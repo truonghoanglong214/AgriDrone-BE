@@ -1,0 +1,93 @@
+# Build outputs
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+[Aa]rtifacts/
+[Pp]ublish/
+x64/
+x86/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+
+# Visual Studio
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.rsuser
+*.VC.db
+*.VC.VC.opendb
+
+# Visual Studio Code
+.vscode/
+
+# JetBrains Rider / ReSharper
+.idea/
+*.sln.iml
+_ReSharper*/
+*.[Rr]e[Ss]harper
+*.DotSettings.user
+
+# Test results and code coverage
+[Tt]est[Rr]esult*/
+[Tt]est[Rr]esults/
+*.trx
+*.coverage
+*.coveragexml
+coverage/
+coverage*.json
+coverage*.xml
+
+# BenchmarkDotNet
+BenchmarkDotNet.Artifacts/
+
+# NuGet packages and generated package files
+*.nupkg
+*.snupkg
+[Pp]ackages/
+*.nuget.props
+*.nuget.targets
+
+# Local .NET tooling and caches
+.dotnet/
+.nuget/
+project.lock.json
+project.fragment.lock.json
+artifacts-obj/
+
+# Local application configuration and secrets
+**/appsettings.Development.json
+**/appsettings.Local.json
+**/appsettings.*.local.json
+.env
+.env.*
+!.env.example
+*.pfx
+*.p12
+
+# Logs and local databases
+*.log
+*.db
+*.db-shm
+*.db-wal
+
+# Publish settings
+*.pubxml
+*.publishproj
+*.azurePubxml
+PublishScripts/
+
+# Generated files
+Generated\ Files/
+
+# Operating system files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Repository-specific local files
+/.github/instructions/codacy.instructions.md

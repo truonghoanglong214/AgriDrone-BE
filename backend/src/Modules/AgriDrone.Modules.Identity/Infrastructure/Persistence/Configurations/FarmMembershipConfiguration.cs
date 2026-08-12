@@ -1,0 +1,78 @@
+using AgriDrone.Modules.Identity.Domain.FarmMemberships;
+using AgriDrone.Modules.Identity.Domain.Users;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+
+namespace AgriDrone.Modules.Identity.Infrastructure.Persistence.Configurations;
+
+public sealed class FarmMembershipConfiguration : IEntityTypeConfiguration<FarmMembership>
+{
+    public void Configure(EntityTypeBuilder<FarmMembership> builder)
+    {
+        builder.ToTable(
+            "farm_memberships",
+            "identity",
+            tableBuilder => tableBuilder.HasComment(
+                "Farm-level authorization: one user can be OWNER, MANAGER, or WORKER in each farm."));
+
+        builder.HasKey(membership => membership.Id).HasName("pk_farm_memberships");
+
+        builder.Property(membership => membership.Id)
+            .HasColumnName("id")
+            .HasColumnType("uuid")
+            .HasDefaultValueSql("gen_random_uuid()")
+            .ValueGeneratedOnAdd();
+
+        builder.Property(membership => membership.FarmId)
+            .HasColumnName("farm_id")
+            .HasColumnType("uuid");
+
+        builder.Property(membership => membership.UserId)
+            .HasColumnName("user_id")
+            .HasColumnType("uuid");
+
+        builder.Property(membership => membership.Role)
+            .HasColumnName("role")
+            .HasColumnType("system.farm_member_role")
+            .IsRequired();
+
+        builder.Property(membership => membership.Status)
+            .HasColumnName("status")
+            .HasColumnType("system.general_status")
+            .HasDefaultValueSql("'ACTIVE'::system.general_status")
+            .IsRequired();
+
+        builder.Property(membership => membership.JoinedAt)
+            .HasColumnName("joined_at")
+            .HasColumnType("timestamp with time zone")
+            .HasDefaultValueSql("NOW()")
+            .IsRequired();
+
+        builder.Property(membership => membership.CreatedAt)
+            .HasColumnName("created_at")
+            .HasColumnType("timestamp with time zone")
+            .HasDefaultValueSql("NOW()")
+            .IsRequired();
+
+        builder.HasIndex(membership => new { membership.FarmId, membership.UserId })
+            .HasDatabaseName("uq_farm_memberships_farm_user")
+            .IsUnique();
+
+        builder.HasIndex(membership => membership.UserId)
+            .HasDatabaseName("ix_farm_memberships_user");
+
+        builder.HasIndex(membership => new
+        {
+            membership.FarmId,
+            membership.Role,
+            membership.Status
+        })
+            .HasDatabaseName("ix_farm_memberships_farm_role");
+
+        builder.HasOne<User>()
+            .WithMany()
+            .HasForeignKey(membership => membership.UserId)
+            .OnDelete(DeleteBehavior.Cascade)
+            .HasConstraintName("fk_farm_memberships_users_user_id");
+    }
+}
