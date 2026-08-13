@@ -42,9 +42,6 @@ public static class ResultMapper
             ErrorType.Failure =>
                 (StatusCodes.Status400BadRequest, "Request failed"),
 
-            ErrorType.Validation =>
-                (StatusCodes.Status400BadRequest, "Validation error"),
-
             ErrorType.NotFound =>
                 (StatusCodes.Status404NotFound, "Resource not found"),
 

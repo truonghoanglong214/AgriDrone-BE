@@ -18,9 +18,6 @@ namespace AgriDrone.SharedKernel.Application
         public static AppError Conflict(string code, string description) =>
             new(code, description, ErrorType.Conflict);
 
-        public static AppError Validation(string code, string description) =>
-            new(code, description, ErrorType.Validation);
-
         public static AppError Forbidden(string code, string description) =>
             new(code, description, ErrorType.Forbidden);
 
