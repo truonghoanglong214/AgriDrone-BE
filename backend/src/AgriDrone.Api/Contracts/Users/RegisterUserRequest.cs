@@ -2,15 +2,11 @@
 {
     public sealed class RegisterUserRequest
     {
-        public string Email { get; private set; } = null!;
-
-        public string Password { get; private set; } = null!;
-
-        public string FullName { get; private set; } = null!;
-
-        public string? Phone { get; private set; }
-        public string TenantCode { get; private set; } = null!;
-
-        public string TenantName { get; private set; } = null!;
+        public string Email { get; init; } = null!;  
+        public string Password { get; init; } = null!;
+        public string FullName { get; init; } = null!;
+        public string? Phone { get; init; }
+        public string TenantCode { get; init; } = null!;
+        public string TenantName { get; init; } = null!;
     }
 }

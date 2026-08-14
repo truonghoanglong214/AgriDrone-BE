@@ -36,7 +36,7 @@ namespace AgriDrone.SharedInfrastructure.Authentication
 
         public IReadOnlyCollection<string> Roles =>
             HttpContext?.User
-                .FindAll("role")
+                .FindAll(AgriDroneClaimTypes.SystemRole)
                 .Select(x => x.Value)
                 .ToArray()
             ?? Array.Empty<string>();

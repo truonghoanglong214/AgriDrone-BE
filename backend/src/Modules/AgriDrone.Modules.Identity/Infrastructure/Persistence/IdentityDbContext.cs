@@ -25,6 +25,18 @@ internal sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> opti
 
     public DbSet<ZoneAssignment> ZoneAssignments => Set<ZoneAssignment>();
 
+    public async Task<T> ExecuteInTransactionAsync<T>(Func<CancellationToken, Task<T>> operation, CancellationToken cancellationToken = default)
+    {
+        await using var transaction =
+        await Database.BeginTransactionAsync(cancellationToken);
+
+        var result = await operation(cancellationToken);
+
+        await transaction.CommitAsync(cancellationToken);
+
+        return result;
+    }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.HasDefaultSchema("identity");

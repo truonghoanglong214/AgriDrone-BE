@@ -8,6 +8,24 @@ public sealed class User : AggregateRoot
     {
     }
 
+    private User(
+        Guid id,
+        string email,
+        string passwordHash,
+        string fullName,
+        string? phone,
+        UserStatus status,
+        DateTimeOffset createdAt)
+    {
+        Id = id;
+        Email = email;
+        PasswordHash = passwordHash;
+        FullName = fullName;
+        Phone = phone;
+        Status = status;
+        CreatedAt = createdAt;
+    }
+
     public string Email { get; private set; } = null!;
 
     public string PasswordHash { get; private set; } = null!;
@@ -25,4 +43,22 @@ public sealed class User : AggregateRoot
     public DateTimeOffset UpdatedAt { get; private set; }
 
     public DateTimeOffset? DeletedAt { get; private set; }
+
+    public static User Create(
+        string email,
+        string passwordHash,
+        string fullName,
+        string? phone,
+        UserStatus userStatus,
+        DateTimeOffset createAt)
+    {
+        return new User(
+            Guid.NewGuid(),
+            email,
+            passwordHash,
+            fullName,
+            phone,
+            userStatus,
+            createAt);
+    }
 }

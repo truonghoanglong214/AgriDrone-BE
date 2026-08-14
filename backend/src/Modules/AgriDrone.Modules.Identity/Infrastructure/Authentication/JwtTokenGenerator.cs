@@ -19,7 +19,7 @@ namespace AgriDrone.Modules.Identity.Infrastructure.Authentication
         public string GenerateAccessToken(
             Guid userId,
             string email,
-            IEnumerable<string> roles)
+            IEnumerable<string> systemRoles)
         {
             var claims = new List<Claim>
         {
@@ -37,8 +37,8 @@ namespace AgriDrone.Modules.Identity.Infrastructure.Authentication
         };
 
             claims.AddRange(
-                roles.Select(role =>
-                    new Claim("role", role)));
+                systemRoles.Select(role =>
+                    new Claim(AgriDroneClaimTypes.SystemRole, role)));
 
             var key = new SymmetricSecurityKey(
                 Encoding.UTF8.GetBytes(

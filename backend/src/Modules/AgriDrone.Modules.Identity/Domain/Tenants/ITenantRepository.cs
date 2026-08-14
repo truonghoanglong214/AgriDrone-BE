@@ -6,7 +6,7 @@ namespace AgriDrone.Modules.Identity.Domain.Tenants
 {
     public interface ITenantRepository
     {
-        Task<Tenant?> GetByCodeAsync(string tenantCode);
+        Task<Tenant?> GetByCodeAsync(string tenantCode, CancellationToken cancellationToken);
         void Add(Tenant tenant);
     }
 }

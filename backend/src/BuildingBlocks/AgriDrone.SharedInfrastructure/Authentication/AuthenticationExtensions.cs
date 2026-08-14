@@ -63,7 +63,7 @@ namespace AgriDrone.SharedInfrastructure.Authentication
                             NameClaimType =
                                 JwtRegisteredClaimNames.Sub,
 
-                            RoleClaimType = "role"
+                            RoleClaimType = AgriDroneClaimTypes.SystemRole
                         };
                 });
 

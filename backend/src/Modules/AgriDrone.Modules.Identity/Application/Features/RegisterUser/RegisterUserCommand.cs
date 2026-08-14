@@ -10,5 +10,7 @@ namespace AgriDrone.Modules.Identity.Application.Features.RegisterUser
         string email, 
         string password, 
         string fullName, 
-        string? phone) : IRequest<Result<RegisterUserResponse>>;
+        string? phone,
+        string tenantCode,
+        string tenantName) : IRequest<Result<RegisterUserResponse>>;
 }

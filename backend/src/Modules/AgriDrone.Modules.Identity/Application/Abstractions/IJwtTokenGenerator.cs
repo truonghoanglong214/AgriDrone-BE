@@ -9,6 +9,6 @@ namespace AgriDrone.Modules.Identity.Application.Abstractions
         string GenerateAccessToken(
             Guid userId,
             string email,
-            IEnumerable<string> roles);
+            IEnumerable<string> systemRoles);
     }
 }
