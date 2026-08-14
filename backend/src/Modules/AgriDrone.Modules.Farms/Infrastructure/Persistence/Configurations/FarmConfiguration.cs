@@ -24,12 +24,18 @@ public sealed class FarmConfiguration : IEntityTypeConfiguration<Farm>
             });
 
         builder.HasKey(farm => farm.Id).HasName("pk_farms");
+        builder.HasAlternateKey(farm => new { farm.Id, farm.TenantId })
+            .HasName("uq_farms_id_tenant");
 
         builder.Property(farm => farm.Id)
             .HasColumnName("id")
             .HasColumnType("uuid")
             .HasDefaultValueSql("gen_random_uuid()")
             .ValueGeneratedOnAdd();
+
+        builder.Property(farm => farm.TenantId)
+            .HasColumnName("tenant_id")
+            .HasColumnType("uuid");
 
         builder.Property(farm => farm.Code)
             .HasColumnName("code")
@@ -86,10 +92,13 @@ public sealed class FarmConfiguration : IEntityTypeConfiguration<Farm>
             .HasColumnName("deleted_at")
             .HasColumnType("timestamp with time zone");
 
-        builder.HasIndex(farm => farm.Code)
-            .HasDatabaseName("ux_farms_code_active")
+        builder.HasIndex(farm => new { farm.TenantId, farm.Code })
+            .HasDatabaseName("ux_farms_tenant_code_active")
             .HasFilter("deleted_at IS NULL")
             .IsUnique();
+
+        builder.HasIndex(farm => farm.TenantId)
+            .HasDatabaseName("ix_farms_tenant");
 
         builder.HasIndex(farm => farm.Boundary)
             .HasDatabaseName("ix_farms_boundary_gist")

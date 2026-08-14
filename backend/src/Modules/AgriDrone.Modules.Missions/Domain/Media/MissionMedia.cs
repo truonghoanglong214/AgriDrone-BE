@@ -14,5 +14,9 @@ public sealed class MissionMedia
 
     public DateTimeOffset? CapturedAt { get; private set; }
 
+    public long? TelemetryTimeOffsetMs { get; private set; }
+
+    public string? CaptureClockSource { get; private set; }
+
     public DateTimeOffset CreatedAt { get; private set; }
 }

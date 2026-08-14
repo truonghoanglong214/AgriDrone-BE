@@ -25,10 +25,30 @@ public sealed class MissionPlantObservationConfiguration
                 tableBuilder.HasCheckConstraint(
                     "ck_observation_match_confidence",
                     "match_confidence IS NULL OR match_confidence BETWEEN 0 AND 1");
+                tableBuilder.HasCheckConstraint(
+                    "ck_observation_grid_position_complete",
+                    "(detected_row_index IS NULL AND detected_column_index IS NULL) OR " +
+                    "(map_version_id IS NOT NULL AND detected_row_index IS NOT NULL AND " +
+                    "detected_column_index IS NOT NULL)");
+                tableBuilder.HasCheckConstraint(
+                    "ck_observation_grid_indices_positive",
+                    "(detected_row_index IS NULL OR detected_row_index >= 1) AND " +
+                    "(detected_column_index IS NULL OR detected_column_index >= 1)");
+                tableBuilder.HasCheckConstraint(
+                    "ck_observation_location_accuracy_nonnegative",
+                    "detected_location_accuracy_m IS NULL OR detected_location_accuracy_m >= 0");
+                tableBuilder.HasCheckConstraint(
+                    "ck_observation_gps_distance_nonnegative",
+                    "gps_distance_m IS NULL OR gps_distance_m >= 0");
+                tableBuilder.HasCheckConstraint(
+                    "ck_observation_grid_score",
+                    "grid_score IS NULL OR grid_score BETWEEN 0 AND 1");
             });
 
         builder.HasKey(observation => observation.Id)
             .HasName("pk_mission_plant_observations");
+        builder.HasAlternateKey(observation => new { observation.Id, observation.FarmId })
+            .HasName("uq_mission_plant_observations_id_farm");
 
         builder.Property(observation => observation.Id)
             .HasColumnName("id")
@@ -61,6 +81,23 @@ public sealed class MissionPlantObservationConfiguration
             .HasColumnName("detected_location")
             .HasColumnType("geometry(Point,4326)");
 
+        builder.Property(observation => observation.MapVersionId)
+            .HasColumnName("map_version_id")
+            .HasColumnType("uuid");
+
+        builder.Property(observation => observation.DetectedRowIndex)
+            .HasColumnName("detected_row_index")
+            .HasColumnType("integer");
+
+        builder.Property(observation => observation.DetectedColumnIndex)
+            .HasColumnName("detected_column_index")
+            .HasColumnType("integer");
+
+        builder.Property(observation => observation.DetectedLocationAccuracyM)
+            .HasColumnName("detected_location_accuracy_m")
+            .HasColumnType("numeric(8,3)")
+            .HasPrecision(8, 3);
+
         builder.Property(observation => observation.DetectionConfidence)
             .HasColumnName("detection_confidence")
             .HasColumnType("numeric(5,4)")
@@ -74,6 +111,31 @@ public sealed class MissionPlantObservationConfiguration
             .HasColumnName("match_confidence")
             .HasColumnType("numeric(5,4)")
             .HasPrecision(5, 4);
+
+        builder.Property(observation => observation.GpsDistanceM)
+            .HasColumnName("gps_distance_m")
+            .HasColumnType("numeric(8,3)")
+            .HasPrecision(8, 3);
+
+        builder.Property(observation => observation.GridScore)
+            .HasColumnName("grid_score")
+            .HasColumnType("numeric(5,4)")
+            .HasPrecision(5, 4);
+
+        builder.Property(observation => observation.SelectedMatchStrategy)
+            .HasColumnName("selected_match_strategy")
+            .HasColumnType("system.match_strategy");
+
+        builder.Property(observation => observation.MatchingAlgorithmVersion)
+            .HasColumnName("matching_algorithm_version")
+            .HasColumnType("character varying(100)")
+            .HasMaxLength(100);
+
+        builder.Property(observation => observation.MatchingParameters)
+            .HasColumnName("matching_parameters")
+            .HasColumnType("jsonb")
+            .HasDefaultValueSql("'{}'::jsonb")
+            .IsRequired();
 
         builder.Property(observation => observation.ResolvedPlantId)
             .HasColumnName("resolved_plant_id")
@@ -113,6 +175,16 @@ public sealed class MissionPlantObservationConfiguration
 
         builder.HasIndex(observation => observation.ResolvedPlantId)
             .HasDatabaseName("ix_observation_resolved_plant");
+
+        builder.HasIndex(observation => observation.MapVersionId)
+            .HasDatabaseName("ix_observations_map_version");
+
+        builder.HasIndex(observation => new
+        {
+            observation.MapVersionId,
+            observation.DetectedRowIndex,
+            observation.DetectedColumnIndex
+        }).HasDatabaseName("ix_observations_map_grid_position");
 
         builder.HasIndex(observation => observation.DetectedLocation)
             .HasDatabaseName("ix_observation_location_gist")

@@ -8,8 +8,6 @@ public sealed class HarvestQualityGrade : Entity
     {
     }
 
-    public Guid FarmId { get; private set; }
-
     public string Code { get; private set; } = null!;
 
     public string Name { get; private set; } = null!;

@@ -72,9 +72,8 @@ public sealed class PlantHarvestQualityDetailConfiguration
 
         builder.HasOne<HarvestQualityGrade>()
             .WithMany()
-            .HasForeignKey(detail => new { detail.QualityGradeId, detail.FarmId })
-            .HasPrincipalKey(grade => new { grade.Id, grade.FarmId })
+            .HasForeignKey(detail => detail.QualityGradeId)
             .OnDelete(DeleteBehavior.Restrict)
-            .HasConstraintName("fk_quality_detail_grade_same_farm");
+            .HasConstraintName("fk_quality_detail_grade_global");
     }
 }

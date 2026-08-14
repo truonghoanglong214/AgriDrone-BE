@@ -1,4 +1,4 @@
-using AgriDrone.Modules.Plants.Domain.Diseases;
+using AgriDrone.Modules.Plants.Domain.Conditions;
 using AgriDrone.Modules.Plants.Domain.Mapping;
 using AgriDrone.Modules.Plants.Domain.Plants;
 using AgriDrone.Modules.Plants.Domain.Scans;
@@ -14,17 +14,22 @@ internal sealed class PlantsDbContext(DbContextOptions<PlantsDbContext> options)
 
     public DbSet<PlantChangeEvent> PlantChangeEvents => Set<PlantChangeEvent>();
 
-    public DbSet<Disease> Diseases => Set<Disease>();
+    public DbSet<PlantCondition> PlantConditions => Set<PlantCondition>();
+
+    public DbSet<HealthLevel> HealthLevels => Set<HealthLevel>();
 
     public DbSet<PlantScan> PlantScans => Set<PlantScan>();
 
     public DbSet<PlantScanMedia> PlantScanMedia => Set<PlantScanMedia>();
 
-    public DbSet<DiseaseDetection> DiseaseDetections => Set<DiseaseDetection>();
+    public DbSet<ConditionDetection> ConditionDetections => Set<ConditionDetection>();
 
-    public DbSet<DiseaseLesion> DiseaseLesions => Set<DiseaseLesion>();
+    public DbSet<ConditionLesion> ConditionLesions => Set<ConditionLesion>();
 
     public DbSet<ScanVerification> ScanVerifications => Set<ScanVerification>();
+
+    public DbSet<ConditionDetectionReview> ConditionDetectionReviews =>
+        Set<ConditionDetectionReview>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

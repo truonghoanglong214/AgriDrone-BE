@@ -9,6 +9,8 @@ public sealed class Farm : AggregateRoot
     {
     }
 
+    public Guid TenantId { get; private set; }
+
     public string Code { get; private set; } = null!;
 
     public string Name { get; private set; } = null!;

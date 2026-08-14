@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
     <ProjectReference Include="..\..\BuildingBlocks\AgriDrone.SharedKernel\AgriDrone.SharedKernel.csproj" />
+    <ProjectReference Include="..\..\BuildingBlocks\AgriDrone.SharedInfrastructure\AgriDrone.SharedInfrastructure.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,3 +1,4 @@
+using AgriDrone.Modules.Plants.Domain.Conditions;
 using AgriDrone.Modules.Plants.Domain.Plants;
 using AgriDrone.Modules.Plants.Domain.Scans;
 using Microsoft.EntityFrameworkCore;
@@ -24,6 +25,8 @@ public sealed class PlantScanConfiguration : IEntityTypeConfiguration<PlantScan>
         builder.HasKey(scan => scan.Id).HasName("pk_plant_scans");
         builder.HasAlternateKey(scan => new { scan.Id, scan.FarmId })
             .HasName("uq_plant_scans_id_farm");
+        builder.HasAlternateKey(scan => new { scan.Id, scan.PlantId, scan.FarmId })
+            .HasName("uq_plant_scans_id_plant_farm");
 
         builder.Property(scan => scan.Id)
             .HasColumnName("id")
@@ -47,6 +50,18 @@ public sealed class PlantScanConfiguration : IEntityTypeConfiguration<PlantScan>
             .HasColumnName("ai_job_id")
             .HasColumnType("uuid");
 
+        builder.Property(scan => scan.VerificationOfScanId)
+            .HasColumnName("verification_of_scan_id")
+            .HasColumnType("uuid");
+
+        builder.Property(scan => scan.SourceTaskId)
+            .HasColumnName("source_task_id")
+            .HasColumnType("uuid");
+
+        builder.Property(scan => scan.ClientOperationId)
+            .HasColumnName("client_operation_id")
+            .HasColumnType("uuid");
+
         builder.Property(scan => scan.ObservedAt)
             .HasColumnName("observed_at")
             .HasColumnType("timestamp with time zone")
@@ -57,30 +72,15 @@ public sealed class PlantScanConfiguration : IEntityTypeConfiguration<PlantScan>
             .HasColumnType("system.scan_source")
             .IsRequired();
 
-        builder.Property(scan => scan.OverallHealthStatus)
-            .HasColumnName("overall_health_status")
-            .HasColumnType("system.health_status")
-            .HasDefaultValueSql("'UNKNOWN'::system.health_status")
+        builder.Property(scan => scan.OverallHealthLevelId)
+            .HasColumnName("overall_health_level_id")
+            .HasColumnType("uuid")
             .IsRequired();
 
         builder.Property(scan => scan.OverallConfidence)
             .HasColumnName("overall_confidence")
             .HasColumnType("numeric(5,4)")
             .HasPrecision(5, 4);
-
-        builder.Property(scan => scan.ReviewStatus)
-            .HasColumnName("review_status")
-            .HasColumnType("system.scan_review_status")
-            .HasDefaultValueSql("'PENDING'::system.scan_review_status")
-            .IsRequired();
-
-        builder.Property(scan => scan.VerifiedBy)
-            .HasColumnName("verified_by")
-            .HasColumnType("uuid");
-
-        builder.Property(scan => scan.VerifiedAt)
-            .HasColumnName("verified_at")
-            .HasColumnType("timestamp with time zone");
 
         builder.Property(scan => scan.Notes)
             .HasColumnName("notes")
@@ -89,6 +89,16 @@ public sealed class PlantScanConfiguration : IEntityTypeConfiguration<PlantScan>
         builder.Property(scan => scan.CreatedBy)
             .HasColumnName("created_by")
             .HasColumnType("uuid");
+
+        builder.Property(scan => scan.DeviceCreatedAt)
+            .HasColumnName("device_created_at")
+            .HasColumnType("timestamp with time zone");
+
+        builder.Property(scan => scan.ServerReceivedAt)
+            .HasColumnName("server_received_at")
+            .HasColumnType("timestamp with time zone")
+            .HasDefaultValueSql("NOW()")
+            .IsRequired();
 
         builder.Property(scan => scan.CreatedAt)
             .HasColumnName("created_at")
@@ -103,13 +113,18 @@ public sealed class PlantScanConfiguration : IEntityTypeConfiguration<PlantScan>
         builder.HasIndex(scan => scan.MissionId)
             .HasDatabaseName("ix_plant_scans_mission");
 
+        builder.HasIndex(scan => scan.ClientOperationId)
+            .HasDatabaseName("uq_plant_scans_client_operation")
+            .HasFilter("client_operation_id IS NOT NULL")
+            .IsUnique();
+
         builder.HasIndex(scan => new
         {
             scan.FarmId,
-            scan.OverallHealthStatus,
+            scan.OverallHealthLevelId,
             scan.ObservedAt
         })
-            .HasDatabaseName("ix_plant_scans_farm_health")
+            .HasDatabaseName("ix_plant_scans_farm_health_level")
             .IsDescending(false, false, true);
 
         builder.HasOne<Plant>()
@@ -118,5 +133,28 @@ public sealed class PlantScanConfiguration : IEntityTypeConfiguration<PlantScan>
             .HasPrincipalKey(plant => new { plant.Id, plant.FarmId })
             .OnDelete(DeleteBehavior.Cascade)
             .HasConstraintName("fk_scan_plant_same_farm");
+
+        builder.HasOne<HealthLevel>()
+            .WithMany()
+            .HasForeignKey(scan => scan.OverallHealthLevelId)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_plant_scans_health_levels_overall_health_level_id");
+
+        builder.HasOne<PlantScan>()
+            .WithMany()
+            .HasForeignKey(scan => new
+            {
+                scan.VerificationOfScanId,
+                scan.PlantId,
+                scan.FarmId
+            })
+            .HasPrincipalKey(original => new
+            {
+                original.Id,
+                original.PlantId,
+                original.FarmId
+            })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_plant_scans_verification_of_same_plant_farm");
     }
 }

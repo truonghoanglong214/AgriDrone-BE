@@ -1,4 +1,5 @@
 using AgriDrone.Modules.Identity.Domain.FarmMemberships;
+using AgriDrone.Modules.Identity.Domain.Tenants;
 using AgriDrone.Modules.Identity.Domain.Users;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
@@ -13,15 +14,21 @@ public sealed class FarmMembershipConfiguration : IEntityTypeConfiguration<FarmM
             "farm_memberships",
             "identity",
             tableBuilder => tableBuilder.HasComment(
-                "Farm-level authorization: one user can be OWNER, MANAGER, or WORKER in each farm."));
+                "Farm-level authorization for tenant members, optionally limited to selected zones."));
 
         builder.HasKey(membership => membership.Id).HasName("pk_farm_memberships");
+        builder.HasAlternateKey(membership => new { membership.Id, membership.FarmId })
+            .HasName("uq_farm_memberships_id_farm");
 
         builder.Property(membership => membership.Id)
             .HasColumnName("id")
             .HasColumnType("uuid")
             .HasDefaultValueSql("gen_random_uuid()")
             .ValueGeneratedOnAdd();
+
+        builder.Property(membership => membership.TenantId)
+            .HasColumnName("tenant_id")
+            .HasColumnType("uuid");
 
         builder.Property(membership => membership.FarmId)
             .HasColumnName("farm_id")
@@ -34,6 +41,12 @@ public sealed class FarmMembershipConfiguration : IEntityTypeConfiguration<FarmM
         builder.Property(membership => membership.Role)
             .HasColumnName("role")
             .HasColumnType("system.farm_member_role")
+            .IsRequired();
+
+        builder.Property(membership => membership.AccessScope)
+            .HasColumnName("access_scope")
+            .HasColumnType("system.farm_access_scope")
+            .HasDefaultValueSql("'ALL_ZONES'::system.farm_access_scope")
             .IsRequired();
 
         builder.Property(membership => membership.Status)
@@ -61,6 +74,9 @@ public sealed class FarmMembershipConfiguration : IEntityTypeConfiguration<FarmM
         builder.HasIndex(membership => membership.UserId)
             .HasDatabaseName("ix_farm_memberships_user");
 
+        builder.HasIndex(membership => new { membership.TenantId, membership.UserId })
+            .HasDatabaseName("ix_farm_memberships_tenant_user");
+
         builder.HasIndex(membership => new
         {
             membership.FarmId,
@@ -74,5 +90,16 @@ public sealed class FarmMembershipConfiguration : IEntityTypeConfiguration<FarmM
             .HasForeignKey(membership => membership.UserId)
             .OnDelete(DeleteBehavior.Cascade)
             .HasConstraintName("fk_farm_memberships_users_user_id");
+
+        builder.HasOne<TenantMembership>()
+            .WithMany()
+            .HasForeignKey(membership => new { membership.TenantId, membership.UserId })
+            .HasPrincipalKey(tenantMembership => new
+            {
+                tenantMembership.TenantId,
+                tenantMembership.UserId
+            })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_farm_memberships_tenant_members_same_tenant");
     }
 }

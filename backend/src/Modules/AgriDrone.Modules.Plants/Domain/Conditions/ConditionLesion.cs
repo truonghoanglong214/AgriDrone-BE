@@ -1,14 +1,14 @@
 using AgriDrone.SharedKernel.Domain;
 
-namespace AgriDrone.Modules.Plants.Domain.Diseases;
+namespace AgriDrone.Modules.Plants.Domain.Conditions;
 
-public sealed class DiseaseLesion : Entity
+public sealed class ConditionLesion : Entity
 {
-    private DiseaseLesion()
+    private ConditionLesion()
     {
     }
 
-    public Guid DiseaseDetectionId { get; private set; }
+    public Guid ConditionDetectionId { get; private set; }
 
     public Guid MediaId { get; private set; }
 

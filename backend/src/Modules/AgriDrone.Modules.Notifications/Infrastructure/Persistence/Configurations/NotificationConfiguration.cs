@@ -19,6 +19,9 @@ public sealed class NotificationConfiguration : IEntityTypeConfiguration<Notific
                     "ck_notification_read_time",
                     "(is_read = FALSE AND read_at IS NULL) OR " +
                     "(is_read = TRUE AND read_at IS NOT NULL)");
+                tableBuilder.HasCheckConstraint(
+                    "ck_notification_farm_tenant_context",
+                    "farm_id IS NULL OR tenant_id IS NOT NULL");
             });
 
         builder.HasKey(notification => notification.Id).HasName("pk_notifications");
@@ -31,6 +34,14 @@ public sealed class NotificationConfiguration : IEntityTypeConfiguration<Notific
 
         builder.Property(notification => notification.UserId)
             .HasColumnName("user_id")
+            .HasColumnType("uuid");
+
+        builder.Property(notification => notification.TenantId)
+            .HasColumnName("tenant_id")
+            .HasColumnType("uuid");
+
+        builder.Property(notification => notification.FarmId)
+            .HasColumnName("farm_id")
             .HasColumnType("uuid");
 
         builder.Property(notification => notification.NotificationType)
@@ -78,6 +89,14 @@ public sealed class NotificationConfiguration : IEntityTypeConfiguration<Notific
         builder.HasIndex(notification => new { notification.UserId, notification.CreatedAt })
             .HasDatabaseName("ix_notifications_user_unread")
             .HasFilter("is_read = FALSE")
+            .IsDescending(false, true);
+
+        builder.HasIndex(notification => new { notification.TenantId, notification.CreatedAt })
+            .HasDatabaseName("ix_notifications_tenant_created")
+            .IsDescending(false, true);
+
+        builder.HasIndex(notification => new { notification.FarmId, notification.CreatedAt })
+            .HasDatabaseName("ix_notifications_farm_created")
             .IsDescending(false, true);
     }
 }

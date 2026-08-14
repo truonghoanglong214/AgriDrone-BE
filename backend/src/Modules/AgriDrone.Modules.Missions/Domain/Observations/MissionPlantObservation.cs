@@ -1,3 +1,4 @@
+using System.Text.Json;
 using AgriDrone.SharedKernel.Domain;
 using NetTopologySuite.Geometries;
 
@@ -21,11 +22,29 @@ public sealed class MissionPlantObservation : Entity
 
     public Point? DetectedLocation { get; private set; }
 
+    public Guid? MapVersionId { get; private set; }
+
+    public int? DetectedRowIndex { get; private set; }
+
+    public int? DetectedColumnIndex { get; private set; }
+
+    public decimal? DetectedLocationAccuracyM { get; private set; }
+
     public decimal? DetectionConfidence { get; private set; }
 
     public Guid? SuggestedPlantId { get; private set; }
 
     public decimal? MatchConfidence { get; private set; }
+
+    public decimal? GpsDistanceM { get; private set; }
+
+    public decimal? GridScore { get; private set; }
+
+    public MatchStrategy? SelectedMatchStrategy { get; private set; }
+
+    public string? MatchingAlgorithmVersion { get; private set; }
+
+    public JsonDocument MatchingParameters { get; private set; } = null!;
 
     public Guid? ResolvedPlantId { get; private set; }
 

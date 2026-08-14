@@ -9,4 +9,8 @@
     <ProjectReference Include="..\Modules\AgriDrone.Modules.FieldTasks\AgriDrone.Modules.FieldTasks.csproj" />
     <ProjectReference Include="..\Modules\AgriDrone.Modules.Notifications\AgriDrone.Modules.Notifications.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
+    <PackageReference Include="Swashbuckle.AspNetCore" />
+  </ItemGroup>
 </Project>

@@ -22,6 +22,12 @@ public sealed class HarvestBatchConfiguration : IEntityTypeConfiguration<Harvest
                 tableBuilder.HasCheckConstraint(
                     "ck_harvest_batch_weight",
                     "reported_weight_kg IS NULL OR reported_weight_kg >= 0");
+                tableBuilder.HasCheckConstraint(
+                    "ck_harvest_batch_completion",
+                    "(status = 'COMPLETED'::system.harvest_batch_status AND " +
+                    "completed_by IS NOT NULL AND completed_at IS NOT NULL) OR " +
+                    "(status <> 'COMPLETED'::system.harvest_batch_status AND " +
+                    "completed_by IS NULL AND completed_at IS NULL)");
             });
 
         builder.HasKey(batch => batch.Id).HasName("pk_harvest_batches");
@@ -70,6 +76,20 @@ public sealed class HarvestBatchConfiguration : IEntityTypeConfiguration<Harvest
             .HasColumnName("notes")
             .HasColumnType("text");
 
+        builder.Property(batch => batch.Status)
+            .HasColumnName("status")
+            .HasColumnType("system.harvest_batch_status")
+            .HasDefaultValueSql("'DRAFT'::system.harvest_batch_status")
+            .IsRequired();
+
+        builder.Property(batch => batch.CompletedBy)
+            .HasColumnName("completed_by")
+            .HasColumnType("uuid");
+
+        builder.Property(batch => batch.CompletedAt)
+            .HasColumnName("completed_at")
+            .HasColumnType("timestamp with time zone");
+
         builder.Property(batch => batch.CreatedBy)
             .HasColumnName("created_by")
             .HasColumnType("uuid");
@@ -85,6 +105,9 @@ public sealed class HarvestBatchConfiguration : IEntityTypeConfiguration<Harvest
             .HasColumnType("timestamp with time zone")
             .HasDefaultValueSql("NOW()")
             .IsRequired();
+
+        builder.Property(batch => batch.Version)
+            .IsRowVersion();
 
         builder.HasIndex(batch => new { batch.FarmId, batch.BatchCode })
             .HasDatabaseName("uq_harvest_batches_farm_code")

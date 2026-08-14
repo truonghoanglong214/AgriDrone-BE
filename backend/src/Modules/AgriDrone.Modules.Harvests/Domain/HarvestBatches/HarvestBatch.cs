@@ -24,9 +24,17 @@ public sealed class HarvestBatch : AggregateRoot
 
     public string? Notes { get; private set; }
 
+    public HarvestBatchStatus Status { get; private set; }
+
+    public Guid? CompletedBy { get; private set; }
+
+    public DateTimeOffset? CompletedAt { get; private set; }
+
     public Guid CreatedBy { get; private set; }
 
     public DateTimeOffset CreatedAt { get; private set; }
 
     public DateTimeOffset UpdatedAt { get; private set; }
+
+    public uint Version { get; private set; }
 }

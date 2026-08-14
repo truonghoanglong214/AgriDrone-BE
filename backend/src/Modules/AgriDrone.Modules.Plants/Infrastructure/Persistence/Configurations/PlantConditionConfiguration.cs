@@ -1,68 +1,74 @@
-using AgriDrone.Modules.Plants.Domain.Diseases;
+using AgriDrone.Modules.Plants.Domain.Conditions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace AgriDrone.Modules.Plants.Infrastructure.Persistence.Configurations;
 
-public sealed class DiseaseConfiguration : IEntityTypeConfiguration<Disease>
+public sealed class PlantConditionConfiguration : IEntityTypeConfiguration<PlantCondition>
 {
-    public void Configure(EntityTypeBuilder<Disease> builder)
+    public void Configure(EntityTypeBuilder<PlantCondition> builder)
     {
         builder.ToTable(
-            "diseases",
+            "plant_conditions",
             "plant",
             tableBuilder => tableBuilder.HasComment(
-                "Configurable disease catalog. Disease types are data, not hard-coded columns."));
+                "Global catalog of diseases, abiotic damage and mechanical plant conditions."));
 
-        builder.HasKey(disease => disease.Id).HasName("pk_diseases");
+        builder.HasKey(condition => condition.Id).HasName("pk_plant_conditions");
 
-        builder.Property(disease => disease.Id)
+        builder.Property(condition => condition.Id)
             .HasColumnName("id")
             .HasColumnType("uuid")
             .HasDefaultValueSql("gen_random_uuid()")
             .ValueGeneratedOnAdd();
 
-        builder.Property(disease => disease.Code)
+        builder.Property(condition => condition.Code)
             .HasColumnName("code")
             .HasColumnType("character varying(50)")
             .HasMaxLength(50)
             .IsRequired();
 
-        builder.Property(disease => disease.Name)
+        builder.Property(condition => condition.Name)
             .HasColumnName("name")
             .HasColumnType("character varying(150)")
             .HasMaxLength(150)
             .IsRequired();
 
-        builder.Property(disease => disease.ScientificName)
+        builder.Property(condition => condition.ScientificName)
             .HasColumnName("scientific_name")
             .HasColumnType("character varying(150)")
             .HasMaxLength(150);
 
-        builder.Property(disease => disease.Description)
+        builder.Property(condition => condition.ConditionType)
+            .HasColumnName("condition_type")
+            .HasColumnType("system.condition_type")
+            .HasDefaultValueSql("'DISEASE'::system.condition_type")
+            .IsRequired();
+
+        builder.Property(condition => condition.Description)
             .HasColumnName("description")
             .HasColumnType("text");
 
-        builder.Property(disease => disease.IsActive)
+        builder.Property(condition => condition.IsActive)
             .HasColumnName("is_active")
             .HasColumnType("boolean")
             .HasDefaultValue(true)
             .IsRequired();
 
-        builder.Property(disease => disease.CreatedAt)
+        builder.Property(condition => condition.CreatedAt)
             .HasColumnName("created_at")
             .HasColumnType("timestamp with time zone")
             .HasDefaultValueSql("NOW()")
             .IsRequired();
 
-        builder.Property(disease => disease.UpdatedAt)
+        builder.Property(condition => condition.UpdatedAt)
             .HasColumnName("updated_at")
             .HasColumnType("timestamp with time zone")
             .HasDefaultValueSql("NOW()")
             .IsRequired();
 
-        builder.HasIndex(disease => disease.Code)
-            .HasDatabaseName("uq_diseases_code")
+        builder.HasIndex(condition => condition.Code)
+            .HasDatabaseName("uq_plant_conditions_code")
             .IsUnique();
     }
 }

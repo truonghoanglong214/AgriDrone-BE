@@ -11,6 +11,10 @@ public sealed class AiProcessingJob : Entity
 
     public Guid MissionId { get; private set; }
 
+    public Guid? ModelVersionId { get; private set; }
+
+    public Guid? ThresholdProfileId { get; private set; }
+
     public AiJobType JobType { get; private set; }
 
     public AiJobStatus Status { get; private set; }
@@ -18,6 +22,18 @@ public sealed class AiProcessingJob : Entity
     public string? ExternalJobId { get; private set; }
 
     public JsonDocument Parameters { get; private set; } = null!;
+
+    public int AttemptNumber { get; private set; }
+
+    public decimal? ProgressPercent { get; private set; }
+
+    public JsonDocument InputManifest { get; private set; } = null!;
+
+    public JsonDocument OutputManifest { get; private set; } = null!;
+
+    public string? ErrorCode { get; private set; }
+
+    public Guid? ClientOperationId { get; private set; }
 
     public string? ErrorMessage { get; private set; }
 

@@ -10,7 +10,7 @@ public sealed class MediaAssetConfiguration : IEntityTypeConfiguration<MediaAsse
     {
         builder.ToTable(
             "media_assets",
-            "mission",
+            "media",
             tableBuilder =>
             {
                 tableBuilder.HasComment(
@@ -23,15 +23,43 @@ public sealed class MediaAssetConfiguration : IEntityTypeConfiguration<MediaAsse
                     "(width_px IS NULL OR width_px > 0) AND " +
                     "(height_px IS NULL OR height_px > 0) AND " +
                     "(duration_ms IS NULL OR duration_ms >= 0)");
+                tableBuilder.HasCheckConstraint(
+                    "ck_media_retention_after_creation",
+                    "retention_until IS NULL OR retention_until >= created_at");
+                tableBuilder.HasCheckConstraint(
+                    "ck_media_archive_after_creation",
+                    "archived_at IS NULL OR archived_at >= created_at");
+                tableBuilder.HasCheckConstraint(
+                    "ck_media_deletion_timeline",
+                    "deletion_requested_at IS NULL OR deleted_at IS NULL OR " +
+                    "deleted_at >= deletion_requested_at");
+                tableBuilder.HasCheckConstraint(
+                    "ck_media_storage_status",
+                    "(storage_status = 'DELETED'::system.media_storage_status AND " +
+                    "deletion_requested_at IS NOT NULL AND deleted_at IS NOT NULL) OR " +
+                    "(storage_status <> 'DELETED'::system.media_storage_status AND deleted_at IS NULL AND " +
+                    "(storage_status NOT IN ('DELETE_PENDING'::system.media_storage_status, " +
+                    "'DELETE_FAILED'::system.media_storage_status) OR deletion_requested_at IS NOT NULL) AND " +
+                    "(storage_status <> 'ARCHIVED'::system.media_storage_status OR archived_at IS NOT NULL))");
             });
 
         builder.HasKey(media => media.Id).HasName("pk_media_assets");
+        builder.HasAlternateKey(media => new { media.Id, media.TenantId })
+            .HasName("uq_media_assets_id_tenant");
 
         builder.Property(media => media.Id)
             .HasColumnName("id")
             .HasColumnType("uuid")
             .HasDefaultValueSql("gen_random_uuid()")
             .ValueGeneratedOnAdd();
+
+        builder.Property(media => media.TenantId)
+            .HasColumnName("tenant_id")
+            .HasColumnType("uuid");
+
+        builder.Property(media => media.FarmId)
+            .HasColumnName("farm_id")
+            .HasColumnType("uuid");
 
         builder.Property(media => media.Provider)
             .HasColumnName("provider")
@@ -90,6 +118,28 @@ public sealed class MediaAssetConfiguration : IEntityTypeConfiguration<MediaAsse
             .HasColumnName("uploaded_by")
             .HasColumnType("uuid");
 
+        builder.Property(media => media.RetentionUntil)
+            .HasColumnName("retention_until")
+            .HasColumnType("timestamp with time zone");
+
+        builder.Property(media => media.ArchivedAt)
+            .HasColumnName("archived_at")
+            .HasColumnType("timestamp with time zone");
+
+        builder.Property(media => media.DeletionRequestedAt)
+            .HasColumnName("deletion_requested_at")
+            .HasColumnType("timestamp with time zone");
+
+        builder.Property(media => media.DeletedAt)
+            .HasColumnName("deleted_at")
+            .HasColumnType("timestamp with time zone");
+
+        builder.Property(media => media.StorageStatus)
+            .HasColumnName("storage_status")
+            .HasColumnType("system.media_storage_status")
+            .HasDefaultValueSql("'ACTIVE'::system.media_storage_status")
+            .IsRequired();
+
         builder.Property(media => media.CreatedAt)
             .HasColumnName("created_at")
             .HasColumnType("timestamp with time zone")
@@ -109,5 +159,17 @@ public sealed class MediaAssetConfiguration : IEntityTypeConfiguration<MediaAsse
         builder.HasIndex(media => media.CreatedAt)
             .HasDatabaseName("ix_media_assets_created")
             .IsDescending();
+
+        builder.HasIndex(media => new { media.TenantId, media.CreatedAt })
+            .HasDatabaseName("ix_media_assets_tenant_created")
+            .IsDescending(false, true);
+
+        builder.HasIndex(media => new { media.FarmId, media.CreatedAt })
+            .HasDatabaseName("ix_media_assets_farm_created")
+            .IsDescending(false, true);
+
+        builder.HasIndex(media => new { media.StorageStatus, media.RetentionUntil })
+            .HasDatabaseName("ix_media_assets_retention_cleanup")
+            .HasFilter("deleted_at IS NULL");
     }
 }

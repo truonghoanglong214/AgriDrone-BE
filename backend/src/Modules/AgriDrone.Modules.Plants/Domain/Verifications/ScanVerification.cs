@@ -1,4 +1,3 @@
-using AgriDrone.Modules.Plants.Domain.Plants;
 using AgriDrone.SharedKernel.Domain;
 
 namespace AgriDrone.Modules.Plants.Domain.Verifications;
@@ -15,9 +14,13 @@ public sealed class ScanVerification : Entity
 
     public VerificationDecision Decision { get; private set; }
 
-    public HealthStatus? CorrectedHealthStatus { get; private set; }
+    public Guid? CorrectedHealthLevelId { get; private set; }
 
     public string? Note { get; private set; }
+
+    public int RevisionNumber { get; private set; }
+
+    public Guid? SupersedesVerificationId { get; private set; }
 
     public DateTimeOffset CreatedAt { get; private set; }
 }

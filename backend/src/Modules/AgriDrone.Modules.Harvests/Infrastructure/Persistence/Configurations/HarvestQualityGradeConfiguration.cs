@@ -15,25 +15,19 @@ public sealed class HarvestQualityGradeConfiguration
             tableBuilder =>
             {
                 tableBuilder.HasComment(
-                    "Farm-configurable quality grades such as A/B/C/Rejected.");
+                    "Global System Admin-managed quality grades such as A/B/C/Rejected.");
                 tableBuilder.HasCheckConstraint(
                     "ck_quality_display_order",
                     "display_order >= 0");
             });
 
         builder.HasKey(grade => grade.Id).HasName("pk_harvest_quality_grades");
-        builder.HasAlternateKey(grade => new { grade.Id, grade.FarmId })
-            .HasName("uq_quality_grades_id_farm");
 
         builder.Property(grade => grade.Id)
             .HasColumnName("id")
             .HasColumnType("uuid")
             .HasDefaultValueSql("gen_random_uuid()")
             .ValueGeneratedOnAdd();
-
-        builder.Property(grade => grade.FarmId)
-            .HasColumnName("farm_id")
-            .HasColumnType("uuid");
 
         builder.Property(grade => grade.Code)
             .HasColumnName("code")
@@ -71,8 +65,8 @@ public sealed class HarvestQualityGradeConfiguration
             .HasDefaultValueSql("NOW()")
             .IsRequired();
 
-        builder.HasIndex(grade => new { grade.FarmId, grade.Code })
-            .HasDatabaseName("uq_quality_grades_farm_code")
+        builder.HasIndex(grade => grade.Code)
+            .HasDatabaseName("uq_quality_grades_code")
             .IsUnique();
     }
 }

@@ -1,10 +1,10 @@
 using AgriDrone.SharedKernel.Domain;
 
-namespace AgriDrone.Modules.Plants.Domain.Diseases;
+namespace AgriDrone.Modules.Plants.Domain.Conditions;
 
-public sealed class Disease : Entity
+public sealed class PlantCondition : Entity
 {
-    private Disease()
+    private PlantCondition()
     {
     }
 
@@ -13,6 +13,8 @@ public sealed class Disease : Entity
     public string Name { get; private set; } = null!;
 
     public string? ScientificName { get; private set; }
+
+    public ConditionType ConditionType { get; private set; }
 
     public string? Description { get; private set; }
 

@@ -10,6 +10,10 @@ public sealed class Notification : Entity
 
     public Guid UserId { get; private set; }
 
+    public Guid? TenantId { get; private set; }
+
+    public Guid? FarmId { get; private set; }
+
     public string NotificationType { get; private set; } = null!;
 
     public string Title { get; private set; } = null!;

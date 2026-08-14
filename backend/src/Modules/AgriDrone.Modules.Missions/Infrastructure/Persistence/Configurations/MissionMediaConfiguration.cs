@@ -35,6 +35,15 @@ public sealed class MissionMediaConfiguration : IEntityTypeConfiguration<Mission
             .HasColumnName("captured_at")
             .HasColumnType("timestamp with time zone");
 
+        builder.Property(media => media.TelemetryTimeOffsetMs)
+            .HasColumnName("telemetry_time_offset_ms")
+            .HasColumnType("bigint");
+
+        builder.Property(media => media.CaptureClockSource)
+            .HasColumnName("capture_clock_source")
+            .HasColumnType("character varying(50)")
+            .HasMaxLength(50);
+
         builder.Property(media => media.CreatedAt)
             .HasColumnName("created_at")
             .HasColumnType("timestamp with time zone")

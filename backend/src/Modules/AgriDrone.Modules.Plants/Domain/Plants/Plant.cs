@@ -17,9 +17,21 @@ public sealed class Plant : AggregateRoot
 
     public Point? Location { get; private set; }
 
+    public Guid? CurrentMapVersionId { get; private set; }
+
+    public int? RowIndex { get; private set; }
+
+    public int? ColumnIndex { get; private set; }
+
+    public decimal? LocationAccuracyM { get; private set; }
+
+    public decimal? PositionConfidence { get; private set; }
+
+    public PositionSource? PositionSource { get; private set; }
+
     public PlantLifecycleStatus LifecycleStatus { get; private set; }
 
-    public HealthStatus CurrentHealthStatus { get; private set; }
+    public Guid CurrentHealthLevelId { get; private set; }
 
     public DateTimeOffset? LastInspectedAt { get; private set; }
 

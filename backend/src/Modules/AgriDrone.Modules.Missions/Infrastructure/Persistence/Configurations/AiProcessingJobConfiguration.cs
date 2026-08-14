@@ -19,6 +19,13 @@ public sealed class AiProcessingJobConfiguration : IEntityTypeConfiguration<AiPr
                 tableBuilder.HasCheckConstraint(
                     "ck_ai_job_time",
                     "completed_at IS NULL OR started_at IS NULL OR completed_at >= started_at");
+                tableBuilder.HasCheckConstraint("ck_ai_job_attempt", "attempt_number >= 1");
+                tableBuilder.HasCheckConstraint(
+                    "ck_ai_job_progress",
+                    "progress_percent IS NULL OR progress_percent BETWEEN 0 AND 100");
+                tableBuilder.HasCheckConstraint(
+                    "ck_ai_job_threshold_model",
+                    "threshold_profile_id IS NULL OR model_version_id IS NOT NULL");
             });
 
         builder.HasKey(job => job.Id).HasName("pk_ai_processing_jobs");
@@ -31,6 +38,14 @@ public sealed class AiProcessingJobConfiguration : IEntityTypeConfiguration<AiPr
 
         builder.Property(job => job.MissionId)
             .HasColumnName("mission_id")
+            .HasColumnType("uuid");
+
+        builder.Property(job => job.ModelVersionId)
+            .HasColumnName("model_version_id")
+            .HasColumnType("uuid");
+
+        builder.Property(job => job.ThresholdProfileId)
+            .HasColumnName("threshold_profile_id")
             .HasColumnType("uuid");
 
         builder.Property(job => job.JobType)
@@ -54,6 +69,38 @@ public sealed class AiProcessingJobConfiguration : IEntityTypeConfiguration<AiPr
             .HasColumnType("jsonb")
             .HasDefaultValueSql("'{}'::jsonb")
             .IsRequired();
+
+        builder.Property(job => job.AttemptNumber)
+            .HasColumnName("attempt_number")
+            .HasColumnType("integer")
+            .HasDefaultValue(1)
+            .IsRequired();
+
+        builder.Property(job => job.ProgressPercent)
+            .HasColumnName("progress_percent")
+            .HasColumnType("numeric(5,2)")
+            .HasPrecision(5, 2);
+
+        builder.Property(job => job.InputManifest)
+            .HasColumnName("input_manifest")
+            .HasColumnType("jsonb")
+            .HasDefaultValueSql("'{}'::jsonb")
+            .IsRequired();
+
+        builder.Property(job => job.OutputManifest)
+            .HasColumnName("output_manifest")
+            .HasColumnType("jsonb")
+            .HasDefaultValueSql("'{}'::jsonb")
+            .IsRequired();
+
+        builder.Property(job => job.ErrorCode)
+            .HasColumnName("error_code")
+            .HasColumnType("character varying(100)")
+            .HasMaxLength(100);
+
+        builder.Property(job => job.ClientOperationId)
+            .HasColumnName("client_operation_id")
+            .HasColumnType("uuid");
 
         builder.Property(job => job.ErrorMessage)
             .HasColumnName("error_message")
@@ -80,10 +127,28 @@ public sealed class AiProcessingJobConfiguration : IEntityTypeConfiguration<AiPr
         builder.HasIndex(job => job.Status)
             .HasDatabaseName("ix_ai_jobs_status");
 
+        builder.HasIndex(job => job.ClientOperationId)
+            .HasDatabaseName("uq_ai_jobs_client_operation")
+            .HasFilter("client_operation_id IS NOT NULL")
+            .IsUnique();
+
         builder.HasOne<DroneMission>()
             .WithMany()
             .HasForeignKey(job => job.MissionId)
             .OnDelete(DeleteBehavior.Cascade)
             .HasConstraintName("fk_ai_processing_jobs_drone_missions_mission_id");
+
+        builder.HasOne<AiModelVersion>()
+            .WithMany()
+            .HasForeignKey(job => job.ModelVersionId)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_ai_processing_jobs_model_versions_model_id");
+
+        builder.HasOne<AiThresholdProfile>()
+            .WithMany()
+            .HasForeignKey(job => new { job.ThresholdProfileId, job.ModelVersionId })
+            .HasPrincipalKey(profile => new { profile.Id, profile.ModelVersionId })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_ai_processing_jobs_threshold_profile_same_model");
     }
 }

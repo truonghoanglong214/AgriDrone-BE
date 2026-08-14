@@ -1,3 +1,4 @@
+using System.Text.Json;
 using AgriDrone.SharedKernel.Domain;
 using NetTopologySuite.Geometries;
 
@@ -8,6 +9,8 @@ public sealed class DroneMission : AggregateRoot
     private DroneMission()
     {
     }
+
+    public Guid TenantId { get; private set; }
 
     public Guid FarmId { get; private set; }
 
@@ -32,6 +35,8 @@ public sealed class DroneMission : AggregateRoot
     public DateTimeOffset? EndedAt { get; private set; }
 
     public LineString? FlightRoute { get; private set; }
+
+    public JsonDocument FlightParameters { get; private set; } = null!;
 
     public int? DetectedPlantCount { get; private set; }
 

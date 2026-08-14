@@ -33,4 +33,6 @@ public sealed class FieldTask : AggregateRoot
     public DateTimeOffset UpdatedAt { get; private set; }
 
     public DateTimeOffset? CompletedAt { get; private set; }
+
+    public uint Version { get; private set; }
 }

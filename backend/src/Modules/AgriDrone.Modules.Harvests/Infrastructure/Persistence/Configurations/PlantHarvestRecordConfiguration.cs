@@ -59,6 +59,36 @@ public sealed class PlantHarvestRecordConfiguration
             .HasColumnName("notes")
             .HasColumnType("text");
 
+        builder.Property(record => record.RecordedBy)
+            .HasColumnName("recorded_by")
+            .HasColumnType("uuid");
+
+        builder.Property(record => record.RecordedAt)
+            .HasColumnName("recorded_at")
+            .HasColumnType("timestamp with time zone")
+            .HasDefaultValueSql("NOW()")
+            .IsRequired();
+
+        builder.Property(record => record.Source)
+            .HasColumnName("source")
+            .HasColumnType("system.harvest_record_source")
+            .HasDefaultValueSql("'WEB'::system.harvest_record_source")
+            .IsRequired();
+
+        builder.Property(record => record.ClientOperationId)
+            .HasColumnName("client_operation_id")
+            .HasColumnType("uuid");
+
+        builder.Property(record => record.DeviceCreatedAt)
+            .HasColumnName("device_created_at")
+            .HasColumnType("timestamp with time zone");
+
+        builder.Property(record => record.ServerReceivedAt)
+            .HasColumnName("server_received_at")
+            .HasColumnType("timestamp with time zone")
+            .HasDefaultValueSql("NOW()")
+            .IsRequired();
+
         builder.Property(record => record.CreatedAt)
             .HasColumnName("created_at")
             .HasColumnType("timestamp with time zone")
@@ -80,6 +110,11 @@ public sealed class PlantHarvestRecordConfiguration
 
         builder.HasIndex(record => record.HarvestBatchId)
             .HasDatabaseName("ix_plant_harvest_records_batch");
+
+        builder.HasIndex(record => record.ClientOperationId)
+            .HasDatabaseName("uq_plant_harvest_records_client_operation")
+            .HasFilter("client_operation_id IS NOT NULL")
+            .IsUnique();
 
         builder.HasOne<HarvestBatch>()
             .WithMany()

@@ -27,12 +27,18 @@ public sealed class DroneMissionConfiguration : IEntityTypeConfiguration<DroneMi
         builder.HasKey(mission => mission.Id).HasName("pk_drone_missions");
         builder.HasAlternateKey(mission => new { mission.Id, mission.FarmId })
             .HasName("uq_drone_missions_id_farm");
+        builder.HasAlternateKey(mission => new { mission.Id, mission.TenantId })
+            .HasName("uq_drone_missions_id_tenant");
 
         builder.Property(mission => mission.Id)
             .HasColumnName("id")
             .HasColumnType("uuid")
             .HasDefaultValueSql("gen_random_uuid()")
             .ValueGeneratedOnAdd();
+
+        builder.Property(mission => mission.TenantId)
+            .HasColumnName("tenant_id")
+            .HasColumnType("uuid");
 
         builder.Property(mission => mission.FarmId)
             .HasColumnName("farm_id")
@@ -89,6 +95,12 @@ public sealed class DroneMissionConfiguration : IEntityTypeConfiguration<DroneMi
             .HasColumnName("flight_route")
             .HasColumnType("geometry(LineString,4326)");
 
+        builder.Property(mission => mission.FlightParameters)
+            .HasColumnName("flight_parameters")
+            .HasColumnType("jsonb")
+            .HasDefaultValueSql("'{}'::jsonb")
+            .IsRequired();
+
         builder.Property(mission => mission.DetectedPlantCount)
             .HasColumnName("detected_plant_count")
             .HasColumnType("integer");
@@ -117,6 +129,9 @@ public sealed class DroneMissionConfiguration : IEntityTypeConfiguration<DroneMi
             .HasDatabaseName("uq_drone_missions_farm_code")
             .IsUnique();
 
+        builder.HasIndex(mission => mission.TenantId)
+            .HasDatabaseName("ix_drone_missions_tenant");
+
         builder.HasIndex(mission => new { mission.FarmId, mission.StartedAt })
             .HasDatabaseName("ix_drone_missions_farm_started")
             .IsDescending(false, true);
@@ -134,8 +149,9 @@ public sealed class DroneMissionConfiguration : IEntityTypeConfiguration<DroneMi
 
         builder.HasOne<Drone>()
             .WithMany()
-            .HasForeignKey(mission => mission.DroneId)
+            .HasForeignKey(mission => new { mission.DroneId, mission.TenantId })
+            .HasPrincipalKey(drone => new { drone.Id, drone.TenantId })
             .OnDelete(DeleteBehavior.Restrict)
-            .HasConstraintName("fk_drone_missions_drones_drone_id");
+            .HasConstraintName("fk_drone_missions_drones_same_tenant");
     }
 }

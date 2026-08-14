@@ -1,4 +1,5 @@
 using AgriDrone.Modules.Farms.Domain.Farms;
+using AgriDrone.Modules.Farms.Domain.Maps;
 using AgriDrone.Modules.Farms.Domain.Zones;
 using Microsoft.EntityFrameworkCore;
 
@@ -10,6 +11,8 @@ internal sealed class FarmsDbContext(DbContextOptions<FarmsDbContext> options)
     public DbSet<Farm> Farms => Set<Farm>();
 
     public DbSet<FarmZone> FarmZones => Set<FarmZone>();
+
+    public DbSet<ZoneMapVersion> ZoneMapVersions => Set<ZoneMapVersion>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

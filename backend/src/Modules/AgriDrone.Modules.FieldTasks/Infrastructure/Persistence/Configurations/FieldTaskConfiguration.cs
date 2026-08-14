@@ -15,6 +15,8 @@ public sealed class FieldTaskConfiguration : IEntityTypeConfiguration<FieldTask>
                 "Field work created by managers, often originating from an AI scan that needs human verification."));
 
         builder.HasKey(fieldTask => fieldTask.Id).HasName("pk_field_tasks");
+        builder.HasAlternateKey(fieldTask => new { fieldTask.Id, fieldTask.FarmId })
+            .HasName("uq_field_tasks_id_farm");
 
         builder.Property(fieldTask => fieldTask.Id)
             .HasColumnName("id")
@@ -85,6 +87,9 @@ public sealed class FieldTaskConfiguration : IEntityTypeConfiguration<FieldTask>
         builder.Property(fieldTask => fieldTask.CompletedAt)
             .HasColumnName("completed_at")
             .HasColumnType("timestamp with time zone");
+
+        builder.Property(fieldTask => fieldTask.Version)
+            .IsRowVersion();
 
         builder.HasIndex(fieldTask => new
         {

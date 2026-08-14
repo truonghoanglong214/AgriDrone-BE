@@ -11,7 +11,17 @@ public sealed class AuditLog : Entity<long>
 
     public Guid? UserId { get; private set; }
 
+    public Guid? TenantId { get; private set; }
+
     public Guid? FarmId { get; private set; }
+
+    public AuditActorType ActorType { get; private set; }
+
+    public Guid? ActorId { get; private set; }
+
+    public Guid? CorrelationId { get; private set; }
+
+    public Guid? SourceJobId { get; private set; }
 
     public string EntityType { get; private set; } = null!;
 
