@@ -1,5 +1,6 @@
 ﻿using AgriDrone.Api.Contracts.Users;
 using AgriDrone.Modules.Identity.Application.Authorization;
+using AgriDrone.Modules.Identity.Application.Features.GetTenantUsers;
 using AgriDrone.Modules.Identity.Application.Features.GetUsers;
 using AgriDrone.SharedInfrastructure.Http;
 using MediatR;
@@ -26,6 +27,23 @@ namespace AgriDrone.Api.Controllers
             var result = await sender.Send(
                 query,
                 cancellationToken);
+
+            return result.ToHttpResult(
+                HttpContext,
+                users => Results.Ok(users));
+        }
+
+        [HttpGet("/api/tenants/current/users")]
+        [Authorize(Policy = IdentityAuthorizationPolicies.TenantAdmin)]
+        public async Task<IResult> GetTenantUsers(
+            [FromQuery] GetUserRequest request,
+            CancellationToken cancellationToken)
+        {
+            var query = new GetTenantUsersQuery(
+                request.PageNumber,
+                request.PageSize);
+
+            var result = await sender.Send(query, cancellationToken);
 
             return result.ToHttpResult(
                 HttpContext,

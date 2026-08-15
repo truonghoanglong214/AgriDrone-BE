@@ -1,3 +1,4 @@
+using AgriDrone.Modules.Harvests.Domain.HarvestBatches;
 using AgriDrone.SharedKernel.Domain;
 
 namespace AgriDrone.Modules.Harvests.Domain.PlantHarvests;
@@ -35,4 +36,8 @@ public sealed class PlantHarvestRecord : Entity
     public DateTimeOffset CreatedAt { get; private set; }
 
     public DateTimeOffset UpdatedAt { get; private set; }
+
+    public HarvestBatch HarvestBatch { get; private set; } = null!;
+
+    public ICollection<PlantHarvestQualityDetail> QualityDetails { get; private set; } = [];
 }

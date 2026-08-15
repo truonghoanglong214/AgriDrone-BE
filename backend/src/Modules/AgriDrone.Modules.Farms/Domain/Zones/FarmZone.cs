@@ -1,3 +1,5 @@
+using AgriDrone.Modules.Farms.Domain.Farms;
+using AgriDrone.Modules.Farms.Domain.Maps;
 using AgriDrone.SharedKernel.Domain;
 using NetTopologySuite.Geometries;
 
@@ -28,4 +30,8 @@ public sealed class FarmZone : Entity
     public DateTimeOffset UpdatedAt { get; private set; }
 
     public DateTimeOffset? DeletedAt { get; private set; }
+
+    public Farm Farm { get; private set; } = null!;
+
+    public ICollection<ZoneMapVersion> MapVersions { get; private set; } = [];
 }

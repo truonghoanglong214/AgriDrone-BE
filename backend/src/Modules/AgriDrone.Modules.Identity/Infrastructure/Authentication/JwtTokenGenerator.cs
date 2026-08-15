@@ -1,5 +1,6 @@
 ﻿using AgriDrone.Modules.Identity.Application.Abstractions;
 using AgriDrone.SharedInfrastructure.Authentication;
+using AgriDrone.Modules.Identity.Domain.Tenants;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using System;
@@ -16,28 +17,44 @@ namespace AgriDrone.Modules.Identity.Infrastructure.Authentication
     {
         private readonly JwtOptions _options = options.Value;
 
-        public string GenerateAccessToken(
-            Guid userId,
-            string email,
-            IEnumerable<string> systemRoles)
+        public AccessTokenResult GenerateAccessToken(
+            AccessTokenRequest request)
         {
             var claims = new List<Claim>
         {
             new(
                 JwtRegisteredClaimNames.Sub,
-                userId.ToString()),
+                request.UserId.ToString()),
 
             new(
                 JwtRegisteredClaimNames.Email,
-                email),
+                request.Email),
 
             new(
                 JwtRegisteredClaimNames.Jti,
                 Guid.NewGuid().ToString())
         };
 
+            if (request.TenantId is Guid tenantId &&
+                request.TenantMembershipId is Guid membershipId &&
+                request.TenantRole is TenantMemberRole tenantRole)
+            {
+                claims.AddRange(
+                [
+                    new Claim(
+                        AgriDroneClaimTypes.TenantId,
+                        tenantId.ToString()),
+                    new Claim(
+                        AgriDroneClaimTypes.TenantMembershipId,
+                        membershipId.ToString()),
+                    new Claim(
+                        AgriDroneClaimTypes.TenantRole,
+                        ToClaimValue(tenantRole))
+                ]);
+            }
+
             claims.AddRange(
-                systemRoles.Select(role =>
+                request.SystemRoles.Select(role =>
                     new Claim(AgriDroneClaimTypes.SystemRole, role)));
 
             var key = new SymmetricSecurityKey(
@@ -48,16 +65,32 @@ namespace AgriDrone.Modules.Identity.Infrastructure.Authentication
                 key,
                 SecurityAlgorithms.HmacSha256);
 
+            var expiresAt = DateTimeOffset.UtcNow.AddMinutes(
+                _options.AccessTokenExpirationMinutes);
+
             var token = new JwtSecurityToken(
                 issuer: _options.Issuer,
                 audience: _options.Audience,
                 claims: claims,
-                expires: DateTime.UtcNow.AddMinutes(
-                    _options.AccessTokenExpirationMinutes),
+                expires: expiresAt.UtcDateTime,
                 signingCredentials: credentials);
 
-            return new JwtSecurityTokenHandler()
+            var accessToken = new JwtSecurityTokenHandler()
                 .WriteToken(token);
+
+            return new AccessTokenResult(accessToken, expiresAt);
+        }
+
+        private static string ToClaimValue(
+            TenantMemberRole role)
+        {
+            return role switch
+            {
+                TenantMemberRole.Owner => "OWNER",
+                TenantMemberRole.TenantAdmin => "TENANT_ADMIN",
+                TenantMemberRole.Member => "MEMBER",
+                _ => throw new ArgumentOutOfRangeException(nameof(role), role, null)
+            };
         }
     }
 }

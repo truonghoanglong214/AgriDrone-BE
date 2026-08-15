@@ -50,14 +50,14 @@ public sealed class MissionMediaConfiguration : IEntityTypeConfiguration<Mission
             .HasDefaultValueSql("NOW()")
             .IsRequired();
 
-        builder.HasOne<DroneMission>()
-            .WithMany()
+        builder.HasOne(media => media.Mission)
+            .WithMany(mission => mission.Media)
             .HasForeignKey(media => media.MissionId)
             .OnDelete(DeleteBehavior.Cascade)
             .HasConstraintName("fk_mission_media_drone_missions_mission_id");
 
-        builder.HasOne<MediaAsset>()
-            .WithMany()
+        builder.HasOne(media => media.Media)
+            .WithMany(asset => asset.MissionMedia)
             .HasForeignKey(media => media.MediaId)
             .OnDelete(DeleteBehavior.Restrict)
             .HasConstraintName("fk_mission_media_media_assets_media_id");

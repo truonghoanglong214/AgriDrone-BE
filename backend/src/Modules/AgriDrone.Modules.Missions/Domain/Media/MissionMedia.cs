@@ -1,3 +1,5 @@
+using AgriDrone.Modules.Missions.Domain.Missions;
+
 namespace AgriDrone.Modules.Missions.Domain.Media;
 
 public sealed class MissionMedia
@@ -19,4 +21,8 @@ public sealed class MissionMedia
     public string? CaptureClockSource { get; private set; }
 
     public DateTimeOffset CreatedAt { get; private set; }
+
+    public DroneMission Mission { get; private set; } = null!;
+
+    public MediaAsset Media { get; private set; } = null!;
 }

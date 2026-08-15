@@ -30,5 +30,6 @@ namespace AgriDrone.Modules.Identity.Infrastructure.Queries
                 pagedRequest,
                 cancellationToken);
         }
+
     }
 }

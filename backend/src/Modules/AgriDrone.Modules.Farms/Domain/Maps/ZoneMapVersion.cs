@@ -1,4 +1,5 @@
 using System.Text.Json;
+using AgriDrone.Modules.Farms.Domain.Zones;
 using AgriDrone.SharedKernel.Domain;
 
 namespace AgriDrone.Modules.Farms.Domain.Maps;
@@ -34,4 +35,6 @@ public sealed class ZoneMapVersion : AggregateRoot
     public DateTimeOffset? ConfirmedAt { get; private set; }
 
     public DateTimeOffset CreatedAt { get; private set; }
+
+    public FarmZone Zone { get; private set; } = null!;
 }

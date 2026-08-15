@@ -1,3 +1,4 @@
+using AgriDrone.Modules.Plants.Domain.Conditions;
 using AgriDrone.SharedKernel.Domain;
 
 namespace AgriDrone.Modules.Plants.Domain.Verifications;
@@ -23,4 +24,12 @@ public sealed class ConditionDetectionReview : Entity
     public string? Note { get; private set; }
 
     public DateTimeOffset CreatedAt { get; private set; }
+
+    public ScanVerification ScanVerification { get; private set; } = null!;
+
+    public ConditionDetection ConditionDetection { get; private set; } = null!;
+
+    public PlantCondition? CorrectedCondition { get; private set; }
+
+    public HealthLevel? CorrectedSeverityLevel { get; private set; }
 }

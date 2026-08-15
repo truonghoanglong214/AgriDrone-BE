@@ -1,4 +1,5 @@
 using System.Text.Json;
+using AgriDrone.Modules.Missions.Domain.Observations;
 using AgriDrone.SharedKernel.Domain;
 
 namespace AgriDrone.Modules.Missions.Domain.Media;
@@ -50,4 +51,8 @@ public sealed class MediaAsset : Entity
     public DateTimeOffset CreatedAt { get; private set; }
 
     public DateTimeOffset UpdatedAt { get; private set; }
+
+    public ICollection<MissionMedia> MissionMedia { get; private set; } = [];
+
+    public ICollection<MissionPlantObservation> EvidenceObservations { get; private set; } = [];
 }

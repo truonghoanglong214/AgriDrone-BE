@@ -121,8 +121,8 @@ public sealed class HarvestBatchConfiguration : IEntityTypeConfiguration<Harvest
             .HasDatabaseName("ix_harvest_batches_zone")
             .IsDescending(false, true);
 
-        builder.HasOne<Season>()
-            .WithMany()
+        builder.HasOne(batch => batch.Season)
+            .WithMany(season => season.HarvestBatches)
             .HasForeignKey(batch => new { batch.SeasonId, batch.FarmId })
             .HasPrincipalKey(season => new { season.Id, season.FarmId })
             .OnDelete(DeleteBehavior.Cascade)

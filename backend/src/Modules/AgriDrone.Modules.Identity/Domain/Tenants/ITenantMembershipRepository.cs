@@ -7,5 +7,13 @@ namespace AgriDrone.Modules.Identity.Domain.Tenants
     public interface ITenantMembershipRepository
     {
         void Add(TenantMembership tenantMembership);
+        Task<IReadOnlyCollection<TenantMembership>> GetActiveByUserIdAsync(
+            Guid userId,
+            CancellationToken cancellationToken);
+
+        Task<TenantMembership?> GetActiveByUserAndTenantIdAsync(
+            Guid userId,
+            Guid tenantId,
+            CancellationToken cancellationToken);
     }
 }

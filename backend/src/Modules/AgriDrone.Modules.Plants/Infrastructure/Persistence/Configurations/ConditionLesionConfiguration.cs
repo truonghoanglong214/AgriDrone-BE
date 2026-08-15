@@ -57,8 +57,8 @@ public sealed class ConditionLesionConfiguration : IEntityTypeConfiguration<Cond
             .HasDefaultValueSql("NOW()")
             .IsRequired();
 
-        builder.HasOne<ConditionDetection>()
-            .WithMany()
+        builder.HasOne(lesion => lesion.ConditionDetection)
+            .WithMany(detection => detection.Lesions)
             .HasForeignKey(lesion => lesion.ConditionDetectionId)
             .OnDelete(DeleteBehavior.Cascade)
             .HasConstraintName("fk_condition_lesions_detections_detection_id");

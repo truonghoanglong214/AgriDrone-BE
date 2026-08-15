@@ -147,8 +147,8 @@ public sealed class DroneMissionConfiguration : IEntityTypeConfiguration<DroneMi
             .HasDatabaseName("ix_drone_missions_route_gist")
             .HasMethod("gist");
 
-        builder.HasOne<Drone>()
-            .WithMany()
+        builder.HasOne(mission => mission.Drone)
+            .WithMany(drone => drone.Missions)
             .HasForeignKey(mission => new { mission.DroneId, mission.TenantId })
             .HasPrincipalKey(drone => new { drone.Id, drone.TenantId })
             .OnDelete(DeleteBehavior.Restrict)

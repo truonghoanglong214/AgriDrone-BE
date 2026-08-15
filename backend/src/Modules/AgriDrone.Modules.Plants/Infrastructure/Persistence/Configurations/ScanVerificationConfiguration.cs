@@ -93,14 +93,14 @@ public sealed class ScanVerificationConfiguration : IEntityTypeConfiguration<Sca
             .HasDatabaseName("uq_scan_verifications_scan_revision")
             .IsUnique();
 
-        builder.HasOne<PlantScan>()
-            .WithMany()
+        builder.HasOne(verification => verification.PlantScan)
+            .WithMany(scan => scan.Verifications)
             .HasForeignKey(verification => verification.PlantScanId)
             .OnDelete(DeleteBehavior.Cascade)
             .HasConstraintName("fk_scan_verifications_plant_scans_scan_id");
 
-        builder.HasOne<ScanVerification>()
-            .WithMany()
+        builder.HasOne(verification => verification.SupersedesVerification)
+            .WithMany(verification => verification.SupersededByVerifications)
             .HasForeignKey(verification => new
             {
                 verification.SupersedesVerificationId,
@@ -110,8 +110,8 @@ public sealed class ScanVerificationConfiguration : IEntityTypeConfiguration<Sca
             .OnDelete(DeleteBehavior.Restrict)
             .HasConstraintName("fk_scan_verifications_supersedes_same_scan");
 
-        builder.HasOne<HealthLevel>()
-            .WithMany()
+        builder.HasOne(verification => verification.CorrectedHealthLevel)
+            .WithMany(level => level.CorrectedScanVerifications)
             .HasForeignKey(verification => verification.CorrectedHealthLevelId)
             .OnDelete(DeleteBehavior.Restrict)
             .HasConstraintName("fk_scan_verifications_health_levels_corrected_health_level_id");

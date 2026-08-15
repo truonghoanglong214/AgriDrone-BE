@@ -36,8 +36,8 @@ public sealed class TaskMediaConfiguration : IEntityTypeConfiguration<TaskMedia>
             .HasDefaultValueSql("NOW()")
             .IsRequired();
 
-        builder.HasOne<FieldTask>()
-            .WithMany()
+        builder.HasOne(media => media.Task)
+            .WithMany(task => task.Media)
             .HasForeignKey(media => media.TaskId)
             .OnDelete(DeleteBehavior.Cascade)
             .HasConstraintName("fk_task_media_field_tasks_task_id");

@@ -1,3 +1,5 @@
+using AgriDrone.Modules.Harvests.Domain.Quality;
+
 namespace AgriDrone.Modules.Harvests.Domain.PlantHarvests;
 
 public sealed class PlantHarvestQualityDetail
@@ -17,4 +19,8 @@ public sealed class PlantHarvestQualityDetail
     public decimal? WeightKg { get; private set; }
 
     public DateTimeOffset CreatedAt { get; private set; }
+
+    public PlantHarvestRecord PlantHarvestRecord { get; private set; } = null!;
+
+    public HarvestQualityGrade QualityGrade { get; private set; } = null!;
 }

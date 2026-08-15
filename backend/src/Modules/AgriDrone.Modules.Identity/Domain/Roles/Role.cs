@@ -15,4 +15,6 @@ public sealed class Role : Entity
     public string? Description { get; private set; }
 
     public DateTimeOffset CreatedAt { get; private set; }
+
+    public ICollection<UserRole> UserRoles { get; private set; } = [];
 }

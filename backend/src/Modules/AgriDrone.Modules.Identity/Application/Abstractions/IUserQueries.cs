@@ -1,4 +1,5 @@
-﻿using AgriDrone.Modules.Identity.Application.Features.GetUsers;
+﻿using AgriDrone.Modules.Identity.Application.Features.GetTenantUsers;
+using AgriDrone.Modules.Identity.Application.Features.GetUsers;
 using AgriDrone.SharedKernel.Application.Pagination;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using System;
@@ -10,5 +11,6 @@ namespace AgriDrone.Modules.Identity.Application.Abstractions
     internal interface IUserQueries
     {
         Task<PagedResult<UserListItemResponse>> GetPageAsync(PagedRequest pagedRequest, CancellationToken cancellationToken);
+
     }
 }

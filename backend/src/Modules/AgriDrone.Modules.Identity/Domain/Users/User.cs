@@ -1,3 +1,7 @@
+using AgriDrone.Modules.Identity.Domain.FarmMemberships;
+using AgriDrone.Modules.Identity.Domain.Roles;
+using AgriDrone.Modules.Identity.Domain.Tenants;
+using AgriDrone.Modules.Identity.Domain.ZoneAssignments;
 using AgriDrone.SharedKernel.Domain;
 
 namespace AgriDrone.Modules.Identity.Domain.Users;
@@ -43,6 +47,14 @@ public sealed class User : AggregateRoot
     public DateTimeOffset UpdatedAt { get; private set; }
 
     public DateTimeOffset? DeletedAt { get; private set; }
+
+    public ICollection<TenantMembership> TenantMemberships { get; private set; } = [];
+
+    public ICollection<FarmMembership> FarmMemberships { get; private set; } = [];
+
+    public ICollection<UserRole> UserRoles { get; private set; } = [];
+
+    public ICollection<ZoneAssignment> AssignedZoneAssignments { get; private set; } = [];
 
     public static User Create(
         string email,

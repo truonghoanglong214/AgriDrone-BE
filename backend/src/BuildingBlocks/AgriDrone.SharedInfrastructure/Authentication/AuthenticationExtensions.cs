@@ -35,6 +35,7 @@ namespace AgriDrone.SharedInfrastructure.Authentication
             services.AddHttpContextAccessor();
 
             services.AddScoped<ICurrentUser, CurrentUser>();
+            services.AddScoped<ICurrentTenant, CurrentTenant>();
 
             services
                 .AddAuthentication(

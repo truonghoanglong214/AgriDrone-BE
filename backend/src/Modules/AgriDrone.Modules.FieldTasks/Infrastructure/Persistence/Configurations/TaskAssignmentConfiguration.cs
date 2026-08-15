@@ -61,8 +61,8 @@ public sealed class TaskAssignmentConfiguration : IEntityTypeConfiguration<TaskA
             .HasFilter("unassigned_at IS NULL")
             .IsDescending(false, true);
 
-        builder.HasOne<FieldTask>()
-            .WithMany()
+        builder.HasOne(assignment => assignment.Task)
+            .WithMany(task => task.Assignments)
             .HasForeignKey(assignment => assignment.TaskId)
             .OnDelete(DeleteBehavior.Cascade)
             .HasConstraintName("fk_task_assignments_field_tasks_task_id");

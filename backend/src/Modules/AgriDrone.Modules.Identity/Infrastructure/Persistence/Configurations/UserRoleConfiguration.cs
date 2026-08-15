@@ -32,14 +32,14 @@ public sealed class UserRoleConfiguration : IEntityTypeConfiguration<UserRole>
             .HasDefaultValueSql("NOW()")
             .IsRequired();
 
-        builder.HasOne<User>()
-            .WithMany()
+        builder.HasOne(userRole => userRole.User)
+            .WithMany(user => user.UserRoles)
             .HasForeignKey(userRole => userRole.UserId)
             .OnDelete(DeleteBehavior.Cascade)
             .HasConstraintName("fk_user_roles_users_user_id");
 
-        builder.HasOne<Role>()
-            .WithMany()
+        builder.HasOne(userRole => userRole.Role)
+            .WithMany(role => role.UserRoles)
             .HasForeignKey(userRole => userRole.RoleId)
             .OnDelete(DeleteBehavior.Cascade)
             .HasConstraintName("fk_user_roles_roles_role_id");

@@ -25,4 +25,6 @@ public sealed class ConditionLesion : Entity
     public decimal? AffectedRatio { get; private set; }
 
     public DateTimeOffset CreatedAt { get; private set; }
+
+    public ConditionDetection ConditionDetection { get; private set; } = null!;
 }

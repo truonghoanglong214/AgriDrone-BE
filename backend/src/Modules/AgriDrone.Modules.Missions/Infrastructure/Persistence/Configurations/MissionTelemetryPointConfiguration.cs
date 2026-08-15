@@ -98,8 +98,8 @@ public sealed class MissionTelemetryPointConfiguration
             .HasDatabaseName("ix_mission_telemetry_location_gist")
             .HasMethod("gist");
 
-        builder.HasOne<DroneMission>()
-            .WithMany()
+        builder.HasOne(point => point.Mission)
+            .WithMany(mission => mission.TelemetryPoints)
             .HasForeignKey(point => point.MissionId)
             .OnDelete(DeleteBehavior.Cascade)
             .HasConstraintName("fk_mission_telemetry_points_missions_mission_id");

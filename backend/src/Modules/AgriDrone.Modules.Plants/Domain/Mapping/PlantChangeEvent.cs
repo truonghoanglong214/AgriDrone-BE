@@ -47,4 +47,6 @@ public sealed class PlantChangeEvent : Entity
     public DateTimeOffset? ReviewedAt { get; private set; }
 
     public DateTimeOffset CreatedAt { get; private set; }
+
+    public Plant? Plant { get; private set; }
 }

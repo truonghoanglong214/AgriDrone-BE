@@ -85,14 +85,14 @@ public sealed class FarmMembershipConfiguration : IEntityTypeConfiguration<FarmM
         })
             .HasDatabaseName("ix_farm_memberships_farm_role");
 
-        builder.HasOne<User>()
-            .WithMany()
+        builder.HasOne(membership => membership.User)
+            .WithMany(user => user.FarmMemberships)
             .HasForeignKey(membership => membership.UserId)
             .OnDelete(DeleteBehavior.Cascade)
             .HasConstraintName("fk_farm_memberships_users_user_id");
 
-        builder.HasOne<TenantMembership>()
-            .WithMany()
+        builder.HasOne(membership => membership.TenantMembership)
+            .WithMany(tenantMembership => tenantMembership.FarmMemberships)
             .HasForeignKey(membership => new { membership.TenantId, membership.UserId })
             .HasPrincipalKey(tenantMembership => new
             {

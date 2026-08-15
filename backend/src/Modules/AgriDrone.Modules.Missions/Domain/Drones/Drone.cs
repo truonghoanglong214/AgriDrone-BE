@@ -1,4 +1,5 @@
 using System.Text.Json;
+using AgriDrone.Modules.Missions.Domain.Missions;
 using AgriDrone.SharedKernel.Domain;
 
 namespace AgriDrone.Modules.Missions.Domain.Drones;
@@ -44,4 +45,6 @@ public sealed class Drone : AggregateRoot
     public DateTimeOffset UpdatedAt { get; private set; }
 
     public DateTimeOffset? DeletedAt { get; private set; }
+
+    public ICollection<DroneMission> Missions { get; private set; } = [];
 }

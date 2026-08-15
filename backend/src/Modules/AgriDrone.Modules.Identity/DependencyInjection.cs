@@ -39,8 +39,10 @@ public static class DependencyInjection
 
         services.AddScoped<IIdentityUnitOfWork>(serviceProvider => serviceProvider.GetRequiredService<IdentityDbContext>());
         services.AddScoped<IUserQueries, UserQueries>();
+        services.AddScoped<ITenantMembershipQueries, TenantMembershipQueries>();
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
+        services.AddScoped<ITenantSelectionTokenService, TenantSelectionTokenService>();
         services.AddScoped<IAuthorizationHandler, TenantRoleAuthorizationHandler>();
         services.AddScoped<IAuthorizationHandler, FarmRoleAuthorizationHandler>();
         services.AddScoped<IPasswordService, PasswordService>();

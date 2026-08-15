@@ -1,3 +1,5 @@
+using AgriDrone.Modules.FieldTasks.Domain.FieldTasks;
+
 namespace AgriDrone.Modules.FieldTasks.Domain.Media;
 
 public sealed class TaskMedia
@@ -13,4 +15,6 @@ public sealed class TaskMedia
     public Guid? UploadedBy { get; private set; }
 
     public DateTimeOffset CreatedAt { get; private set; }
+
+    public FieldTask Task { get; private set; } = null!;
 }

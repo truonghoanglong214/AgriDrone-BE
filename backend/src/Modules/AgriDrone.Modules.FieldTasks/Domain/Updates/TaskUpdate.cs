@@ -1,3 +1,4 @@
+using AgriDrone.Modules.FieldTasks.Domain.FieldTasks;
 using AgriDrone.SharedKernel.Domain;
 
 namespace AgriDrone.Modules.FieldTasks.Domain.Updates;
@@ -27,4 +28,6 @@ public sealed class TaskUpdate : Entity
     public DateTimeOffset ServerReceivedAt { get; private set; }
 
     public DateTimeOffset CreatedAt { get; private set; }
+
+    public FieldTask Task { get; private set; } = null!;
 }

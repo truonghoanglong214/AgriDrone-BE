@@ -1,4 +1,6 @@
 using System.Text.Json;
+using AgriDrone.Modules.Missions.Domain.Missions;
+using AgriDrone.Modules.Missions.Domain.Observations;
 using AgriDrone.SharedKernel.Domain;
 
 namespace AgriDrone.Modules.Missions.Domain.Processing;
@@ -42,4 +44,12 @@ public sealed class AiProcessingJob : Entity
     public DateTimeOffset? StartedAt { get; private set; }
 
     public DateTimeOffset? CompletedAt { get; private set; }
+
+    public DroneMission Mission { get; private set; } = null!;
+
+    public AiModelVersion? ModelVersion { get; private set; }
+
+    public AiThresholdProfile? ThresholdProfile { get; private set; }
+
+    public ICollection<MissionPlantObservation> PlantObservations { get; private set; } = [];
 }

@@ -26,5 +26,8 @@ namespace AgriDrone.SharedKernel.Application
 
         public static AppError Failure(string code, string description) =>
             new(code, description, ErrorType.Failure);
+
+        public static AppError Validation(string code, string description) =>
+            new(code, description, ErrorType.Validation);
     }
 }

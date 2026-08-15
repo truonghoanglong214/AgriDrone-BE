@@ -127,21 +127,21 @@ public sealed class PlantScanConfiguration : IEntityTypeConfiguration<PlantScan>
             .HasDatabaseName("ix_plant_scans_farm_health_level")
             .IsDescending(false, false, true);
 
-        builder.HasOne<Plant>()
-            .WithMany()
+        builder.HasOne(scan => scan.Plant)
+            .WithMany(plant => plant.Scans)
             .HasForeignKey(scan => new { scan.PlantId, scan.FarmId })
             .HasPrincipalKey(plant => new { plant.Id, plant.FarmId })
             .OnDelete(DeleteBehavior.Cascade)
             .HasConstraintName("fk_scan_plant_same_farm");
 
-        builder.HasOne<HealthLevel>()
-            .WithMany()
+        builder.HasOne(scan => scan.OverallHealthLevel)
+            .WithMany(level => level.PlantScans)
             .HasForeignKey(scan => scan.OverallHealthLevelId)
             .OnDelete(DeleteBehavior.Restrict)
             .HasConstraintName("fk_plant_scans_health_levels_overall_health_level_id");
 
-        builder.HasOne<PlantScan>()
-            .WithMany()
+        builder.HasOne(scan => scan.VerificationOfScan)
+            .WithMany(scan => scan.VerificationScans)
             .HasForeignKey(scan => new
             {
                 scan.VerificationOfScanId,

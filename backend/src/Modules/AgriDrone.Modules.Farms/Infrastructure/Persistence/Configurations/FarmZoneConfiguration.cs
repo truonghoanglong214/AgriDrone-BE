@@ -97,8 +97,8 @@ public sealed class FarmZoneConfiguration : IEntityTypeConfiguration<FarmZone>
             .HasDatabaseName("ix_farm_zones_boundary_gist")
             .HasMethod("gist");
 
-        builder.HasOne<Farm>()
-            .WithMany()
+        builder.HasOne(zone => zone.Farm)
+            .WithMany(farm => farm.Zones)
             .HasForeignKey(zone => zone.FarmId)
             .OnDelete(DeleteBehavior.Cascade)
             .HasConstraintName("fk_farm_zones_farms_farm_id");

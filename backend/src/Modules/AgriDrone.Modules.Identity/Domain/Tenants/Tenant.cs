@@ -29,6 +29,8 @@ public sealed class Tenant : AggregateRoot
 
     public DateTimeOffset? DeletedAt { get; private set; }
 
+    public ICollection<TenantMembership> Memberships { get; private set; } = [];
+
     public static Tenant Create(string code, string name, GeneralStatus status, DateTimeOffset createdAt)
     {
         return new Tenant(

@@ -116,8 +116,8 @@ public sealed class PlantHarvestRecordConfiguration
             .HasFilter("client_operation_id IS NOT NULL")
             .IsUnique();
 
-        builder.HasOne<HarvestBatch>()
-            .WithMany()
+        builder.HasOne(record => record.HarvestBatch)
+            .WithMany(batch => batch.PlantHarvestRecords)
             .HasForeignKey(record => new { record.HarvestBatchId, record.FarmId })
             .HasPrincipalKey(batch => new { batch.Id, batch.FarmId })
             .OnDelete(DeleteBehavior.Cascade)

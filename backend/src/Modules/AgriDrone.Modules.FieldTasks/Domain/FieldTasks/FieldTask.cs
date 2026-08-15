@@ -1,3 +1,6 @@
+using AgriDrone.Modules.FieldTasks.Domain.Assignments;
+using AgriDrone.Modules.FieldTasks.Domain.Media;
+using AgriDrone.Modules.FieldTasks.Domain.Updates;
 using AgriDrone.SharedKernel.Domain;
 
 namespace AgriDrone.Modules.FieldTasks.Domain.FieldTasks;
@@ -35,4 +38,10 @@ public sealed class FieldTask : AggregateRoot
     public DateTimeOffset? CompletedAt { get; private set; }
 
     public uint Version { get; private set; }
+
+    public ICollection<TaskAssignment> Assignments { get; private set; } = [];
+
+    public ICollection<TaskMedia> Media { get; private set; } = [];
+
+    public ICollection<TaskUpdate> Updates { get; private set; } = [];
 }

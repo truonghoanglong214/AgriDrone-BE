@@ -68,8 +68,8 @@ public sealed class ZoneAssignmentConfiguration : IEntityTypeConfiguration<ZoneA
         builder.HasIndex(assignment => new { assignment.FarmId, assignment.ZoneId })
             .HasDatabaseName("ix_zone_assignments_farm_zone");
 
-        builder.HasOne<FarmMembership>()
-            .WithMany()
+        builder.HasOne(assignment => assignment.FarmMembership)
+            .WithMany(membership => membership.ZoneAssignments)
             .HasForeignKey(assignment => new
             {
                 assignment.FarmMembershipId,
@@ -79,8 +79,8 @@ public sealed class ZoneAssignmentConfiguration : IEntityTypeConfiguration<ZoneA
             .OnDelete(DeleteBehavior.Cascade)
             .HasConstraintName("fk_zone_assignments_membership_same_farm");
 
-        builder.HasOne<User>()
-            .WithMany()
+        builder.HasOne(assignment => assignment.AssignedByUser)
+            .WithMany(user => user.AssignedZoneAssignments)
             .HasForeignKey(assignment => assignment.AssignedBy)
             .OnDelete(DeleteBehavior.Restrict)
             .HasConstraintName("fk_zone_assignments_users_assigned_by");

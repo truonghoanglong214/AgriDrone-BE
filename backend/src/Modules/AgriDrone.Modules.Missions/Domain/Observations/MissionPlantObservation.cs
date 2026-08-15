@@ -1,4 +1,7 @@
 using System.Text.Json;
+using AgriDrone.Modules.Missions.Domain.Media;
+using AgriDrone.Modules.Missions.Domain.Missions;
+using AgriDrone.Modules.Missions.Domain.Processing;
 using AgriDrone.SharedKernel.Domain;
 using NetTopologySuite.Geometries;
 
@@ -57,4 +60,14 @@ public sealed class MissionPlantObservation : Entity
     public Guid? EvidenceMediaId { get; private set; }
 
     public DateTimeOffset CreatedAt { get; private set; }
+
+    public DroneMission Mission { get; private set; } = null!;
+
+    public AiProcessingJob? AiJob { get; private set; }
+
+    public AiModelVersion? ModelVersion { get; private set; }
+
+    public MediaAsset? EvidenceMedia { get; private set; }
+
+    public ICollection<ObservationMatchCandidate> MatchCandidates { get; private set; } = [];
 }

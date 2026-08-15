@@ -1,5 +1,7 @@
 using AgriDrone.Modules.Plants.Domain.Diseases;
 using AgriDrone.Modules.Plants.Domain.Mapping;
+using AgriDrone.Modules.Plants.Domain.Scans;
+using AgriDrone.Modules.Plants.Domain.Verifications;
 using AgriDrone.SharedKernel.Domain;
 
 namespace AgriDrone.Modules.Plants.Domain.Conditions;
@@ -31,4 +33,14 @@ public sealed class ConditionDetection : Entity
     public Guid? CreatedBy { get; private set; }
 
     public DateTimeOffset CreatedAt { get; private set; }
+
+    public PlantScan PlantScan { get; private set; } = null!;
+
+    public PlantCondition Condition { get; private set; } = null!;
+
+    public HealthLevel SeverityLevel { get; private set; } = null!;
+
+    public ICollection<ConditionLesion> Lesions { get; private set; } = [];
+
+    public ICollection<ConditionDetectionReview> Reviews { get; private set; } = [];
 }

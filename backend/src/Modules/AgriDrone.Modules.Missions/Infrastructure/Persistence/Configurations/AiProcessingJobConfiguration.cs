@@ -132,20 +132,20 @@ public sealed class AiProcessingJobConfiguration : IEntityTypeConfiguration<AiPr
             .HasFilter("client_operation_id IS NOT NULL")
             .IsUnique();
 
-        builder.HasOne<DroneMission>()
-            .WithMany()
+        builder.HasOne(job => job.Mission)
+            .WithMany(mission => mission.AiProcessingJobs)
             .HasForeignKey(job => job.MissionId)
             .OnDelete(DeleteBehavior.Cascade)
             .HasConstraintName("fk_ai_processing_jobs_drone_missions_mission_id");
 
-        builder.HasOne<AiModelVersion>()
-            .WithMany()
+        builder.HasOne(job => job.ModelVersion)
+            .WithMany(model => model.ProcessingJobs)
             .HasForeignKey(job => job.ModelVersionId)
             .OnDelete(DeleteBehavior.Restrict)
             .HasConstraintName("fk_ai_processing_jobs_model_versions_model_id");
 
-        builder.HasOne<AiThresholdProfile>()
-            .WithMany()
+        builder.HasOne(job => job.ThresholdProfile)
+            .WithMany(profile => profile.ProcessingJobs)
             .HasForeignKey(job => new { job.ThresholdProfileId, job.ModelVersionId })
             .HasPrincipalKey(profile => new { profile.Id, profile.ModelVersionId })
             .OnDelete(DeleteBehavior.Restrict)

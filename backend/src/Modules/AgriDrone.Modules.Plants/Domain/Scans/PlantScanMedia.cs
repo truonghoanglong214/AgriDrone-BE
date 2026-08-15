@@ -15,4 +15,6 @@ public sealed class PlantScanMedia
     public bool IsPrimary { get; private set; }
 
     public DateTimeOffset CreatedAt { get; private set; }
+
+    public PlantScan PlantScan { get; private set; } = null!;
 }

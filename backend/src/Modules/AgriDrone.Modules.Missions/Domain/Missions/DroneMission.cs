@@ -1,4 +1,9 @@
 using System.Text.Json;
+using AgriDrone.Modules.Missions.Domain.Drones;
+using AgriDrone.Modules.Missions.Domain.Media;
+using AgriDrone.Modules.Missions.Domain.Observations;
+using AgriDrone.Modules.Missions.Domain.Processing;
+using AgriDrone.Modules.Missions.Domain.Telemetry;
 using AgriDrone.SharedKernel.Domain;
 using NetTopologySuite.Geometries;
 
@@ -47,4 +52,14 @@ public sealed class DroneMission : AggregateRoot
     public DateTimeOffset CreatedAt { get; private set; }
 
     public DateTimeOffset UpdatedAt { get; private set; }
+
+    public Drone Drone { get; private set; } = null!;
+
+    public ICollection<MissionMedia> Media { get; private set; } = [];
+
+    public ICollection<MissionTelemetryPoint> TelemetryPoints { get; private set; } = [];
+
+    public ICollection<AiProcessingJob> AiProcessingJobs { get; private set; } = [];
+
+    public ICollection<MissionPlantObservation> PlantObservations { get; private set; } = [];
 }

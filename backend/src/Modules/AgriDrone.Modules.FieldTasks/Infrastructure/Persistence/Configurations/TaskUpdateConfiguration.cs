@@ -76,8 +76,8 @@ public sealed class TaskUpdateConfiguration : IEntityTypeConfiguration<TaskUpdat
             .HasFilter("client_operation_id IS NOT NULL")
             .IsUnique();
 
-        builder.HasOne<FieldTask>()
-            .WithMany()
+        builder.HasOne(update => update.Task)
+            .WithMany(task => task.Updates)
             .HasForeignKey(update => new { update.TaskId, update.FarmId })
             .HasPrincipalKey(fieldTask => new { fieldTask.Id, fieldTask.FarmId })
             .OnDelete(DeleteBehavior.Cascade)

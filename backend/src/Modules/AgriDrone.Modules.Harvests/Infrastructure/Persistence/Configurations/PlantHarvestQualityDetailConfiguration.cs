@@ -59,8 +59,8 @@ public sealed class PlantHarvestQualityDetailConfiguration
             .HasDefaultValueSql("NOW()")
             .IsRequired();
 
-        builder.HasOne<PlantHarvestRecord>()
-            .WithMany()
+        builder.HasOne(detail => detail.PlantHarvestRecord)
+            .WithMany(record => record.QualityDetails)
             .HasForeignKey(detail => new
             {
                 detail.PlantHarvestRecordId,
@@ -70,8 +70,8 @@ public sealed class PlantHarvestQualityDetailConfiguration
             .OnDelete(DeleteBehavior.Cascade)
             .HasConstraintName("fk_quality_detail_record_same_farm");
 
-        builder.HasOne<HarvestQualityGrade>()
-            .WithMany()
+        builder.HasOne(detail => detail.QualityGrade)
+            .WithMany(grade => grade.PlantHarvestQualityDetails)
             .HasForeignKey(detail => detail.QualityGradeId)
             .OnDelete(DeleteBehavior.Restrict)
             .HasConstraintName("fk_quality_detail_grade_global");

@@ -15,4 +15,6 @@ public sealed class AiDetectionThreshold : Entity
     public decimal MinConfidence { get; private set; }
 
     public DateTimeOffset CreatedAt { get; private set; }
+
+    public AiThresholdProfile ThresholdProfile { get; private set; } = null!;
 }

@@ -15,5 +15,7 @@ namespace AgriDrone.SharedInfrastructure.Authentication
         public string Secret { get; init; } = string.Empty;
 
         public int AccessTokenExpirationMinutes { get; init; }
+
+        public int TenantSelectionTokenExpirationMinutes { get; init; } = 5;
     }
 }

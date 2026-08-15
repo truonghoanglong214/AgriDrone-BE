@@ -69,14 +69,14 @@ public sealed class TenantMembershipConfiguration : IEntityTypeConfiguration<Ten
             membership.Status
         }).HasDatabaseName("ix_tenant_memberships_tenant_role");
 
-        builder.HasOne<Tenant>()
-            .WithMany()
+        builder.HasOne(membership => membership.Tenant)
+            .WithMany(tenant => tenant.Memberships)
             .HasForeignKey(membership => membership.TenantId)
             .OnDelete(DeleteBehavior.Cascade)
             .HasConstraintName("fk_tenant_memberships_tenants_tenant_id");
 
-        builder.HasOne<User>()
-            .WithMany()
+        builder.HasOne(membership => membership.User)
+            .WithMany(user => user.TenantMemberships)
             .HasForeignKey(membership => membership.UserId)
             .OnDelete(DeleteBehavior.Cascade)
             .HasConstraintName("fk_tenant_memberships_users_user_id");

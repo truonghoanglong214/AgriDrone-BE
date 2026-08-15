@@ -37,8 +37,8 @@ public sealed class AiDetectionThresholdConfiguration : IEntityTypeConfiguration
             .HasDatabaseName("uq_ai_detection_thresholds_profile_condition")
             .IsUnique();
 
-        builder.HasOne<AiThresholdProfile>()
-            .WithMany()
+        builder.HasOne(threshold => threshold.ThresholdProfile)
+            .WithMany(profile => profile.DetectionThresholds)
             .HasForeignKey(threshold => threshold.ThresholdProfileId)
             .OnDelete(DeleteBehavior.Cascade)
             .HasConstraintName("fk_ai_detection_thresholds_profiles_profile_id");

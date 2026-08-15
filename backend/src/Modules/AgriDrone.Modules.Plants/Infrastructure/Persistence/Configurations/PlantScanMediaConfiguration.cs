@@ -43,8 +43,8 @@ public sealed class PlantScanMediaConfiguration : IEntityTypeConfiguration<Plant
             .HasDefaultValueSql("NOW()")
             .IsRequired();
 
-        builder.HasOne<PlantScan>()
-            .WithMany()
+        builder.HasOne(media => media.PlantScan)
+            .WithMany(scan => scan.Media)
             .HasForeignKey(media => media.PlantScanId)
             .OnDelete(DeleteBehavior.Cascade)
             .HasConstraintName("fk_plant_scan_media_plant_scans_scan_id");

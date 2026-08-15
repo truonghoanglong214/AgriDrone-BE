@@ -130,8 +130,8 @@ public sealed class ZoneMapVersionConfiguration : IEntityTypeConfiguration<ZoneM
         builder.HasIndex(mapVersion => mapVersion.SourceMissionId)
             .HasDatabaseName("ix_zone_map_versions_source_mission");
 
-        builder.HasOne<FarmZone>()
-            .WithMany()
+        builder.HasOne(mapVersion => mapVersion.Zone)
+            .WithMany(zone => zone.MapVersions)
             .HasForeignKey(mapVersion => new { mapVersion.ZoneId, mapVersion.FarmId })
             .HasPrincipalKey(zone => new { zone.Id, zone.FarmId })
             .OnDelete(DeleteBehavior.Cascade)

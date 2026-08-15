@@ -1,3 +1,6 @@
+using AgriDrone.Modules.Identity.Domain.Tenants;
+using AgriDrone.Modules.Identity.Domain.Users;
+using AgriDrone.Modules.Identity.Domain.ZoneAssignments;
 using AgriDrone.SharedKernel.Domain;
 
 namespace AgriDrone.Modules.Identity.Domain.FarmMemberships;
@@ -23,4 +26,10 @@ public sealed class FarmMembership : Entity
     public DateTimeOffset JoinedAt { get; private set; }
 
     public DateTimeOffset CreatedAt { get; private set; }
+
+    public User User { get; private set; } = null!;
+
+    public TenantMembership TenantMembership { get; private set; } = null!;
+
+    public ICollection<ZoneAssignment> ZoneAssignments { get; private set; } = [];
 }

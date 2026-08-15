@@ -1,3 +1,4 @@
+using AgriDrone.Modules.Harvests.Domain.PlantHarvests;
 using AgriDrone.SharedKernel.Domain;
 
 namespace AgriDrone.Modules.Harvests.Domain.Quality;
@@ -19,4 +20,6 @@ public sealed class HarvestQualityGrade : Entity
     public DateTimeOffset CreatedAt { get; private set; }
 
     public DateTimeOffset UpdatedAt { get; private set; }
+
+    public ICollection<PlantHarvestQualityDetail> PlantHarvestQualityDetails { get; private set; } = [];
 }

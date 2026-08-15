@@ -1,3 +1,6 @@
+using AgriDrone.Modules.Plants.Domain.Plants;
+using AgriDrone.Modules.Plants.Domain.Scans;
+using AgriDrone.Modules.Plants.Domain.Verifications;
 using AgriDrone.SharedKernel.Domain;
 
 namespace AgriDrone.Modules.Plants.Domain.Conditions;
@@ -23,4 +26,14 @@ public sealed class HealthLevel : Entity
     public DateTimeOffset CreatedAt { get; private set; }
 
     public DateTimeOffset UpdatedAt { get; private set; }
+
+    public ICollection<Plant> CurrentPlants { get; private set; } = [];
+
+    public ICollection<PlantScan> PlantScans { get; private set; } = [];
+
+    public ICollection<ConditionDetection> ConditionDetections { get; private set; } = [];
+
+    public ICollection<ScanVerification> CorrectedScanVerifications { get; private set; } = [];
+
+    public ICollection<ConditionDetectionReview> CorrectedDetectionReviews { get; private set; } = [];
 }

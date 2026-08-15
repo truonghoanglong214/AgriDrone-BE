@@ -51,8 +51,8 @@ public sealed class AiThresholdProfileConfiguration : IEntityTypeConfiguration<A
             .HasDatabaseName("uq_ai_threshold_profiles_model_name_version")
             .IsUnique();
 
-        builder.HasOne<AiModelVersion>()
-            .WithMany()
+        builder.HasOne(profile => profile.ModelVersion)
+            .WithMany(model => model.ThresholdProfiles)
             .HasForeignKey(profile => profile.ModelVersionId)
             .OnDelete(DeleteBehavior.Restrict)
             .HasConstraintName("fk_ai_threshold_profiles_model_versions_model_id");

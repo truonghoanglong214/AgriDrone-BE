@@ -110,20 +110,20 @@ public sealed class ConditionDetectionConfiguration : IEntityTypeConfiguration<C
         builder.HasIndex(detection => detection.SeverityLevelId)
             .HasDatabaseName("ix_condition_detections_severity_level");
 
-        builder.HasOne<PlantScan>()
-            .WithMany()
+        builder.HasOne(detection => detection.PlantScan)
+            .WithMany(scan => scan.ConditionDetections)
             .HasForeignKey(detection => detection.PlantScanId)
             .OnDelete(DeleteBehavior.Cascade)
             .HasConstraintName("fk_condition_detections_plant_scans_scan_id");
 
-        builder.HasOne<PlantCondition>()
-            .WithMany()
+        builder.HasOne(detection => detection.Condition)
+            .WithMany(condition => condition.Detections)
             .HasForeignKey(detection => detection.ConditionId)
             .OnDelete(DeleteBehavior.Restrict)
             .HasConstraintName("fk_condition_detections_conditions_condition_id");
 
-        builder.HasOne<HealthLevel>()
-            .WithMany()
+        builder.HasOne(detection => detection.SeverityLevel)
+            .WithMany(level => level.ConditionDetections)
             .HasForeignKey(detection => detection.SeverityLevelId)
             .OnDelete(DeleteBehavior.Restrict)
             .HasConstraintName("fk_condition_detections_health_levels_severity_level_id");

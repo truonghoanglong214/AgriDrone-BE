@@ -118,8 +118,8 @@ public sealed class PlantChangeEventConfiguration : IEntityTypeConfiguration<Pla
             .HasDatabaseName("ix_plant_change_events_farm_created")
             .IsDescending(false, true);
 
-        builder.HasOne<Plant>()
-            .WithMany()
+        builder.HasOne(changeEvent => changeEvent.Plant)
+            .WithMany(plant => plant.ChangeEvents)
             .HasForeignKey(changeEvent => new { changeEvent.PlantId, changeEvent.FarmId })
             .HasPrincipalKey(plant => new { plant.Id, plant.FarmId })
             .OnDelete(DeleteBehavior.Restrict)

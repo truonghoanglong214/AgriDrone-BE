@@ -190,27 +190,27 @@ public sealed class MissionPlantObservationConfiguration
             .HasDatabaseName("ix_observation_location_gist")
             .HasMethod("gist");
 
-        builder.HasOne<DroneMission>()
-            .WithMany()
+        builder.HasOne(observation => observation.Mission)
+            .WithMany(mission => mission.PlantObservations)
             .HasForeignKey(observation => new { observation.MissionId, observation.FarmId })
             .HasPrincipalKey(mission => new { mission.Id, mission.FarmId })
             .OnDelete(DeleteBehavior.Cascade)
             .HasConstraintName("fk_observation_mission_same_farm");
 
-        builder.HasOne<AiProcessingJob>()
-            .WithMany()
+        builder.HasOne(observation => observation.AiJob)
+            .WithMany(job => job.PlantObservations)
             .HasForeignKey(observation => observation.AiJobId)
             .OnDelete(DeleteBehavior.SetNull)
             .HasConstraintName("fk_observations_ai_jobs_ai_job_id");
 
-        builder.HasOne<AiModelVersion>()
-            .WithMany()
+        builder.HasOne(observation => observation.ModelVersion)
+            .WithMany(model => model.PlantObservations)
             .HasForeignKey(observation => observation.ModelVersionId)
             .OnDelete(DeleteBehavior.SetNull)
             .HasConstraintName("fk_observations_ai_models_model_version_id");
 
-        builder.HasOne<MediaAsset>()
-            .WithMany()
+        builder.HasOne(observation => observation.EvidenceMedia)
+            .WithMany(media => media.EvidenceObservations)
             .HasForeignKey(observation => observation.EvidenceMediaId)
             .OnDelete(DeleteBehavior.SetNull)
             .HasConstraintName("fk_observations_media_assets_evidence_media_id");

@@ -47,28 +47,28 @@ public sealed class ConditionDetectionReviewConfiguration
             .HasDatabaseName("uq_condition_reviews_verification_detection")
             .IsUnique();
 
-        builder.HasOne<ScanVerification>()
-            .WithMany()
+        builder.HasOne(review => review.ScanVerification)
+            .WithMany(verification => verification.ConditionReviews)
             .HasForeignKey(review => new { review.ScanVerificationId, review.PlantScanId })
             .HasPrincipalKey(verification => new { verification.Id, verification.PlantScanId })
             .OnDelete(DeleteBehavior.Cascade)
             .HasConstraintName("fk_condition_reviews_verification_same_scan");
 
-        builder.HasOne<ConditionDetection>()
-            .WithMany()
+        builder.HasOne(review => review.ConditionDetection)
+            .WithMany(detection => detection.Reviews)
             .HasForeignKey(review => new { review.ConditionDetectionId, review.PlantScanId })
             .HasPrincipalKey(detection => new { detection.Id, detection.PlantScanId })
             .OnDelete(DeleteBehavior.Restrict)
             .HasConstraintName("fk_condition_reviews_detection_same_scan");
 
-        builder.HasOne<PlantCondition>()
-            .WithMany()
+        builder.HasOne(review => review.CorrectedCondition)
+            .WithMany(condition => condition.CorrectedReviews)
             .HasForeignKey(review => review.CorrectedConditionId)
             .OnDelete(DeleteBehavior.Restrict)
             .HasConstraintName("fk_condition_reviews_corrected_condition_id");
 
-        builder.HasOne<HealthLevel>()
-            .WithMany()
+        builder.HasOne(review => review.CorrectedSeverityLevel)
+            .WithMany(level => level.CorrectedDetectionReviews)
             .HasForeignKey(review => review.CorrectedSeverityLevelId)
             .OnDelete(DeleteBehavior.Restrict)
             .HasConstraintName("fk_condition_reviews_corrected_severity_level_id");

@@ -1,4 +1,6 @@
+using AgriDrone.Modules.Plants.Domain.Conditions;
 using AgriDrone.Modules.Plants.Domain.Plants;
+using AgriDrone.Modules.Plants.Domain.Verifications;
 using AgriDrone.SharedKernel.Domain;
 
 namespace AgriDrone.Modules.Plants.Domain.Scans;
@@ -40,4 +42,18 @@ public sealed class PlantScan : Entity
     public DateTimeOffset ServerReceivedAt { get; private set; }
 
     public DateTimeOffset CreatedAt { get; private set; }
+
+    public Plant Plant { get; private set; } = null!;
+
+    public HealthLevel OverallHealthLevel { get; private set; } = null!;
+
+    public PlantScan? VerificationOfScan { get; private set; }
+
+    public ICollection<PlantScan> VerificationScans { get; private set; } = [];
+
+    public ICollection<PlantScanMedia> Media { get; private set; } = [];
+
+    public ICollection<ConditionDetection> ConditionDetections { get; private set; } = [];
+
+    public ICollection<ScanVerification> Verifications { get; private set; } = [];
 }

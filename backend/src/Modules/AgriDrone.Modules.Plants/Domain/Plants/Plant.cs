@@ -1,3 +1,6 @@
+using AgriDrone.Modules.Plants.Domain.Conditions;
+using AgriDrone.Modules.Plants.Domain.Mapping;
+using AgriDrone.Modules.Plants.Domain.Scans;
 using AgriDrone.SharedKernel.Domain;
 using NetTopologySuite.Geometries;
 
@@ -44,4 +47,10 @@ public sealed class Plant : AggregateRoot
     public DateTimeOffset UpdatedAt { get; private set; }
 
     public DateTimeOffset? RetiredAt { get; private set; }
+
+    public HealthLevel CurrentHealthLevel { get; private set; } = null!;
+
+    public ICollection<PlantScan> Scans { get; private set; } = [];
+
+    public ICollection<PlantChangeEvent> ChangeEvents { get; private set; } = [];
 }

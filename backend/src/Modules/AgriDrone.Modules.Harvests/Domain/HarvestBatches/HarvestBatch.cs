@@ -1,3 +1,5 @@
+using AgriDrone.Modules.Harvests.Domain.PlantHarvests;
+using AgriDrone.Modules.Harvests.Domain.Seasons;
 using AgriDrone.SharedKernel.Domain;
 
 namespace AgriDrone.Modules.Harvests.Domain.HarvestBatches;
@@ -37,4 +39,8 @@ public sealed class HarvestBatch : AggregateRoot
     public DateTimeOffset UpdatedAt { get; private set; }
 
     public uint Version { get; private set; }
+
+    public Season Season { get; private set; } = null!;
+
+    public ICollection<PlantHarvestRecord> PlantHarvestRecords { get; private set; } = [];
 }

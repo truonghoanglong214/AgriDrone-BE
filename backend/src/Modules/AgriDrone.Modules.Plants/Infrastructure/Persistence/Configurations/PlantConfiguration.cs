@@ -162,8 +162,8 @@ public sealed class PlantConfiguration : IEntityTypeConfiguration<Plant>
             .HasDatabaseName("ix_plants_location_gist")
             .HasMethod("gist");
 
-        builder.HasOne<HealthLevel>()
-            .WithMany()
+        builder.HasOne(plant => plant.CurrentHealthLevel)
+            .WithMany(level => level.CurrentPlants)
             .HasForeignKey(plant => plant.CurrentHealthLevelId)
             .OnDelete(DeleteBehavior.Restrict)
             .HasConstraintName("fk_plants_health_levels_current_health_level_id");

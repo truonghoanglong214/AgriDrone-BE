@@ -21,5 +21,35 @@ namespace AgriDrone.Modules.Identity.Application.Errors
             AppError.Conflict(
                 "Tenant.TenantCodeAlreadyExist",
                 $"Tenant with Tenant Code '{tenantCode}' already exists.");
+
+        public static AppError InvalidCredentials() =>
+            AppError.Validation(
+                "User.InvalidCredentials",
+                "Invalid email or password.");
+
+        public static AppError UserNotInAnyTenant(string email) =>
+            AppError.Forbidden(
+                "User.NotInAnyTenant",
+                $"User with email '{email}' is not a member of any tenant.");
+
+        public static AppError TenantNotFound() =>
+            AppError.NotFound(
+                "Tenant.NotFound",
+                $"Tenant was not found.");
+
+        public static AppError InvalidTenantSelectionToken() =>
+            AppError.Unauthorized(
+                "Authentication.InvalidTenantSelectionToken",
+                "The tenant selection token is invalid or expired.");
+
+        public static AppError TenantAccessDenied() =>
+            AppError.Forbidden(
+                "Tenant.AccessDenied",
+                "The user does not have an active membership in the selected tenant.");
+
+        public static AppError CurrentTenantRequired() =>
+            AppError.Unauthorized(
+                "Tenant.ContextRequired",
+                "A valid tenant context is required.");
     }
 }

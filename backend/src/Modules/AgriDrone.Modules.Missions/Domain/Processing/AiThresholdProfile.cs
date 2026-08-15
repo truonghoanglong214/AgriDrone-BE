@@ -23,4 +23,10 @@ public sealed class AiThresholdProfile : Entity
     public Guid CreatedBy { get; private set; }
 
     public DateTimeOffset CreatedAt { get; private set; }
+
+    public AiModelVersion ModelVersion { get; private set; } = null!;
+
+    public ICollection<AiDetectionThreshold> DetectionThresholds { get; private set; } = [];
+
+    public ICollection<AiProcessingJob> ProcessingJobs { get; private set; } = [];
 }

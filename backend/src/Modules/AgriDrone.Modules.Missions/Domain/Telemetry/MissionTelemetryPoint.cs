@@ -1,3 +1,4 @@
+using AgriDrone.Modules.Missions.Domain.Missions;
 using AgriDrone.SharedKernel.Domain;
 using NetTopologySuite.Geometries;
 
@@ -28,4 +29,6 @@ public sealed class MissionTelemetryPoint : Entity
     public decimal? HorizontalAccuracyM { get; private set; }
 
     public DateTimeOffset CreatedAt { get; private set; }
+
+    public DroneMission Mission { get; private set; } = null!;
 }

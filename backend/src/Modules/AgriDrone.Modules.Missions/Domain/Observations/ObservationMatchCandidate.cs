@@ -34,4 +34,6 @@ public sealed class ObservationMatchCandidate : Entity
     public JsonDocument Parameters { get; private set; } = null!;
 
     public DateTimeOffset CreatedAt { get; private set; }
+
+    public MissionPlantObservation Observation { get; private set; } = null!;
 }

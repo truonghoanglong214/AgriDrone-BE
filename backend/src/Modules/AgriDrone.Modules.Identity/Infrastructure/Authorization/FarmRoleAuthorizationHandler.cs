@@ -1,4 +1,5 @@
 using AgriDrone.Modules.Identity.Domain.FarmMemberships;
+using AgriDrone.Modules.Identity.Domain.Users;
 using AgriDrone.Modules.Identity.Infrastructure.Persistence;
 using AgriDrone.SharedKernel.Application.Abstractions;
 using AgriDrone.SharedKernel.Domain;
@@ -9,7 +10,8 @@ namespace AgriDrone.Modules.Identity.Infrastructure.Authorization;
 
 internal sealed class FarmRoleAuthorizationHandler(
     IdentityDbContext dbContext,
-    ICurrentUser currentUser)
+    ICurrentUser currentUser,
+    ICurrentTenant currentTenant)
     : AuthorizationHandler<FarmRoleRequirement>
 {
     protected override async Task HandleRequirementAsync(
@@ -17,6 +19,7 @@ internal sealed class FarmRoleAuthorizationHandler(
         FarmRoleRequirement requirement)
     {
         if (currentUser.UserId is not Guid userId ||
+            currentTenant.TenantId is not Guid tenantId ||
             !AuthorizationRouteValues.TryGetGuid(
                 context,
                 "farmId",
@@ -30,13 +33,19 @@ internal sealed class FarmRoleAuthorizationHandler(
             .AsNoTracking()
             .Where(farmMembership =>
                 farmMembership.FarmId == farmId &&
+                farmMembership.TenantId == tenantId &&
                 farmMembership.UserId == userId &&
                 farmMembership.Status == GeneralStatus.Active)
             .Join(
                 dbContext.TenantMemberships.AsNoTracking().Where(
                     tenantMembership =>
+                        tenantMembership.TenantId == tenantId &&
                         tenantMembership.UserId == userId &&
-                        tenantMembership.Status == GeneralStatus.Active),
+                        tenantMembership.Status == GeneralStatus.Active &&
+                        tenantMembership.Tenant.Status == GeneralStatus.Active &&
+                        tenantMembership.Tenant.DeletedAt == null &&
+                        tenantMembership.User.Status == UserStatus.Active &&
+                        tenantMembership.User.DeletedAt == null),
                 farmMembership => new
                 {
                     farmMembership.TenantId,

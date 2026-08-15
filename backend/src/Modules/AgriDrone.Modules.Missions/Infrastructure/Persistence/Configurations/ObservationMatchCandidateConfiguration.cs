@@ -121,8 +121,8 @@ public sealed class ObservationMatchCandidateConfiguration
         builder.HasIndex(candidate => candidate.PlantId)
             .HasDatabaseName("ix_match_candidates_plant");
 
-        builder.HasOne<MissionPlantObservation>()
-            .WithMany()
+        builder.HasOne(candidate => candidate.Observation)
+            .WithMany(observation => observation.MatchCandidates)
             .HasForeignKey(candidate => new { candidate.ObservationId, candidate.FarmId })
             .HasPrincipalKey(observation => new { observation.Id, observation.FarmId })
             .OnDelete(DeleteBehavior.Cascade)

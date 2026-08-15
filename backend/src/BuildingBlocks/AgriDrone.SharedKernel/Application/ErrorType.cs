@@ -10,6 +10,7 @@ namespace AgriDrone.SharedKernel.Application
         NotFound,
         Conflict,
         Unauthorized,
-        Forbidden
+        Forbidden,
+        Validation
     }
 }

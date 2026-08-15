@@ -1,3 +1,4 @@
+using AgriDrone.Modules.Farms.Domain.Zones;
 using AgriDrone.SharedKernel.Domain;
 using NetTopologySuite.Geometries;
 
@@ -32,4 +33,6 @@ public sealed class Farm : AggregateRoot
     public DateTimeOffset UpdatedAt { get; private set; }
 
     public DateTimeOffset? DeletedAt { get; private set; }
+
+    public ICollection<FarmZone> Zones { get; private set; } = [];
 }
