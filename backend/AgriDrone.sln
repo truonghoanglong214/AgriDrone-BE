@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 17
-VisualStudioVersion = 17.0.31903.59
+# Visual Studio Version 18
+VisualStudioVersion = 18.9.12105.275
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{827E0CD3-B72D-47B6-A68D-7590B98EB39B}"
 EndProject
@@ -44,6 +44,8 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AgriDrone.IntegrationTests", "tests\AgriDrone.IntegrationTests\AgriDrone.IntegrationTests.csproj", "{2FE0F939-1E23-4C12-8F69-2D2CF9C62E64}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AgriDrone.ArchitectureTests", "tests\AgriDrone.ArchitectureTests\AgriDrone.ArchitectureTests.csproj", "{167AA217-6E0F-4085-B2F7-B00A72CE6DE3}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AgriDrone.Integrations.Email", "src\Integrations\AgriDrone.Integrations.Email\AgriDrone.Integrations.Email.csproj", "{22F78F71-2BEA-4ECE-9357-BA1B6C5EB9FA}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -247,6 +249,18 @@ Global
 		{167AA217-6E0F-4085-B2F7-B00A72CE6DE3}.Release|x64.Build.0 = Release|Any CPU
 		{167AA217-6E0F-4085-B2F7-B00A72CE6DE3}.Release|x86.ActiveCfg = Release|Any CPU
 		{167AA217-6E0F-4085-B2F7-B00A72CE6DE3}.Release|x86.Build.0 = Release|Any CPU
+		{22F78F71-2BEA-4ECE-9357-BA1B6C5EB9FA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{22F78F71-2BEA-4ECE-9357-BA1B6C5EB9FA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{22F78F71-2BEA-4ECE-9357-BA1B6C5EB9FA}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{22F78F71-2BEA-4ECE-9357-BA1B6C5EB9FA}.Debug|x64.Build.0 = Debug|Any CPU
+		{22F78F71-2BEA-4ECE-9357-BA1B6C5EB9FA}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{22F78F71-2BEA-4ECE-9357-BA1B6C5EB9FA}.Debug|x86.Build.0 = Debug|Any CPU
+		{22F78F71-2BEA-4ECE-9357-BA1B6C5EB9FA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{22F78F71-2BEA-4ECE-9357-BA1B6C5EB9FA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{22F78F71-2BEA-4ECE-9357-BA1B6C5EB9FA}.Release|x64.ActiveCfg = Release|Any CPU
+		{22F78F71-2BEA-4ECE-9357-BA1B6C5EB9FA}.Release|x64.Build.0 = Release|Any CPU
+		{22F78F71-2BEA-4ECE-9357-BA1B6C5EB9FA}.Release|x86.ActiveCfg = Release|Any CPU
+		{22F78F71-2BEA-4ECE-9357-BA1B6C5EB9FA}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -271,5 +285,9 @@ Global
 		{CB0FECB7-6725-4798-A382-C849B54AD869} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{2FE0F939-1E23-4C12-8F69-2D2CF9C62E64} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{167AA217-6E0F-4085-B2F7-B00A72CE6DE3} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
+		{22F78F71-2BEA-4ECE-9357-BA1B6C5EB9FA} = {95CF60EF-5A8F-866C-1324-B5EA7AAAC44D}
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {6D4036F3-76B9-4EEA-B630-C4F868A8951E}
 	EndGlobalSection
 EndGlobal

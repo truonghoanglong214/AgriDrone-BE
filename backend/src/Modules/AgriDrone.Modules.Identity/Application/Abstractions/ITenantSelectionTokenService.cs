@@ -1,8 +1,6 @@
-namespace AgriDrone.Modules.Identity.Application.Abstractions;
+using AgriDrone.Modules.Identity.Application.Contracts.Authentication;
 
-public sealed record TenantSelectionTokenResult(
-    string Token,
-    DateTimeOffset ExpiresAt);
+namespace AgriDrone.Modules.Identity.Application.Abstractions;
 
 public interface ITenantSelectionTokenService
 {

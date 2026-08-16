@@ -1,3 +1,4 @@
+using AgriDrone.Integrations.Email;
 using AgriDrone.Modules.Farms;
 using AgriDrone.Modules.FieldTasks;
 using AgriDrone.Modules.Harvests;
@@ -54,6 +55,7 @@ builder.Services.AddCors(options =>
 
 // Modules
 builder.Services
+    .AddEmailIntegration(builder.Configuration)
     .AddFarmsModule(builder.Configuration)
     .AddFieldTasksModule(builder.Configuration)
     .AddHarvestsModule(builder.Configuration)
