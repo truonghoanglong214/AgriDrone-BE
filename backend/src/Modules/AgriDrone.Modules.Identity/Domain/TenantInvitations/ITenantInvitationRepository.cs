@@ -1,16 +1,15 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+namespace AgriDrone.Modules.Identity.Domain.TenantInvitations;
 
-namespace AgriDrone.Modules.Identity.Domain.TenantInvitations
+public interface ITenantInvitationRepository
 {
-    public interface ITenantInvitationRepository
-    {
+    Task<TenantInvitation?> GetByTokenHashAsync(
+        string tokenHash,
+        CancellationToken cancellationToken);
 
-        bool CanBeAccepted(DateTimeOffset now);
+    Task<TenantInvitation?> GetPendingAsync(
+        Guid tenantId,
+        string email,
+        CancellationToken cancellationToken);
 
-        void Accept(Guid userId, DateTimeOffset now);
-
-        void Revoke(DateTimeOffset now);
-    }
+    void Add(TenantInvitation invitation);
 }

@@ -5,6 +5,7 @@ using AgriDrone.Modules.Harvests.Domain.HarvestBatches;
 using AgriDrone.Modules.Harvests.Domain.PlantHarvests;
 using AgriDrone.Modules.Harvests.Domain.Seasons;
 using AgriDrone.Modules.Identity.Domain.FarmMemberships;
+using AgriDrone.Modules.Identity.Domain.TenantInvitations;
 using AgriDrone.Modules.Identity.Domain.Tenants;
 using AgriDrone.Modules.Identity.Domain.Users;
 using AgriDrone.Modules.Missions.Domain.Drones;
@@ -36,6 +37,7 @@ internal static class PostgreSqlEnumMappings
         modelBuilder.HasPostgresEnum<FarmMemberRole>(DbSchemas.System, "farm_member_role", translator);
         modelBuilder.HasPostgresEnum<FarmAccessScope>(DbSchemas.System, "farm_access_scope", translator);
         modelBuilder.HasPostgresEnum<TenantMemberRole>(DbSchemas.System, "tenant_member_role", translator);
+        modelBuilder.HasPostgresEnum<TenantInvitationStatus>(DbSchemas.System, "tenant_invitation_status", translator);
         modelBuilder.HasPostgresEnum<GeneralStatus>(DbSchemas.System, "general_status", translator);
         modelBuilder.HasPostgresEnum<MapVersionStatus>(DbSchemas.System, "map_version_status", translator);
         modelBuilder.HasPostgresEnum<PlantLifecycleStatus>(DbSchemas.System, "plant_lifecycle_status", translator);
@@ -81,6 +83,7 @@ internal static class PostgreSqlEnumMappings
         dataSourceBuilder.MapEnum<FarmMemberRole>("system.farm_member_role", translator);
         dataSourceBuilder.MapEnum<FarmAccessScope>("system.farm_access_scope", translator);
         dataSourceBuilder.MapEnum<TenantMemberRole>("system.tenant_member_role", translator);
+        dataSourceBuilder.MapEnum<TenantInvitationStatus>("system.tenant_invitation_status", translator);
         dataSourceBuilder.MapEnum<GeneralStatus>("system.general_status", translator);
         dataSourceBuilder.MapEnum<MapVersionStatus>("system.map_version_status", translator);
         dataSourceBuilder.MapEnum<PlantLifecycleStatus>("system.plant_lifecycle_status", translator);

@@ -1,14 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+namespace AgriDrone.Modules.Identity.Domain.TenantInvitations;
 
-namespace AgriDrone.Modules.Identity.Domain.TenantInvitations
+public enum TenantInvitationStatus
 {
-    public enum TenantInvitationStatus
-    {
-        Pending,
-        Accepted,
-        Revoked,
-        Expired
-    }
+    Pending,
+    Accepted,
+    Revoked,
+    Expired
 }

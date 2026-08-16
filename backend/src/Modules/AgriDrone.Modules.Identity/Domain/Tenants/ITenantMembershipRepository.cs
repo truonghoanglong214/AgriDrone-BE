@@ -15,5 +15,7 @@ namespace AgriDrone.Modules.Identity.Domain.Tenants
             Guid userId,
             Guid tenantId,
             CancellationToken cancellationToken);
+
+        Task<TenantMembership?> GetByUserAndTenantIdAsync(Guid userId, Guid tenantId, CancellationToken cancellationToken);
     }
 }

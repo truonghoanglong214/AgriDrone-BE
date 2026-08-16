@@ -1,13 +1,17 @@
 using AgriDrone.Modules.Identity.Application.Abstractions;
 using AgriDrone.Modules.Identity.Application.Authorization;
+using AgriDrone.Modules.Identity.Application.Options;
 using AgriDrone.Modules.Identity.Domain.FarmMemberships;
+using AgriDrone.Modules.Identity.Domain.TenantInvitations;
 using AgriDrone.Modules.Identity.Domain.Tenants;
 using AgriDrone.Modules.Identity.Domain.Users;
 using AgriDrone.Modules.Identity.Infrastructure.Authentication;
 using AgriDrone.Modules.Identity.Infrastructure.Authorization;
+using AgriDrone.Modules.Identity.Infrastructure.Configuration;
 using AgriDrone.Modules.Identity.Infrastructure.Persistence;
 using AgriDrone.Modules.Identity.Infrastructure.Queries;
 using AgriDrone.Modules.Identity.Infrastructure.Repositories;
+using AgriDrone.Modules.Identity.Infrastructure.Security;
 using AgriDrone.SharedInfrastructure.Persistence;
 using AgriDrone.SharedKernel.Domain;
 using FluentValidation;
@@ -15,6 +19,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace AgriDrone.Modules.Identity;
 
@@ -27,6 +32,15 @@ public static class DependencyInjection
         var connectionString = configuration.GetRequiredAgriDroneConnectionString();
         var translator = UpperSnakeCaseNameTranslator.Instance;
 
+        services
+            .AddOptions<TenantInvitationOptions>()
+            .Bind(configuration.GetSection(TenantInvitationOptions.SectionName))
+            .ValidateOnStart();
+
+        services.AddSingleton<
+            IValidateOptions<TenantInvitationOptions>,
+            TenantInvitationOptionsValidator>();
+
         services.AddDbContext<IdentityDbContext>(options =>
             options.UseNpgsql(
                 connectionString,
@@ -35,6 +49,7 @@ public static class DependencyInjection
                     .MapEnum<FarmMemberRole>("farm_member_role", "system", translator)
                     .MapEnum<FarmAccessScope>("farm_access_scope", "system", translator)
                     .MapEnum<TenantMemberRole>("tenant_member_role", "system", translator)
+                    .MapEnum<TenantInvitationStatus>("tenant_invitation_status", "system", translator)
                     .MapEnum<GeneralStatus>("general_status", "system", translator)));
 
         services.AddScoped<IIdentityUnitOfWork>(serviceProvider => serviceProvider.GetRequiredService<IdentityDbContext>());
@@ -48,6 +63,8 @@ public static class DependencyInjection
         services.AddScoped<IPasswordService, PasswordService>();
         services.AddScoped<ITenantRepository, TenantRepository>();
         services.AddScoped<ITenantMembershipRepository, TenantMembershipRepository>();
+        services.AddScoped<ITenantInvitationRepository, TenantInvitationRepository>();
+        services.AddSingleton<IInvitationTokenService, InvitationTokenService>();
 
         services.AddAuthorization(authorization =>
         {

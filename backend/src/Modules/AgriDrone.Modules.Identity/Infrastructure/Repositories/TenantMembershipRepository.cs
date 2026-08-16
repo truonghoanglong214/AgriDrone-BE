@@ -44,5 +44,8 @@ namespace AgriDrone.Modules.Identity.Infrastructure.Repositories
                         membership.Tenant.DeletedAt == null,
                     cancellationToken);
         }
+
+        public Task<TenantMembership?> GetByUserAndTenantIdAsync(Guid userId, Guid tenantId, CancellationToken cancellationToken)
+            => context.TenantMemberships.SingleOrDefaultAsync(tms => tms.TenantId == tenantId && tms.UserId == userId, cancellationToken);
     }
 }

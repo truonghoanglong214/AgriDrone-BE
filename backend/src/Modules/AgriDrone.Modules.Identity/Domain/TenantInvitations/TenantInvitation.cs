@@ -1,59 +1,130 @@
-﻿using AgriDrone.Modules.Identity.Domain.Tenants;
+using AgriDrone.Modules.Identity.Domain.Tenants;
+using AgriDrone.Modules.Identity.Domain.Users;
 using AgriDrone.SharedKernel.Domain;
-using System;
-using System.Collections.Generic;
-using System.Text;
 
-namespace AgriDrone.Modules.Identity.Domain.TenantInvitations
+namespace AgriDrone.Modules.Identity.Domain.TenantInvitations;
+
+public sealed class TenantInvitation : Entity
 {
-    public sealed class TenantInvitation : Entity
+    private TenantInvitation()
     {
-        public TenantInvitation(Guid id, Guid tenantId, string email, TenantMemberRole role, string tokenHash, TenantInvitationStatus status, Guid invitedByUserId, DateTimeOffset expiredAt, DateTimeOffset createdAt)
+    }
+
+    private TenantInvitation(
+        Guid id,
+        Guid tenantId,
+        string email,
+        TenantMemberRole role,
+        string tokenHash,
+        Guid invitedByUserId,
+        DateTimeOffset expiresAt,
+        DateTimeOffset createdAt)
+    {
+        Id = id;
+        TenantId = tenantId;
+        Email = email;
+        Role = role;
+        TokenHash = tokenHash;
+        Status = TenantInvitationStatus.Pending;
+        InvitedByUserId = invitedByUserId;
+        ExpiresAt = expiresAt;
+        CreatedAt = createdAt;
+    }
+
+    public Guid TenantId { get; private set; }
+
+    public string Email { get; private set; } = null!;
+
+    public TenantMemberRole Role { get; private set; }
+
+    public string TokenHash { get; private set; } = null!;
+
+    public TenantInvitationStatus Status { get; private set; }
+
+    public Guid InvitedByUserId { get; private set; }
+
+    public Guid? AcceptedByUserId { get; private set; }
+
+    public DateTimeOffset ExpiresAt { get; private set; }
+
+    public DateTimeOffset CreatedAt { get; private set; }
+
+    public DateTimeOffset? AcceptedAt { get; private set; }
+
+    public Tenant Tenant { get; private set; } = null!;
+
+    public User InvitedByUser { get; private set; } = null!;
+
+    public User? AcceptedByUser { get; private set; }
+
+    public static TenantInvitation Create(
+        Guid tenantId,
+        string email,
+        TenantMemberRole role,
+        string tokenHash,
+        Guid invitedByUserId,
+        DateTimeOffset expiresAt,
+        DateTimeOffset createdAt)
+    {
+        return new TenantInvitation(
+            Guid.NewGuid(),
+            tenantId,
+            email.Trim(),
+            role,
+            tokenHash,
+            invitedByUserId,
+            expiresAt,
+            createdAt);
+    }
+
+    public bool CanBeAccepted(DateTimeOffset now) =>
+        Status == TenantInvitationStatus.Pending && now < ExpiresAt;
+
+    public void Accept(Guid userId, DateTimeOffset now)
+    {
+        if (userId == Guid.Empty)
         {
-            Id = id;
-            TenantId = tenantId;
-            Email = email;
-            Role = role;
-            TokenHash = tokenHash;
-            Status = status;
-            InvitedByUserId = invitedByUserId;
-            ExpiresAt = expiredAt;
-            CreatedAt = createdAt;
+            throw new ArgumentException("Accepting user ID is required.", nameof(userId));
         }
-        public Guid TenantId { get; private set; }
 
-        public string Email { get; private set; } = null!;
-
-        public TenantMemberRole Role { get; private set; }
-
-        public string TokenHash { get; private set; } = null!;
-
-        public TenantInvitationStatus Status { get; private set; }
-
-        public Guid InvitedByUserId { get; private set; }
-
-        public Guid? AcceptedByUserId { get; private set; }
-
-        public DateTimeOffset ExpiresAt { get; private set; }
-
-        public DateTimeOffset CreatedAt { get; private set; }
-
-        public DateTimeOffset? AcceptedAt { get; private set; }
-
-        public static TenantInvitation Create(Guid tenantId, string email, TenantMemberRole role, string tokenHash, TenantInvitationStatus status, Guid invitedByUserId, DateTimeOffset expiredAt, DateTimeOffset createdAt)
+        if (!CanBeAccepted(now))
         {
-            return new TenantInvitation
-           (
-                Guid.NewGuid(),
-                tenantId,
-                email,
-                role,
-                tokenHash,
-                status,
-                invitedByUserId,
-                expiredAt,
-                createdAt
-           );
+            throw new InvalidOperationException(
+                "Only a pending, unexpired invitation can be accepted.");
         }
+
+        Status = TenantInvitationStatus.Accepted;
+        AcceptedByUserId = userId;
+        AcceptedAt = now;
+    }
+
+    public void Revoke(DateTimeOffset now)
+    {
+        if (Status != TenantInvitationStatus.Pending)
+        {
+            throw new InvalidOperationException(
+                "Only a pending invitation can be revoked.");
+        }
+
+        if (now < CreatedAt)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(now),
+                now,
+                "Revocation time cannot be earlier than creation time.");
+        }
+
+        Status = TenantInvitationStatus.Revoked;
+    }
+
+    public void MarkExpired(DateTimeOffset now)
+    {
+        if (Status != TenantInvitationStatus.Pending || now < ExpiresAt)
+        {
+            throw new InvalidOperationException(
+                "Only a pending invitation past its expiration time can be marked as expired.");
+        }
+
+        Status = TenantInvitationStatus.Expired;
     }
 }
