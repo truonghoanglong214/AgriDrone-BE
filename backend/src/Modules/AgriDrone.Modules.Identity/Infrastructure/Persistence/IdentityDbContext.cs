@@ -1,5 +1,6 @@
 using AgriDrone.Modules.Identity.Application.Abstractions;
 using AgriDrone.Modules.Identity.Domain.FarmMemberships;
+using AgriDrone.Modules.Identity.Domain.PasswordResetTokens;
 using AgriDrone.Modules.Identity.Domain.Roles;
 using AgriDrone.Modules.Identity.Domain.TenantInvitations;
 using AgriDrone.Modules.Identity.Domain.Tenants;
@@ -25,6 +26,8 @@ internal sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> opti
     public DbSet<TenantMembership> TenantMemberships => Set<TenantMembership>();
 
     public DbSet<TenantInvitation> TenantInvitations => Set<TenantInvitation>();
+
+    public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
 
     public DbSet<ZoneAssignment> ZoneAssignments => Set<ZoneAssignment>();
 

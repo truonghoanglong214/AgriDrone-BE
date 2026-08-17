@@ -2,6 +2,7 @@ using AgriDrone.Modules.Identity.Application.Abstractions;
 using AgriDrone.Modules.Identity.Application.Authorization;
 using AgriDrone.Modules.Identity.Application.Options;
 using AgriDrone.Modules.Identity.Domain.FarmMemberships;
+using AgriDrone.Modules.Identity.Domain.PasswordResetTokens;
 using AgriDrone.Modules.Identity.Domain.TenantInvitations;
 using AgriDrone.Modules.Identity.Domain.Tenants;
 using AgriDrone.Modules.Identity.Domain.Users;
@@ -37,9 +38,17 @@ public static class DependencyInjection
             .Bind(configuration.GetSection(TenantInvitationOptions.SectionName))
             .ValidateOnStart();
 
+        services
+            .AddOptions<PasswordResetOptions>()
+            .Bind(configuration.GetSection(PasswordResetOptions.SectionName))
+            .ValidateOnStart();
+
         services.AddSingleton<
             IValidateOptions<TenantInvitationOptions>,
             TenantInvitationOptionsValidator>();
+        services.AddSingleton<
+            IValidateOptions<PasswordResetOptions>,
+            PasswordResetOptionsValidator>();
 
         services.AddDbContext<IdentityDbContext>(options =>
             options.UseNpgsql(
@@ -64,7 +73,9 @@ public static class DependencyInjection
         services.AddScoped<ITenantRepository, TenantRepository>();
         services.AddScoped<ITenantMembershipRepository, TenantMembershipRepository>();
         services.AddScoped<ITenantInvitationRepository, TenantInvitationRepository>();
+        services.AddScoped<IPasswordResetTokenRepository, PasswordResetTokenRepository>();
         services.AddSingleton<IInvitationTokenService, InvitationTokenService>();
+        services.AddSingleton<IPasswordResetTokenService, PasswordResetTokenService>();
 
         services.AddAuthorization(authorization =>
         {

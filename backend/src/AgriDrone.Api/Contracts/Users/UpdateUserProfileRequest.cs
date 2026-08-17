@@ -1,4 +1,4 @@
-﻿namespace AgriDrone.Api.Contracts.Users
+﻿ namespace AgriDrone.Api.Contracts.Users
 {
     public sealed class UpdateUserProfileRequest
     {

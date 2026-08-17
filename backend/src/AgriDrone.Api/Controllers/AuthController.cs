@@ -1,6 +1,8 @@
 ﻿using AgriDrone.Api.Contracts.Users;
 using AgriDrone.Modules.Identity.Application.Features.LoginUser;
+using AgriDrone.Modules.Identity.Application.Features.ForgotPassword;
 using AgriDrone.Modules.Identity.Application.Features.RegisterUser;
+using AgriDrone.Modules.Identity.Application.Features.ResetPassword;
 using AgriDrone.Modules.Identity.Application.Features.SelectTenant;
 using AgriDrone.SharedInfrastructure.Http;
 using MediatR;
@@ -56,6 +58,39 @@ namespace AgriDrone.Api.Controllers
                 response => Results.Json(
                     response,
                     statusCode: StatusCodes.Status200OK));
+        }
+
+        [AllowAnonymous]
+        [HttpPost("forgot-password")]
+        public async Task<IResult> ForgotPassword(
+            [FromBody] ForgotPasswordRequest request,
+            CancellationToken cancellationToken)
+        {
+            var command = new ForgotPasswordCommand(request.Email);
+            var result = await sender.Send(command, cancellationToken);
+
+            return result.ToHttpResult(
+                HttpContext,
+                response => Results.Json(
+                    response,
+                    statusCode: StatusCodes.Status202Accepted));
+        }
+
+        [AllowAnonymous]
+        [HttpPost("reset-password")]
+        public async Task<IResult> ResetPassword(
+            [FromBody] ResetPasswordRequest request,
+            CancellationToken cancellationToken)
+        {
+            var command = new ResetPasswordCommand(
+                request.Token,
+                request.NewPassword,
+                request.ConfirmPassword);
+            var result = await sender.Send(command, cancellationToken);
+
+            return result.ToHttpResult(
+                HttpContext,
+                response => Results.Ok(response));
         }
 
         [AllowAnonymous]
