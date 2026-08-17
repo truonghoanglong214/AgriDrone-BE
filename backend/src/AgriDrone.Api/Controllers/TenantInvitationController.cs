@@ -9,10 +9,11 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace AgriDrone.Api.Controllers;
 
+[Route("api/auth")]
 [ApiController]
 public sealed class TenantInvitationController(ISender sender) : ControllerBase
 {
-    [HttpPost("/api/tenants/current/invitations/tenant-admin")]
+    [HttpPost("/current/invitations/tenant-admin")]
     [Authorize(Policy = IdentityAuthorizationPolicies.TenantOwner)]
     public async Task<IResult> InviteTenantAdmin(
         [FromBody] InviteTenantAdminRequest request,
@@ -30,7 +31,7 @@ public sealed class TenantInvitationController(ISender sender) : ControllerBase
     }
 
     [AllowAnonymous]
-    [HttpPost("/api/auth/invitations/accept")]
+    [HttpPost("/invitations/accept")]
     public async Task<IResult> AcceptTenantInvitation(
         [FromBody] AcceptTenantInvitationRequest request,
         CancellationToken cancellationToken)

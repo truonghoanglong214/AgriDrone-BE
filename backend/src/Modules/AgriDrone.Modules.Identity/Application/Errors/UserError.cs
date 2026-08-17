@@ -7,6 +7,11 @@ namespace AgriDrone.Modules.Identity.Application.Errors
 {
     public static class UserError
     {
+        public static AppError CurrentUserIsRequired() =>
+            AppError.Unauthorized(
+                "User.ContextRequired",
+                "A valid tenant context is required.");
+
         public static AppError NotFound(string element, Guid id) =>
             AppError.NotFound(
                 $"{element}.NotFound",
@@ -32,10 +37,20 @@ namespace AgriDrone.Modules.Identity.Application.Errors
                 "User.NotInAnyTenant",
                 $"User with email '{email}' is not a member of any tenant.");
 
+        public static AppError PasswordIsNotCorrect() =>
+            AppError.Forbidden(
+                "Password.NotCorrect",
+                $"Old password is not correct.");
+
         public static AppError TenantNotFound() =>
             AppError.NotFound(
                 "Tenant.NotFound",
                 $"Tenant was not found.");
+
+        public static AppError UserNotFound() =>
+            AppError.NotFound(
+                "User.NotFound",
+                $"User was not found.");
 
         public static AppError InvalidTenantSelectionToken() =>
             AppError.Unauthorized(

@@ -73,4 +73,44 @@ public sealed class User : AggregateRoot
             userStatus,
             createAt);
     }
+
+    public void UpdateProfile(
+    string fullName,
+    string? phone,
+    DateTimeOffset updatedAt)
+    {
+        FullName = fullName.Trim();
+        Phone = string.IsNullOrWhiteSpace(phone)
+            ? null
+            : phone.Trim();
+
+        UpdatedAt = updatedAt;
+    }
+
+    public void Activate(DateTimeOffset updatedAt)
+    {
+        if (Status == UserStatus.Active)
+            return;
+
+        Status = UserStatus.Active;
+        UpdatedAt = updatedAt;
+    }
+
+    public void Inactive(DateTimeOffset updatedAt)
+    {
+        if (Status == UserStatus.Inactive)
+            return;
+
+        Status = UserStatus.Inactive;
+        UpdatedAt = updatedAt;
+    }
+
+    public void ChangePassword(
+    string passwordHash,
+    DateTimeOffset updatedAt)
+    {
+
+        PasswordHash = passwordHash;
+        UpdatedAt = updatedAt;
+    }
 }

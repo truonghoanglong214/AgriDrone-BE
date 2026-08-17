@@ -29,4 +29,6 @@ internal sealed class UserRepository(IdentityDbContext dbContext) : IUserReposit
         => dbContext.Users.Where(user => user.DeletedAt == null).ToListAsync(cancellationToken);
 
     public void Add(User user) => dbContext.Users.Add(user);
+
+    public void Update(User user) => dbContext.Users.Update(user);
 }

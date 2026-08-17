@@ -2,6 +2,8 @@
 using AgriDrone.Modules.Identity.Application.Authorization;
 using AgriDrone.Modules.Identity.Application.Features.GetTenantUsers;
 using AgriDrone.Modules.Identity.Application.Features.GetUsers;
+using AgriDrone.Modules.Identity.Application.Features.UpdateUser;
+using AgriDrone.Modules.Identity.Application.Features.UpdateUserPassword;
 using AgriDrone.SharedInfrastructure.Http;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -33,7 +35,7 @@ namespace AgriDrone.Api.Controllers
                 users => Results.Ok(users));
         }
 
-        [HttpGet("/api/tenants/current/users")]
+        [HttpGet("/tenants/current/users")]
         [Authorize(Policy = IdentityAuthorizationPolicies.TenantAdmin)]
         public async Task<IResult> GetTenantUsers(
             [FromQuery] GetUserRequest request,
@@ -50,6 +52,35 @@ namespace AgriDrone.Api.Controllers
                 users => Results.Ok(users));
         }
 
+        [HttpPut("/current/profile")]
+        public async Task<IResult> UpdateUserProfile(
+            [FromBody] UpdateUserProfileRequest request,
+            CancellationToken cancellationToken)
+        {
+            var command = new UpdateUserCommand(
+                request.Name,
+                request.Phone);
 
+            var result = await sender.Send(command, cancellationToken);
+
+            return result.ToHttpResult(
+                HttpContext,
+                users => Results.Ok(users));
+        }
+
+        [HttpPut("/current/change-password")]
+        public async Task<IResult> UpdatePassword(
+            [FromBody] UpdateUserPasswordRequest request,
+            CancellationToken cancellationToken)
+        {
+            var command = new UpdateUserPasswordCommand(
+                request.NewPassword,
+                request.OldPassword);
+            var result = await sender.Send(command, cancellationToken);
+
+            return result.ToHttpResult(
+                HttpContext,
+                users => Results.Ok(users));
+        }
     }
 }

@@ -12,4 +12,5 @@ public interface IUserRepository
 
     Task<List<User>> GetAllAsync(CancellationToken cancellationToken = default);
     void Add(User user);
+    void Update(User user);
 }
