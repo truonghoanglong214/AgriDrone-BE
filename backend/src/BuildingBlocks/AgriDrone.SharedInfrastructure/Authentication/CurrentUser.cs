@@ -1,4 +1,5 @@
 ﻿using AgriDrone.SharedKernel.Application.Abstractions;
+using AgriDrone.SharedKernel.Application.Abstractions.Execution;
 using Microsoft.AspNetCore.Http;
 using Microsoft.IdentityModel.JsonWebTokens;
 using System;
@@ -7,7 +8,9 @@ using System.Text;
 
 namespace AgriDrone.SharedInfrastructure.Authentication
 {
-    public class CurrentUser(IHttpContextAccessor httpContextAccessor) : ICurrentUser
+    public class CurrentUser(
+        IHttpContextAccessor httpContextAccessor,
+        IExecutionContext executionContext) : ICurrentUser
     {
         private HttpContext? HttpContext =>
         httpContextAccessor.HttpContext;
@@ -23,9 +26,10 @@ namespace AgriDrone.SharedInfrastructure.Authentication
                     .FindFirst(JwtRegisteredClaimNames.Sub)?
                     .Value;
 
-                return Guid.TryParse(value, out Guid userId)
+                return Guid.TryParse(value, out Guid userId) &&
+                       userId != Guid.Empty
                     ? userId
-                    : null;
+                    : executionContext.ActorId;
             }
         }
 

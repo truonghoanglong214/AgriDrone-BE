@@ -1,12 +1,16 @@
 using AgriDrone.SharedKernel.Application.Abstractions;
+using AgriDrone.SharedKernel.Application.Abstractions.Execution;
 using Microsoft.AspNetCore.Http;
 
 namespace AgriDrone.SharedInfrastructure.Authentication;
 
-internal sealed class CurrentTenant(IHttpContextAccessor httpContextAccessor)
+internal sealed class CurrentTenant(
+    IHttpContextAccessor httpContextAccessor,
+    IExecutionContext executionContext)
     : ICurrentTenant
 {
-    public Guid? TenantId => GetGuidClaim(AgriDroneClaimTypes.TenantId);
+    public Guid? TenantId =>
+        GetGuidClaim(AgriDroneClaimTypes.TenantId) ?? executionContext.TenantId;
 
     public Guid? MembershipId => GetGuidClaim(
         AgriDroneClaimTypes.TenantMembershipId);
@@ -15,8 +19,7 @@ internal sealed class CurrentTenant(IHttpContextAccessor httpContextAccessor)
         .FindFirst(AgriDroneClaimTypes.TenantRole)?
         .Value;
 
-    public bool HasTenantContext =>
-        TenantId.HasValue && MembershipId.HasValue;
+    public bool HasTenantContext => TenantId.HasValue;
 
     private Guid? GetGuidClaim(string claimType)
     {
@@ -24,6 +27,8 @@ internal sealed class CurrentTenant(IHttpContextAccessor httpContextAccessor)
             .FindFirst(claimType)?
             .Value;
 
-        return Guid.TryParse(value, out var id) ? id : null;
+        return Guid.TryParse(value, out var id) && id != Guid.Empty
+            ? id
+            : null;
     }
 }

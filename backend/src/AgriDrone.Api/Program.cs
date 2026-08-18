@@ -8,6 +8,7 @@ using AgriDrone.Modules.Notifications;
 using AgriDrone.Modules.Plants;
 using AgriDrone.SharedInfrastructure.Authentication;
 using AgriDrone.SharedInfrastructure.ExceptionHandling;
+using AgriDrone.SharedInfrastructure.Execution;
 using AgriDrone.SharedInfrastructure.Validation;
 using Microsoft.OpenApi;
 
@@ -63,6 +64,7 @@ builder.Services
     .AddMissionsModule(builder.Configuration)
     .AddNotificationsModule(builder.Configuration)
     .AddPlantsModule(builder.Configuration)
+    .AddExecutionContext()
     .AddJwtAuthentication(builder.Configuration)
     .AddValidationPipeline()
     .AddGlobalExceptionHandling();
@@ -82,6 +84,7 @@ app.UseHttpsRedirection();
 app.UseCors("Frontend");
 
 app.UseAuthentication();
+app.UseExecutionContext();
 app.UseAuthorization();
 
 app.MapControllers();
