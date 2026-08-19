@@ -1,11 +1,10 @@
-using AgriDrone.Modules.Identity.Domain.Tenants;
+using AgriDrone.SharedKernel.Application.Abstractions.Authorization;
 using Microsoft.AspNetCore.Authorization;
 
 namespace AgriDrone.Modules.Identity.Infrastructure.Authorization;
 
-internal sealed class TenantRoleRequirement(
-    params TenantMemberRole[] allowedRoles) : IAuthorizationRequirement
+internal sealed class TenantRoleRequirement(TenantAccessLevel requiredAccess)
+    : IAuthorizationRequirement
 {
-    public IReadOnlySet<TenantMemberRole> AllowedRoles { get; } =
-        allowedRoles.ToHashSet();
+    public TenantAccessLevel RequiredAccess { get; } = requiredAccess;
 }

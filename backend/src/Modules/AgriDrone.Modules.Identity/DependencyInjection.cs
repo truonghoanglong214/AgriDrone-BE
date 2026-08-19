@@ -14,6 +14,7 @@ using AgriDrone.Modules.Identity.Infrastructure.Queries;
 using AgriDrone.Modules.Identity.Infrastructure.Repositories;
 using AgriDrone.Modules.Identity.Infrastructure.Security;
 using AgriDrone.SharedInfrastructure.Persistence;
+using AgriDrone.SharedKernel.Application.Abstractions.Authorization;
 using AgriDrone.SharedKernel.Domain;
 using FluentValidation;
 using Microsoft.AspNetCore.Authorization;
@@ -67,6 +68,7 @@ public static class DependencyInjection
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
         services.AddScoped<ITenantSelectionTokenService, TenantSelectionTokenService>();
+        services.AddScoped<IEffectiveAccessService, EffectiveAccessService>();
         services.AddScoped<IAuthorizationHandler, TenantRoleAuthorizationHandler>();
         services.AddScoped<IAuthorizationHandler, FarmRoleAuthorizationHandler>();
         services.AddScoped<IPasswordService, PasswordService>();
@@ -90,48 +92,35 @@ public static class DependencyInjection
                 policy => policy
                     .RequireAuthenticatedUser()
                     .AddRequirements(new TenantRoleRequirement(
-                        TenantMemberRole.Owner,
-                        TenantMemberRole.TenantAdmin,
-                        TenantMemberRole.Member)));
+                        TenantAccessLevel.Member)));
 
             authorization.AddPolicy(
                 IdentityAuthorizationPolicies.TenantAdmin,
                 policy => policy
                     .RequireAuthenticatedUser()
                     .AddRequirements(new TenantRoleRequirement(
-                        TenantMemberRole.Owner,
-                        TenantMemberRole.TenantAdmin)));
+                        TenantAccessLevel.Admin)));
 
             authorization.AddPolicy(
                 IdentityAuthorizationPolicies.TenantOwner,
                 policy => policy
                     .RequireAuthenticatedUser()
                     .AddRequirements(new TenantRoleRequirement(
-                        TenantMemberRole.Owner)));
+                        TenantAccessLevel.Owner)));
 
             authorization.AddPolicy(
                 IdentityAuthorizationPolicies.FarmMember,
                 policy => policy
                     .RequireAuthenticatedUser()
                     .AddRequirements(new FarmRoleRequirement(
-                        FarmMemberRole.Owner,
-                        FarmMemberRole.Manager,
-                        FarmMemberRole.Worker)));
+                        FarmAccessLevel.Member)));
 
             authorization.AddPolicy(
                 IdentityAuthorizationPolicies.FarmManager,
                 policy => policy
                     .RequireAuthenticatedUser()
                     .AddRequirements(new FarmRoleRequirement(
-                        FarmMemberRole.Owner,
-                        FarmMemberRole.Manager)));
-
-            authorization.AddPolicy(
-                IdentityAuthorizationPolicies.FarmOwner,
-                policy => policy
-                    .RequireAuthenticatedUser()
-                    .AddRequirements(new FarmRoleRequirement(
-                        FarmMemberRole.Owner)));
+                        FarmAccessLevel.Manager)));
         });
 
         var assembly = typeof(DependencyInjection).Assembly;

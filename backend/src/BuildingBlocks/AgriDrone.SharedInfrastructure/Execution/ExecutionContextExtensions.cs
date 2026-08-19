@@ -14,6 +14,7 @@ public static class ExecutionContextExtensions
             serviceProvider.GetRequiredService<ScopedExecutionContext>());
         services.AddScoped<IExecutionContextInitializer>(serviceProvider =>
             serviceProvider.GetRequiredService<ScopedExecutionContext>());
+        services.AddSingleton<IExecutionContextRunner, ExecutionContextRunner>();
 
         return services;
     }

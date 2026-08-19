@@ -2,6 +2,7 @@ using AgriDrone.SharedInfrastructure.Authentication;
 using AgriDrone.SharedKernel.Application.Abstractions.Execution;
 using Microsoft.AspNetCore.Http;
 using Microsoft.IdentityModel.JsonWebTokens;
+using Microsoft.Extensions.Logging;
 
 namespace AgriDrone.SharedInfrastructure.Execution;
 
@@ -11,21 +12,29 @@ public sealed class HttpExecutionContextMiddleware(RequestDelegate next)
 
     public async Task InvokeAsync(
         HttpContext httpContext,
-        IExecutionContextInitializer initializer)
+        IExecutionContextInitializer initializer,
+        ILogger<HttpExecutionContextMiddleware> logger)
     {
         var correlationId = GetOrCreateCorrelationId(httpContext);
-        var snapshot = new ExecutionContextSnapshot(
+        var snapshot = ExecutionContextSnapshot.ForHttp(
             GetGuidClaim(httpContext, AgriDroneClaimTypes.TenantId),
             GetGuidClaim(httpContext, JwtRegisteredClaimNames.Sub),
-            correlationId,
-            MessageId: null,
-            ExecutionContextSource.Http);
+            correlationId);
 
         httpContext.TraceIdentifier = correlationId.ToString("D");
         httpContext.Response.Headers[CorrelationIdHeaderName] =
             httpContext.TraceIdentifier;
 
         using var contextLease = initializer.Begin(snapshot);
+        using var loggingScope = logger.BeginScope(
+            new Dictionary<string, object?>
+            {
+                ["ExecutionSource"] = snapshot.Source.ToString(),
+                ["TenantId"] = snapshot.TenantId,
+                ["ActorId"] = snapshot.ActorId,
+                ["CorrelationId"] = snapshot.CorrelationId
+            });
+
         await next(httpContext);
     }
 
