@@ -7,6 +7,7 @@
 	</PropertyGroup>
 	
 	<ItemGroup>
+		<ProjectReference Include="..\AgriDrone.IntegrationContracts\AgriDrone.IntegrationContracts.csproj" />
 		<ProjectReference Include="..\AgriDrone.SharedKernel\AgriDrone.SharedKernel.csproj" />
 	</ItemGroup>
 
@@ -19,6 +20,8 @@
 		<PackageReference Include="Microsoft.EntityFrameworkCore" />
 		<PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
 		<PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+		<PackageReference Include="RabbitMQ.Client" />
+		<PackageReference Include="StackExchange.Redis" />
 	</ItemGroup>
 	
 </Project>

@@ -10,11 +10,42 @@ public sealed class ZoneMapVersion : AggregateRoot
     {
     }
 
+    private ZoneMapVersion(
+        Guid id,
+        Guid farmId,
+        Guid zoneId,
+        Guid sourceMissionId,
+        Guid sourceApprovalId,
+        int versionNumber,
+        decimal gridBearingDeg,
+        decimal rowSpacingM,
+        decimal plantSpacingM,
+        string algorithmVersion,
+        JsonDocument parameters,
+        DateTimeOffset createdAt)
+    {
+        Id = id;
+        FarmId = farmId;
+        ZoneId = zoneId;
+        SourceMissionId = sourceMissionId;
+        SourceApprovalId = sourceApprovalId;
+        VersionNumber = versionNumber;
+        Status = MapVersionStatus.Draft;
+        GridBearingDeg = gridBearingDeg;
+        RowSpacingM = rowSpacingM;
+        PlantSpacingM = plantSpacingM;
+        AlgorithmVersion = algorithmVersion;
+        Parameters = parameters;
+        CreatedAt = createdAt;
+    }
+
     public Guid FarmId { get; private set; }
 
     public Guid ZoneId { get; private set; }
 
     public Guid? SourceMissionId { get; private set; }
+
+    public Guid? SourceApprovalId { get; private set; }
 
     public int VersionNumber { get; private set; }
 
@@ -37,4 +68,96 @@ public sealed class ZoneMapVersion : AggregateRoot
     public DateTimeOffset CreatedAt { get; private set; }
 
     public FarmZone Zone { get; private set; } = null!;
+
+    public static ZoneMapVersion CreateDraft(
+        Guid id,
+        Guid farmId,
+        Guid zoneId,
+        Guid sourceMissionId,
+        Guid sourceApprovalId,
+        int versionNumber,
+        decimal gridBearingDeg,
+        decimal rowSpacingM,
+        decimal plantSpacingM,
+        string algorithmVersion,
+        JsonDocument parameters,
+        DateTimeOffset createdAt)
+    {
+        EnsureId(id, nameof(id));
+        EnsureId(farmId, nameof(farmId));
+        EnsureId(zoneId, nameof(zoneId));
+        EnsureId(sourceMissionId, nameof(sourceMissionId));
+        EnsureId(sourceApprovalId, nameof(sourceApprovalId));
+        ArgumentOutOfRangeException.ThrowIfLessThan(versionNumber, 1);
+        ArgumentOutOfRangeException.ThrowIfNegative(gridBearingDeg);
+        ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(
+            gridBearingDeg,
+            360);
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(rowSpacingM, 0);
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(plantSpacingM, 0);
+        ArgumentException.ThrowIfNullOrWhiteSpace(algorithmVersion);
+        ArgumentNullException.ThrowIfNull(parameters);
+        EnsureUtc(createdAt, nameof(createdAt));
+
+        return new ZoneMapVersion(
+            id,
+            farmId,
+            zoneId,
+            sourceMissionId,
+            sourceApprovalId,
+            versionNumber,
+            gridBearingDeg,
+            rowSpacingM,
+            plantSpacingM,
+            algorithmVersion.Trim(),
+            JsonDocument.Parse(parameters.RootElement.GetRawText()),
+            createdAt);
+    }
+
+    public void Confirm(Guid actorId, DateTimeOffset confirmedAt)
+    {
+        EnsureId(actorId, nameof(actorId));
+        EnsureUtc(confirmedAt, nameof(confirmedAt));
+
+        if (Status != MapVersionStatus.Draft)
+        {
+            throw new InvalidOperationException(
+                $"Only a draft map version can be confirmed; current status is '{Status}'.");
+        }
+
+        Status = MapVersionStatus.Confirmed;
+        ConfirmedBy = actorId;
+        ConfirmedAt = confirmedAt;
+    }
+
+    public void Supersede()
+    {
+        if (Status != MapVersionStatus.Confirmed)
+        {
+            throw new InvalidOperationException(
+                $"Only a confirmed map version can be superseded; current status is '{Status}'.");
+        }
+
+        Status = MapVersionStatus.Superseded;
+    }
+
+    private static void EnsureId(Guid value, string parameterName)
+    {
+        if (value == Guid.Empty)
+        {
+            throw new ArgumentException("Identifier cannot be empty.", parameterName);
+        }
+    }
+
+    private static void EnsureUtc(
+        DateTimeOffset value,
+        string parameterName)
+    {
+        if (value == default || value.Offset != TimeSpan.Zero)
+        {
+            throw new ArgumentException(
+                "Timestamp must be a non-default UTC value.",
+                parameterName);
+        }
+    }
 }

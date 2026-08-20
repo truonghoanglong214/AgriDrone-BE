@@ -12,6 +12,40 @@ public sealed class Plant : AggregateRoot
     {
     }
 
+    private Plant(
+        Guid id,
+        Guid farmId,
+        Guid zoneId,
+        string plantCode,
+        Point location,
+        Guid mapVersionId,
+        int rowIndex,
+        int columnIndex,
+        decimal? locationAccuracyM,
+        decimal positionConfidence,
+        Guid healthLevelId,
+        Guid sourceMissionId,
+        DateTimeOffset mappedAt)
+    {
+        Id = id;
+        FarmId = farmId;
+        ZoneId = zoneId;
+        PlantCode = plantCode;
+        Location = location;
+        CurrentMapVersionId = mapVersionId;
+        RowIndex = rowIndex;
+        ColumnIndex = columnIndex;
+        LocationAccuracyM = locationAccuracyM;
+        PositionConfidence = positionConfidence;
+        PositionSource = Plants.PositionSource.MappingAi;
+        LifecycleStatus = PlantLifecycleStatus.Active;
+        CurrentHealthLevelId = healthLevelId;
+        MappedAt = mappedAt;
+        CreatedFromMissionId = sourceMissionId;
+        CreatedAt = mappedAt;
+        UpdatedAt = mappedAt;
+    }
+
     public Guid FarmId { get; private set; }
 
     public Guid? ZoneId { get; private set; }
@@ -53,4 +87,146 @@ public sealed class Plant : AggregateRoot
     public ICollection<PlantScan> Scans { get; private set; } = [];
 
     public ICollection<PlantChangeEvent> ChangeEvents { get; private set; } = [];
+
+    public static Plant CreateFromMapping(
+        Guid id,
+        Guid farmId,
+        Guid zoneId,
+        string plantCode,
+        Point location,
+        Guid mapVersionId,
+        int rowIndex,
+        int columnIndex,
+        decimal? locationAccuracyM,
+        decimal positionConfidence,
+        Guid healthLevelId,
+        Guid sourceMissionId,
+        DateTimeOffset mappedAt)
+    {
+        EnsureId(id, nameof(id));
+        EnsureId(farmId, nameof(farmId));
+        EnsureId(zoneId, nameof(zoneId));
+        EnsureId(mapVersionId, nameof(mapVersionId));
+        EnsureId(healthLevelId, nameof(healthLevelId));
+        EnsureId(sourceMissionId, nameof(sourceMissionId));
+        ArgumentException.ThrowIfNullOrWhiteSpace(plantCode);
+        ArgumentNullException.ThrowIfNull(location);
+        ArgumentOutOfRangeException.ThrowIfLessThan(rowIndex, 1);
+        ArgumentOutOfRangeException.ThrowIfLessThan(columnIndex, 1);
+
+        EnsureMappingMeasurements(
+            locationAccuracyM,
+            positionConfidence,
+            mappedAt);
+
+        return new Plant(
+            id,
+            farmId,
+            zoneId,
+            plantCode.Trim(),
+            CopyPoint(location),
+            mapVersionId,
+            rowIndex,
+            columnIndex,
+            locationAccuracyM,
+            positionConfidence,
+            healthLevelId,
+            sourceMissionId,
+            mappedAt);
+    }
+
+    public void ApplyPublishedMapPosition(
+        Guid mapVersionId,
+        Point location,
+        int rowIndex,
+        int columnIndex,
+        decimal? locationAccuracyM,
+        decimal positionConfidence,
+        DateTimeOffset mappedAt)
+    {
+        EnsureId(mapVersionId, nameof(mapVersionId));
+        ArgumentNullException.ThrowIfNull(location);
+        ArgumentOutOfRangeException.ThrowIfLessThan(rowIndex, 1);
+        ArgumentOutOfRangeException.ThrowIfLessThan(columnIndex, 1);
+        EnsureMappingMeasurements(
+            locationAccuracyM,
+            positionConfidence,
+            mappedAt);
+
+        if (LifecycleStatus != PlantLifecycleStatus.Active)
+        {
+            throw new InvalidOperationException(
+                $"Plant '{Id}' in lifecycle '{LifecycleStatus}' cannot be assigned to a published map.");
+        }
+
+        CurrentMapVersionId = mapVersionId;
+        Location = CopyPoint(location);
+        RowIndex = rowIndex;
+        ColumnIndex = columnIndex;
+        LocationAccuracyM = locationAccuracyM;
+        PositionConfidence = positionConfidence;
+        PositionSource = Plants.PositionSource.MappingAi;
+        MappedAt = mappedAt;
+        UpdatedAt = mappedAt;
+    }
+
+    public void ClearGridPositionForRemap(DateTimeOffset updatedAt)
+    {
+        if (LifecycleStatus != PlantLifecycleStatus.Active)
+        {
+            throw new InvalidOperationException(
+                $"Plant '{Id}' in lifecycle '{LifecycleStatus}' cannot be remapped.");
+        }
+
+        if (updatedAt == default || updatedAt.Offset != TimeSpan.Zero)
+        {
+            throw new ArgumentException(
+                "UpdatedAt must be a non-default UTC timestamp.",
+                nameof(updatedAt));
+        }
+
+        CurrentMapVersionId = null;
+        RowIndex = null;
+        ColumnIndex = null;
+        UpdatedAt = updatedAt;
+    }
+
+    private static void EnsureMappingMeasurements(
+        decimal? locationAccuracyM,
+        decimal positionConfidence,
+        DateTimeOffset mappedAt)
+    {
+        if (locationAccuracyM < 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(locationAccuracyM));
+        }
+
+        if (positionConfidence is < 0 or > 1)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(positionConfidence));
+        }
+
+        if (mappedAt == default || mappedAt.Offset != TimeSpan.Zero)
+        {
+            throw new ArgumentException(
+                "MappedAt must be a non-default UTC timestamp.",
+                nameof(mappedAt));
+        }
+    }
+
+    private static Point CopyPoint(Point point) =>
+        new(point.X, point.Y)
+        {
+            SRID = point.SRID
+        };
+
+    private static void EnsureId(Guid value, string parameterName)
+    {
+        if (value == Guid.Empty)
+        {
+            throw new ArgumentException("Identifier cannot be empty.", parameterName);
+        }
+    }
 }

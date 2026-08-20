@@ -1,3 +1,5 @@
+using AgriDrone.IntegrationContracts.Messaging;
+
 namespace AgriDrone.IntegrationContracts.Mapping.Validation;
 
 public static class ZoneMapPublishedV1Validator
@@ -51,6 +53,10 @@ public static class ZoneMapPublishedV1Validator
         {
             errors.Add("PublishedAt is required.");
         }
+        else if (payload.PublishedAt.Offset != TimeSpan.Zero)
+        {
+            errors.Add("PublishedAt must use the UTC offset.");
+        }
 
         ValidatePlantMappings(payload.PlantMappings, errors);
 
@@ -64,6 +70,14 @@ public static class ZoneMapPublishedV1Validator
         if (plantMappings is null || plantMappings.Count == 0)
         {
             errors.Add("PlantMappings must contain at least one item.");
+            return;
+        }
+
+        if (plantMappings.Count >
+            IntegrationContractLimits.MaximumPlantMappingCount)
+        {
+            errors.Add(
+                $"PlantMappings cannot contain more than {IntegrationContractLimits.MaximumPlantMappingCount} items.");
             return;
         }
 

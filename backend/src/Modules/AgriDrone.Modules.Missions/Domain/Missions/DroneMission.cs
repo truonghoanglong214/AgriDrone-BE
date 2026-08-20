@@ -53,6 +53,12 @@ public sealed class DroneMission : AggregateRoot
 
     public DateTimeOffset UpdatedAt { get; private set; }
 
+    public Guid? PublishedMapVersionId { get; private set; }
+
+    public Guid? MappingApprovalId { get; private set; }
+
+    public DateTimeOffset? MapPublishedAt { get; private set; }
+
     public Drone Drone { get; private set; } = null!;
 
     public ICollection<MissionMedia> Media { get; private set; } = [];
@@ -62,4 +68,47 @@ public sealed class DroneMission : AggregateRoot
     public ICollection<AiProcessingJob> AiProcessingJobs { get; private set; } = [];
 
     public ICollection<MissionPlantObservation> PlantObservations { get; private set; } = [];
+
+    public bool ApplyPublishedZoneMap(
+        Guid approvalId,
+        Guid mapVersionId,
+        DateTimeOffset publishedAt)
+    {
+        ArgumentOutOfRangeException.ThrowIfEqual(approvalId, Guid.Empty);
+        ArgumentOutOfRangeException.ThrowIfEqual(mapVersionId, Guid.Empty);
+
+        if (publishedAt == default || publishedAt.Offset != TimeSpan.Zero)
+        {
+            throw new ArgumentException(
+                "PublishedAt must be a non-default UTC timestamp.",
+                nameof(publishedAt));
+        }
+
+        if (PublishedMapVersionId == mapVersionId &&
+            MappingApprovalId == approvalId)
+        {
+            return false;
+        }
+
+        if (PublishedMapVersionId.HasValue || MappingApprovalId.HasValue)
+        {
+            throw new InvalidOperationException(
+                "The mapping mission is already linked to a different published map.");
+        }
+
+        if (MissionType != MissionType.Mapping ||
+            Status != MissionStatus.Completed ||
+            ProcessingStatus != ProcessingStatus.ReviewRequired)
+        {
+            throw new InvalidOperationException(
+                "Only a completed mapping flight awaiting review can accept a published map.");
+        }
+
+        PublishedMapVersionId = mapVersionId;
+        MappingApprovalId = approvalId;
+        MapPublishedAt = publishedAt;
+        ProcessingStatus = ProcessingStatus.Completed;
+        UpdatedAt = publishedAt;
+        return true;
+    }
 }

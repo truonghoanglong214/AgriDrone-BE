@@ -68,6 +68,10 @@ public sealed class ZoneMapVersionConfiguration : IEntityTypeConfiguration<ZoneM
             .HasColumnName("source_mission_id")
             .HasColumnType("uuid");
 
+        builder.Property(mapVersion => mapVersion.SourceApprovalId)
+            .HasColumnName("source_approval_id")
+            .HasColumnType("uuid");
+
         builder.Property(mapVersion => mapVersion.VersionNumber)
             .HasColumnName("version_number")
             .HasColumnType("integer");
@@ -129,6 +133,11 @@ public sealed class ZoneMapVersionConfiguration : IEntityTypeConfiguration<ZoneM
 
         builder.HasIndex(mapVersion => mapVersion.SourceMissionId)
             .HasDatabaseName("ix_zone_map_versions_source_mission");
+
+        builder.HasIndex(mapVersion => mapVersion.SourceApprovalId)
+            .HasDatabaseName("ux_zone_map_versions_source_approval")
+            .HasFilter("source_approval_id IS NOT NULL")
+            .IsUnique();
 
         builder.HasOne(mapVersion => mapVersion.Zone)
             .WithMany(zone => zone.MapVersions)

@@ -31,7 +31,7 @@ namespace AgriDrone.Database.Migrations
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "condition_type", new[] { "DISEASE", "ABIOTIC_DAMAGE", "MECHANICAL_DAMAGE", "OTHER" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "drone_status", new[] { "AVAILABLE", "IN_MISSION", "MAINTENANCE", "INACTIVE" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "farm_access_scope", new[] { "ALL_ZONES", "SELECTED_ZONES" });
-            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "farm_member_role", new[] { "OWNER", "MANAGER", "WORKER" });
+            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "farm_member_role", new[] { "MANAGER", "WORKER" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "finding_source", new[] { "AI", "MANUAL" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "general_status", new[] { "ACTIVE", "INACTIVE" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "harvest_batch_status", new[] { "DRAFT", "OPEN", "COMPLETED", "CANCELLED" });
@@ -223,6 +223,10 @@ namespace AgriDrone.Database.Migrations
                         .HasColumnType("numeric(8,3)")
                         .HasColumnName("row_spacing_m");
 
+                    b.Property<Guid?>("SourceApprovalId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("source_approval_id");
+
                     b.Property<Guid?>("SourceMissionId")
                         .HasColumnType("uuid")
                         .HasColumnName("source_mission_id");
@@ -251,6 +255,11 @@ namespace AgriDrone.Database.Migrations
                         .HasName("uq_zone_map_versions_id_zone_farm");
 
                     b.HasIndex("ConfirmedBy");
+
+                    b.HasIndex("SourceApprovalId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_zone_map_versions_source_approval")
+                        .HasFilter("source_approval_id IS NOT NULL");
 
                     b.HasIndex("SourceMissionId")
                         .HasDatabaseName("ix_zone_map_versions_source_mission");
@@ -1951,6 +1960,14 @@ namespace AgriDrone.Database.Migrations
                         .HasColumnType("geometry(LineString,4326)")
                         .HasColumnName("flight_route");
 
+                    b.Property<DateTimeOffset?>("MapPublishedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("map_published_at");
+
+                    b.Property<Guid?>("MappingApprovalId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("mapping_approval_id");
+
                     b.Property<string>("MissionCode")
                         .IsRequired()
                         .HasMaxLength(50)
@@ -1974,6 +1991,10 @@ namespace AgriDrone.Database.Migrations
                         .HasColumnType("system.processing_status")
                         .HasColumnName("processing_status")
                         .HasDefaultValueSql("'NOT_UPLOADED'::system.processing_status");
+
+                    b.Property<Guid?>("PublishedMapVersionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("published_map_version_id");
 
                     b.Property<DateTimeOffset?>("ScheduledAt")
                         .HasColumnType("timestamp with time zone")
@@ -2018,6 +2039,11 @@ namespace AgriDrone.Database.Migrations
                         .HasDatabaseName("ix_drone_missions_route_gist");
 
                     NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("FlightRoute"), "gist");
+
+                    b.HasIndex("MappingApprovalId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_drone_missions_mapping_approval")
+                        .HasFilter("mapping_approval_id IS NOT NULL");
 
                     b.HasIndex("PilotUserId");
 
@@ -3803,6 +3829,217 @@ namespace AgriDrone.Database.Migrations
                             t.HasCheckConstraint("ck_audit_actor_context", "(actor_type = 'USER'::system.audit_actor_type AND COALESCE(actor_id, user_id) IS NOT NULL) OR (actor_type = 'AI'::system.audit_actor_type AND source_job_id IS NOT NULL) OR actor_type = 'SYSTEM'::system.audit_actor_type");
 
                             t.HasCheckConstraint("ck_audit_farm_tenant_context", "farm_id IS NULL OR tenant_id IS NOT NULL");
+                        });
+                });
+
+            modelBuilder.Entity("AgriDrone.SharedInfrastructure.Messaging.Persistence.InboxMessage", b =>
+                {
+                    b.Property<string>("ConsumerName")
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)")
+                        .HasColumnName("consumer_name");
+
+                    b.Property<Guid>("MessageId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("message_id");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at");
+
+                    b.Property<Guid>("CorrelationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("correlation_id");
+
+                    b.Property<string>("ErrorCode")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("error_code");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("event_type");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("last_error");
+
+                    b.Property<DateTimeOffset>("ReceivedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("received_at");
+
+                    b.Property<string>("Result")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("result");
+
+                    b.Property<int>("SchemaVersion")
+                        .HasColumnType("integer")
+                        .HasColumnName("schema_version");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("status");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.HasKey("ConsumerName", "MessageId")
+                        .HasName("pk_inbox_messages");
+
+                    b.HasIndex("Status", "ReceivedAt")
+                        .HasDatabaseName("ix_inbox_messages_status_received_at");
+
+                    b.HasIndex("TenantId", "CorrelationId")
+                        .HasDatabaseName("ix_inbox_messages_tenant_correlation");
+
+                    b.ToTable("inbox_messages", "system", t =>
+                        {
+                            t.HasComment("Idempotency records and replay results for integration-event consumers.");
+
+                            t.HasCheckConstraint("ck_inbox_messages_completion", "(status = 'PROCESSING' AND completed_at IS NULL) OR (status IN ('COMPLETED', 'FAILED') AND completed_at IS NOT NULL AND completed_at >= received_at)");
+
+                            t.HasCheckConstraint("ck_inbox_messages_error", "(status = 'FAILED' AND error_code IS NOT NULL) OR (status <> 'FAILED' AND error_code IS NULL AND last_error IS NULL)");
+
+                            t.HasCheckConstraint("ck_inbox_messages_result", "result IS NULL OR status = 'COMPLETED'");
+
+                            t.HasCheckConstraint("ck_inbox_messages_schema_version", "schema_version > 0");
+
+                            t.HasCheckConstraint("ck_inbox_messages_status", "status IN ('PROCESSING', 'COMPLETED', 'FAILED')");
+                        });
+                });
+
+            modelBuilder.Entity("AgriDrone.SharedInfrastructure.Messaging.Persistence.OutboxMessage", b =>
+                {
+                    b.Property<Guid>("MessageId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("message_id");
+
+                    b.Property<Guid?>("ActorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("actor_id");
+
+                    b.Property<int>("AttemptCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("attempt_count");
+
+                    b.Property<byte[]>("Body")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("body");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("content_type");
+
+                    b.Property<Guid>("CorrelationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("correlation_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("event_type");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("last_error");
+
+                    b.Property<Guid?>("LockedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("locked_by");
+
+                    b.Property<DateTimeOffset?>("LockedUntil")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("locked_until");
+
+                    b.Property<DateTimeOffset?>("NextAttemptAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("next_attempt_at");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("occurred_at");
+
+                    b.Property<string>("PartitionKey")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("partition_key");
+
+                    b.Property<DateTimeOffset?>("PublishedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("published_at");
+
+                    b.Property<string>("RoutingKey")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("routing_key");
+
+                    b.Property<int>("SchemaVersion")
+                        .HasColumnType("integer")
+                        .HasColumnName("schema_version");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("status");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.HasKey("MessageId")
+                        .HasName("pk_outbox_messages");
+
+                    b.HasIndex("PartitionKey", "OccurredAt")
+                        .HasDatabaseName("ix_outbox_messages_partition")
+                        .HasFilter("partition_key IS NOT NULL");
+
+                    b.HasIndex("Status", "LockedUntil")
+                        .HasDatabaseName("ix_outbox_messages_lease")
+                        .HasFilter("status = 'PROCESSING'");
+
+                    b.HasIndex("TenantId", "CorrelationId")
+                        .HasDatabaseName("ix_outbox_messages_tenant_correlation");
+
+                    b.HasIndex("Status", "NextAttemptAt", "OccurredAt")
+                        .HasDatabaseName("ix_outbox_messages_dispatch")
+                        .HasFilter("status IN ('PENDING', 'RETRY')");
+
+                    b.ToTable("outbox_messages", "system", t =>
+                        {
+                            t.HasComment("Integration events awaiting reliable delivery to the message broker.");
+
+                            t.HasCheckConstraint("ck_outbox_messages_attempt_count", "attempt_count >= 0");
+
+                            t.HasCheckConstraint("ck_outbox_messages_body_size", "octet_length(body) BETWEEN 1 AND 4194304");
+
+                            t.HasCheckConstraint("ck_outbox_messages_processing_lease", "(status = 'PROCESSING' AND locked_by IS NOT NULL AND locked_until IS NOT NULL) OR (status <> 'PROCESSING' AND locked_by IS NULL AND locked_until IS NULL)");
+
+                            t.HasCheckConstraint("ck_outbox_messages_publication", "(status = 'PUBLISHED' AND published_at IS NOT NULL) OR (status <> 'PUBLISHED' AND published_at IS NULL)");
+
+                            t.HasCheckConstraint("ck_outbox_messages_retry_schedule", "(status IN ('PENDING', 'RETRY') AND next_attempt_at IS NOT NULL) OR (status NOT IN ('PENDING', 'RETRY') AND next_attempt_at IS NULL)");
+
+                            t.HasCheckConstraint("ck_outbox_messages_schema_version", "schema_version > 0");
+
+                            t.HasCheckConstraint("ck_outbox_messages_status", "status IN ('PENDING', 'PROCESSING', 'RETRY', 'PUBLISHED', 'DEAD')");
+
+                            t.HasCheckConstraint("ck_outbox_messages_timestamps", "created_at >= occurred_at AND (published_at IS NULL OR published_at >= created_at)");
                         });
                 });
 

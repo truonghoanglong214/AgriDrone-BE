@@ -1,0 +1,48 @@
+name: agridrone-step1-test
+
+services:
+  postgres:
+    image: postgis/postgis:17-3.5
+    environment:
+      POSTGRES_DB: agridrone_step1
+      POSTGRES_USER: agridrone_test
+      POSTGRES_PASSWORD: agridrone_test
+    ports:
+      - "127.0.0.1:55432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agridrone_test -d agridrone_step1"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    tmpfs:
+      - /var/lib/postgresql/data
+
+  rabbitmq:
+    image: rabbitmq:4.2.7-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: agridrone_test
+      RABBITMQ_DEFAULT_PASS: agridrone_test
+      RABBITMQ_DEFAULT_VHOST: agridrone_step1
+    ports:
+      - "127.0.0.1:55672:5672"
+      - "127.0.0.1:55673:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 3s
+      timeout: 5s
+      retries: 30
+    tmpfs:
+      - /var/lib/rabbitmq
+
+  redis:
+    image: redis:8.8.1-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no", "--requirepass", "agridrone_test"]
+    ports:
+      - "127.0.0.1:56379:6379"
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=agridrone_test redis-cli ping | grep -q PONG"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    tmpfs:
+      - /data

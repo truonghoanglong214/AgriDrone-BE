@@ -5,6 +5,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\BuildingBlocks\AgriDrone.IntegrationContracts\AgriDrone.IntegrationContracts.csproj" />
+    <ProjectReference Include="..\..\src\BuildingBlocks\AgriDrone.SharedInfrastructure\AgriDrone.SharedInfrastructure.csproj" />
     <ProjectReference Include="..\..\src\BuildingBlocks\AgriDrone.SharedKernel\AgriDrone.SharedKernel.csproj" />
     <ProjectReference Include="..\..\src\Modules\AgriDrone.Modules.Identity\AgriDrone.Modules.Identity.csproj" />
     <ProjectReference Include="..\..\src\Modules\AgriDrone.Modules.Farms\AgriDrone.Modules.Farms.csproj" />
@@ -13,5 +15,14 @@
     <ProjectReference Include="..\..\src\Modules\AgriDrone.Modules.Harvests\AgriDrone.Modules.Harvests.csproj" />
     <ProjectReference Include="..\..\src\Modules\AgriDrone.Modules.FieldTasks\AgriDrone.Modules.FieldTasks.csproj" />
     <ProjectReference Include="..\..\src\Modules\AgriDrone.Modules.Notifications\AgriDrone.Modules.Notifications.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
   </ItemGroup>
 </Project>

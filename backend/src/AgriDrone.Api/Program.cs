@@ -1,3 +1,4 @@
+using AgriDrone.Database;
 using AgriDrone.Integrations.Email;
 using AgriDrone.Modules.Farms;
 using AgriDrone.Modules.FieldTasks;
@@ -9,8 +10,11 @@ using AgriDrone.Modules.Plants;
 using AgriDrone.SharedInfrastructure.Authentication;
 using AgriDrone.SharedInfrastructure.ExceptionHandling;
 using AgriDrone.SharedInfrastructure.Execution;
+using AgriDrone.SharedInfrastructure.Health;
+using AgriDrone.SharedInfrastructure.Messaging;
 using AgriDrone.SharedInfrastructure.Validation;
 using Microsoft.OpenApi;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -64,6 +68,9 @@ builder.Services
     .AddMissionsModule(builder.Configuration)
     .AddNotificationsModule(builder.Configuration)
     .AddPlantsModule(builder.Configuration)
+    .AddIntegrationMessagingFoundation(builder.Configuration)
+    .AddMappingPublicationPersistence(builder.Configuration)
+    .AddAgriDroneHealthChecks()
     .AddExecutionContext()
     .AddJwtAuthentication(builder.Configuration)
     .AddValidationPipeline()
@@ -88,5 +95,18 @@ app.UseExecutionContext();
 app.UseAuthorization();
 
 app.MapControllers();
+
+app.MapHealthChecks(
+    "/health/live",
+    new HealthCheckOptions
+    {
+        Predicate = registration => registration.Tags.Contains("live")
+    });
+app.MapHealthChecks(
+    "/health/ready",
+    new HealthCheckOptions
+    {
+        Predicate = registration => registration.Tags.Contains("ready")
+    });
 
 app.Run();

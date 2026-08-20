@@ -52,9 +52,19 @@ namespace AgriDrone.IntegrationContracts.Messaging.Validation
                 return "TenantId is required.";
             }
 
+            if (envelope.ActorId == Guid.Empty)
+            {
+                return "ActorId cannot be an empty GUID when provided.";
+            }
+
             if (envelope.OccurredAt == default)
             {
                 return "OccurredAt is required.";
+            }
+
+            if (envelope.OccurredAt.Offset != TimeSpan.Zero)
+            {
+                return "OccurredAt must use the UTC offset.";
             }
 
             // Old events remain valid for replay. Only reject timestamps that
@@ -77,6 +87,12 @@ namespace AgriDrone.IntegrationContracts.Messaging.Validation
             if (string.IsNullOrWhiteSpace(envelope.EventType))
             {
                 return "EventType is required.";
+            }
+
+            if (envelope.EventType.Length >
+                IntegrationContractLimits.MaximumEventTypeLength)
+            {
+                return $"EventType cannot exceed {IntegrationContractLimits.MaximumEventTypeLength} characters.";
             }
 
             if (!string.Equals(

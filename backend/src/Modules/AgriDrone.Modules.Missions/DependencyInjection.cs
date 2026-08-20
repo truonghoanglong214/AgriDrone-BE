@@ -4,7 +4,12 @@ using AgriDrone.Modules.Missions.Domain.Missions;
 using AgriDrone.Modules.Missions.Domain.Observations;
 using AgriDrone.Modules.Missions.Domain.Processing;
 using AgriDrone.Modules.Missions.Domain.Telemetry;
+using AgriDrone.Modules.Missions.Application.Integration;
 using AgriDrone.Modules.Missions.Infrastructure.Persistence;
+using AgriDrone.IntegrationContracts.Mapping;
+using AgriDrone.IntegrationContracts.Messaging;
+using AgriDrone.SharedInfrastructure.Messaging;
+using AgriDrone.SharedInfrastructure.Messaging.Consumers;
 using AgriDrone.SharedInfrastructure.Persistence;
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
@@ -55,6 +60,12 @@ public static class DependencyInjection
         services.AddValidatorsFromAssembly(
             assembly,
             includeInternalTypes: true);
+
+        services.AddScoped<
+            IIntegrationMessageHandler<ZoneMapPublishedV1>,
+            ZoneMapPublishedHandler>();
+        services.AddIntegrationConsumer<ZoneMapPublishedProcessor>(
+            IntegrationConsumerNames.Be2ZoneMapPublishedV1);
 
         return services;
     }

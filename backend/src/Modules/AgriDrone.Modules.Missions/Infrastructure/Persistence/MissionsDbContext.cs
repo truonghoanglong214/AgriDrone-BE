@@ -4,6 +4,8 @@ using AgriDrone.Modules.Missions.Domain.Missions;
 using AgriDrone.Modules.Missions.Domain.Observations;
 using AgriDrone.Modules.Missions.Domain.Processing;
 using AgriDrone.Modules.Missions.Domain.Telemetry;
+using AgriDrone.SharedInfrastructure.Messaging.Persistence;
+using AgriDrone.SharedInfrastructure.Messaging.Persistence.Configurations;
 using Microsoft.EntityFrameworkCore;
 
 namespace AgriDrone.Modules.Missions.Infrastructure.Persistence;
@@ -34,9 +36,15 @@ internal sealed class MissionsDbContext(DbContextOptions<MissionsDbContext> opti
 
     public DbSet<MissionTelemetryPoint> MissionTelemetryPoints => Set<MissionTelemetryPoint>();
 
+    public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
+
+    public DbSet<InboxMessage> InboxMessages => Set<InboxMessage>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.HasDefaultSchema("mission");
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(MissionsDbContext).Assembly);
+        modelBuilder.ApplyConfiguration(new InboxMessageConfiguration());
+        modelBuilder.ApplyConfiguration(new OutboxMessageConfiguration());
     }
 }

@@ -125,6 +125,23 @@ public sealed class DroneMissionConfiguration : IEntityTypeConfiguration<DroneMi
             .HasDefaultValueSql("NOW()")
             .IsRequired();
 
+        builder.Property(mission => mission.PublishedMapVersionId)
+            .HasColumnName("published_map_version_id")
+            .HasColumnType("uuid");
+
+        builder.Property(mission => mission.MappingApprovalId)
+            .HasColumnName("mapping_approval_id")
+            .HasColumnType("uuid");
+
+        builder.Property(mission => mission.MapPublishedAt)
+            .HasColumnName("map_published_at")
+            .HasColumnType("timestamp with time zone");
+
+        builder.HasIndex(mission => mission.MappingApprovalId)
+            .HasDatabaseName("ux_drone_missions_mapping_approval")
+            .HasFilter("mapping_approval_id IS NOT NULL")
+            .IsUnique();
+
         builder.HasIndex(mission => new { mission.FarmId, mission.MissionCode })
             .HasDatabaseName("uq_drone_missions_farm_code")
             .IsUnique();

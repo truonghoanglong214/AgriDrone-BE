@@ -1,4 +1,5 @@
 using AgriDrone.IntegrationContracts.Contracts;
+using AgriDrone.IntegrationContracts.Messaging;
 
 namespace AgriDrone.IntegrationContracts.Mapping.Validation;
 
@@ -56,6 +57,12 @@ public static class MappingCandidatesApprovedV1Validator
         {
             errors.Add("AlgorithmVersion is required.");
         }
+        else if (payload.AlgorithmVersion.Length >
+                 IntegrationContractLimits.MaximumAlgorithmVersionLength)
+        {
+            errors.Add(
+                $"AlgorithmVersion cannot exceed {IntegrationContractLimits.MaximumAlgorithmVersionLength} characters.");
+        }
 
         if (!double.IsFinite(payload.GridBearingDeg) ||
             payload.GridBearingDeg < 0 ||
@@ -85,16 +92,34 @@ public static class MappingCandidatesApprovedV1Validator
             return;
         }
 
+        if (parameters.Count > IntegrationContractLimits.MaximumParameterCount)
+        {
+            errors.Add(
+                $"Parameters cannot contain more than {IntegrationContractLimits.MaximumParameterCount} items.");
+        }
+
         foreach (var parameter in parameters)
         {
             if (string.IsNullOrWhiteSpace(parameter.Key))
             {
                 errors.Add("Parameters cannot contain an empty key.");
             }
+            else if (parameter.Key.Length >
+                     IntegrationContractLimits.MaximumParameterKeyLength)
+            {
+                errors.Add(
+                    $"Parameter key '{parameter.Key}' cannot exceed {IntegrationContractLimits.MaximumParameterKeyLength} characters.");
+            }
 
             if (parameter.Value is null)
             {
                 errors.Add($"Parameters['{parameter.Key}'] cannot be null.");
+            }
+            else if (parameter.Value.Length >
+                     IntegrationContractLimits.MaximumParameterValueLength)
+            {
+                errors.Add(
+                    $"Parameters['{parameter.Key}'] cannot exceed {IntegrationContractLimits.MaximumParameterValueLength} characters.");
             }
         }
     }
@@ -106,6 +131,14 @@ public static class MappingCandidatesApprovedV1Validator
         if (candidates is null || candidates.Count == 0)
         {
             errors.Add("Candidates must contain at least one item.");
+            return;
+        }
+
+        if (candidates.Count >
+            IntegrationContractLimits.MaximumMappingCandidateCount)
+        {
+            errors.Add(
+                $"Candidates cannot contain more than {IntegrationContractLimits.MaximumMappingCandidateCount} items.");
             return;
         }
 
@@ -131,6 +164,18 @@ public static class MappingCandidatesApprovedV1Validator
                 gridPositions,
                 resolvedPlantIds,
                 errors);
+        }
+
+        var hasActionableCandidate = candidates.Any(candidate =>
+            candidate is not null &&
+            candidate.Decision is
+                MappingCandidateDecisions.Matched or
+                MappingCandidateDecisions.CreateNew);
+
+        if (!hasActionableCandidate)
+        {
+            errors.Add(
+                "Candidates must contain at least one matched or create-new item.");
         }
     }
 
