@@ -22,20 +22,23 @@ namespace AgriDrone.Modules.Identity.Application.Features.RegisterUser
     {
         public async Task<Result<RegisterUserResponse>> Handle(RegisterUserCommand request, CancellationToken cancellationToken)
         {
+            var code = request.tenantCode.Trim().ToUpperInvariant();
+            var name = request.tenantName.Trim();
+
             var existingUser = await userRepository.GetByEmailAsync(request.email, cancellationToken);
             if(existingUser is not null) 
                 return Result.Failure<RegisterUserResponse>(UserError.EmailAlreadyExists(request.email));
 
-            var existingTenant = await tenantRepository.GetByCodeAsync(request.tenantCode, cancellationToken);
+            var existingTenant = await tenantRepository.GetByCodeAsync(code, cancellationToken);
             if(existingTenant is not null)
-                return Result.Failure<RegisterUserResponse>(UserError.TenantAlreadyExist(request.tenantCode));
+                return Result.Failure<RegisterUserResponse>(UserError.TenantAlreadyExist(code));
             
             string passwordHash = passwordService.HashPassword(request.password);
             var now = DateTimeOffset.UtcNow;
 
             var newUser = User.Create(request.email, passwordHash, request.fullName, request.phone, UserStatus.Active, now);
 
-            var newTenant = Tenant.Create(request.tenantCode, request.tenantName, GeneralStatus.Active, now);
+            var newTenant = Tenant.Create(code, name, GeneralStatus.Active, now);
 
             var newTenantMembership = TenantMembership.Create(newTenant.Id, newUser.Id, TenantMemberRole.Owner, GeneralStatus.Active, now, now);
 
