@@ -6,12 +6,14 @@ using AgriDrone.Modules.Identity.Domain.TenantInvitations;
 using AgriDrone.Modules.Identity.Domain.Tenants;
 using AgriDrone.Modules.Identity.Domain.Users;
 using AgriDrone.Modules.Identity.Domain.ZoneAssignments;
+using AgriDrone.SharedInfrastructure.Auditing;
+using AgriDrone.SharedInfrastructure.Persistence.Configurations;
 using Microsoft.EntityFrameworkCore;
 
 namespace AgriDrone.Modules.Identity.Infrastructure.Persistence;
 
 internal sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> options)
-    : DbContext(options), IIdentityUnitOfWork
+    : DbContext(options), IIdentityUnitOfWork, IAuditLogSink
 {
     public DbSet<User> Users => Set<User>();
 
@@ -30,6 +32,8 @@ internal sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> opti
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
 
     public DbSet<ZoneAssignment> ZoneAssignments => Set<ZoneAssignment>();
+    
+    public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 
     public async Task<T> ExecuteInTransactionAsync<T>(Func<CancellationToken, Task<T>> operation, CancellationToken cancellationToken = default)
     {
@@ -43,9 +47,17 @@ internal sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> opti
         return result;
     }
 
+    public void AddAuditLog(AuditLog auditLog)
+    {
+        ArgumentNullException.ThrowIfNull(auditLog);
+        AuditLogs.Add(auditLog);
+    }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.HasDefaultSchema("identity");
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(IdentityDbContext).Assembly);
+        modelBuilder.ApplyConfiguration(
+            new AuditLogConfiguration());
     }
 }

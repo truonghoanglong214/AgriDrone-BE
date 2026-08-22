@@ -101,8 +101,47 @@ namespace AgriDrone.Database.Migrations
 
             migrationBuilder.Sql(
                 """
-                DELETE FROM identity.farm_memberships
-                WHERE role = 'OWNER'::system.farm_member_role;
+                DO $farm_owner_audit$
+                DECLARE
+                    owner_membership_count bigint;
+                    invalid_owner_membership_count bigint;
+                BEGIN
+                    SELECT COUNT(*)
+                    INTO owner_membership_count
+                    FROM identity.farm_memberships AS fm
+                    WHERE fm.role::text = 'OWNER';
+
+                    SELECT COUNT(*)
+                    INTO invalid_owner_membership_count
+                    FROM identity.farm_memberships AS fm
+                    LEFT JOIN identity.tenant_memberships AS tm
+                        ON tm.tenant_id = fm.tenant_id
+                        AND tm.user_id = fm.user_id
+                    WHERE fm.role::text = 'OWNER'
+                        AND tm.role IS DISTINCT FROM
+                            'OWNER'::system.tenant_member_role;
+
+                    IF invalid_owner_membership_count > 0 THEN
+                        RAISE EXCEPTION USING
+                            MESSAGE = format(
+                                'Farm OWNER role migration blocked: %s of %s legacy FarmMembership records do not have a matching TenantMembership OWNER.',
+                                invalid_owner_membership_count,
+                                owner_membership_count),
+                            HINT = 'Run docs/operations/audit-farm-owner-memberships.sql, resolve every invalid record explicitly, then retry. This migration never promotes a tenant member automatically.';
+                    END IF;
+
+                    RAISE NOTICE
+                        'Farm OWNER role audit passed: % legacy FarmMembership record(s) are backed by TenantMembership OWNER.',
+                        owner_membership_count;
+                END
+                $farm_owner_audit$;
+
+                DELETE FROM identity.farm_memberships AS fm
+                USING identity.tenant_memberships AS tm
+                WHERE fm.role::text = 'OWNER'
+                    AND tm.tenant_id = fm.tenant_id
+                    AND tm.user_id = fm.user_id
+                    AND tm.role = 'OWNER'::system.tenant_member_role;
 
                 ALTER TYPE system.farm_member_role
                     RENAME TO farm_member_role_old;

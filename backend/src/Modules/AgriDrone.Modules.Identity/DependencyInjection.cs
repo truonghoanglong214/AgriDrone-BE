@@ -13,6 +13,7 @@ using AgriDrone.Modules.Identity.Infrastructure.Persistence;
 using AgriDrone.Modules.Identity.Infrastructure.Queries;
 using AgriDrone.Modules.Identity.Infrastructure.Repositories;
 using AgriDrone.Modules.Identity.Infrastructure.Security;
+using AgriDrone.SharedInfrastructure.Auditing;
 using AgriDrone.SharedInfrastructure.Persistence;
 using AgriDrone.SharedKernel.Application.Abstractions.Authorization;
 using AgriDrone.SharedKernel.Domain;
@@ -63,6 +64,7 @@ public static class DependencyInjection
                     .MapEnum<GeneralStatus>("general_status", "system", translator)));
 
         services.AddScoped<IIdentityUnitOfWork>(serviceProvider => serviceProvider.GetRequiredService<IdentityDbContext>());
+        services.AddScoped<IAuditLogSink>(serviceProvider => serviceProvider.GetRequiredService<IdentityDbContext>());
         services.AddScoped<IUserQueries, UserQueries>();
         services.AddScoped<ITenantMembershipQueries, TenantMembershipQueries>();
         services.AddScoped<IUserRepository, UserRepository>();

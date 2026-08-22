@@ -41,4 +41,22 @@ public sealed class Tenant : AggregateRoot
             createdAt
             );
     }
+
+    public void Activate(DateTimeOffset updateAt)
+    {
+        if (Status == GeneralStatus.Active)
+            return;
+
+        Status = GeneralStatus.Active;
+        UpdatedAt = updateAt;
+    }
+
+    public void Deactivate(DateTimeOffset updateAt)
+    {
+        if (Status == GeneralStatus.Inactive)
+            return;
+
+        Status = GeneralStatus.Inactive;
+        UpdatedAt = updateAt;
+    }
 }
