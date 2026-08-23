@@ -24,10 +24,11 @@ namespace AgriDrone.Modules.Identity.Application.Features.RegisterUser
         {
             var code = request.tenantCode.Trim().ToUpperInvariant();
             var name = request.tenantName.Trim();
+            var email = request.email.Trim().ToLowerInvariant();
 
-            var existingUser = await userRepository.GetByEmailAsync(request.email, cancellationToken);
+            var existingUser = await userRepository.GetByEmailAsync(email, cancellationToken);
             if(existingUser is not null) 
-                return Result.Failure<RegisterUserResponse>(UserError.EmailAlreadyExists(request.email));
+                return Result.Failure<RegisterUserResponse>(UserError.EmailAlreadyExists(email));
 
             var existingTenant = await tenantRepository.GetByCodeAsync(code, cancellationToken);
             if(existingTenant is not null)
@@ -36,7 +37,7 @@ namespace AgriDrone.Modules.Identity.Application.Features.RegisterUser
             string passwordHash = passwordService.HashPassword(request.password);
             var now = DateTimeOffset.UtcNow;
 
-            var newUser = User.Create(request.email, passwordHash, request.fullName, request.phone, UserStatus.Active, now);
+            var newUser = User.Create(email, passwordHash, request.fullName, request.phone, UserStatus.Active, now);
 
             var newTenant = Tenant.Create(code, name, GeneralStatus.Active, now);
 

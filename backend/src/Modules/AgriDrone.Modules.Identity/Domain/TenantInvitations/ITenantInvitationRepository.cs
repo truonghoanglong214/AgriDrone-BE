@@ -11,5 +11,9 @@ public interface ITenantInvitationRepository
         string email,
         CancellationToken cancellationToken);
 
+    Task<TenantInvitation?> GetByIdAsync(
+        Guid invitationId,
+        CancellationToken cancellationToken);
+
     void Add(TenantInvitation invitation);
 }

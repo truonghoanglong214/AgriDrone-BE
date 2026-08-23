@@ -1,4 +1,5 @@
 using AgriDrone.Modules.Identity.Application.Abstractions;
+using AgriDrone.Modules.Identity.Application.Invitations.Creation;
 using AgriDrone.Modules.Identity.Domain.FarmMemberships;
 using AgriDrone.Modules.Identity.Domain.PasswordResetTokens;
 using AgriDrone.Modules.Identity.Domain.Roles;
@@ -7,14 +8,20 @@ using AgriDrone.Modules.Identity.Domain.Tenants;
 using AgriDrone.Modules.Identity.Domain.Users;
 using AgriDrone.Modules.Identity.Domain.ZoneAssignments;
 using AgriDrone.SharedInfrastructure.Auditing;
+using AgriDrone.SharedInfrastructure.Messaging.Persistence;
+using AgriDrone.SharedInfrastructure.Messaging.Persistence.Configurations;
 using AgriDrone.SharedInfrastructure.Persistence.Configurations;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace AgriDrone.Modules.Identity.Infrastructure.Persistence;
 
 internal sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> options)
     : DbContext(options), IIdentityUnitOfWork, IAuditLogSink
 {
+    private const string PendingInvitationConstraint =
+        "uq_tenant_invitations_pending_tenant_email";
+
     public DbSet<User> Users => Set<User>();
 
     public DbSet<Role> Roles => Set<Role>();
@@ -35,6 +42,10 @@ internal sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> opti
     
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 
+    public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
+
+    public DbSet<InboxMessage> InboxMessages => Set<InboxMessage>();
+
     public async Task<T> ExecuteInTransactionAsync<T>(Func<CancellationToken, Task<T>> operation, CancellationToken cancellationToken = default)
     {
         await using var transaction =
@@ -45,6 +56,24 @@ internal sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> opti
         await transaction.CommitAsync(cancellationToken);
 
         return result;
+    }
+
+    public override async Task<int> SaveChangesAsync(
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return await base.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException exception)
+            when (exception.InnerException is PostgresException
+            {
+                SqlState: PostgresErrorCodes.UniqueViolation,
+                ConstraintName: PendingInvitationConstraint
+            })
+        {
+            throw new PendingTenantInvitationConflictException(exception);
+        }
     }
 
     public void AddAuditLog(AuditLog auditLog)
@@ -59,5 +88,11 @@ internal sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> opti
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(IdentityDbContext).Assembly);
         modelBuilder.ApplyConfiguration(
             new AuditLogConfiguration());
+
+        modelBuilder.ApplyConfiguration(
+            new OutboxMessageConfiguration());
+
+        modelBuilder.ApplyConfiguration(
+            new InboxMessageConfiguration());
     }
 }

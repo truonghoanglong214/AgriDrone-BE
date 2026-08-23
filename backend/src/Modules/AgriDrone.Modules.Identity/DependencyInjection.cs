@@ -1,5 +1,9 @@
+using AgriDrone.IntegrationContracts.Messaging;
+using AgriDrone.IntegrationContracts.Notifications;
 using AgriDrone.Modules.Identity.Application.Abstractions;
 using AgriDrone.Modules.Identity.Application.Authorization;
+using AgriDrone.Modules.Identity.Application.Invitations.Creation;
+using AgriDrone.Modules.Identity.Application.Invitations.EmailDelivery;
 using AgriDrone.Modules.Identity.Application.Options;
 using AgriDrone.Modules.Identity.Domain.FarmMemberships;
 using AgriDrone.Modules.Identity.Domain.PasswordResetTokens;
@@ -9,11 +13,15 @@ using AgriDrone.Modules.Identity.Domain.Users;
 using AgriDrone.Modules.Identity.Infrastructure.Authentication;
 using AgriDrone.Modules.Identity.Infrastructure.Authorization;
 using AgriDrone.Modules.Identity.Infrastructure.Configuration;
+using AgriDrone.Modules.Identity.Infrastructure.Messaging;
+using AgriDrone.Modules.Identity.Infrastructure.Messaging.Consumers;
 using AgriDrone.Modules.Identity.Infrastructure.Persistence;
 using AgriDrone.Modules.Identity.Infrastructure.Queries;
 using AgriDrone.Modules.Identity.Infrastructure.Repositories;
 using AgriDrone.Modules.Identity.Infrastructure.Security;
 using AgriDrone.SharedInfrastructure.Auditing;
+using AgriDrone.SharedInfrastructure.Messaging;
+using AgriDrone.SharedInfrastructure.Messaging.Consumers;
 using AgriDrone.SharedInfrastructure.Persistence;
 using AgriDrone.SharedKernel.Application.Abstractions.Authorization;
 using AgriDrone.SharedKernel.Domain;
@@ -78,8 +86,13 @@ public static class DependencyInjection
         services.AddScoped<ITenantMembershipRepository, TenantMembershipRepository>();
         services.AddScoped<ITenantInvitationRepository, TenantInvitationRepository>();
         services.AddScoped<IPasswordResetTokenRepository, PasswordResetTokenRepository>();
+        services.AddScoped<ITenantInvitationService, TenantInvitationService>();
+        services.AddScoped<ITenantInvitationEmailDelivery, TenantInvitationEmailDelivery>();
+        services.AddScoped<IIntegrationMessageHandler<TenantInvitationEmailRequestedV1>, TenantInvitationEmailRequestedHandler>();
+        services.AddScoped<IIdentityIntegrationOutbox, IdentityIntegrationOutbox>();
         services.AddSingleton<IInvitationTokenService, InvitationTokenService>();
         services.AddSingleton<IPasswordResetTokenService, PasswordResetTokenService>();
+        services.AddIntegrationConsumer<TenantInvitationEmailRequestedProcessor>(IntegrationConsumerNames.EmailTenantInvitationV1);
 
         services.AddAuthorization(authorization =>
         {

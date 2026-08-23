@@ -11,5 +11,8 @@ namespace AgriDrone.IntegrationContracts.Messaging
 
         public const string ZoneMapPublishedV1 =
             "mapping.zone-map-published.v1";
+
+        public const string TenantInvitationEmailRequestedV1 =
+            "identity.tenant-invitation-email-requested.v1";
     }
 }

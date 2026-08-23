@@ -10,6 +10,11 @@ internal sealed class TenantInvitationRepository(IdentityDbContext context)
     public void Add(TenantInvitation invitation) =>
         context.TenantInvitations.Add(invitation);
 
+    public Task<TenantInvitation?> GetByIdAsync(Guid invitationId, CancellationToken cancellationToken)
+        => context.TenantInvitations.SingleOrDefaultAsync(
+            invitation => invitation.Id == invitationId,
+            cancellationToken);
+
     public Task<TenantInvitation?> GetByTokenHashAsync(
         string tokenHash,
         CancellationToken cancellationToken) =>

@@ -7,4 +7,7 @@ public static class IntegrationConsumerNames
 
     public const string Be2ZoneMapPublishedV1 =
         "be2-zone-map-published-v1";
+
+    public const string EmailTenantInvitationV1 =
+        "email-tenant-invitation-v1";
 }
