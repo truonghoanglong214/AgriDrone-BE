@@ -32,4 +32,14 @@ internal sealed class TenantInvitationRepository(IdentityDbContext context)
                 invitation.Email == email &&
                 invitation.Status == TenantInvitationStatus.Pending,
             cancellationToken);
+
+    public Task<TenantInvitation?> GetPendingOwnerProvisioningAsync(
+        Guid tenantId,
+        CancellationToken cancellationToken) =>
+        context.TenantInvitations.SingleOrDefaultAsync(
+            invitation =>
+                invitation.TenantId == tenantId &&
+                invitation.Purpose == TenantInvitationPurpose.OwnerProvisioning &&
+                invitation.Status == TenantInvitationStatus.Pending,
+            cancellationToken);
 }

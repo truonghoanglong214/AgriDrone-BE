@@ -1,6 +1,6 @@
 ﻿namespace AgriDrone.Api.Contracts.Users
 {
-    public sealed class GetUserRequest
+    public sealed record GetUserRequest
     {
         public int PageNumber { get; init; } = 1;
 

@@ -21,6 +21,10 @@ internal sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> opti
 {
     private const string PendingInvitationConstraint =
         "uq_tenant_invitations_pending_tenant_email";
+    private const string PendingOwnerProvisioningConstraint =
+        "uq_tenant_invitations_pending_owner_provisioning";
+    private const string ActiveTenantOwnerConstraint =
+        "uq_tenant_memberships_active_owner";
 
     public DbSet<User> Users => Set<User>();
 
@@ -73,6 +77,24 @@ internal sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> opti
             })
         {
             throw new PendingTenantInvitationConflictException(exception);
+        }
+        catch (DbUpdateException exception)
+            when (exception.InnerException is PostgresException
+            {
+                SqlState: PostgresErrorCodes.UniqueViolation,
+                ConstraintName: PendingOwnerProvisioningConstraint
+            })
+        {
+            throw new PendingTenantOwnerProvisioningConflictException(exception);
+        }
+        catch (DbUpdateException exception)
+            when (exception.InnerException is PostgresException
+            {
+                SqlState: PostgresErrorCodes.UniqueViolation,
+                ConstraintName: ActiveTenantOwnerConstraint
+            })
+        {
+            throw new ActiveTenantOwnerConflictException(exception);
         }
     }
 

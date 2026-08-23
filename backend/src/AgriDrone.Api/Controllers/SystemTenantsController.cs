@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using AgriDrone.Modules.Identity.Application.Features.ActivateTenant;
 using AgriDrone.Modules.Identity.Application.Features.DeactivateTenant;
+using AgriDrone.Modules.Identity.Application.Features.ProvisionTenantOwner;
 
 namespace AgriDrone.Api.Controllers
 {
@@ -68,6 +69,25 @@ namespace AgriDrone.Api.Controllers
             return result.ToHttpResult(
                 HttpContext,
                 () => Results.NoContent());
+        }
+
+        [HttpPost("{tenantId:guid}/owner-provisionings")]
+        public async Task<IResult> ProvisionTenantOwner(
+            [FromRoute] Guid tenantId,
+            [FromBody] ProvisionTenantOwnerRequest request,
+            CancellationToken cancellationToken)
+        {
+            var command = new ProvisionTenantOwnerCommand(
+                tenantId,
+                request.Email);
+
+            var result = await sender.Send(command, cancellationToken);
+
+            return result.ToHttpResult(
+                HttpContext,
+                response => Results.Json(
+                    response,
+                    statusCode: StatusCodes.Status201Created));
         }
     }
 }

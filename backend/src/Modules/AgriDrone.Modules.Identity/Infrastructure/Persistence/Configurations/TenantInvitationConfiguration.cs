@@ -17,8 +17,9 @@ public sealed class TenantInvitationConfiguration
                 tableBuilder.HasComment(
                     "Single-use invitations for granting tenant membership through verified email ownership.");
                 tableBuilder.HasCheckConstraint(
-                    "ck_tenant_invitations_role_not_owner",
-                    "role <> 'OWNER'::system.tenant_member_role");
+                    "ck_tenant_invitations_purpose_role",
+                    "(purpose = 'OWNER_PROVISIONING'::system.tenant_invitation_purpose AND role = 'OWNER'::system.tenant_member_role) OR " +
+                    "(purpose = 'MEMBERSHIP'::system.tenant_invitation_purpose AND role <> 'OWNER'::system.tenant_member_role)");
                 tableBuilder.HasCheckConstraint(
                     "ck_tenant_invitations_expiration",
                     "expires_at > created_at");
@@ -47,6 +48,13 @@ public sealed class TenantInvitationConfiguration
         builder.Property(invitation => invitation.Role)
             .HasColumnName("role")
             .HasColumnType("system.tenant_member_role")
+            .IsRequired();
+
+        builder.Property(invitation => invitation.Purpose)
+            .HasColumnName("purpose")
+            .HasColumnType("system.tenant_invitation_purpose")
+            .HasDefaultValueSql(
+                "'MEMBERSHIP'::system.tenant_invitation_purpose")
             .IsRequired();
 
         builder.Property(invitation => invitation.TokenHash)
@@ -97,6 +105,14 @@ public sealed class TenantInvitationConfiguration
         })
             .HasDatabaseName("uq_tenant_invitations_pending_tenant_email")
             .HasFilter("status = 'PENDING'::system.tenant_invitation_status")
+            .IsUnique();
+
+        builder.HasIndex(invitation => invitation.TenantId)
+            .HasDatabaseName(
+                "uq_tenant_invitations_pending_owner_provisioning")
+            .HasFilter(
+                "purpose = 'OWNER_PROVISIONING'::system.tenant_invitation_purpose " +
+                "AND status = 'PENDING'::system.tenant_invitation_status")
             .IsUnique();
 
         builder.HasIndex(invitation => new

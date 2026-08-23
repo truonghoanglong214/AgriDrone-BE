@@ -11,6 +11,10 @@ public interface ITenantInvitationRepository
         string email,
         CancellationToken cancellationToken);
 
+    Task<TenantInvitation?> GetPendingOwnerProvisioningAsync(
+        Guid tenantId,
+        CancellationToken cancellationToken);
+
     Task<TenantInvitation?> GetByIdAsync(
         Guid invitationId,
         CancellationToken cancellationToken);

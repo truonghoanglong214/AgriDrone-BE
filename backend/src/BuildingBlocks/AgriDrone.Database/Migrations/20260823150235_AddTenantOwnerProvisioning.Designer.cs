@@ -4,6 +4,7 @@ using System.Text.Json;
 using AgriDrone.Database;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using NetTopologySuite.Geometries;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
@@ -13,9 +14,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace AgriDrone.Database.Migrations
 {
     [DbContext(typeof(AgriDroneSchemaDbContext))]
-    partial class AgriDroneSchemaDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260823150235_AddTenantOwnerProvisioning")]
+    partial class AddTenantOwnerProvisioning
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

@@ -38,7 +38,7 @@ namespace AgriDrone.Api.Controllers
         [HttpGet("/tenants/current/users")]
         [Authorize(Policy = IdentityAuthorizationPolicies.TenantAdmin)]
         public async Task<IResult> GetTenantUsers(
-            [FromQuery] GetUserRequest request,
+            [FromQuery] GetTenantUserRequest request,
             CancellationToken cancellationToken)
         {
             var query = new GetTenantUsersQuery(

@@ -69,6 +69,13 @@ public sealed class TenantMembershipConfiguration : IEntityTypeConfiguration<Ten
             membership.Status
         }).HasDatabaseName("ix_tenant_memberships_tenant_role");
 
+        builder.HasIndex(membership => membership.TenantId)
+            .HasDatabaseName("uq_tenant_memberships_active_owner")
+            .HasFilter(
+                "role = 'OWNER'::system.tenant_member_role " +
+                "AND status = 'ACTIVE'::system.general_status")
+            .IsUnique();
+
         builder.HasOne(membership => membership.Tenant)
             .WithMany(tenant => tenant.Memberships)
             .HasForeignKey(membership => membership.TenantId)

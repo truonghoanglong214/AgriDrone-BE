@@ -10,7 +10,7 @@ namespace AgriDrone.Modules.Identity.Application.Errors
         public static AppError CurrentUserIsRequired() =>
             AppError.Unauthorized(
                 "User.ContextRequired",
-                "A valid tenant context is required.");
+                "A valid user context is required.");
 
         public static AppError NotFound(string element, Guid id) =>
             AppError.NotFound(

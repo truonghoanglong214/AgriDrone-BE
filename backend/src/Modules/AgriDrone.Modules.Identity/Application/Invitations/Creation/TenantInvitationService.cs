@@ -48,6 +48,11 @@ internal sealed class TenantInvitationService(
             return Result.Failure<TenantInvitationCreated>(
                 TenantInvitationError.AlreadyPending());
         }
+        catch (PendingTenantOwnerProvisioningConflictException)
+        {
+            return Result.Failure<TenantInvitationCreated>(
+                TenantInvitationError.OwnerProvisioningAlreadyPending());
+        }
     }
 
     private async Task<Result<TenantInvitationCreated>> InviteCoreAsync(
@@ -63,6 +68,15 @@ internal sealed class TenantInvitationService(
         {
             return Result.Failure<TenantInvitationCreated>(
                 UserError.TenantNotFound());
+        }
+
+        if (request.Purpose == TenantInvitationPurpose.OwnerProvisioning &&
+            await tenantMembershipRepository.HasActiveOwnerAsync(
+                request.TenantId,
+                cancellationToken))
+        {
+            return Result.Failure<TenantInvitationCreated>(
+                TenantInvitationError.OwnerAlreadyAssigned());
         }
 
         var existingUser = await userRepository.GetByEmailAsync(
@@ -91,18 +105,25 @@ internal sealed class TenantInvitationService(
         }
 
         var now = timeProvider.GetUtcNow();
-        var pendingInvitation =
-            await tenantInvitationRepository.GetPendingAsync(
-                request.TenantId,
-                email,
-                cancellationToken);
+        var pendingInvitation = request.Purpose ==
+            TenantInvitationPurpose.OwnerProvisioning
+                ? await tenantInvitationRepository
+                    .GetPendingOwnerProvisioningAsync(
+                        request.TenantId,
+                        cancellationToken)
+                : await tenantInvitationRepository.GetPendingAsync(
+                    request.TenantId,
+                    email,
+                    cancellationToken);
 
         if (pendingInvitation is not null)
         {
             if (pendingInvitation.CanBeAccepted(now))
             {
                 return Result.Failure<TenantInvitationCreated>(
-                    TenantInvitationError.AlreadyPending());
+                    request.Purpose == TenantInvitationPurpose.OwnerProvisioning
+                        ? TenantInvitationError.OwnerProvisioningAlreadyPending()
+                        : TenantInvitationError.AlreadyPending());
             }
 
             pendingInvitation.MarkExpired(now);
@@ -119,6 +140,7 @@ internal sealed class TenantInvitationService(
             request.TenantId,
             email,
             request.Role,
+            request.Purpose,
             token.TokenHash,
             request.InvitedByUserId,
             expiresAt,

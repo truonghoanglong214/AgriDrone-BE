@@ -19,6 +19,16 @@ public static class TenantInvitationError
             "TenantInvitation.AlreadyPending",
             "An active invitation already exists for this email address.");
 
+    public static AppError OwnerAlreadyAssigned() =>
+        AppError.Conflict(
+            "TenantInvitation.OwnerAlreadyAssigned",
+            "The tenant already has an active owner.");
+
+    public static AppError OwnerProvisioningAlreadyPending() =>
+        AppError.Conflict(
+            "TenantInvitation.OwnerProvisioningAlreadyPending",
+            "The tenant already has an active owner provisioning request.");
+
     public static AppError InvalidOrExpired() =>
         AppError.Validation(
             "TenantInvitation.InvalidOrExpired",

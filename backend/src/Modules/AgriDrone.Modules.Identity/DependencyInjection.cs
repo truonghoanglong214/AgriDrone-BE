@@ -69,6 +69,7 @@ public static class DependencyInjection
                     .MapEnum<FarmAccessScope>("farm_access_scope", "system", translator)
                     .MapEnum<TenantMemberRole>("tenant_member_role", "system", translator)
                     .MapEnum<TenantInvitationStatus>("tenant_invitation_status", "system", translator)
+                    .MapEnum<TenantInvitationPurpose>("tenant_invitation_purpose", "system", translator)
                     .MapEnum<GeneralStatus>("general_status", "system", translator)));
 
         services.AddScoped<IIdentityUnitOfWork>(serviceProvider => serviceProvider.GetRequiredService<IdentityDbContext>());

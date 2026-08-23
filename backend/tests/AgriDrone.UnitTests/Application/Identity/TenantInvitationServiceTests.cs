@@ -29,7 +29,8 @@ public sealed class TenantInvitationServiceTests
                 fixture.Tenant.Id,
                 fixture.InviterId,
                 "  ADMIN@Example.COM ",
-                TenantMemberRole.TenantAdmin),
+                TenantMemberRole.TenantAdmin,
+                TenantInvitationPurpose.Membership),
             CancellationToken.None);
 
         Assert.True(result.IsSuccess);
@@ -37,6 +38,7 @@ public sealed class TenantInvitationServiceTests
             fixture.InvitationRepository.AddedInvitations);
         Assert.Equal("admin@example.com", invitation.Email);
         Assert.Equal(TenantMemberRole.TenantAdmin, invitation.Role);
+        Assert.Equal(TenantInvitationPurpose.Membership, invitation.Purpose);
         Assert.Equal(Now.AddHours(24), invitation.ExpiresAt);
         Assert.Equal(invitation.Id, result.Value.InvitationId);
         Assert.Equal(1, fixture.UnitOfWork.SaveChangesCount);
@@ -71,7 +73,8 @@ public sealed class TenantInvitationServiceTests
                 fixture.Tenant.Id,
                 inviter.Id,
                 inviter.Email,
-                TenantMemberRole.TenantAdmin),
+                TenantMemberRole.TenantAdmin,
+                TenantInvitationPurpose.Membership),
             CancellationToken.None);
 
         Assert.True(result.IsFailure);
@@ -92,6 +95,7 @@ public sealed class TenantInvitationServiceTests
                 fixture.Tenant.Id,
                 "admin@example.com",
                 TenantMemberRole.TenantAdmin,
+                TenantInvitationPurpose.Membership,
                 "OLD_HASH",
                 fixture.InviterId,
                 Now.AddHours(1),
@@ -102,7 +106,8 @@ public sealed class TenantInvitationServiceTests
                 fixture.Tenant.Id,
                 fixture.InviterId,
                 "admin@example.com",
-                TenantMemberRole.TenantAdmin),
+                TenantMemberRole.TenantAdmin,
+                TenantInvitationPurpose.Membership),
             CancellationToken.None);
 
         Assert.True(result.IsFailure);
@@ -120,6 +125,7 @@ public sealed class TenantInvitationServiceTests
             fixture.Tenant.Id,
             "member@example.com",
             TenantMemberRole.Member,
+            TenantInvitationPurpose.Membership,
             "OLD_HASH",
             fixture.InviterId,
             Now.AddMinutes(-1),
@@ -131,7 +137,8 @@ public sealed class TenantInvitationServiceTests
                 fixture.Tenant.Id,
                 fixture.InviterId,
                 "member@example.com",
-                TenantMemberRole.Member),
+                TenantMemberRole.Member,
+                TenantInvitationPurpose.Membership),
             CancellationToken.None);
 
         Assert.True(result.IsSuccess);
@@ -155,11 +162,126 @@ public sealed class TenantInvitationServiceTests
                 fixture.Tenant.Id,
                 fixture.InviterId,
                 "admin@example.com",
-                TenantMemberRole.TenantAdmin),
+                TenantMemberRole.TenantAdmin,
+                TenantInvitationPurpose.Membership),
             CancellationToken.None);
 
         Assert.True(result.IsFailure);
         Assert.Equal("TenantInvitation.AlreadyPending", result.Error.Code);
+    }
+
+    [Fact]
+    public async Task InviteAsyncCreatesOwnerProvisioningWhenTenantHasNoOwner()
+    {
+        var fixture = CreateFixture();
+
+        var result = await fixture.Service.InviteAsync(
+            new CreateTenantInvitationRequest(
+                fixture.Tenant.Id,
+                fixture.InviterId,
+                "owner@example.com",
+                TenantMemberRole.Owner,
+                TenantInvitationPurpose.OwnerProvisioning),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        var invitation = Assert.Single(
+            fixture.InvitationRepository.AddedInvitations);
+        Assert.Equal(TenantMemberRole.Owner, invitation.Role);
+        Assert.Equal(
+            TenantInvitationPurpose.OwnerProvisioning,
+            invitation.Purpose);
+    }
+
+    [Fact]
+    public async Task InviteAsyncRejectsOwnerProvisioningWhenOwnerAlreadyExists()
+    {
+        var fixture = CreateFixture();
+        fixture.MembershipRepository.HasActiveOwner = true;
+
+        var result = await fixture.Service.InviteAsync(
+            new CreateTenantInvitationRequest(
+                fixture.Tenant.Id,
+                fixture.InviterId,
+                "owner@example.com",
+                TenantMemberRole.Owner,
+                TenantInvitationPurpose.OwnerProvisioning),
+            CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(
+            "TenantInvitation.OwnerAlreadyAssigned",
+            result.Error.Code);
+        Assert.Empty(fixture.InvitationRepository.AddedInvitations);
+        Assert.Equal(0, fixture.UnitOfWork.SaveChangesCount);
+    }
+
+    [Fact]
+    public async Task InviteAsyncRejectsSecondPendingOwnerProvisioning()
+    {
+        var fixture = CreateFixture();
+        fixture.InvitationRepository.PendingOwnerProvisioning =
+            TenantInvitation.Create(
+                fixture.Tenant.Id,
+                "first-owner@example.com",
+                TenantMemberRole.Owner,
+                TenantInvitationPurpose.OwnerProvisioning,
+                "OLD_HASH",
+                fixture.InviterId,
+                Now.AddHours(1),
+                Now.AddHours(-1));
+
+        var result = await fixture.Service.InviteAsync(
+            new CreateTenantInvitationRequest(
+                fixture.Tenant.Id,
+                fixture.InviterId,
+                "second-owner@example.com",
+                TenantMemberRole.Owner,
+                TenantInvitationPurpose.OwnerProvisioning),
+            CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(
+            "TenantInvitation.OwnerProvisioningAlreadyPending",
+            result.Error.Code);
+        Assert.Empty(fixture.InvitationRepository.AddedInvitations);
+    }
+
+    [Fact]
+    public async Task InviteAsyncMapsConcurrentOwnerProvisioningConflict()
+    {
+        var fixture = CreateFixture();
+        fixture.UnitOfWork.TransactionException =
+            new PendingTenantOwnerProvisioningConflictException(
+                new InvalidOperationException("unique constraint"));
+
+        var result = await fixture.Service.InviteAsync(
+            new CreateTenantInvitationRequest(
+                fixture.Tenant.Id,
+                fixture.InviterId,
+                "owner@example.com",
+                TenantMemberRole.Owner,
+                TenantInvitationPurpose.OwnerProvisioning),
+            CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(
+            "TenantInvitation.OwnerProvisioningAlreadyPending",
+            result.Error.Code);
+    }
+
+    [Fact]
+    public void InvitationRejectsPurposeAndRoleMismatch()
+    {
+        Assert.Throws<ArgumentException>(() => TenantInvitation.Create(
+            Guid.NewGuid(),
+            "owner@example.com",
+            TenantMemberRole.Owner,
+            TenantInvitationPurpose.Membership,
+            "TOKEN_HASH",
+            Guid.NewGuid(),
+            Now.AddHours(1),
+            Now));
     }
 
     private static Fixture CreateFixture()
@@ -201,6 +323,7 @@ public sealed class TenantInvitationServiceTests
             tenant,
             inviterId,
             userRepository,
+            membershipRepository,
             invitationRepository,
             outbox,
             unitOfWork);
@@ -211,6 +334,7 @@ public sealed class TenantInvitationServiceTests
         Tenant Tenant,
         Guid InviterId,
         FakeUserRepository UserRepository,
+        FakeTenantMembershipRepository MembershipRepository,
         FakeTenantInvitationRepository InvitationRepository,
         FakeIdentityIntegrationOutbox Outbox,
         FakeIdentityUnitOfWork UnitOfWork);
@@ -273,6 +397,8 @@ public sealed class TenantInvitationServiceTests
     private sealed class FakeTenantMembershipRepository
         : ITenantMembershipRepository
     {
+        public bool HasActiveOwner { get; set; }
+
         public void Add(TenantMembership tenantMembership)
         {
         }
@@ -289,6 +415,11 @@ public sealed class TenantInvitationServiceTests
             CancellationToken cancellationToken) =>
             Task.FromResult<TenantMembership?>(null);
 
+        public Task<bool> HasActiveOwnerAsync(
+            Guid tenantId,
+            CancellationToken cancellationToken) =>
+            Task.FromResult(HasActiveOwner);
+
         public Task<TenantMembership?> GetByUserAndTenantIdAsync(
             Guid userId,
             Guid tenantId,
@@ -300,6 +431,8 @@ public sealed class TenantInvitationServiceTests
         : ITenantInvitationRepository
     {
         public TenantInvitation? PendingInvitation { get; set; }
+
+        public TenantInvitation? PendingOwnerProvisioning { get; set; }
 
         public List<TenantInvitation> AddedInvitations { get; } = [];
 
@@ -313,6 +446,11 @@ public sealed class TenantInvitationServiceTests
             string email,
             CancellationToken cancellationToken) =>
             Task.FromResult(PendingInvitation);
+
+        public Task<TenantInvitation?> GetPendingOwnerProvisioningAsync(
+            Guid tenantId,
+            CancellationToken cancellationToken) =>
+            Task.FromResult(PendingOwnerProvisioning);
 
         public Task<TenantInvitation?> GetByIdAsync(
             Guid invitationId,

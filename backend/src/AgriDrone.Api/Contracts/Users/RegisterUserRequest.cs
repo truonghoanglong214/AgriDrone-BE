@@ -1,6 +1,6 @@
 ﻿namespace AgriDrone.Api.Contracts.Users
 {
-    public sealed class RegisterUserRequest
+    public sealed record RegisterUserRequest
     {
         public string Email { get; init; } = null!;  
         public string Password { get; init; } = null!;

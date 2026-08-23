@@ -1,5 +1,6 @@
 using AgriDrone.Modules.Identity.Application.Abstractions;
 using AgriDrone.Modules.Identity.Application.Errors;
+using AgriDrone.Modules.Identity.Application.Invitations.Creation;
 using AgriDrone.Modules.Identity.Domain.TenantInvitations;
 using AgriDrone.Modules.Identity.Domain.Tenants;
 using AgriDrone.Modules.Identity.Domain.Users;
@@ -20,18 +21,26 @@ internal sealed class AcceptTenantInvitationCommandHandler(
         AcceptTenantInvitationCommand,
         Result<AcceptTenantInvitationResponse>>
 {
-    public Task<Result<AcceptTenantInvitationResponse>> Handle(
+    public async Task<Result<AcceptTenantInvitationResponse>> Handle(
         AcceptTenantInvitationCommand request,
         CancellationToken cancellationToken)
     {
         var tokenHash = invitationTokenService.Hash(request.Token);
 
-        return unitOfWork.ExecuteInTransactionAsync(
-            transactionCancellationToken => AcceptAsync(
-                request,
-                tokenHash,
-                transactionCancellationToken),
-            cancellationToken);
+        try
+        {
+            return await unitOfWork.ExecuteInTransactionAsync(
+                transactionCancellationToken => AcceptAsync(
+                    request,
+                    tokenHash,
+                    transactionCancellationToken),
+                cancellationToken);
+        }
+        catch (ActiveTenantOwnerConflictException)
+        {
+            return Result.Failure<AcceptTenantInvitationResponse>(
+                TenantInvitationError.OwnerAlreadyAssigned());
+        }
     }
 
     private async Task<Result<AcceptTenantInvitationResponse>> AcceptAsync(
@@ -48,6 +57,15 @@ internal sealed class AcceptTenantInvitationCommandHandler(
         {
             return Result.Failure<AcceptTenantInvitationResponse>(
                 TenantInvitationError.InvalidOrExpired());
+        }
+
+        if (invitation.Purpose == TenantInvitationPurpose.OwnerProvisioning &&
+            await tenantMembershipRepository.HasActiveOwnerAsync(
+                invitation.TenantId,
+                cancellationToken))
+        {
+            return Result.Failure<AcceptTenantInvitationResponse>(
+                TenantInvitationError.OwnerAlreadyAssigned());
         }
 
         var user = await userRepository.GetByEmailAsync(

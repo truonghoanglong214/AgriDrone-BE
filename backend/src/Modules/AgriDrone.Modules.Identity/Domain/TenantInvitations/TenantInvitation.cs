@@ -15,6 +15,7 @@ public sealed class TenantInvitation : Entity
         Guid tenantId,
         string email,
         TenantMemberRole role,
+        TenantInvitationPurpose purpose,
         string tokenHash,
         Guid invitedByUserId,
         DateTimeOffset expiresAt,
@@ -24,6 +25,7 @@ public sealed class TenantInvitation : Entity
         TenantId = tenantId;
         Email = email;
         Role = role;
+        Purpose = purpose;
         TokenHash = tokenHash;
         Status = TenantInvitationStatus.Pending;
         InvitedByUserId = invitedByUserId;
@@ -36,6 +38,8 @@ public sealed class TenantInvitation : Entity
     public string Email { get; private set; } = null!;
 
     public TenantMemberRole Role { get; private set; }
+
+    public TenantInvitationPurpose Purpose { get; private set; }
 
     public string TokenHash { get; private set; } = null!;
 
@@ -61,21 +65,40 @@ public sealed class TenantInvitation : Entity
         Guid tenantId,
         string email,
         TenantMemberRole role,
+        TenantInvitationPurpose purpose,
         string tokenHash,
         Guid invitedByUserId,
         DateTimeOffset expiresAt,
         DateTimeOffset createdAt)
     {
+        if (!HasCompatiblePurpose(role, purpose))
+        {
+            throw new ArgumentException(
+                "The invitation purpose is incompatible with the tenant role.",
+                nameof(purpose));
+        }
+
         return new TenantInvitation(
             Guid.NewGuid(),
             tenantId,
             email.Trim(),
             role,
+            purpose,
             tokenHash,
             invitedByUserId,
             expiresAt,
             createdAt);
     }
+
+    private static bool HasCompatiblePurpose(
+        TenantMemberRole role,
+        TenantInvitationPurpose purpose) =>
+        (role, purpose) switch
+        {
+            (TenantMemberRole.Owner, TenantInvitationPurpose.OwnerProvisioning) => true,
+            (not TenantMemberRole.Owner, TenantInvitationPurpose.Membership) => true,
+            _ => false
+        };
 
     public bool CanBeAccepted(DateTimeOffset now) =>
         Status == TenantInvitationStatus.Pending && now < ExpiresAt;

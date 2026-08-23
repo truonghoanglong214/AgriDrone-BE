@@ -1,5 +1,6 @@
 using AgriDrone.Modules.Identity.Application.Errors;
 using AgriDrone.Modules.Identity.Application.Invitations.Creation;
+using AgriDrone.Modules.Identity.Domain.TenantInvitations;
 using AgriDrone.Modules.Identity.Domain.Tenants;
 using AgriDrone.SharedKernel.Application;
 using AgriDrone.SharedKernel.Application.Abstractions;
@@ -29,7 +30,8 @@ internal sealed class InviteTenantAdminCommandHandler(
                 tenantId,
                 inviterUserId,
                 request.Email,
-                TenantMemberRole.TenantAdmin),
+                TenantMemberRole.TenantAdmin,
+                TenantInvitationPurpose.Membership),
             cancellationToken);
 
         if (result.IsFailure)
