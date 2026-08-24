@@ -42,16 +42,7 @@ public sealed class AgriDroneSchemaDbContextFactory
         var dataSource = dataSourceBuilder.Build();
 
         var optionsBuilder = new DbContextOptionsBuilder<AgriDroneSchemaDbContext>();
-        optionsBuilder.UseNpgsql(
-            dataSource,
-            npgsqlOptions =>
-            {
-                npgsqlOptions.UseNetTopologySuite();
-                npgsqlOptions.MigrationsAssembly(typeof(AgriDroneSchemaDbContext).Assembly.FullName);
-                npgsqlOptions.MigrationsHistoryTable(
-                    "__ef_migrations_history",
-                    DbSchemas.System);
-            });
+        AgriDroneSchemaDbContextOptions.Configure(optionsBuilder, dataSource);
 
         return new AgriDroneSchemaDbContext(optionsBuilder.Options);
     }

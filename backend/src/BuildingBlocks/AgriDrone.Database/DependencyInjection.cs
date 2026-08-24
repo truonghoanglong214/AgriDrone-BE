@@ -12,11 +12,35 @@ using AgriDrone.SharedKernel.Domain;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Npgsql;
 
 namespace AgriDrone.Database;
 
 public static class DependencyInjection
 {
+    public static IServiceCollection AddAgriDroneDatabase(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        var connectionString =
+            configuration.GetRequiredAgriDroneConnectionString();
+
+        services.AddSingleton(_ =>
+        {
+            var dataSourceBuilder = new NpgsqlDataSourceBuilder(connectionString);
+            PostgreSqlEnumMappings.ConfigureDataSource(dataSourceBuilder);
+            return dataSourceBuilder.Build();
+        });
+
+        services.AddDbContext<AgriDroneSchemaDbContext>((serviceProvider, options) =>
+        {
+            var dataSource = serviceProvider.GetRequiredService<NpgsqlDataSource>();
+            AgriDroneSchemaDbContextOptions.Configure(options, dataSource);
+        });
+
+        return services;
+    }
+
     public static IServiceCollection AddMappingPublicationPersistence(
         this IServiceCollection services,
         IConfiguration configuration)

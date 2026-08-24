@@ -1,6 +1,6 @@
 ﻿using AgriDrone.Modules.Identity.Application.Abstractions;
 using AgriDrone.Modules.Identity.Application.Errors;
-using AgriDrone.Modules.Identity.Application.Authorization;
+using AgriDrone.Modules.Identity.Domain.Roles;
 using AgriDrone.Modules.Identity.Domain.Tenants;
 using AgriDrone.Modules.Identity.Domain.Users;
 using AgriDrone.SharedKernel.Application;
@@ -32,7 +32,7 @@ namespace AgriDrone.Modules.Identity.Application.Features.LoginUser
                 user.Id,
                 cancellationToken);
 
-            if (systemRoles.Contains(SystemRoleCodes.SystemAdmin))
+            if (systemRoles.Contains(SystemRoles.SystemAdmin))
             {
                 var systemSession = AuthenticationSessionFactory.CreateSystemSession(
                     jwtTokenGenerator,

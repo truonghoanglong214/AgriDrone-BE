@@ -13,10 +13,4 @@ public static class IdentityAuthorizationPolicies
     public const string FarmMember = "Identity.FarmMember";
 
     public const string FarmManager = "Identity.FarmManager";
-
-}
-
-public static class SystemRoleCodes
-{
-    public const string SystemAdmin = "SYSTEM_ADMIN";
 }

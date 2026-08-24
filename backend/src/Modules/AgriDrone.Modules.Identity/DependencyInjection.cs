@@ -7,6 +7,7 @@ using AgriDrone.Modules.Identity.Application.Invitations.EmailDelivery;
 using AgriDrone.Modules.Identity.Application.Options;
 using AgriDrone.Modules.Identity.Domain.FarmMemberships;
 using AgriDrone.Modules.Identity.Domain.PasswordResetTokens;
+using AgriDrone.Modules.Identity.Domain.Roles;
 using AgriDrone.Modules.Identity.Domain.TenantInvitations;
 using AgriDrone.Modules.Identity.Domain.Tenants;
 using AgriDrone.Modules.Identity.Domain.Users;
@@ -101,7 +102,7 @@ public static class DependencyInjection
                 IdentityAuthorizationPolicies.SystemAdmin,
                 policy => policy
                     .RequireAuthenticatedUser()
-                    .RequireRole(SystemRoleCodes.SystemAdmin));
+                    .RequireRole(SystemRoles.SystemAdmin));
 
             authorization.AddPolicy(
                 IdentityAuthorizationPolicies.TenantMember,

@@ -61,6 +61,7 @@ builder.Services.AddCors(options =>
 // Modules
 builder.Services
     .AddEmailIntegration(builder.Configuration)
+    .AddAgriDroneDatabase(builder.Configuration)
     .AddFarmsModule(builder.Configuration)
     .AddFieldTasksModule(builder.Configuration)
     .AddHarvestsModule(builder.Configuration)
@@ -77,6 +78,12 @@ builder.Services
     .AddGlobalExceptionHandling();
 
 var app = builder.Build();
+
+if (builder.Configuration.GetValue<bool>(
+        "DatabaseInitialization:ApplyMigrationsOnStartup"))
+{
+    await app.Services.MigrateAgriDroneDatabaseAsync();
+}
 
 app.UseExceptionHandler();
 
