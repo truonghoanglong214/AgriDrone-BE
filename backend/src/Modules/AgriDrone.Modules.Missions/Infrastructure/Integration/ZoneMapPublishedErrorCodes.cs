@@ -1,4 +1,4 @@
-namespace AgriDrone.Modules.Missions.Application.Integration;
+namespace AgriDrone.Modules.Missions.Infrastructure.Integration;
 
 internal static class ZoneMapPublishedErrorCodes
 {

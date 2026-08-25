@@ -15,13 +15,32 @@ public sealed class DroneMissionConfiguration : IEntityTypeConfiguration<DroneMi
             tableBuilder =>
             {
                 tableBuilder.HasComment(
-                    "Drone flight mission for mapping or health inspection, including route and processing state.");
+                "Drone flight mission for mapping or health inspection, including route and processing state.");
+
                 tableBuilder.HasCheckConstraint(
                     "ck_drone_missions_time",
-                    "ended_at IS NULL OR started_at IS NULL OR ended_at >= started_at");
+                    "ended_at IS NULL OR started_at IS NULL OR " +
+                    "ended_at >= started_at");
+
+                tableBuilder.HasCheckConstraint(
+                    "ck_drone_missions_schedule_time",
+                    "scheduled_end_at IS NULL OR scheduled_at IS NULL OR " +
+                    "scheduled_end_at > scheduled_at");
+
                 tableBuilder.HasCheckConstraint(
                     "ck_drone_missions_detected_count",
-                    "detected_plant_count IS NULL OR detected_plant_count >= 0");
+                    "detected_plant_count IS NULL OR " +
+                    "detected_plant_count >= 0");
+
+                tableBuilder.HasCheckConstraint(
+                    "ck_drone_missions_health_review_counts",
+                    "health_review_total >= 0 AND " +
+                    "health_review_pending >= 0 AND " +
+                    "health_review_awaiting_field_verification >= 0 AND " +
+                    "health_review_resolved >= 0 AND " +
+                    "health_review_pending + " +
+                    "health_review_awaiting_field_verification + " +
+                    "health_review_resolved = health_review_total");
             });
 
         builder.HasKey(mission => mission.Id).HasName("pk_drone_missions");
@@ -82,7 +101,18 @@ public sealed class DroneMissionConfiguration : IEntityTypeConfiguration<DroneMi
         builder.Property(mission => mission.ScheduledAt)
             .HasColumnName("scheduled_at")
             .HasColumnType("timestamp with time zone");
-
+        builder.Property(mission => mission.ScheduledEndAt)
+            .HasColumnName("scheduled_end_at")
+            .HasColumnType("timestamp with time zone");
+        builder.HasIndex(mission => new
+        {
+            mission.TenantId,
+            mission.DroneId,
+            mission.ScheduledAt,
+            mission.ScheduledEndAt
+        })
+            .HasDatabaseName(
+                "ix_drone_missions_drone_schedule");
         builder.Property(mission => mission.StartedAt)
             .HasColumnName("started_at")
             .HasColumnType("timestamp with time zone");
@@ -137,6 +167,57 @@ public sealed class DroneMissionConfiguration : IEntityTypeConfiguration<DroneMi
             .HasColumnName("map_published_at")
             .HasColumnType("timestamp with time zone");
 
+        builder.Property(mission => mission.HealthReviewHandoffId)
+    .HasColumnName("health_review_handoff_id")
+    .HasColumnType("uuid");
+
+        builder.Property(mission => mission.HealthReviewVersion)
+            .HasColumnName("health_review_version")
+            .HasColumnType("bigint");
+
+        builder.Property(mission => mission.HealthReviewState)
+            .HasColumnName("health_review_state")
+            .HasConversion<string>()
+            .HasColumnType("character varying(32)")
+            .HasMaxLength(32);
+
+        builder.Property(mission => mission.HealthReviewTotal)
+            .HasColumnName("health_review_total")
+            .HasColumnType("integer")
+            .HasDefaultValue(0)
+            .IsRequired();
+
+        builder.Property(mission => mission.HealthReviewPending)
+            .HasColumnName("health_review_pending")
+            .HasColumnType("integer")
+            .HasDefaultValue(0)
+            .IsRequired();
+
+        builder.Property(
+                mission =>
+                    mission.HealthReviewAwaitingFieldVerification)
+            .HasColumnName(
+                "health_review_awaiting_field_verification")
+            .HasColumnType("integer")
+            .HasDefaultValue(0)
+            .IsRequired();
+
+        builder.Property(mission => mission.HealthReviewResolved)
+            .HasColumnName("health_review_resolved")
+            .HasColumnType("integer")
+            .HasDefaultValue(0)
+            .IsRequired();
+
+        builder.Property(mission => mission.HealthReviewChangedAt)
+            .HasColumnName("health_review_changed_at")
+            .HasColumnType("timestamp with time zone");
+
+        builder.HasIndex(mission => mission.HealthReviewHandoffId)
+            .HasDatabaseName(
+                "ux_drone_missions_health_review_handoff")
+            .HasFilter("health_review_handoff_id IS NOT NULL")
+            .IsUnique();
+
         builder.HasIndex(mission => mission.MappingApprovalId)
             .HasDatabaseName("ux_drone_missions_mapping_approval")
             .HasFilter("mapping_approval_id IS NOT NULL")
@@ -165,7 +246,7 @@ public sealed class DroneMissionConfiguration : IEntityTypeConfiguration<DroneMi
             .HasMethod("gist");
 
         builder.HasOne(mission => mission.Drone)
-            .WithMany(drone => drone.Missions)
+            .WithMany()
             .HasForeignKey(mission => new { mission.DroneId, mission.TenantId })
             .HasPrincipalKey(drone => new { drone.Id, drone.TenantId })
             .OnDelete(DeleteBehavior.Restrict)

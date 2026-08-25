@@ -35,6 +35,8 @@ public sealed class DroneMission : AggregateRoot
 
     public DateTimeOffset? ScheduledAt { get; private set; }
 
+    public DateTimeOffset? ScheduledEndAt { get; private set; }
+
     public DateTimeOffset? StartedAt { get; private set; }
 
     public DateTimeOffset? EndedAt { get; private set; }
@@ -58,6 +60,22 @@ public sealed class DroneMission : AggregateRoot
     public Guid? MappingApprovalId { get; private set; }
 
     public DateTimeOffset? MapPublishedAt { get; private set; }
+
+    public Guid? HealthReviewHandoffId { get; private set; }
+
+    public long? HealthReviewVersion { get; private set; }
+
+    public MissionHealthReviewState? HealthReviewState { get; private set; }
+
+    public int HealthReviewTotal { get; private set; }
+
+    public int HealthReviewPending { get; private set; }
+
+    public int HealthReviewAwaitingFieldVerification { get; private set; }
+
+    public int HealthReviewResolved { get; private set; }
+
+    public DateTimeOffset? HealthReviewChangedAt { get; private set; }
 
     public Drone Drone { get; private set; } = null!;
 
@@ -109,6 +127,102 @@ public sealed class DroneMission : AggregateRoot
         MapPublishedAt = publishedAt;
         ProcessingStatus = ProcessingStatus.Completed;
         UpdatedAt = publishedAt;
+        return true;
+    }
+    public bool ApplyHealthReviewState(
+    Guid handoffId,
+    long reviewVersion,
+    MissionHealthReviewState state,
+    int total,
+    int pending,
+    int awaitingFieldVerification,
+    int resolved,
+    DateTimeOffset changedAt)
+    {
+        ArgumentOutOfRangeException.ThrowIfEqual(
+            handoffId,
+            Guid.Empty);
+
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(
+    reviewVersion);
+
+        if (total < 0 ||
+            pending < 0 ||
+            awaitingFieldVerification < 0 ||
+            resolved < 0 ||
+            pending + awaitingFieldVerification + resolved != total)
+        {
+            throw new ArgumentException(
+                "Health review counters are invalid.");
+        }
+
+        if (changedAt == default ||
+            changedAt.Offset != TimeSpan.Zero)
+        {
+            throw new ArgumentException(
+                "ChangedAt must be a non-default UTC timestamp.",
+                nameof(changedAt));
+        }
+
+        if (MissionType != MissionType.HealthInspection)
+        {
+            throw new InvalidOperationException(
+                "Only a health-inspection mission can accept health review state.");
+        }
+
+        if (HealthReviewHandoffId.HasValue &&
+            HealthReviewHandoffId != handoffId)
+        {
+            throw new InvalidOperationException(
+                "The Mission belongs to a different health handoff.");
+        }
+
+        if (HealthReviewVersion is long currentVersion)
+        {
+            if (reviewVersion < currentVersion)
+            {
+                return false;
+            }
+
+            if (reviewVersion == currentVersion)
+            {
+                var isSameSnapshot =
+                    HealthReviewHandoffId == handoffId &&
+                    HealthReviewState == state &&
+                    HealthReviewTotal == total &&
+                    HealthReviewPending == pending &&
+                    HealthReviewAwaitingFieldVerification ==
+                        awaitingFieldVerification &&
+                    HealthReviewResolved == resolved;
+
+                if (isSameSnapshot)
+                {
+                    return false;
+                }
+
+                throw new InvalidOperationException(
+                    "The same Health Review version contains conflicting data.");
+            }
+        }
+
+        HealthReviewHandoffId = handoffId;
+        HealthReviewVersion = reviewVersion;
+        HealthReviewState = state;
+        HealthReviewTotal = total;
+        HealthReviewPending = pending;
+        HealthReviewAwaitingFieldVerification =
+            awaitingFieldVerification;
+        HealthReviewResolved = resolved;
+        HealthReviewChangedAt = changedAt;
+        UpdatedAt = changedAt;
+
+        ProcessingStatus =
+            state == MissionHealthReviewState.Resolved &&
+            pending == 0 &&
+            awaitingFieldVerification == 0
+                ? ProcessingStatus.Completed
+                : ProcessingStatus.ReviewRequired;
+
         return true;
     }
 }
