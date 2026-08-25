@@ -62,6 +62,7 @@ public sealed class FarmZoneConfiguration : IEntityTypeConfiguration<FarmZone>
         builder.Property(zone => zone.Status)
             .HasColumnName("status")
             .HasColumnType("system.general_status")
+            .HasSentinel((AgriDrone.SharedKernel.Domain.GeneralStatus)(-1))
             .HasDefaultValueSql("'ACTIVE'::system.general_status")
             .IsRequired();
 

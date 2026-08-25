@@ -70,12 +70,14 @@ public sealed class DroneMissionConfiguration : IEntityTypeConfiguration<DroneMi
         builder.Property(mission => mission.Status)
             .HasColumnName("status")
             .HasColumnType("system.mission_status")
+            .HasSentinel((MissionStatus)(-1))
             .HasDefaultValueSql("'DRAFT'::system.mission_status")
             .IsRequired();
 
         builder.Property(mission => mission.ProcessingStatus)
             .HasColumnName("processing_status")
             .HasColumnType("system.processing_status")
+            .HasSentinel((ProcessingStatus)(-1))
             .HasDefaultValueSql("'NOT_UPLOADED'::system.processing_status")
             .IsRequired();
 

@@ -37,6 +37,7 @@ public sealed class TenantConfiguration : IEntityTypeConfiguration<Tenant>
         builder.Property(tenant => tenant.Status)
             .HasColumnName("status")
             .HasColumnType("system.general_status")
+            .HasSentinel((AgriDrone.SharedKernel.Domain.GeneralStatus)(-1))
             .HasDefaultValueSql("'ACTIVE'::system.general_status")
             .IsRequired();
 

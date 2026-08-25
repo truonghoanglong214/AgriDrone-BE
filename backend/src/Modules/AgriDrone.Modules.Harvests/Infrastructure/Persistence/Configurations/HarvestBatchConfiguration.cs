@@ -79,6 +79,7 @@ public sealed class HarvestBatchConfiguration : IEntityTypeConfiguration<Harvest
         builder.Property(batch => batch.Status)
             .HasColumnName("status")
             .HasColumnType("system.harvest_batch_status")
+            .HasSentinel((HarvestBatchStatus)(-1))
             .HasDefaultValueSql("'DRAFT'::system.harvest_batch_status")
             .IsRequired();
 

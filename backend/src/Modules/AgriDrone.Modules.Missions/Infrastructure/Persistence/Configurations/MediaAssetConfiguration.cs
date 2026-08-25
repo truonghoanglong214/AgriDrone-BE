@@ -137,6 +137,7 @@ public sealed class MediaAssetConfiguration : IEntityTypeConfiguration<MediaAsse
         builder.Property(media => media.StorageStatus)
             .HasColumnName("storage_status")
             .HasColumnType("system.media_storage_status")
+            .HasSentinel((MediaStorageStatus)(-1))
             .HasDefaultValueSql("'ACTIVE'::system.media_storage_status")
             .IsRequired();
 

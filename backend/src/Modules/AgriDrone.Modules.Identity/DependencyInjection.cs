@@ -5,6 +5,7 @@ using AgriDrone.Modules.Identity.Application.Authorization;
 using AgriDrone.Modules.Identity.Application.Invitations.Creation;
 using AgriDrone.Modules.Identity.Application.Invitations.EmailDelivery;
 using AgriDrone.Modules.Identity.Application.Options;
+using AgriDrone.Modules.Identity.Application.PasswordReset.EmailDelivery;
 using AgriDrone.Modules.Identity.Domain.FarmMemberships;
 using AgriDrone.Modules.Identity.Domain.PasswordResetTokens;
 using AgriDrone.Modules.Identity.Domain.Roles;
@@ -14,6 +15,7 @@ using AgriDrone.Modules.Identity.Domain.Users;
 using AgriDrone.Modules.Identity.Infrastructure.Authentication;
 using AgriDrone.Modules.Identity.Infrastructure.Authorization;
 using AgriDrone.Modules.Identity.Infrastructure.Configuration;
+using AgriDrone.Modules.Identity.Infrastructure.Initialization;
 using AgriDrone.Modules.Identity.Infrastructure.Messaging;
 using AgriDrone.Modules.Identity.Infrastructure.Messaging.Consumers;
 using AgriDrone.Modules.Identity.Infrastructure.Persistence;
@@ -54,6 +56,15 @@ public static class DependencyInjection
             .Bind(configuration.GetSection(PasswordResetOptions.SectionName))
             .ValidateOnStart();
 
+        services
+            .AddOptions<SystemAdminBootstrapOptions>()
+            .Bind(configuration.GetSection(SystemAdminBootstrapOptions.SectionName))
+            .ValidateOnStart();
+
+        services.AddSingleton<
+            IValidateOptions<SystemAdminBootstrapOptions>,
+            SystemAdminBootstrapOptionsValidator>();
+
         services.AddSingleton<
             IValidateOptions<TenantInvitationOptions>,
             TenantInvitationOptionsValidator>();
@@ -71,13 +82,17 @@ public static class DependencyInjection
                     .MapEnum<TenantMemberRole>("tenant_member_role", "system", translator)
                     .MapEnum<TenantInvitationStatus>("tenant_invitation_status", "system", translator)
                     .MapEnum<TenantInvitationPurpose>("tenant_invitation_purpose", "system", translator)
-                    .MapEnum<GeneralStatus>("general_status", "system", translator)));
+                    .MapEnum<GeneralStatus>("general_status", "system", translator)
+                    .MapEnum<AuditActorType>("audit_actor_type", "system", translator)));
 
         services.AddScoped<IIdentityUnitOfWork>(serviceProvider => serviceProvider.GetRequiredService<IdentityDbContext>());
         services.AddScoped<IAuditLogSink>(serviceProvider => serviceProvider.GetRequiredService<IdentityDbContext>());
         services.AddScoped<IUserQueries, UserQueries>();
+        services.AddScoped<ITenantQueries, TenantQueries>();
         services.AddScoped<ITenantMembershipQueries, TenantMembershipQueries>();
         services.AddScoped<IUserRepository, UserRepository>();
+        services.AddScoped<IRoleRepository, RoleRepository>();
+        services.AddScoped<ISystemAdminBootstrapLock, SystemAdminBootstrapLock>();
         services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
         services.AddScoped<ITenantSelectionTokenService, TenantSelectionTokenService>();
         services.AddScoped<IEffectiveAccessService, EffectiveAccessService>();
@@ -88,6 +103,7 @@ public static class DependencyInjection
         services.AddScoped<ITenantMembershipRepository, TenantMembershipRepository>();
         services.AddScoped<ITenantInvitationRepository, TenantInvitationRepository>();
         services.AddScoped<IPasswordResetTokenRepository, PasswordResetTokenRepository>();
+        services.AddScoped<IPasswordResetEmailDelivery, PasswordResetEmailDelivery>();
         services.AddScoped<ITenantInvitationService, TenantInvitationService>();
         services.AddScoped<ITenantInvitationEmailDelivery, TenantInvitationEmailDelivery>();
         services.AddScoped<IIntegrationMessageHandler<TenantInvitationEmailRequestedV1>, TenantInvitationEmailRequestedHandler>();

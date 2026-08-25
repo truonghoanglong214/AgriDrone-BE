@@ -353,6 +353,11 @@ public sealed class TenantInvitationServiceTests
             CancellationToken cancellationToken = default) =>
             Task.FromResult(UserByEmail);
 
+        public Task<User?> GetByEmailIncludingDeletedAsync(
+            string email,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(UserByEmail);
+
         public Task<IReadOnlyCollection<string>> GetSystemRoleCodesAsync(
             Guid userId,
             CancellationToken cancellationToken = default) =>
@@ -425,6 +430,11 @@ public sealed class TenantInvitationServiceTests
             Guid tenantId,
             CancellationToken cancellationToken) =>
             Task.FromResult<TenantMembership?>(null);
+
+        public Task<TenantMembership?> GetByIdAsync(Guid tenantId, CancellationToken cancellationToken)
+        {
+            throw new NotImplementedException();
+        }
     }
 
     private sealed class FakeTenantInvitationRepository

@@ -42,6 +42,7 @@ public sealed class PlantConditionConfiguration : IEntityTypeConfiguration<Plant
         builder.Property(condition => condition.ConditionType)
             .HasColumnName("condition_type")
             .HasColumnType("system.condition_type")
+            .HasSentinel((ConditionType)(-1))
             .HasDefaultValueSql("'DISEASE'::system.condition_type")
             .IsRequired();
 

@@ -79,6 +79,7 @@ public sealed class ZoneMapVersionConfiguration : IEntityTypeConfiguration<ZoneM
         builder.Property(mapVersion => mapVersion.Status)
             .HasColumnName("status")
             .HasColumnType("system.map_version_status")
+            .HasSentinel((MapVersionStatus)(-1))
             .HasDefaultValueSql("'DRAFT'::system.map_version_status")
             .IsRequired();
 

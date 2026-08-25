@@ -46,4 +46,20 @@ public sealed class TenantMembership : Entity
             joinedAt,
             createAt);
     }
+
+    public void Activate(DateTimeOffset updateAt)
+    {
+        if (Status == GeneralStatus.Active)
+            return;
+
+        Status = GeneralStatus.Active;
+    }
+
+    public void Deactivate(DateTimeOffset updateAt)
+    {
+        if (Status == GeneralStatus.Inactive)
+            return;
+
+        Status = GeneralStatus.Inactive;
+    }
 }

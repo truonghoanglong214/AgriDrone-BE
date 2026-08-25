@@ -46,12 +46,14 @@ public sealed class FarmMembershipConfiguration : IEntityTypeConfiguration<FarmM
         builder.Property(membership => membership.AccessScope)
             .HasColumnName("access_scope")
             .HasColumnType("system.farm_access_scope")
+            .HasSentinel((FarmAccessScope)(-1))
             .HasDefaultValueSql("'ALL_ZONES'::system.farm_access_scope")
             .IsRequired();
 
         builder.Property(membership => membership.Status)
             .HasColumnName("status")
             .HasColumnType("system.general_status")
+            .HasSentinel((AgriDrone.SharedKernel.Domain.GeneralStatus)(-1))
             .HasDefaultValueSql("'ACTIVE'::system.general_status")
             .IsRequired();
 

@@ -53,6 +53,7 @@ public sealed class TenantInvitationConfiguration
         builder.Property(invitation => invitation.Purpose)
             .HasColumnName("purpose")
             .HasColumnType("system.tenant_invitation_purpose")
+            .HasSentinel((TenantInvitationPurpose)(-1))
             .HasDefaultValueSql(
                 "'MEMBERSHIP'::system.tenant_invitation_purpose")
             .IsRequired();
@@ -67,6 +68,7 @@ public sealed class TenantInvitationConfiguration
         builder.Property(invitation => invitation.Status)
             .HasColumnName("status")
             .HasColumnType("system.tenant_invitation_status")
+            .HasSentinel((TenantInvitationStatus)(-1))
             .HasDefaultValueSql("'PENDING'::system.tenant_invitation_status")
             .IsRequired();
 

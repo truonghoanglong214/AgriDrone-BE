@@ -144,6 +144,7 @@ public sealed class MissionPlantObservationConfiguration
         builder.Property(observation => observation.ReviewStatus)
             .HasColumnName("review_status")
             .HasColumnType("system.observation_review_status")
+            .HasSentinel((ObservationReviewStatus)(-1))
             .HasDefaultValueSql("'PENDING'::system.observation_review_status")
             .IsRequired();
 

@@ -57,5 +57,8 @@ namespace AgriDrone.Modules.Identity.Infrastructure.Repositories
 
         public Task<TenantMembership?> GetByUserAndTenantIdAsync(Guid userId, Guid tenantId, CancellationToken cancellationToken)
             => context.TenantMemberships.SingleOrDefaultAsync(tms => tms.TenantId == tenantId && tms.UserId == userId, cancellationToken);
+
+        public Task<TenantMembership?> GetByIdAsync(Guid tenantId, CancellationToken cancellationToken)
+            => context.TenantMemberships.SingleOrDefaultAsync(tms => tms.Id == tenantId, cancellationToken);
     }
 }

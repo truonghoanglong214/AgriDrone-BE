@@ -85,6 +85,8 @@ if (builder.Configuration.GetValue<bool>(
     await app.Services.MigrateAgriDroneDatabaseAsync();
 }
 
+await app.Services.BootstrapSystemAdminAsync();
+
 app.UseExceptionHandler();
 
 if (app.Environment.IsDevelopment())

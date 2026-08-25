@@ -39,6 +39,7 @@ public sealed class FieldTaskConfiguration : IEntityTypeConfiguration<FieldTask>
         builder.Property(fieldTask => fieldTask.TaskType)
             .HasColumnName("task_type")
             .HasColumnType("system.task_type")
+            .HasSentinel((FieldTaskType)(-1))
             .HasDefaultValueSql("'GENERAL'::system.task_type")
             .IsRequired();
 
@@ -55,12 +56,14 @@ public sealed class FieldTaskConfiguration : IEntityTypeConfiguration<FieldTask>
         builder.Property(fieldTask => fieldTask.Priority)
             .HasColumnName("priority")
             .HasColumnType("system.task_priority")
+            .HasSentinel((FieldTaskPriority)(-1))
             .HasDefaultValueSql("'MEDIUM'::system.task_priority")
             .IsRequired();
 
         builder.Property(fieldTask => fieldTask.Status)
             .HasColumnName("status")
             .HasColumnType("system.task_status")
+            .HasSentinel((FieldTaskStatus)(-1))
             .HasDefaultValueSql("'OPEN'::system.task_status")
             .IsRequired();
 

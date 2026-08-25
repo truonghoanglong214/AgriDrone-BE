@@ -28,6 +28,7 @@ public sealed class PlantScanMediaConfiguration : IEntityTypeConfiguration<Plant
         builder.Property(media => media.MediaRole)
             .HasColumnName("media_role")
             .HasColumnType("system.scan_media_role")
+            .HasSentinel((ScanMediaRole)(-1))
             .HasDefaultValueSql("'CONTEXT'::system.scan_media_role")
             .IsRequired();
 

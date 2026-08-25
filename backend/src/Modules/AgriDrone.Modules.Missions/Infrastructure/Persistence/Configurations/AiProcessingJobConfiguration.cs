@@ -56,6 +56,7 @@ public sealed class AiProcessingJobConfiguration : IEntityTypeConfiguration<AiPr
         builder.Property(job => job.Status)
             .HasColumnName("status")
             .HasColumnType("system.ai_job_status")
+            .HasSentinel((AiJobStatus)(-1))
             .HasDefaultValueSql("'QUEUED'::system.ai_job_status")
             .IsRequired();
 

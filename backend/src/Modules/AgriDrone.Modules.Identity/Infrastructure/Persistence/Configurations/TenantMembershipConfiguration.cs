@@ -44,6 +44,7 @@ public sealed class TenantMembershipConfiguration : IEntityTypeConfiguration<Ten
         builder.Property(membership => membership.Status)
             .HasColumnName("status")
             .HasColumnType("system.general_status")
+            .HasSentinel((AgriDrone.SharedKernel.Domain.GeneralStatus)(-1))
             .HasDefaultValueSql("'ACTIVE'::system.general_status")
             .IsRequired();
 

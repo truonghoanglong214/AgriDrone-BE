@@ -1,14 +1,16 @@
 ﻿using AgriDrone.Api.Contracts.Tenants;
 using AgriDrone.Modules.Identity.Application.Authorization;
+using AgriDrone.Modules.Identity.Application.Features.ActivateTenant;
 using AgriDrone.Modules.Identity.Application.Features.CreateTenant;
-using MediatR;
+using AgriDrone.Modules.Identity.Application.Features.DeactivateTenant;
+using AgriDrone.Modules.Identity.Application.Features.GetTenant;
+using AgriDrone.Modules.Identity.Application.Features.GetUsers;
+using AgriDrone.Modules.Identity.Application.Features.ProvisionTenantOwner;
 using AgriDrone.SharedInfrastructure.Http;
+using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using AgriDrone.Modules.Identity.Application.Features.ActivateTenant;
-using AgriDrone.Modules.Identity.Application.Features.DeactivateTenant;
-using AgriDrone.Modules.Identity.Application.Features.ProvisionTenantOwner;
 
 namespace AgriDrone.Api.Controllers
 {
@@ -88,6 +90,24 @@ namespace AgriDrone.Api.Controllers
                 response => Results.Json(
                     response,
                     statusCode: StatusCodes.Status201Created));
+        }
+
+        [HttpGet("all")]
+        public async Task<IResult> GetAllTenantAsync(
+            [FromQuery] GetTenantRequest request,
+            CancellationToken cancellationToken)
+        {
+            var query = new GetTenantsQuery(
+                request.PageNumber,
+                request.PageSize);
+
+            var result = await sender.Send(
+                query,
+                cancellationToken);
+
+            return result.ToHttpResult(
+                HttpContext,
+                tenants => Results.Ok(tenants));
         }
     }
 }

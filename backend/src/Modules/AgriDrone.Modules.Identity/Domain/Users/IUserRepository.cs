@@ -6,6 +6,10 @@ public interface IUserRepository
 
     Task<User?> GetByEmailAsync(string email, CancellationToken cancellationToken = default);
 
+    Task<User?> GetByEmailIncludingDeletedAsync(
+        string email,
+        CancellationToken cancellationToken = default);
+
     Task<IReadOnlyCollection<string>> GetSystemRoleCodesAsync(
         Guid userId,
         CancellationToken cancellationToken = default);

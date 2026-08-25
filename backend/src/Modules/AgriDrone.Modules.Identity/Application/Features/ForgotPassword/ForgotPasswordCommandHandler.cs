@@ -1,10 +1,9 @@
-using System.Text.Encodings.Web;
 using AgriDrone.Modules.Identity.Application.Abstractions;
 using AgriDrone.Modules.Identity.Application.Options;
+using AgriDrone.Modules.Identity.Application.PasswordReset.EmailDelivery;
 using AgriDrone.Modules.Identity.Domain.PasswordResetTokens;
 using AgriDrone.Modules.Identity.Domain.Users;
 using AgriDrone.SharedKernel.Application;
-using AgriDrone.SharedKernel.Application.Abstractions.Notifications;
 using MediatR;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -15,7 +14,7 @@ internal sealed partial class ForgotPasswordCommandHandler(
     IUserRepository userRepository,
     IPasswordResetTokenRepository passwordResetTokenRepository,
     IPasswordResetTokenService passwordResetTokenService,
-    IEmailSender emailSender,
+    IPasswordResetEmailDelivery passwordResetEmailDelivery,
     IOptions<PasswordResetOptions> passwordResetOptions,
     IIdentityUnitOfWork unitOfWork,
     ILogger<ForgotPasswordCommandHandler> logger)
@@ -66,8 +65,9 @@ internal sealed partial class ForgotPasswordCommandHandler(
 
         try
         {
-            await SendPasswordResetEmailAsync(
-                user,
+            await passwordResetEmailDelivery.DeliverAsync(
+                user.Email,
+                user.FullName,
                 generatedToken.PlainTextToken,
                 expiresAt,
                 cancellationToken);
@@ -82,41 +82,6 @@ internal sealed partial class ForgotPasswordCommandHandler(
 
     private static Result<ForgotPasswordResponse> CreateGenericSuccess() =>
         Result.Success(new ForgotPasswordResponse(GenericMessage));
-
-    private async Task SendPasswordResetEmailAsync(
-        User user,
-        string plainTextToken,
-        DateTimeOffset expiresAt,
-        CancellationToken cancellationToken)
-    {
-        var resetUrl = BuildResetUrl(plainTextToken);
-        var encodedFullName = HtmlEncoder.Default.Encode(user.FullName);
-        var encodedResetUrl = HtmlEncoder.Default.Encode(resetUrl);
-
-        var message = new EmailMessage(
-            To: [new EmailRecipient(user.Email, user.FullName)],
-            Subject: "Reset your AgriDrone password",
-            HtmlBody: $"""
-                <h2>Reset your password</h2>
-                <p>Hello {encodedFullName},</p>
-                <p>We received a request to reset your AgriDrone password.</p>
-                <p><a href="{encodedResetUrl}">Reset password</a></p>
-                <p>This link expires at {expiresAt:O}. If you did not request it, you can ignore this email.</p>
-                """,
-            TextBody:
-                $"Hello {user.FullName},{Environment.NewLine}" +
-                $"Reset your AgriDrone password: {resetUrl}{Environment.NewLine}" +
-                $"This link expires at {expiresAt:O}. If you did not request it, you can ignore this email.");
-
-        await emailSender.SendAsync(message, cancellationToken);
-    }
-
-    private string BuildResetUrl(string plainTextToken)
-    {
-        var separator = _passwordResetOptions.ResetUrl.Contains('?') ? '&' : '?';
-
-        return $"{_passwordResetOptions.ResetUrl}{separator}token={Uri.EscapeDataString(plainTextToken)}";
-    }
 
     [LoggerMessage(
         EventId = 1,

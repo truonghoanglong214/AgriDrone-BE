@@ -36,7 +36,7 @@ public sealed class AiThresholdProfileConfiguration : IEntityTypeConfiguration<A
         builder.Property(profile => profile.ModelVersionId).HasColumnName("model_version_id").HasColumnType("uuid");
         builder.Property(profile => profile.ProfileName).HasColumnName("profile_name").HasColumnType("character varying(100)").HasMaxLength(100).IsRequired();
         builder.Property(profile => profile.VersionNumber).HasColumnName("version_number").HasColumnType("integer");
-        builder.Property(profile => profile.Status).HasColumnName("status").HasColumnType("system.threshold_profile_status").HasDefaultValueSql("'DRAFT'::system.threshold_profile_status").IsRequired();
+builder.Property(profile => profile.Status).HasColumnName("status").HasColumnType("system.threshold_profile_status").HasSentinel((ThresholdProfileStatus)(-1)).HasDefaultValueSql("'DRAFT'::system.threshold_profile_status").IsRequired();
         builder.Property(profile => profile.EffectiveFrom).HasColumnName("effective_from").HasColumnType("timestamp with time zone");
         builder.Property(profile => profile.EffectiveTo).HasColumnName("effective_to").HasColumnType("timestamp with time zone");
         builder.Property(profile => profile.CreatedBy).HasColumnName("created_by").HasColumnType("uuid");

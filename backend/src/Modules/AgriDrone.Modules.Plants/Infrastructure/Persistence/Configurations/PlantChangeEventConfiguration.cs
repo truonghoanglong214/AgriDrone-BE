@@ -56,6 +56,7 @@ public sealed class PlantChangeEventConfiguration : IEntityTypeConfiguration<Pla
         builder.Property(changeEvent => changeEvent.Source)
             .HasColumnName("source")
             .HasColumnType("system.plant_change_source")
+            .HasSentinel((PlantChangeSource)(-1))
             .HasDefaultValueSql("'MISSION_AI'::system.plant_change_source")
             .IsRequired();
 
@@ -87,6 +88,7 @@ public sealed class PlantChangeEventConfiguration : IEntityTypeConfiguration<Pla
         builder.Property(changeEvent => changeEvent.Status)
             .HasColumnName("status")
             .HasColumnType("system.review_status")
+            .HasSentinel((ReviewStatus)(-1))
             .HasDefaultValueSql("'PENDING'::system.review_status")
             .IsRequired();
 

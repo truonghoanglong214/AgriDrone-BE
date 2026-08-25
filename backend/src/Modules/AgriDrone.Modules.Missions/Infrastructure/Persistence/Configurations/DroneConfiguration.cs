@@ -96,6 +96,7 @@ public sealed class DroneConfiguration : IEntityTypeConfiguration<Drone>
         builder.Property(drone => drone.Status)
             .HasColumnName("status")
             .HasColumnType("system.drone_status")
+            .HasSentinel((DroneStatus)(-1))
             .HasDefaultValueSql("'AVAILABLE'::system.drone_status")
             .IsRequired();
 

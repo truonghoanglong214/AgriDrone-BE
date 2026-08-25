@@ -90,6 +90,7 @@ public sealed class PlantConfiguration : IEntityTypeConfiguration<Plant>
         builder.Property(plant => plant.LifecycleStatus)
             .HasColumnName("lifecycle_status")
             .HasColumnType("system.plant_lifecycle_status")
+            .HasSentinel((PlantLifecycleStatus)(-1))
             .HasDefaultValueSql("'ACTIVE'::system.plant_lifecycle_status")
             .IsRequired();
 

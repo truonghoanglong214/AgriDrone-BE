@@ -49,6 +49,7 @@ public sealed class AuditLogConfiguration : IEntityTypeConfiguration<AuditLog>
         builder.Property(auditLog => auditLog.ActorType)
             .HasColumnName("actor_type")
             .HasColumnType("system.audit_actor_type")
+            .HasSentinel((AuditActorType)(-1))
             .HasDefaultValueSql("'SYSTEM'::system.audit_actor_type")
             .IsRequired();
 

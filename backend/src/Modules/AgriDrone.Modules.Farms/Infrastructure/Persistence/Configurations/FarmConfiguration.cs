@@ -1,4 +1,5 @@
 using AgriDrone.Modules.Farms.Domain.Farms;
+using AgriDrone.SharedKernel.Domain;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -69,6 +70,7 @@ public sealed class FarmConfiguration : IEntityTypeConfiguration<Farm>
         builder.Property(farm => farm.Status)
             .HasColumnName("status")
             .HasColumnType("system.general_status")
+            .HasSentinel((GeneralStatus)(-1))
             .HasDefaultValueSql("'ACTIVE'::system.general_status")
             .IsRequired();
 

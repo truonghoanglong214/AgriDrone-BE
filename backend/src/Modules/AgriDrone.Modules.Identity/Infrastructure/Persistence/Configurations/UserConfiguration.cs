@@ -46,6 +46,7 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(user => user.Status)
             .HasColumnName("status")
             .HasColumnType("system.user_status")
+            .HasSentinel((UserStatus)(-1))
             .HasDefaultValueSql("'ACTIVE'::system.user_status")
             .IsRequired();
 

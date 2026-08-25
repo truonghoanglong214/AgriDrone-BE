@@ -1,4 +1,5 @@
 using AgriDrone.Modules.Plants.Domain.Conditions;
+using AgriDrone.Modules.Plants.Domain.Diseases;
 using AgriDrone.Modules.Plants.Domain.Scans;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
@@ -58,6 +59,7 @@ public sealed class ConditionDetectionConfiguration : IEntityTypeConfiguration<C
         builder.Property(detection => detection.Source)
             .HasColumnName("source")
             .HasColumnType("system.finding_source")
+            .HasSentinel((FindingSource)(-1))
             .HasDefaultValueSql("'AI'::system.finding_source")
             .IsRequired();
 

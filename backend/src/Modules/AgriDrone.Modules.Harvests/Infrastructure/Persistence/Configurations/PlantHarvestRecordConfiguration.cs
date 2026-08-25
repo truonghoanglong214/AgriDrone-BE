@@ -72,6 +72,7 @@ public sealed class PlantHarvestRecordConfiguration
         builder.Property(record => record.Source)
             .HasColumnName("source")
             .HasColumnType("system.harvest_record_source")
+            .HasSentinel((HarvestRecordSource)(-1))
             .HasDefaultValueSql("'WEB'::system.harvest_record_source")
             .IsRequired();
 

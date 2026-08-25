@@ -74,6 +74,20 @@ public sealed class User : AggregateRoot
             createAt);
     }
 
+    public void AssignSystemRole(
+        Guid roleId,
+        DateTimeOffset assignedAt)
+    {
+        ArgumentOutOfRangeException.ThrowIfEqual(roleId, Guid.Empty);
+
+        if (UserRoles.Any(userRole => userRole.RoleId == roleId))
+        {
+            return;
+        }
+
+        UserRoles.Add(UserRole.Create(Id, roleId, assignedAt));
+    }
+
     public void UpdateProfile(
     string fullName,
     string? phone,

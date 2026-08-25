@@ -13,6 +13,13 @@ internal sealed class UserRepository(IdentityDbContext dbContext) : IUserReposit
     public Task<User?> GetByEmailAsync(string email, CancellationToken cancellationToken = default) 
         =>dbContext.Users.SingleOrDefaultAsync(user => user.Email == email && user.DeletedAt == null,cancellationToken);
 
+    public Task<User?> GetByEmailIncludingDeletedAsync(
+        string email,
+        CancellationToken cancellationToken = default) =>
+        dbContext.Users.SingleOrDefaultAsync(
+            user => user.Email == email,
+            cancellationToken);
+
     public async Task<IReadOnlyCollection<string>> GetSystemRoleCodesAsync(
         Guid userId,
         CancellationToken cancellationToken = default)

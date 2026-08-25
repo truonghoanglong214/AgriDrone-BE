@@ -17,4 +17,20 @@ public sealed class UserRole
     public User User { get; private set; } = null!;
 
     public Role Role { get; private set; } = null!;
+
+    internal static UserRole Create(
+        Guid userId,
+        Guid roleId,
+        DateTimeOffset assignedAt)
+    {
+        ArgumentOutOfRangeException.ThrowIfEqual(userId, Guid.Empty);
+        ArgumentOutOfRangeException.ThrowIfEqual(roleId, Guid.Empty);
+
+        return new UserRole
+        {
+            UserId = userId,
+            RoleId = roleId,
+            AssignedAt = assignedAt
+        };
+    }
 }

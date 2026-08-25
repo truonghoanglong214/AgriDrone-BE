@@ -58,6 +58,7 @@ public sealed class SeasonConfiguration : IEntityTypeConfiguration<Season>
         builder.Property(season => season.Status)
             .HasColumnName("status")
             .HasColumnType("system.season_status")
+            .HasSentinel((SeasonStatus)(-1))
             .HasDefaultValueSql("'PLANNED'::system.season_status")
             .IsRequired();
 
