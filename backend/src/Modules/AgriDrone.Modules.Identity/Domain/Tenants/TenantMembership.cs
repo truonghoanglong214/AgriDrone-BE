@@ -60,6 +60,12 @@ public sealed class TenantMembership : Entity
         if (Status == GeneralStatus.Inactive)
             return;
 
+        if (Role == TenantMemberRole.Owner)
+        {
+            throw new InvalidOperationException(
+                "The active OWNER membership cannot be deactivated.");
+        }
+
         Status = GeneralStatus.Inactive;
     }
 

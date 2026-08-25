@@ -24,6 +24,11 @@ public static class TenantMembershipError
             "TenantMembership.OwnerRoleProtected",
             "OWNER cannot be assigned or removed through this operation.");
 
+    public static AppError OwnerMembershipProtected() =>
+        AppError.Conflict(
+            "TenantMembership.OwnerMembershipProtected",
+            "The active OWNER membership cannot be deactivated.");
+
     public static AppError Inactive() =>
         AppError.Conflict(
             "TenantMembership.Inactive",

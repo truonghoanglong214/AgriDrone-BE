@@ -10,8 +10,8 @@ namespace AgriDrone.Modules.Identity.Application.Features.ActivateTenantMembersh
     {
         public ActivateTenantMembershipCommandValidator()
         {
-            RuleFor(x => x.tenantId)
-                .NotEmpty().WithMessage("TenantId is required.");
+            RuleFor(x => x.MembershipId)
+                .NotEmpty().WithMessage("MembershipId is required.");
         }
     }
 }

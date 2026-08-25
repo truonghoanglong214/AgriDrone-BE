@@ -1,8 +1,10 @@
 using AgriDrone.Api.Contracts.TenantMembership;
 using AgriDrone.Modules.Identity.Application.Authorization;
+using AgriDrone.Modules.Identity.Application.Features.UpdateTenantMembershipStatus;
 using AgriDrone.Modules.Identity.Application.Features.UpdateTenantRole;
 using AgriDrone.Modules.Identity.Domain.Tenants;
 using AgriDrone.SharedInfrastructure.Http;
+using AgriDrone.SharedKernel.Domain;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -30,6 +32,28 @@ public sealed class TenantMembershipController(ISender sender) : ControllerBase
 
         var result = await sender.Send(
             new UpdateTenantRoleCommand(userId, role),
+            cancellationToken);
+
+        return result.ToHttpResult(
+            HttpContext,
+            () => Results.NoContent());
+    }
+
+    [HttpPut("{userId:guid}/status")]
+    public async Task<IResult> UpdateStatus(
+        [FromRoute] Guid userId,
+        [FromBody] UpdateTenantMembershipStatusRequest request,
+        CancellationToken cancellationToken)
+    {
+        var status = request.Status switch
+        {
+            UpdateTenantMembershipStatusValue.Active => GeneralStatus.Active,
+            UpdateTenantMembershipStatusValue.Inactive => GeneralStatus.Inactive,
+            _ => (GeneralStatus)(-1)
+        };
+
+        var result = await sender.Send(
+            new UpdateTenantMembershipStatusCommand(userId, status),
             cancellationToken);
 
         return result.ToHttpResult(

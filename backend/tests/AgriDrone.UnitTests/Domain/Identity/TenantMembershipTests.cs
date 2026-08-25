@@ -47,6 +47,43 @@ public sealed class TenantMembershipTests
             membership.ChangeRole(TenantMemberRole.Owner));
     }
 
+    [Fact]
+    public void ChangeRoleDoesNotAllowDemotingOwnerToTenantAdmin()
+    {
+        var membership = CreateMembership(TenantMemberRole.Owner);
+
+        Assert.Throws<InvalidOperationException>(() =>
+            membership.ChangeRole(TenantMemberRole.TenantAdmin));
+    }
+
+    [Fact]
+    public void ChangeRoleDoesNotAllowPromotingTenantAdminToOwner()
+    {
+        var membership = CreateMembership(TenantMemberRole.TenantAdmin);
+
+        Assert.Throws<InvalidOperationException>(() =>
+            membership.ChangeRole(TenantMemberRole.Owner));
+    }
+
+    [Fact]
+    public void DeactivateDoesNotAllowDeactivatingOwner()
+    {
+        var membership = CreateMembership(TenantMemberRole.Owner);
+
+        Assert.Throws<InvalidOperationException>(() =>
+            membership.Deactivate(Now));
+    }
+
+    [Fact]
+    public void DeactivateAllowsDeactivatingMember()
+    {
+        var membership = CreateMembership(TenantMemberRole.Member);
+
+        membership.Deactivate(Now);
+
+        Assert.Equal(GeneralStatus.Inactive, membership.Status);
+    }
+
     private static TenantMembership CreateMembership(
         TenantMemberRole role) =>
         TenantMembership.Create(
