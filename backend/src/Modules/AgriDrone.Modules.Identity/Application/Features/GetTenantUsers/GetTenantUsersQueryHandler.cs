@@ -23,7 +23,7 @@ namespace AgriDrone.Modules.Identity.Application.Features.GetTenantUsers
             if (currentTenant.TenantId is not Guid tenantId)
             {
                 return Result.Failure<PagedResult<TenantUsersListItemResponse>>(
-                    UserError.CurrentTenantRequired());
+                    TenantError.ContextRequired());
             }
 
             var users = await tenantMembershipQueries.GetUsersPageAsync(

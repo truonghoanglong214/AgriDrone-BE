@@ -22,7 +22,7 @@ internal sealed class InviteTenantAdminCommandHandler(
             currentUser.UserId is not Guid inviterUserId)
         {
             return Result.Failure<InviteTenantAdminResponse>(
-                UserError.CurrentTenantRequired());
+                TenantError.ContextRequired());
         }
 
         var result = await invitationService.InviteAsync(

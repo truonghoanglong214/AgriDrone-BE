@@ -22,7 +22,7 @@ internal sealed class ProvisionTenantOwnerCommandHandler(
         if (currentUser.UserId is not Guid requestedByUserId)
         {
             return Result.Failure<ProvisionTenantOwnerResponse>(
-                UserError.CurrentUserIsRequired());
+                AuthenticationError.CurrentUserRequired());
         }
 
         var result = await invitationService.InviteAsync(

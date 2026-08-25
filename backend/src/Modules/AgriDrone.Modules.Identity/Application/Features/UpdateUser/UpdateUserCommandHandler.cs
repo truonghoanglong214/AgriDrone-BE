@@ -20,11 +20,11 @@ namespace AgriDrone.Modules.Identity.Application.Features.UpdateUser
         public async Task<Result<UpdateUserResponse>>  Handle(UpdateUserCommand request, CancellationToken cancellationToken)
         {
             if (currentUser.UserId is not Guid currentUserId)
-                return Result.Failure<UpdateUserResponse>(UserError.CurrentUserIsRequired());
+                return Result.Failure<UpdateUserResponse>(AuthenticationError.CurrentUserRequired());
 
             var user = await userRepository.GetByIdAsync(currentUserId, cancellationToken);
             if (user is null)
-                return Result.Failure<UpdateUserResponse>(UserError.NotFound("User", currentUserId));
+                return Result.Failure<UpdateUserResponse>(UserError.NotFound(currentUserId));
 
             var now = DateTimeOffset.UtcNow;
             user.UpdateProfile(request.fullName, request.phone, now);

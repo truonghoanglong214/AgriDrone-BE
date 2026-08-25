@@ -67,7 +67,7 @@ internal sealed class TenantInvitationService(
         if (tenant is null)
         {
             return Result.Failure<TenantInvitationCreated>(
-                UserError.TenantNotFound());
+                TenantError.NotFound());
         }
 
         if (request.Purpose == TenantInvitationPurpose.OwnerProvisioning &&

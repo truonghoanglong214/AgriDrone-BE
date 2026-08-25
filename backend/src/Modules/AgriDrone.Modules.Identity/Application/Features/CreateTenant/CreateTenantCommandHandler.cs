@@ -21,7 +21,7 @@ namespace AgriDrone.Modules.Identity.Application.Features.CreateTenant
             var name = request.Name.Trim();
             var existedTenant = await tenantRepository.GetByCodeAsync(code, cancellationToken);
             if (existedTenant is not null)
-                return Result.Failure<CreateTenantResponse>(UserError.TenantAlreadyExist(code));
+                return Result.Failure<CreateTenantResponse>(TenantError.CodeAlreadyExists(code));
 
             var newTenant = Tenant.Create(
                 code,

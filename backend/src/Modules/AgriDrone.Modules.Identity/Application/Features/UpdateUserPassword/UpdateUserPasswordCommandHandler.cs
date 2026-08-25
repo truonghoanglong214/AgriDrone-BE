@@ -21,14 +21,14 @@ namespace AgriDrone.Modules.Identity.Application.Features.UpdateUserPassword
         public async Task<Result<UpdateUserPasswordResponse>> Handle(UpdateUserPasswordCommand request, CancellationToken cancellationToken)
         {
             if (currentUser.UserId is not Guid currentUserId)
-                return Result.Failure<UpdateUserPasswordResponse>(UserError.CurrentUserIsRequired());
+                return Result.Failure<UpdateUserPasswordResponse>(AuthenticationError.CurrentUserRequired());
 
             var user = await userRepository.GetByIdAsync(currentUserId, cancellationToken);
             if (user is null)
-                return Result.Failure<UpdateUserPasswordResponse>(UserError.UserNotFound());
+                return Result.Failure<UpdateUserPasswordResponse>(UserError.NotFound());
 
             if (!passwordService.VerifyPassword(request.oldPassword, user.PasswordHash))
-                return Result.Failure<UpdateUserPasswordResponse>(UserError.PasswordIsNotCorrect());
+                return Result.Failure<UpdateUserPasswordResponse>(PasswordError.Incorrect());
 
             var newPassword = passwordService.HashPassword(request.newPassword);
             var now = DateTimeOffset.UtcNow;

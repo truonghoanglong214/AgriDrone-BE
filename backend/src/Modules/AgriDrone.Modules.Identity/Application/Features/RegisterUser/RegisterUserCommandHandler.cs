@@ -32,7 +32,7 @@ namespace AgriDrone.Modules.Identity.Application.Features.RegisterUser
 
             var existingTenant = await tenantRepository.GetByCodeAsync(code, cancellationToken);
             if(existingTenant is not null)
-                return Result.Failure<RegisterUserResponse>(UserError.TenantAlreadyExist(code));
+                return Result.Failure<RegisterUserResponse>(TenantError.CodeAlreadyExists(code));
             
             string passwordHash = passwordService.HashPassword(request.password);
             var now = DateTimeOffset.UtcNow;

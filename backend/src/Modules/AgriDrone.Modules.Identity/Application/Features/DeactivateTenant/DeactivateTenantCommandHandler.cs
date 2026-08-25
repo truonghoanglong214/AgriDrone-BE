@@ -25,7 +25,7 @@ namespace AgriDrone.Modules.Identity.Application.Features.DeactivateTenant
         {
             var tenant = await tenantRepository.GetByIdIgnoreStatusAsync(request.TenantId, cancellationToken);
             if (tenant is null)
-                return Result.Failure(UserError.TenantNotFound());
+                return Result.Failure(TenantError.NotFound());
 
             if (tenant.Status == GeneralStatus.Inactive)
             {
@@ -34,7 +34,7 @@ namespace AgriDrone.Modules.Identity.Application.Features.DeactivateTenant
 
             if (executionContext.ActorId is not Guid actorId)
             {
-                return Result.Failure(UserError.CurrentUserIsRequired());
+                return Result.Failure(AuthenticationError.CurrentUserRequired());
             }
 
             var now = timeProvider.GetUtcNow();

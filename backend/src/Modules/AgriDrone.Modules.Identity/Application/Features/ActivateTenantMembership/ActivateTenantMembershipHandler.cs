@@ -27,13 +27,13 @@ namespace AgriDrone.Modules.Identity.Application.Features.ActivateTenantMembersh
         {
             var tenantMembership = await tenantMembershipRepository.GetByIdAsync(request.tenantId, cancellationToken);
             if (tenantMembership is null)
-                return Result.Failure(UserError.TenantNotFound());
+                return Result.Failure(TenantMembershipError.NotFound());
 
             if (tenantMembership.Status == GeneralStatus.Active)
                 return Result.Success();
 
             if (executionContext.ActorId is not Guid actorId)
-                return Result.Failure(UserError.CurrentUserIsRequired());
+                return Result.Failure(AuthenticationError.CurrentUserRequired());
 
             var now = timeProvider.GetUtcNow();
             var oldStatus = tenantMembership.Status;

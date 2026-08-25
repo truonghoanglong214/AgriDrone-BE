@@ -62,4 +62,25 @@ public sealed class TenantMembership : Entity
 
         Status = GeneralStatus.Inactive;
     }
+
+    public void ChangeRole(TenantMemberRole newRole)
+    {
+        if (Role == TenantMemberRole.Owner ||
+            newRole == TenantMemberRole.Owner)
+        {
+            throw new InvalidOperationException(
+                "OWNER role cannot be changed through the generic role update.");
+        }
+
+        if (newRole is not TenantMemberRole.Member and
+            not TenantMemberRole.TenantAdmin)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(newRole),
+                newRole,
+                "Only MEMBER and TENANT_ADMIN roles are supported.");
+        }
+
+        Role = newRole;
+    }
 }

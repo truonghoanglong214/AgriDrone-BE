@@ -24,14 +24,14 @@ internal sealed class SelectTenantCommandHandler(
         if (userId is not Guid id)
         {
             return Result.Failure<LoginUserResponse>(
-                UserError.InvalidTenantSelectionToken());
+                AuthenticationError.InvalidTenantSelectionToken());
         }
 
         var user = await userRepository.GetByIdAsync(id, cancellationToken);
         if (user is null || user.Status != UserStatus.Active)
         {
             return Result.Failure<LoginUserResponse>(
-                UserError.InvalidTenantSelectionToken());
+                AuthenticationError.InvalidTenantSelectionToken());
         }
 
         var membership = await tenantMembershipRepository
@@ -42,7 +42,7 @@ internal sealed class SelectTenantCommandHandler(
         if (membership is null)
         {
             return Result.Failure<LoginUserResponse>(
-                UserError.TenantAccessDenied());
+                TenantError.AccessDenied());
         }
 
         var systemRoles = await userRepository.GetSystemRoleCodesAsync(

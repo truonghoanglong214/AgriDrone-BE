@@ -23,10 +23,10 @@ namespace AgriDrone.Modules.Identity.Application.Features.LoginUser
         {
             var user = await userRepository.GetByEmailAsync(request.email, cancellationToken);
             if (user is null || user.Status != UserStatus.Active)
-                return Result.Failure<LoginUserResponse>(UserError.InvalidCredentials());
+                return Result.Failure<LoginUserResponse>(AuthenticationError.InvalidCredentials());
 
             if (!passwordService.VerifyPassword(request.password, user.PasswordHash))
-                return Result.Failure<LoginUserResponse>(UserError.InvalidCredentials());
+                return Result.Failure<LoginUserResponse>(AuthenticationError.InvalidCredentials());
 
             var systemRoles = await userRepository.GetSystemRoleCodesAsync(
                 user.Id,
@@ -52,7 +52,7 @@ namespace AgriDrone.Modules.Identity.Application.Features.LoginUser
                 user.Id,
                 cancellationToken);
             if (memberships.Count == 0)
-                return Result.Failure<LoginUserResponse>(UserError.UserNotInAnyTenant(user.Email));
+                return Result.Failure<LoginUserResponse>(TenantMembershipError.UserNotInAnyTenant(user.Email));
 
             if (memberships.Count == 1)
             {
