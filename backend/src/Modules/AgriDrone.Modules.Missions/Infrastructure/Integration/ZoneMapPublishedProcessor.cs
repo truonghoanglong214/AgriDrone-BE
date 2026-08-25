@@ -4,7 +4,7 @@ using AgriDrone.IntegrationContracts.Messaging;
 using AgriDrone.SharedInfrastructure.Messaging.Consumers;
 using AgriDrone.SharedKernel.Application.Abstractions.Execution;
 
-namespace AgriDrone.Modules.Missions.Application.Integration;
+namespace AgriDrone.Modules.Missions.Infrastructure.Integration;
 
 internal sealed class ZoneMapPublishedProcessor(
     IIntegrationMessageReader messageReader,

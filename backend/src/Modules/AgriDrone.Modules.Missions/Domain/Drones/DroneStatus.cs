@@ -5,5 +5,6 @@ public enum DroneStatus
     Available,
     InMission,
     Maintenance,
-    Inactive
+    Inactive,
+    Retired
 }

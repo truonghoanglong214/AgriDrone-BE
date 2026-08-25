@@ -18,7 +18,7 @@ public sealed class AgriDroneSchemaDbContext(DbContextOptions<AgriDroneSchemaDbC
         modelBuilder.HasPostgresExtension("pgcrypto");
         modelBuilder.HasPostgresExtension("postgis");
         modelBuilder.HasPostgresExtension("citext");
-
+        modelBuilder.HasPostgresExtension("btree_gist");
         PostgreSqlEnumMappings.ConfigureModel(modelBuilder);
 
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(User).Assembly);
