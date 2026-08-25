@@ -25,7 +25,9 @@ namespace AgriDrone.Modules.Identity.Application.Features.ActivateTenantMembersh
     {
         public async Task<Result> Handle(ActivateTenantMembershipCommand request, CancellationToken cancellationToken)
         {
-            var tenantMembership = await tenantMembershipRepository.GetByIdAsync(request.tenantId, cancellationToken);
+            var tenantMembership = await tenantMembershipRepository.GetByIdAsync(
+                request.MembershipId,
+                cancellationToken);
             if (tenantMembership is null)
                 return Result.Failure(TenantMembershipError.NotFound());
 

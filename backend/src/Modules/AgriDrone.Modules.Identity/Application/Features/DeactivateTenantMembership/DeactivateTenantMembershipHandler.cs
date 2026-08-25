@@ -23,12 +23,18 @@ namespace AgriDrone.Modules.Identity.Application.Features.DeactivateTenantMember
     {
         public async Task<Result> Handle(DeactivateTenantMembershipCommand request, CancellationToken cancellationToken)
         {
-            var tenantMembership = await tenantMembershipRepository.GetByIdAsync(request.tenantId, cancellationToken);
+            var tenantMembership = await tenantMembershipRepository.GetByIdAsync(
+                request.MembershipId,
+                cancellationToken);
             if (tenantMembership is null)
                 return Result.Failure(TenantMembershipError.NotFound());
 
             if (tenantMembership.Status == GeneralStatus.Inactive)
                 return Result.Success();
+
+            if (tenantMembership.Role == TenantMemberRole.Owner)
+                return Result.Failure(
+                    TenantMembershipError.OwnerMembershipProtected());
 
             if (executionContext.ActorId is not Guid actorId)
                 return Result.Failure(AuthenticationError.CurrentUserRequired());

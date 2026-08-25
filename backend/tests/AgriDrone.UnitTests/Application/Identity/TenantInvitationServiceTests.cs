@@ -431,7 +431,7 @@ public sealed class TenantInvitationServiceTests
             CancellationToken cancellationToken) =>
             Task.FromResult<TenantMembership?>(null);
 
-        public Task<TenantMembership?> GetByIdAsync(Guid tenantId, CancellationToken cancellationToken)
+        public Task<TenantMembership?> GetByIdAsync(Guid membershipId, CancellationToken cancellationToken)
         {
             throw new NotImplementedException();
         }

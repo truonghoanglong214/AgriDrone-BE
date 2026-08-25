@@ -7,5 +7,5 @@ using System.Text;
 namespace AgriDrone.Modules.Identity.Application.Features.DeactivateTenantMembership
 {
     public sealed record DeactivateTenantMembershipCommand(
-        Guid tenantId) : IRequest<Result>;
+        Guid MembershipId) : IRequest<Result>;
 }
