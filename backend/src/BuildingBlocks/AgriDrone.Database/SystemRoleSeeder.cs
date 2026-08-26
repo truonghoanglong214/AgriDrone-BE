@@ -7,33 +7,54 @@ internal static class SystemRoleSeeder
 {
     public static void Seed(DbContext dbContext)
     {
+        var roles = dbContext.Set<Role>();
+
         foreach (var role in SystemRoles.All)
         {
-            dbContext.Database.ExecuteSqlInterpolated(CreateUpsertCommand(role));
+            var existingRole = roles.SingleOrDefault(
+                candidate => candidate.Code == role.Code);
+
+            if (existingRole is null)
+            {
+                roles.Add(Role.CreateSystemRole(
+                    role.Code,
+                    role.Name,
+                    role.Description,
+                    DateTimeOffset.UtcNow));
+                continue;
+            }
+
+            existingRole.UpdateDefinition(role.Name, role.Description);
         }
+
+        dbContext.SaveChanges();
     }
 
     public static async Task SeedAsync(
         DbContext dbContext,
         CancellationToken cancellationToken)
     {
+        var roles = dbContext.Set<Role>();
+
         foreach (var role in SystemRoles.All)
         {
-            await dbContext.Database.ExecuteSqlInterpolatedAsync(
-                CreateUpsertCommand(role),
+            var existingRole = await roles.SingleOrDefaultAsync(
+                candidate => candidate.Code == role.Code,
                 cancellationToken);
-        }
-    }
 
-    private static FormattableString CreateUpsertCommand(
-        SystemRoleDefinition role) => $"""
-        INSERT INTO identity.roles
-            (id, code, name, description, created_at)
-        VALUES
-            (gen_random_uuid(), {role.Code}, {role.Name}, {role.Description}, NOW())
-        ON CONFLICT (code) DO UPDATE
-        SET
-            name = EXCLUDED.name,
-            description = EXCLUDED.description;
-        """;
+            if (existingRole is null)
+            {
+                roles.Add(Role.CreateSystemRole(
+                    role.Code,
+                    role.Name,
+                    role.Description,
+                    DateTimeOffset.UtcNow));
+                continue;
+            }
+
+            existingRole.UpdateDefinition(role.Name, role.Description);
+        }
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
 }

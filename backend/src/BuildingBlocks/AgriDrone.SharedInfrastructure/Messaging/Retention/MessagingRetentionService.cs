@@ -58,32 +58,22 @@ internal sealed partial class MessagingRetentionService(
         var outboxCutoff = now.AddDays(
             -_options.PublishedOutboxRetentionDays);
 
-        var inboxDeleted = await dbContext.Database.ExecuteSqlInterpolatedAsync(
-            $$"""
-            DELETE FROM system.inbox_messages
-            WHERE (consumer_name, message_id) IN (
-                SELECT consumer_name, message_id
-                FROM system.inbox_messages
-                WHERE status IN ('COMPLETED', 'FAILED')
-                  AND completed_at < {{inboxCutoff}}
-                ORDER BY completed_at
-                LIMIT {{_options.BatchSize}}
-            )
-            """,
-            cancellationToken);
-        var outboxDeleted = await dbContext.Database.ExecuteSqlInterpolatedAsync(
-            $$"""
-            DELETE FROM system.outbox_messages
-            WHERE message_id IN (
-                SELECT message_id
-                FROM system.outbox_messages
-                WHERE status = 'PUBLISHED'
-                  AND published_at < {{outboxCutoff}}
-                ORDER BY published_at
-                LIMIT {{_options.BatchSize}}
-            )
-            """,
-            cancellationToken);
+        var inboxDeleted = await dbContext.InboxMessages
+            .Where(message =>
+                (message.Status == InboxMessageStatus.Completed ||
+                 message.Status == InboxMessageStatus.Failed) &&
+                message.CompletedAt < inboxCutoff)
+            .OrderBy(message => message.CompletedAt)
+            .Take(_options.BatchSize)
+            .ExecuteDeleteAsync(cancellationToken);
+
+        var outboxDeleted = await dbContext.OutboxMessages
+            .Where(message =>
+                message.Status == OutboxMessageStatus.Published &&
+                message.PublishedAt < outboxCutoff)
+            .OrderBy(message => message.PublishedAt)
+            .Take(_options.BatchSize)
+            .ExecuteDeleteAsync(cancellationToken);
 
         LogCleanupCompleted(logger, inboxDeleted, outboxDeleted);
         return (inboxDeleted, outboxDeleted);

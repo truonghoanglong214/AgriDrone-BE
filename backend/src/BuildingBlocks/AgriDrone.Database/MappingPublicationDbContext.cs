@@ -6,6 +6,7 @@ using AgriDrone.Modules.Plants.Domain.Conditions;
 using AgriDrone.Modules.Plants.Domain.Mapping;
 using AgriDrone.Modules.Plants.Domain.Plants;
 using AgriDrone.Modules.Plants.Infrastructure.Persistence.Configurations;
+using AgriDrone.Database.Mapping;
 using AgriDrone.SharedInfrastructure.Auditing;
 using AgriDrone.SharedInfrastructure.Messaging.Persistence;
 using AgriDrone.SharedInfrastructure.Messaging.Persistence.Configurations;
@@ -36,6 +37,9 @@ public sealed class MappingPublicationDbContext(
 
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 
+    internal DbSet<MissionPublicationState> MissionPublicationStates =>
+        Set<MissionPublicationState>();
+
     public void AddAuditLog(AuditLog auditLog)
     {
         ArgumentNullException.ThrowIfNull(auditLog);
@@ -55,6 +59,8 @@ public sealed class MappingPublicationDbContext(
         modelBuilder.ApplyConfiguration(new InboxMessageConfiguration());
         modelBuilder.ApplyConfiguration(new OutboxMessageConfiguration());
         modelBuilder.ApplyConfiguration(new AuditLogConfiguration());
+        modelBuilder.ApplyConfiguration(
+            new MissionPublicationStateConfiguration());
 
         ConfigurePublicationRelationships(modelBuilder);
     }

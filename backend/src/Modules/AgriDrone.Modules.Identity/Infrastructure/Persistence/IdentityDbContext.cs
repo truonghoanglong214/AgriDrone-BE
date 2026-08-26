@@ -7,6 +7,7 @@ using AgriDrone.Modules.Identity.Domain.TenantInvitations;
 using AgriDrone.Modules.Identity.Domain.Tenants;
 using AgriDrone.Modules.Identity.Domain.Users;
 using AgriDrone.Modules.Identity.Domain.ZoneAssignments;
+using AgriDrone.Modules.Identity.Infrastructure.Initialization;
 using AgriDrone.SharedInfrastructure.Auditing;
 using AgriDrone.SharedInfrastructure.Messaging.Persistence;
 using AgriDrone.SharedInfrastructure.Messaging.Persistence.Configurations;
@@ -49,6 +50,9 @@ internal sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> opti
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
 
     public DbSet<InboxMessage> InboxMessages => Set<InboxMessage>();
+
+    public DbSet<InitializationLock> InitializationLocks =>
+        Set<InitializationLock>();
 
     public async Task<T> ExecuteInTransactionAsync<T>(Func<CancellationToken, Task<T>> operation, CancellationToken cancellationToken = default)
     {

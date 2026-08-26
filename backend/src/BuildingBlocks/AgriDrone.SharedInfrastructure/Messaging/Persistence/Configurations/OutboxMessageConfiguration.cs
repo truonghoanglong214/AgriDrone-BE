@@ -151,6 +151,9 @@ public sealed class OutboxMessageConfiguration
                 $"character varying({MessagingPersistenceLimits.MaximumErrorLength})")
             .HasMaxLength(MessagingPersistenceLimits.MaximumErrorLength);
 
+        builder.Property(message => message.Version)
+            .IsRowVersion();
+
         builder.HasIndex(message => new
         {
             message.Status,

@@ -38,4 +38,34 @@ public static class TenantMembershipError
         AppError.Conflict(
             "TenantMembership.UserInactive",
             "The target user is inactive.");
+
+    public static AppError OwnershipTransferToSelf() =>
+    AppError.Validation(
+        "TenantOwnership.TransferToSelf",
+        "Ownership cannot be transferred to the current owner.");
+
+    public static AppError NewOwnerNotFound() =>
+        AppError.NotFound(
+            "TenantOwnership.NewOwnerNotFound",
+            "The new owner is not a member of this tenant.");
+
+    public static AppError NewOwnerInactive() =>
+        AppError.Conflict(
+            "TenantOwnership.NewOwnerInactive",
+            "The new owner membership must be active.");
+
+    public static AppError NewOwnerUserInactive() =>
+        AppError.Conflict(
+            "TenantOwnership.NewOwnerUserInactive",
+            "The new owner's user account must be active.");
+
+    public static AppError OwnershipChanged() =>
+        AppError.Conflict(
+            "TenantOwnership.ConcurrentTransfer",
+            "Tenant ownership changed while the request was being processed.");
+
+    public static AppError ConcurrentUpdate() =>
+        AppError.Conflict(
+            "TenantMembership.ConcurrentUpdate",
+            "The tenant membership changed while the request was being processed.");
 }

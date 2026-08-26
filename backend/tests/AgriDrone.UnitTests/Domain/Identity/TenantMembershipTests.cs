@@ -84,6 +84,55 @@ public sealed class TenantMembershipTests
         Assert.Equal(GeneralStatus.Inactive, membership.Status);
     }
 
+    [Fact]
+    public void RelinquishOwnershipDemotesOwnerToTenantAdmin()
+    {
+        var membership = CreateMembership(TenantMemberRole.Owner);
+
+        membership.RelinquishOwnership(TenantMemberRole.TenantAdmin);
+
+        Assert.Equal(TenantMemberRole.TenantAdmin, membership.Role);
+    }
+
+    [Fact]
+    public void RelinquishOwnershipRejectsNonOwner()
+    {
+        var membership = CreateMembership(TenantMemberRole.Member);
+
+        Assert.Throws<InvalidOperationException>(() =>
+            membership.RelinquishOwnership(
+                TenantMemberRole.TenantAdmin));
+    }
+
+    [Fact]
+    public void RelinquishOwnershipRejectsOwnerAsNewRole()
+    {
+        var membership = CreateMembership(TenantMemberRole.Owner);
+
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            membership.RelinquishOwnership(TenantMemberRole.Owner));
+    }
+
+    [Fact]
+    public void AssumeOwnershipPromotesActiveMember()
+    {
+        var membership = CreateMembership(TenantMemberRole.Member);
+
+        membership.AssumeOwnership();
+
+        Assert.Equal(TenantMemberRole.Owner, membership.Role);
+    }
+
+    [Fact]
+    public void AssumeOwnershipRejectsInactiveMembership()
+    {
+        var membership = CreateMembership(TenantMemberRole.Member);
+        membership.Deactivate(Now);
+
+        Assert.Throws<InvalidOperationException>(
+            membership.AssumeOwnership);
+    }
+
     private static TenantMembership CreateMembership(
         TenantMemberRole role) =>
         TenantMembership.Create(

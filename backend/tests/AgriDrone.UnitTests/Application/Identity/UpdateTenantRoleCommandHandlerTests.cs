@@ -7,6 +7,7 @@ using AgriDrone.SharedInfrastructure.Auditing;
 using AgriDrone.SharedKernel.Application.Abstractions.Authorization;
 using AgriDrone.SharedKernel.Application.Abstractions.Execution;
 using AgriDrone.SharedKernel.Domain;
+using Microsoft.EntityFrameworkCore;
 using Xunit;
 
 namespace AgriDrone.UnitTests.Application.Identity;
@@ -110,6 +111,25 @@ public sealed class UpdateTenantRoleCommandHandlerTests
         Assert.True(result.IsSuccess);
         Assert.Equal(0, fixture.UnitOfWork.SaveChangesCount);
         Assert.Null(fixture.AuditWriter.Action);
+    }
+
+    [Fact]
+    public async Task HandleMapsOptimisticConcurrencyConflict()
+    {
+        var fixture = CreateFixture(TenantMemberRole.Member);
+        fixture.UnitOfWork.SaveException =
+            new DbUpdateConcurrencyException();
+
+        var result = await fixture.Handler.Handle(
+            new UpdateTenantRoleCommand(
+                fixture.TargetUserId,
+                TenantMemberRole.TenantAdmin),
+            CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(
+            "TenantMembership.ConcurrentUpdate",
+            result.Error.Code);
     }
 
     private static Fixture CreateFixture(
@@ -231,16 +251,29 @@ public sealed class UpdateTenantRoleCommandHandlerTests
             Guid membershipId,
             CancellationToken cancellationToken) =>
             Task.FromResult<TenantMembership?>(null);
+
+        public Task<TenantMembership?> GetActiveOwnerAsync(Guid tenantId, CancellationToken cancellationToken)
+        {
+            throw new NotImplementedException();
+        }
     }
 
     private sealed class FakeIdentityUnitOfWork : IIdentityUnitOfWork
     {
         public int SaveChangesCount { get; private set; }
 
+        public Exception? SaveException { get; set; }
+
         public Task<int> SaveChangesAsync(
             CancellationToken cancellationToken = default)
         {
             SaveChangesCount++;
+
+            if (SaveException is not null)
+            {
+                throw SaveException;
+            }
+
             return Task.FromResult(1);
         }
 
