@@ -5,6 +5,7 @@ using AgriDrone.IntegrationContracts.Messaging;
 using AgriDrone.Modules.Farms.Domain.Maps;
 using AgriDrone.Modules.Plants.Domain.Mapping;
 using AgriDrone.Modules.Plants.Domain.Plants;
+using AgriDrone.Modules.Missions.Domain.Missions;
 using AgriDrone.SharedInfrastructure.Auditing;
 using AgriDrone.SharedInfrastructure.Caching;
 using AgriDrone.SharedInfrastructure.Messaging.Consumers;
@@ -379,19 +380,11 @@ internal sealed class MappingCandidatesApprovedHandler(
                 $"Actor is not allowed to publish this Zone map: {access.Reason}.");
         }
 
-        var mission = await context.Database
-            .SqlQuery<MissionPublicationState>($$"""
-                SELECT
-                    tenant_id AS "TenantId",
-                    farm_id AS "FarmId",
-                    zone_id AS "ZoneId",
-                    mission_type::text AS "MissionType",
-                    status::text AS "Status",
-                    processing_status::text AS "ProcessingStatus"
-                FROM mission.drone_missions
-                WHERE id = {{payload.MissionId}}
-                """)
-            .SingleOrDefaultAsync(cancellationToken);
+        var mission = await context.MissionPublicationStates
+            .AsNoTracking()
+            .SingleOrDefaultAsync(
+                candidate => candidate.Id == payload.MissionId,
+                cancellationToken);
         if (mission is null)
         {
             return Permanent(
@@ -402,9 +395,9 @@ internal sealed class MappingCandidatesApprovedHandler(
         if (mission.TenantId != envelope.TenantId ||
             mission.FarmId != payload.FarmId ||
             mission.ZoneId != payload.ZoneId ||
-            mission.MissionType != "MAPPING" ||
-            mission.Status != "COMPLETED" ||
-            mission.ProcessingStatus != "REVIEW_REQUIRED")
+            mission.MissionType != MissionType.Mapping ||
+            mission.Status != MissionStatus.Completed ||
+            mission.ProcessingStatus != ProcessingStatus.ReviewRequired)
         {
             return Permanent(
                 MappingPublicationErrorCodes.MissionInvalid,
@@ -557,21 +550,6 @@ internal sealed class MappingCandidatesApprovedHandler(
         decimal GridBearingDeg,
         decimal RowSpacingM,
         decimal PlantSpacingM);
-
-    private sealed class MissionPublicationState
-    {
-        public Guid TenantId { get; init; }
-
-        public Guid FarmId { get; init; }
-
-        public Guid? ZoneId { get; init; }
-
-        public string MissionType { get; init; } = string.Empty;
-
-        public string Status { get; init; } = string.Empty;
-
-        public string ProcessingStatus { get; init; } = string.Empty;
-    }
 
     private sealed record PlantPositionSnapshot(
         Point? Location,

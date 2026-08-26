@@ -435,6 +435,11 @@ public sealed class TenantInvitationServiceTests
         {
             throw new NotImplementedException();
         }
+
+        public Task<TenantMembership?> GetActiveOwnerAsync(Guid tenantId, CancellationToken cancellationToken)
+        {
+            throw new NotImplementedException();
+        }
     }
 
     private sealed class FakeTenantInvitationRepository

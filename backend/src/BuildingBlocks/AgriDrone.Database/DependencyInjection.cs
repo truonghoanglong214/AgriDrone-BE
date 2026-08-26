@@ -1,6 +1,7 @@
 using AgriDrone.Modules.Farms.Domain.Maps;
 using AgriDrone.Modules.Plants.Domain.Mapping;
 using AgriDrone.Modules.Plants.Domain.Plants;
+using AgriDrone.Modules.Missions.Domain.Missions;
 using AgriDrone.Database.Mapping;
 using AgriDrone.IntegrationContracts.Mapping;
 using AgriDrone.IntegrationContracts.Messaging;
@@ -80,6 +81,18 @@ public static class DependencyInjection
                         translator)
                     .MapEnum<ReviewStatus>(
                         "review_status",
+                        DbSchemas.System,
+                        translator)
+                    .MapEnum<MissionType>(
+                        "mission_type",
+                        DbSchemas.System,
+                        translator)
+                    .MapEnum<MissionStatus>(
+                        "mission_status",
+                        DbSchemas.System,
+                        translator)
+                    .MapEnum<ProcessingStatus>(
+                        "processing_status",
                         DbSchemas.System,
                         translator)
                     .MapEnum<AuditActorType>(

@@ -17,4 +17,31 @@ public sealed class Role : Entity
     public DateTimeOffset CreatedAt { get; private set; }
 
     public ICollection<UserRole> UserRoles { get; private set; } = [];
+
+    public static Role CreateSystemRole(
+        string code,
+        string name,
+        string description,
+        DateTimeOffset createdAt)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(code);
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+
+        return new Role
+        {
+            Id = Guid.NewGuid(),
+            Code = code.Trim(),
+            Name = name.Trim(),
+            Description = description.Trim(),
+            CreatedAt = createdAt
+        };
+    }
+
+    public void UpdateDefinition(string name, string description)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+
+        Name = name.Trim();
+        Description = description.Trim();
+    }
 }

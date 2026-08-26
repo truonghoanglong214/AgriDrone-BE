@@ -17,8 +17,6 @@ internal sealed class PostgreSqlReadinessHealthCheck(
             await using var connection = new NpgsqlConnection(
                 configuration.GetRequiredAgriDroneConnectionString());
             await connection.OpenAsync(cancellationToken);
-            await using var command = new NpgsqlCommand("SELECT 1", connection);
-            await command.ExecuteScalarAsync(cancellationToken);
             return HealthCheckResult.Healthy("PostgreSQL is reachable.");
         }
         catch (Exception exception)

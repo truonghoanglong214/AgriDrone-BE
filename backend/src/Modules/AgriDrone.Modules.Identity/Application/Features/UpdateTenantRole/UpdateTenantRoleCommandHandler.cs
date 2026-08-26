@@ -9,6 +9,7 @@ using AgriDrone.SharedKernel.Application.Abstractions.Authorization;
 using AgriDrone.SharedKernel.Application.Abstractions.Execution;
 using AgriDrone.SharedKernel.Domain;
 using MediatR;
+using Microsoft.EntityFrameworkCore;
 
 namespace AgriDrone.Modules.Identity.Application.Features.UpdateTenantRole;
 
@@ -118,7 +119,15 @@ internal sealed class UpdateTenantRoleCommandHandler(
             newData: newData,
             createdAt: now);
 
-        await unitOfWork.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Result.Failure(
+                TenantMembershipError.ConcurrentUpdate());
+        }
 
         return Result.Success();
     }

@@ -25,6 +25,8 @@ public sealed class TenantMembership : Entity
 
     public GeneralStatus Status { get; private set; }
 
+    public uint Version { get; private set; }
+
     public DateTimeOffset? JoinedAt { get; private set; }
 
     public DateTimeOffset CreatedAt { get; private set; }
@@ -88,5 +90,36 @@ public sealed class TenantMembership : Entity
         }
 
         Role = newRole;
+    }
+
+    public void RelinquishOwnership(TenantMemberRole newRole)
+    {
+        if (Role != TenantMemberRole.Owner)
+            throw new InvalidOperationException("Only an OWNER can relinquish ownership.");
+
+        if (Status != GeneralStatus.Active)
+            throw new InvalidOperationException("The current OWNER membership must be active.");
+
+        if (newRole is not TenantMemberRole.Member
+            and not TenantMemberRole.TenantAdmin)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(newRole),
+                newRole,
+                "The previous OWNER must become MEMBER or TENANT_ADMIN.");
+        }
+
+        Role = newRole;
+    }
+
+    public void AssumeOwnership()
+    {
+        if (Role == TenantMemberRole.Owner)
+            throw new InvalidOperationException("The membership is already OWNER.");
+
+        if (Status != GeneralStatus.Active)
+            throw new InvalidOperationException("An inactive membership cannot become OWNER.");
+
+        Role = TenantMemberRole.Owner;
     }
 }

@@ -1,4 +1,3 @@
-using System.Data;
 using AgriDrone.SharedInfrastructure.Messaging.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -6,6 +5,8 @@ namespace AgriDrone.SharedInfrastructure.Messaging.Outbox;
 
 internal sealed class OutboxStore(MessagingDbContext dbContext)
 {
+    private const int MaximumClaimAttempts = 3;
+
     private const string ExpiredLeaseError =
         "The previous dispatcher lease expired before publication was recorded.";
 
@@ -16,11 +17,6 @@ internal sealed class OutboxStore(MessagingDbContext dbContext)
         TimeSpan leaseDuration,
         CancellationToken cancellationToken)
     {
-        await using var transaction = await dbContext.Database
-            .BeginTransactionAsync(
-                IsolationLevel.ReadCommitted,
-                cancellationToken);
-
         await dbContext.OutboxMessages
             .Where(message =>
                 message.Status == OutboxMessageStatus.Processing &&
@@ -36,29 +32,43 @@ internal sealed class OutboxStore(MessagingDbContext dbContext)
                     .SetProperty(message => message.LastError, ExpiredLeaseError),
                 cancellationToken);
 
-        var messages = await dbContext.OutboxMessages
-            .FromSqlInterpolated($$"""
-                SELECT *
-                FROM system.outbox_messages
-                WHERE status IN ('PENDING', 'RETRY')
-                  AND next_attempt_at <= {{now}}
-                ORDER BY occurred_at, message_id
-                FOR UPDATE SKIP LOCKED
-                LIMIT {{batchSize}}
-                """)
-            .AsTracking()
-            .ToListAsync(cancellationToken);
-
         var lockedUntil = now.Add(leaseDuration);
-        foreach (var message in messages)
+        for (var attempt = 1; attempt <= MaximumClaimAttempts; attempt++)
         {
-            message.MarkProcessing(dispatcherId, lockedUntil, now);
+            var messages = await dbContext.OutboxMessages
+                .Where(message =>
+                    (message.Status == OutboxMessageStatus.Pending ||
+                     message.Status == OutboxMessageStatus.Retry) &&
+                    message.NextAttemptAt <= now)
+                .OrderBy(message => message.OccurredAt)
+                .ThenBy(message => message.MessageId)
+                .Take(batchSize)
+                .ToListAsync(cancellationToken);
+
+            if (messages.Count == 0)
+            {
+                return messages;
+            }
+
+            foreach (var message in messages)
+            {
+                message.MarkProcessing(dispatcherId, lockedUntil, now);
+            }
+
+            try
+            {
+                await dbContext.SaveChangesAsync(cancellationToken);
+                return messages;
+            }
+            catch (DbUpdateConcurrencyException)
+                when (attempt < MaximumClaimAttempts)
+            {
+                dbContext.ChangeTracker.Clear();
+            }
         }
 
-        await dbContext.SaveChangesAsync(cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
-
-        return messages;
+        throw new DbUpdateConcurrencyException(
+            "Outbox messages could not be claimed after repeated concurrent updates.");
     }
 
     public async Task<bool> MarkPublishedAsync(

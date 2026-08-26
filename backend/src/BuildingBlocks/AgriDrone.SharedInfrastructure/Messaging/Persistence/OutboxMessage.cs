@@ -74,6 +74,8 @@ public sealed class OutboxMessage
 
     public string? LastError { get; private set; }
 
+    public uint Version { get; private set; }
+
     internal static OutboxMessage Create(
         Guid messageId,
         Guid tenantId,

@@ -60,6 +60,9 @@ public sealed class TenantMembershipConfiguration : IEntityTypeConfiguration<Ten
             .HasDefaultValueSql("NOW()")
             .IsRequired();
 
+        builder.Property(membership => membership.Version)
+            .IsRowVersion();
+
         builder.HasIndex(membership => membership.UserId)
             .HasDatabaseName("ix_tenant_memberships_user");
 

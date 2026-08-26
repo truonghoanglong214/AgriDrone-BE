@@ -7,8 +7,6 @@ namespace AgriDrone.Modules.Identity.Infrastructure.Initialization;
 internal sealed class SystemAdminBootstrapLock(IdentityDbContext dbContext)
     : ISystemAdminBootstrapLock
 {
-    private const long LockKey = 8_241_906_202_608_24;
-
     public async Task AcquireAsync(
         CancellationToken cancellationToken = default)
     {
@@ -18,8 +16,13 @@ internal sealed class SystemAdminBootstrapLock(IdentityDbContext dbContext)
                 "The System Admin bootstrap lock must be acquired inside a database transaction.");
         }
 
-        await dbContext.Database.ExecuteSqlInterpolatedAsync(
-            $"SELECT pg_advisory_xact_lock({LockKey});",
-            cancellationToken);
+        var initializationLock = await dbContext.InitializationLocks
+            .SingleAsync(
+                candidate => candidate.Name ==
+                    InitializationLock.SystemAdminBootstrapName,
+                cancellationToken);
+
+        initializationLock.Acquire();
+        await dbContext.SaveChangesAsync(cancellationToken);
     }
 }
