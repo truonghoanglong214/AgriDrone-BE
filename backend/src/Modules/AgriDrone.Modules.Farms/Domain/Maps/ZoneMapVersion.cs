@@ -83,11 +83,11 @@ public sealed class ZoneMapVersion : AggregateRoot
         JsonDocument parameters,
         DateTimeOffset createdAt)
     {
-        EnsureId(id, nameof(id));
-        EnsureId(farmId, nameof(farmId));
-        EnsureId(zoneId, nameof(zoneId));
-        EnsureId(sourceMissionId, nameof(sourceMissionId));
-        EnsureId(sourceApprovalId, nameof(sourceApprovalId));
+        DomainGuard.NotEmpty(id);
+        DomainGuard.NotEmpty(farmId);
+        DomainGuard.NotEmpty(zoneId);
+        DomainGuard.NotEmpty(sourceMissionId);
+        DomainGuard.NotEmpty(sourceApprovalId);
         ArgumentOutOfRangeException.ThrowIfLessThan(versionNumber, 1);
         ArgumentOutOfRangeException.ThrowIfNegative(gridBearingDeg);
         ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(
@@ -97,7 +97,7 @@ public sealed class ZoneMapVersion : AggregateRoot
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(plantSpacingM, 0);
         ArgumentException.ThrowIfNullOrWhiteSpace(algorithmVersion);
         ArgumentNullException.ThrowIfNull(parameters);
-        EnsureUtc(createdAt, nameof(createdAt));
+        DomainGuard.Utc(createdAt);
 
         return new ZoneMapVersion(
             id,
@@ -116,8 +116,8 @@ public sealed class ZoneMapVersion : AggregateRoot
 
     public void Confirm(Guid actorId, DateTimeOffset confirmedAt)
     {
-        EnsureId(actorId, nameof(actorId));
-        EnsureUtc(confirmedAt, nameof(confirmedAt));
+        DomainGuard.NotEmpty(actorId);
+        DomainGuard.Utc(confirmedAt);
 
         if (Status != MapVersionStatus.Draft)
         {
@@ -141,23 +141,4 @@ public sealed class ZoneMapVersion : AggregateRoot
         Status = MapVersionStatus.Superseded;
     }
 
-    private static void EnsureId(Guid value, string parameterName)
-    {
-        if (value == Guid.Empty)
-        {
-            throw new ArgumentException("Identifier cannot be empty.", parameterName);
-        }
-    }
-
-    private static void EnsureUtc(
-        DateTimeOffset value,
-        string parameterName)
-    {
-        if (value == default || value.Offset != TimeSpan.Zero)
-        {
-            throw new ArgumentException(
-                "Timestamp must be a non-default UTC value.",
-                parameterName);
-        }
-    }
 }

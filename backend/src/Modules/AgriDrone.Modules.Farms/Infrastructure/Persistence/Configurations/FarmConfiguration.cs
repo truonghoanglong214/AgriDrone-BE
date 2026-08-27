@@ -94,6 +94,13 @@ public sealed class FarmConfiguration : IEntityTypeConfiguration<Farm>
             .HasColumnName("deleted_at")
             .HasColumnType("timestamp with time zone");
 
+        builder.Property(farm => farm.Version)
+            .HasColumnName("version")
+            .HasColumnType("bigint")
+            .HasDefaultValue(1L)
+            .IsConcurrencyToken()
+            .IsRequired();
+
         builder.HasIndex(farm => new { farm.TenantId, farm.Code })
             .HasDatabaseName("ux_farms_tenant_code_active")
             .HasFilter("deleted_at IS NULL")
