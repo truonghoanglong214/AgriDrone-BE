@@ -7,8 +7,25 @@ namespace AgriDrone.Modules.Farms.Domain.Zones;
 
 public sealed class FarmZone : Entity
 {
-    private FarmZone()
+    private FarmZone(
+        Guid farmId,
+        string code,
+        string name,
+        Polygon? boundary,
+        decimal? areaHectares,
+        GeneralStatus status,
+        Guid createdBy,
+        DateTimeOffset createdAt
+        )
     {
+        FarmId = farmId;
+        Code = code;
+        Name = name;
+        Boundary = boundary;
+        AreaHectares = areaHectares;
+        Status = status;
+        CreatedBy = createdBy;
+        CreatedAt = createdAt;
     }
 
     public Guid FarmId { get; private set; }
@@ -31,7 +48,44 @@ public sealed class FarmZone : Entity
 
     public DateTimeOffset? DeletedAt { get; private set; }
 
+    public long Version { get; private set; } = 1;
+
     public Farm Farm { get; private set; } = null!;
 
     public ICollection<ZoneMapVersion> MapVersions { get; private set; } = [];
+
+    public static FarmZone Create(
+        string code,
+        string name,
+        Polygon? boundary,
+        decimal? areaHectares,
+        GeneralStatus status,
+        Guid createdBy,
+        DateTimeOffset createdAt)
+    {
+        return new FarmZone(
+            Guid.NewGuid(),
+            code,
+            name,
+            boundary,
+            areaHectares,
+            status,
+            createdBy,
+            createdAt);
+    }
+
+    public void UpdateDetails(string code,
+        string name,
+        Polygon? boundary,
+        decimal? areaHectares,
+        DateTimeOffset updateAt)
+    {
+        Code = code;
+        Name = name;
+        Boundary = boundary;
+        AreaHectares = areaHectares;
+        UpdatedAt = updateAt;
+        Version++;
+    }
+
 }

@@ -103,12 +103,12 @@ public sealed class Plant : AggregateRoot
         Guid sourceMissionId,
         DateTimeOffset mappedAt)
     {
-        EnsureId(id, nameof(id));
-        EnsureId(farmId, nameof(farmId));
-        EnsureId(zoneId, nameof(zoneId));
-        EnsureId(mapVersionId, nameof(mapVersionId));
-        EnsureId(healthLevelId, nameof(healthLevelId));
-        EnsureId(sourceMissionId, nameof(sourceMissionId));
+        DomainGuard.NotEmpty(id);
+        DomainGuard.NotEmpty(farmId);
+        DomainGuard.NotEmpty(zoneId);
+        DomainGuard.NotEmpty(mapVersionId);
+        DomainGuard.NotEmpty(healthLevelId);
+        DomainGuard.NotEmpty(sourceMissionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(plantCode);
         ArgumentNullException.ThrowIfNull(location);
         ArgumentOutOfRangeException.ThrowIfLessThan(rowIndex, 1);
@@ -144,7 +144,7 @@ public sealed class Plant : AggregateRoot
         decimal positionConfidence,
         DateTimeOffset mappedAt)
     {
-        EnsureId(mapVersionId, nameof(mapVersionId));
+        DomainGuard.NotEmpty(mapVersionId);
         ArgumentNullException.ThrowIfNull(location);
         ArgumentOutOfRangeException.ThrowIfLessThan(rowIndex, 1);
         ArgumentOutOfRangeException.ThrowIfLessThan(columnIndex, 1);
@@ -222,11 +222,4 @@ public sealed class Plant : AggregateRoot
             SRID = point.SRID
         };
 
-    private static void EnsureId(Guid value, string parameterName)
-    {
-        if (value == Guid.Empty)
-        {
-            throw new ArgumentException("Identifier cannot be empty.", parameterName);
-        }
-    }
 }

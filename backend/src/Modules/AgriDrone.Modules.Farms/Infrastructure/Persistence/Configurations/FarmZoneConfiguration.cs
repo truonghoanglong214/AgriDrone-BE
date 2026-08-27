@@ -86,6 +86,13 @@ public sealed class FarmZoneConfiguration : IEntityTypeConfiguration<FarmZone>
             .HasColumnName("deleted_at")
             .HasColumnType("timestamp with time zone");
 
+        builder.Property(zone => zone.Version)
+            .HasColumnName("version")
+            .HasColumnType("bigint")
+            .HasDefaultValue(1L)
+            .IsConcurrencyToken()
+            .IsRequired();
+
         builder.HasIndex(zone => new { zone.FarmId, zone.Code })
             .HasDatabaseName("ux_farm_zones_farm_code_active")
             .HasFilter("deleted_at IS NULL")
