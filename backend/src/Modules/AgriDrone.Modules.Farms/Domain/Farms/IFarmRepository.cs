@@ -23,5 +23,6 @@ namespace AgriDrone.Modules.Farms.Domain.Farms
             CancellationToken cancellationToken = default);
 
         void Add(Farm farm);
+        void Update(Farm farm);
     }
 }

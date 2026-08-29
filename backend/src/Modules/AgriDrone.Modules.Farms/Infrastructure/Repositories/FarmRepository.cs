@@ -35,5 +35,8 @@ namespace AgriDrone.Modules.Farms.Infrastructure.Repositories
             => context.Farms
             .AsNoTracking()
             .SingleOrDefaultAsync(farm => farm.TenantId == tenantId && farm.Id == farmId && farm.DeletedAt == null, cancellationToken);
+
+        public void Update(Farm farm)
+            => context.Farms.Update(farm);
     }
 }
