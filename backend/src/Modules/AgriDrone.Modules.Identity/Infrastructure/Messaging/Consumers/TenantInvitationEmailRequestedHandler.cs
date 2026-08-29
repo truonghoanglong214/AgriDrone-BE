@@ -1,6 +1,5 @@
 ﻿using AgriDrone.IntegrationContracts.Messaging;
 using AgriDrone.IntegrationContracts.Notifications;
-using AgriDrone.Modules.Identity.Application.Abstractions;
 using AgriDrone.Modules.Identity.Application.Invitations.EmailDelivery;
 using AgriDrone.Modules.Identity.Application.Options;
 using AgriDrone.Modules.Identity.Domain.TenantInvitations;

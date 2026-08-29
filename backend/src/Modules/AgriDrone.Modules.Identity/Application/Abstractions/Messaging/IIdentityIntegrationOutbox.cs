@@ -1,9 +1,5 @@
 ﻿using AgriDrone.IntegrationContracts.Messaging;
-using System;
-using System.Collections.Generic;
-using System.Text;
-
-namespace AgriDrone.Modules.Identity.Application.Abstractions
+namespace AgriDrone.Modules.Identity.Application.Abstractions.Messaging
 {
     internal interface IIdentityIntegrationOutbox
     {

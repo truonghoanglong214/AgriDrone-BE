@@ -34,6 +34,7 @@ public sealed class FarmZoneOptimisticConcurrencyTests
 
     private static FarmZone CreateZone() =>
         FarmZone.Create(
+            Guid.NewGuid(),
             "ZONE-001",
             "Test zone",
             boundary: null,

@@ -26,6 +26,7 @@ public sealed class Role : Entity
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(code);
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        DomainGuard.Utc(createdAt);
 
         return new Role
         {

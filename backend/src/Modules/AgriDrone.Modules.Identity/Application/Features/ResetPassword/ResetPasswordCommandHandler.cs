@@ -1,5 +1,6 @@
-using AgriDrone.Modules.Identity.Application.Abstractions;
 using AgriDrone.Modules.Identity.Application.Errors;
+using AgriDrone.Modules.Identity.Application.Abstractions.Persistence;
+using AgriDrone.Modules.Identity.Application.Abstractions.Services;
 using AgriDrone.Modules.Identity.Domain.PasswordResetTokens;
 using AgriDrone.Modules.Identity.Domain.Users;
 using AgriDrone.SharedKernel.Application;

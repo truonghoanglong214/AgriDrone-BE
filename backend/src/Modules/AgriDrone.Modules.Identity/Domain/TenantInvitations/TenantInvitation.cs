@@ -71,6 +71,11 @@ public sealed class TenantInvitation : Entity
         DateTimeOffset expiresAt,
         DateTimeOffset createdAt)
     {
+        DomainGuard.NotEmpty(tenantId);
+        DomainGuard.NotEmpty(invitedByUserId);
+        DomainGuard.Utc(expiresAt);
+        DomainGuard.Utc(createdAt);
+
         if (!HasCompatiblePurpose(role, purpose))
         {
             throw new ArgumentException(
@@ -100,15 +105,17 @@ public sealed class TenantInvitation : Entity
             _ => false
         };
 
-    public bool CanBeAccepted(DateTimeOffset now) =>
-        Status == TenantInvitationStatus.Pending && now < ExpiresAt;
+    public bool CanBeAccepted(DateTimeOffset now)
+    {
+        DomainGuard.Utc(now);
+
+        return Status == TenantInvitationStatus.Pending && now < ExpiresAt;
+    }
 
     public void Accept(Guid userId, DateTimeOffset now)
     {
-        if (userId == Guid.Empty)
-        {
-            throw new ArgumentException("Accepting user ID is required.", nameof(userId));
-        }
+        DomainGuard.NotEmpty(userId);
+        DomainGuard.Utc(now);
 
         if (!CanBeAccepted(now))
         {
@@ -123,6 +130,8 @@ public sealed class TenantInvitation : Entity
 
     public void Revoke(DateTimeOffset now)
     {
+        DomainGuard.Utc(now);
+
         if (Status != TenantInvitationStatus.Pending)
         {
             throw new InvalidOperationException(
@@ -142,6 +151,8 @@ public sealed class TenantInvitation : Entity
 
     public void MarkExpired(DateTimeOffset now)
     {
+        DomainGuard.Utc(now);
+
         if (Status != TenantInvitationStatus.Pending || now < ExpiresAt)
         {
             throw new InvalidOperationException(

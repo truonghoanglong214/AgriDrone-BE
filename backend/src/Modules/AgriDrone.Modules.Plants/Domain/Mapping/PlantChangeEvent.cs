@@ -154,20 +154,14 @@ public sealed class PlantChangeEvent : Entity
         Guid actorId,
         DateTimeOffset createdAt)
     {
-        ArgumentOutOfRangeException.ThrowIfEqual(farmId, Guid.Empty);
-        ArgumentOutOfRangeException.ThrowIfEqual(missionId, Guid.Empty);
-        ArgumentOutOfRangeException.ThrowIfEqual(plantId, Guid.Empty);
-        ArgumentOutOfRangeException.ThrowIfEqual(actorId, Guid.Empty);
+        DomainGuard.NotEmpty(farmId);
+        DomainGuard.NotEmpty(missionId);
+        DomainGuard.NotEmpty(plantId);
+        DomainGuard.NotEmpty(actorId);
         ArgumentNullException.ThrowIfNull(newLocation);
         ArgumentOutOfRangeException.ThrowIfLessThan(newRowIndex, 1);
         ArgumentOutOfRangeException.ThrowIfLessThan(newColumnIndex, 1);
-
-        if (createdAt == default || createdAt.Offset != TimeSpan.Zero)
-        {
-            throw new ArgumentException(
-                "CreatedAt must be a non-default UTC timestamp.",
-                nameof(createdAt));
-        }
+        DomainGuard.Utc(createdAt);
 
         return new PlantChangeEvent(
             Guid.NewGuid(),

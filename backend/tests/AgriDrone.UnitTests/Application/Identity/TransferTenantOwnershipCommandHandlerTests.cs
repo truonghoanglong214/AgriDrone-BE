@@ -1,5 +1,5 @@
 using System.Text.Json;
-using AgriDrone.Modules.Identity.Application.Abstractions;
+using AgriDrone.Modules.Identity.Application.Abstractions.Persistence;
 using AgriDrone.Modules.Identity.Application.Features.TransferTenantOwnership;
 using AgriDrone.Modules.Identity.Application.Invitations.Creation;
 using AgriDrone.Modules.Identity.Domain.Tenants;

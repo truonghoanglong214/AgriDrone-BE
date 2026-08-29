@@ -1,5 +1,5 @@
-﻿using AgriDrone.Modules.Identity.Application.Abstractions;
 using AgriDrone.Modules.Identity.Application.Features.GetTenant;
+using AgriDrone.Modules.Identity.Application.Abstractions.Queries;
 using AgriDrone.Modules.Identity.Infrastructure.Persistence;
 using AgriDrone.SharedInfrastructure.Persistence.Pagination;
 using AgriDrone.SharedKernel.Application.Pagination;

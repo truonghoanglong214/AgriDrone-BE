@@ -1,5 +1,5 @@
-﻿using AgriDrone.Modules.Identity.Application.Abstractions;
 using AgriDrone.Modules.Identity.Application.Errors;
+using AgriDrone.Modules.Identity.Application.Abstractions.Persistence;
 using AgriDrone.Modules.Identity.Application.Invitations.Creation;
 using AgriDrone.Modules.Identity.Domain.Tenants;
 using AgriDrone.Modules.Identity.Domain.Users;

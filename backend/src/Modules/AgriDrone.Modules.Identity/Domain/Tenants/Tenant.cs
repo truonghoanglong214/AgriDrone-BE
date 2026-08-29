@@ -33,6 +33,8 @@ public sealed class Tenant : AggregateRoot
 
     public static Tenant Create(string code, string name, GeneralStatus status, DateTimeOffset createdAt)
     {
+        DomainGuard.Utc(createdAt);
+
         return new Tenant(
             Guid.NewGuid(),
             code,
@@ -44,6 +46,8 @@ public sealed class Tenant : AggregateRoot
 
     public void Activate(DateTimeOffset updateAt)
     {
+        DomainGuard.Utc(updateAt);
+
         if (Status == GeneralStatus.Active)
             return;
 
@@ -53,6 +57,8 @@ public sealed class Tenant : AggregateRoot
 
     public void Deactivate(DateTimeOffset updateAt)
     {
+        DomainGuard.Utc(updateAt);
+
         if (Status == GeneralStatus.Inactive)
             return;
 

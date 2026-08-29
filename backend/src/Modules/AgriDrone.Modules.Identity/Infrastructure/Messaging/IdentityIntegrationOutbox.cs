@@ -1,5 +1,5 @@
 using AgriDrone.IntegrationContracts.Messaging;
-using AgriDrone.Modules.Identity.Application.Abstractions;
+using AgriDrone.Modules.Identity.Application.Abstractions.Messaging;
 using AgriDrone.Modules.Identity.Infrastructure.Persistence;
 using AgriDrone.SharedInfrastructure.Messaging.Outbox;
 

@@ -1,4 +1,5 @@
 using AgriDrone.Modules.Identity.Domain.Users;
+using AgriDrone.SharedKernel.Domain;
 
 namespace AgriDrone.Modules.Identity.Domain.Roles;
 
@@ -23,8 +24,9 @@ public sealed class UserRole
         Guid roleId,
         DateTimeOffset assignedAt)
     {
-        ArgumentOutOfRangeException.ThrowIfEqual(userId, Guid.Empty);
-        ArgumentOutOfRangeException.ThrowIfEqual(roleId, Guid.Empty);
+        DomainGuard.NotEmpty(userId);
+        DomainGuard.NotEmpty(roleId);
+        DomainGuard.Utc(assignedAt);
 
         return new UserRole
         {

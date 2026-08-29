@@ -1,5 +1,5 @@
-﻿using AgriDrone.Modules.Identity.Application.Abstractions;
 using AgriDrone.SharedKernel.Application;
+using AgriDrone.Modules.Identity.Application.Abstractions.Queries;
 using AgriDrone.SharedKernel.Application.Pagination;
 using MediatR;
 using System;

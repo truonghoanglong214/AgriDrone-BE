@@ -55,6 +55,7 @@ public sealed class FarmZone : Entity
     public ICollection<ZoneMapVersion> MapVersions { get; private set; } = [];
 
     public static FarmZone Create(
+        Guid farmId,
         string code,
         string name,
         Polygon? boundary,
@@ -63,8 +64,12 @@ public sealed class FarmZone : Entity
         Guid createdBy,
         DateTimeOffset createdAt)
     {
+        DomainGuard.NotEmpty(farmId);
+        DomainGuard.NotEmpty(createdBy);
+        DomainGuard.Utc(createdAt);
+
         return new FarmZone(
-            Guid.NewGuid(),
+            farmId,
             code,
             name,
             boundary,
@@ -80,6 +85,8 @@ public sealed class FarmZone : Entity
         decimal? areaHectares,
         DateTimeOffset updateAt)
     {
+        DomainGuard.Utc(updateAt);
+
         Code = code;
         Name = name;
         Boundary = boundary;

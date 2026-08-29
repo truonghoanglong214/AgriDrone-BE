@@ -1,12 +1,6 @@
-﻿using AgriDrone.Modules.Identity.Application.Features.GetTenantUsers;
 using AgriDrone.Modules.Identity.Application.Features.GetUsers;
 using AgriDrone.SharedKernel.Application.Pagination;
-using Microsoft.AspNetCore.Mvc.RazorPages;
-using System;
-using System.Collections.Generic;
-using System.Text;
-
-namespace AgriDrone.Modules.Identity.Application.Abstractions
+namespace AgriDrone.Modules.Identity.Application.Abstractions.Queries
 {
     internal interface IUserQueries
     {
