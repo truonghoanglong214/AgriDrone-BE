@@ -1,5 +1,5 @@
-﻿using AgriDrone.Modules.Identity.Application.Abstractions;
 using AgriDrone.Modules.Identity.Application.Contracts.Authentication;
+using AgriDrone.Modules.Identity.Application.Abstractions.Services;
 using AgriDrone.SharedInfrastructure.Authentication;
 using AgriDrone.Modules.Identity.Domain.Tenants;
 using Microsoft.Extensions.Options;

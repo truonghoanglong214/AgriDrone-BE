@@ -178,12 +178,7 @@ public sealed class Plant : AggregateRoot
                 $"Plant '{Id}' in lifecycle '{LifecycleStatus}' cannot be remapped.");
         }
 
-        if (updatedAt == default || updatedAt.Offset != TimeSpan.Zero)
-        {
-            throw new ArgumentException(
-                "UpdatedAt must be a non-default UTC timestamp.",
-                nameof(updatedAt));
-        }
+        DomainGuard.Utc(updatedAt);
 
         CurrentMapVersionId = null;
         RowIndex = null;
@@ -208,12 +203,7 @@ public sealed class Plant : AggregateRoot
                 nameof(positionConfidence));
         }
 
-        if (mappedAt == default || mappedAt.Offset != TimeSpan.Zero)
-        {
-            throw new ArgumentException(
-                "MappedAt must be a non-default UTC timestamp.",
-                nameof(mappedAt));
-        }
+        DomainGuard.Utc(mappedAt);
     }
 
     private static Point CopyPoint(Point point) =>

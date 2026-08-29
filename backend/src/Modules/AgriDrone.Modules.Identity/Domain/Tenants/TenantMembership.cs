@@ -39,6 +39,15 @@ public sealed class TenantMembership : Entity
 
     public static TenantMembership Create(Guid tenantId, Guid userId, TenantMemberRole role, GeneralStatus status, DateTimeOffset? joinedAt, DateTimeOffset createAt)
     {
+        DomainGuard.NotEmpty(tenantId);
+        DomainGuard.NotEmpty(userId);
+        DomainGuard.Utc(createAt);
+
+        if (joinedAt.HasValue)
+        {
+            DomainGuard.Utc(joinedAt.Value, nameof(joinedAt));
+        }
+
         return new TenantMembership(
             Guid.NewGuid(),
             tenantId,
@@ -51,6 +60,8 @@ public sealed class TenantMembership : Entity
 
     public void Activate(DateTimeOffset updateAt)
     {
+        DomainGuard.Utc(updateAt);
+
         if (Status == GeneralStatus.Active)
             return;
 
@@ -59,6 +70,8 @@ public sealed class TenantMembership : Entity
 
     public void Deactivate(DateTimeOffset updateAt)
     {
+        DomainGuard.Utc(updateAt);
+
         if (Status == GeneralStatus.Inactive)
             return;
 

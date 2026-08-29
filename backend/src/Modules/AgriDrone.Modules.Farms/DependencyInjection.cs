@@ -1,5 +1,10 @@
+using AgriDrone.Modules.Farms.Application.Abstractions.Persistence;
+using AgriDrone.Modules.Farms.Domain.Farms;
 using AgriDrone.Modules.Farms.Domain.Maps;
+using AgriDrone.Modules.Farms.Domain.Zones;
 using AgriDrone.Modules.Farms.Infrastructure.Persistence;
+using AgriDrone.Modules.Farms.Infrastructure.Repositories;
+using AgriDrone.SharedInfrastructure.Auditing;
 using AgriDrone.SharedInfrastructure.Persistence;
 using AgriDrone.SharedKernel.Domain;
 using FluentValidation;
@@ -24,7 +29,13 @@ public static class DependencyInjection
                 npgsql => npgsql
                     .UseNetTopologySuite()
                     .MapEnum<GeneralStatus>("general_status", "system", translator)
-                    .MapEnum<MapVersionStatus>("map_version_status", "system", translator)));
+                    .MapEnum<MapVersionStatus>("map_version_status", "system", translator)
+                    .MapEnum<AuditActorType>("audit_actor_type", "system", translator)));
+
+        services.AddScoped<IFarmUnitOfWork>(serviceProvider =>
+            serviceProvider.GetRequiredService<FarmsDbContext>());
+        services.AddScoped<IFarmRepository, FarmRepository>();
+        services.AddScoped<IFarmZoneRepository, FarmZoneRepository>();
 
         var assembly = typeof(DependencyInjection).Assembly;
 

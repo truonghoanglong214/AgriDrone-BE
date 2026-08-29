@@ -1,4 +1,4 @@
-namespace AgriDrone.Modules.Identity.Application.Abstractions;
+namespace AgriDrone.Modules.Identity.Application.Abstractions.Services;
 
 internal interface ISystemAdminBootstrapLock
 {

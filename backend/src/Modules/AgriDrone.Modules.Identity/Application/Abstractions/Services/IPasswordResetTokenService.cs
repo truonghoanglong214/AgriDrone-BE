@@ -1,6 +1,6 @@
 using AgriDrone.Modules.Identity.Application.Contracts.PasswordReset;
 
-namespace AgriDrone.Modules.Identity.Application.Abstractions;
+namespace AgriDrone.Modules.Identity.Application.Abstractions.Services;
 
 public interface IPasswordResetTokenService
 {

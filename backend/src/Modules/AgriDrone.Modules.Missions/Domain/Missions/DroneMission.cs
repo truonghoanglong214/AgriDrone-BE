@@ -74,15 +74,9 @@ public sealed class DroneMission : AggregateRoot
         Guid mapVersionId,
         DateTimeOffset publishedAt)
     {
-        ArgumentOutOfRangeException.ThrowIfEqual(approvalId, Guid.Empty);
-        ArgumentOutOfRangeException.ThrowIfEqual(mapVersionId, Guid.Empty);
-
-        if (publishedAt == default || publishedAt.Offset != TimeSpan.Zero)
-        {
-            throw new ArgumentException(
-                "PublishedAt must be a non-default UTC timestamp.",
-                nameof(publishedAt));
-        }
+        DomainGuard.NotEmpty(approvalId);
+        DomainGuard.NotEmpty(mapVersionId);
+        DomainGuard.Utc(publishedAt);
 
         if (PublishedMapVersionId == mapVersionId &&
             MappingApprovalId == approvalId)

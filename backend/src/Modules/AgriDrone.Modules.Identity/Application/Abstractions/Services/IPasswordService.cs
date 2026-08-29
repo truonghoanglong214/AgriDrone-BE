@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-
-namespace AgriDrone.Modules.Identity.Application.Abstractions
+namespace AgriDrone.Modules.Identity.Application.Abstractions.Services
 {
     internal interface IPasswordService
     {

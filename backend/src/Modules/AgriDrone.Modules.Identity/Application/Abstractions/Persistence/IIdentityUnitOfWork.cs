@@ -1,9 +1,5 @@
 ﻿using AgriDrone.SharedKernel.Application.Abstractions;
-using System;
-using System.Collections.Generic;
-using System.Text;
-
-namespace AgriDrone.Modules.Identity.Application.Abstractions
+namespace AgriDrone.Modules.Identity.Application.Abstractions.Persistence
 {
     internal interface IIdentityUnitOfWork : IUnitOfWork
     {

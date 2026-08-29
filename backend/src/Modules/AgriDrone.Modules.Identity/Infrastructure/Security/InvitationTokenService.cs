@@ -1,6 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
-using AgriDrone.Modules.Identity.Application.Abstractions;
+using AgriDrone.Modules.Identity.Application.Abstractions.Services;
 using AgriDrone.Modules.Identity.Application.Contracts.Invitations;
 
 namespace AgriDrone.Modules.Identity.Infrastructure.Security;

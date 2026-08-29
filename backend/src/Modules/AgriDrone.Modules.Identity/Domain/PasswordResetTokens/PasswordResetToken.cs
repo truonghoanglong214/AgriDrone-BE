@@ -43,11 +43,9 @@ public sealed class PasswordResetToken : Entity
         DateTimeOffset expiresAt,
         DateTimeOffset createdAt)
     {
-        if (userId == Guid.Empty)
-        {
-            throw new ArgumentException("User ID is required.", nameof(userId));
-        }
-
+        DomainGuard.NotEmpty(userId);
+        DomainGuard.Utc(expiresAt);
+        DomainGuard.Utc(createdAt);
         if (string.IsNullOrWhiteSpace(tokenHash))
         {
             throw new ArgumentException("Token hash is required.", nameof(tokenHash));
@@ -69,6 +67,10 @@ public sealed class PasswordResetToken : Entity
             createdAt);
     }
 
-    public bool CanBeUsed(DateTimeOffset now) =>
-        UsedAt is null && RevokedAt is null && now < ExpiresAt;
+    public bool CanBeUsed(DateTimeOffset now)
+    {
+        DomainGuard.Utc(now);
+
+        return UsedAt is null && RevokedAt is null && now < ExpiresAt;
+    }
 }

@@ -64,6 +64,8 @@ public sealed class User : AggregateRoot
         UserStatus userStatus,
         DateTimeOffset createAt)
     {
+        DomainGuard.Utc(createAt);
+
         return new User(
             Guid.NewGuid(),
             email,
@@ -78,7 +80,8 @@ public sealed class User : AggregateRoot
         Guid roleId,
         DateTimeOffset assignedAt)
     {
-        ArgumentOutOfRangeException.ThrowIfEqual(roleId, Guid.Empty);
+        DomainGuard.NotEmpty(roleId);
+        DomainGuard.Utc(assignedAt);
 
         if (UserRoles.Any(userRole => userRole.RoleId == roleId))
         {
@@ -93,6 +96,8 @@ public sealed class User : AggregateRoot
     string? phone,
     DateTimeOffset updatedAt)
     {
+        DomainGuard.Utc(updatedAt);
+
         FullName = fullName.Trim();
         Phone = string.IsNullOrWhiteSpace(phone)
             ? null
@@ -103,6 +108,8 @@ public sealed class User : AggregateRoot
 
     public void Activate(DateTimeOffset updatedAt)
     {
+        DomainGuard.Utc(updatedAt);
+
         if (Status == UserStatus.Active)
             return;
 
@@ -112,6 +119,8 @@ public sealed class User : AggregateRoot
 
     public void Inactive(DateTimeOffset updatedAt)
     {
+        DomainGuard.Utc(updatedAt);
+
         if (Status == UserStatus.Inactive)
             return;
 
@@ -123,6 +132,7 @@ public sealed class User : AggregateRoot
     string passwordHash,
     DateTimeOffset updatedAt)
     {
+        DomainGuard.Utc(updatedAt);
 
         PasswordHash = passwordHash;
         UpdatedAt = updatedAt;
