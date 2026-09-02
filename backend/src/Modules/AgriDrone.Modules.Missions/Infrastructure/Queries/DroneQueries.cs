@@ -43,8 +43,8 @@ internal sealed class DroneQueries(
                 !dbContext.DroneMissions.Any(mission =>
                     mission.TenantId == tenantId &&
                     mission.DroneId == drone.Id &&
-                    (mission.Status == MissionStatus.Ready ||
-                     mission.Status == MissionStatus.Flying) &&
+                    (mission.Status == MissionStatus.Scheduled ||
+                     mission.Status == MissionStatus.InFlight) &&
                     mission.ScheduledAt.HasValue &&
                     mission.ScheduledEndAt.HasValue &&
                     mission.ScheduledAt.Value < endAt &&

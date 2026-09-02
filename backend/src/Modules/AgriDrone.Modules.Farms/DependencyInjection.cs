@@ -1,8 +1,11 @@
+using AgriDrone.IntegrationContracts.Farms;
 using AgriDrone.Modules.Farms.Application.Abstractions.Persistence;
+using AgriDrone.Modules.Farms.Application.Abstractions.Queries;
 using AgriDrone.Modules.Farms.Domain.Farms;
 using AgriDrone.Modules.Farms.Domain.Maps;
 using AgriDrone.Modules.Farms.Domain.Zones;
 using AgriDrone.Modules.Farms.Infrastructure.Persistence;
+using AgriDrone.Modules.Farms.Infrastructure.Queries;
 using AgriDrone.Modules.Farms.Infrastructure.Repositories;
 using AgriDrone.SharedInfrastructure.Auditing;
 using AgriDrone.SharedInfrastructure.Persistence;
@@ -36,6 +39,10 @@ public static class DependencyInjection
             serviceProvider.GetRequiredService<FarmsDbContext>());
         services.AddScoped<IFarmRepository, FarmRepository>();
         services.AddScoped<IFarmZoneRepository, FarmZoneRepository>();
+        services.AddScoped<IFarmQueries, FarmQueries>();
+        services.AddScoped<
+            IMissionPlanningReferenceQuery,
+            MissionPlanningReferenceQuery>();
 
         var assembly = typeof(DependencyInjection).Assembly;
 

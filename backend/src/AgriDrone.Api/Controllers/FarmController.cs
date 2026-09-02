@@ -17,7 +17,7 @@ namespace AgriDrone.Api.Controllers
         ISender sender) : ControllerBase
     {
         [HttpGet]
-        [Authorize(Policy = )]
+        [Authorize]
         public async Task<IResult> GetFarms(
             [FromQuery] GetFarmsRequest request,
             CancellationToken cancellationToken)

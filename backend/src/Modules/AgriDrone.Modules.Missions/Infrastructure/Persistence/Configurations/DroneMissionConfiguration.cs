@@ -41,6 +41,20 @@ public sealed class DroneMissionConfiguration : IEntityTypeConfiguration<DroneMi
                     "health_review_pending + " +
                     "health_review_awaiting_field_verification + " +
                     "health_review_resolved = health_review_total");
+
+                tableBuilder.HasCheckConstraint(
+                    "ck_drone_missions_preflight_confirmation",
+                    "(preflight_confirmed_by IS NULL AND " +
+                    "preflight_confirmed_at IS NULL) OR " +
+                    "(preflight_confirmed_by IS NOT NULL AND " +
+                    "preflight_confirmed_at IS NOT NULL)");
+
+                tableBuilder.HasCheckConstraint(
+                    "ck_drone_missions_source_map",
+                    "(mission_type = 'MAPPING'::system.mission_type AND " +
+                    "source_map_version_id IS NULL) OR " +
+                    "(mission_type = 'HEALTH_INSPECTION'::system.mission_type AND " +
+                    "source_map_version_id IS NOT NULL)");
             });
 
         builder.HasKey(mission => mission.Id).HasName("pk_drone_missions");
@@ -65,7 +79,8 @@ public sealed class DroneMissionConfiguration : IEntityTypeConfiguration<DroneMi
 
         builder.Property(mission => mission.ZoneId)
             .HasColumnName("zone_id")
-            .HasColumnType("uuid");
+            .HasColumnType("uuid")
+            .IsRequired();
 
         builder.Property(mission => mission.DroneId)
             .HasColumnName("drone_id")
@@ -123,6 +138,14 @@ public sealed class DroneMissionConfiguration : IEntityTypeConfiguration<DroneMi
             .HasColumnName("ended_at")
             .HasColumnType("timestamp with time zone");
 
+        builder.Property(mission => mission.PreflightConfirmedBy)
+            .HasColumnName("preflight_confirmed_by")
+            .HasColumnType("uuid");
+
+        builder.Property(mission => mission.PreflightConfirmedAt)
+            .HasColumnName("preflight_confirmed_at")
+            .HasColumnType("timestamp with time zone");
+
         builder.Property(mission => mission.FlightRoute)
             .HasColumnName("flight_route")
             .HasColumnType("geometry(LineString,4326)");
@@ -156,6 +179,13 @@ public sealed class DroneMissionConfiguration : IEntityTypeConfiguration<DroneMi
             .HasColumnType("timestamp with time zone")
             .HasDefaultValueSql("NOW()")
             .IsRequired();
+
+        builder.Property(mission => mission.Version)
+            .IsRowVersion();
+
+        builder.Property(mission => mission.SourceMapVersionId)
+            .HasColumnName("source_map_version_id")
+            .HasColumnType("uuid");
 
         builder.Property(mission => mission.PublishedMapVersionId)
             .HasColumnName("published_map_version_id")

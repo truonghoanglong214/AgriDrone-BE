@@ -2,6 +2,7 @@ using AgriDrone.IntegrationContracts.Health;
 using AgriDrone.IntegrationContracts.Mapping;
 using AgriDrone.IntegrationContracts.Messaging;
 using AgriDrone.Modules.Missions.Application.Abstractions;
+using AgriDrone.Modules.Missions.Application.Abstractions.Missions;
 using AgriDrone.Modules.Missions.Domain.Drones;
 using AgriDrone.Modules.Missions.Domain.Media;
 using AgriDrone.Modules.Missions.Domain.Missions;
@@ -12,6 +13,7 @@ using AgriDrone.Modules.Missions.Infrastructure.Integration;
 using AgriDrone.Modules.Missions.Infrastructure.Persistence;
 using AgriDrone.Modules.Missions.Infrastructure.Queries;
 using AgriDrone.Modules.Missions.Infrastructure.Repositories;
+using AgriDrone.SharedInfrastructure.Auditing;
 using AgriDrone.SharedInfrastructure.Messaging;
 using AgriDrone.SharedInfrastructure.Messaging.Consumers;
 using AgriDrone.SharedInfrastructure.Persistence;
@@ -55,6 +57,10 @@ public static class DependencyInjection
                         "observation_review_status",
                         "system",
                         translator)
+                    .MapEnum<AuditActorType>(
+                        "audit_actor_type",
+                        "system",
+                        translator)
                     .MapEnum<MatchStrategy>("match_strategy", "system", translator)));
         services.AddScoped<IMissionsUnitOfWork>(
                 serviceProvider =>
@@ -63,10 +69,6 @@ public static class DependencyInjection
         services.AddScoped<
             IDroneRepository,
             DroneRepository>();
-
-        services.AddScoped<
-            IDroneStatusChangeRepository,
-            DroneStatusChangeRepository>();
 
         services.AddScoped<
             IDroneQueries,
@@ -88,6 +90,12 @@ public static class DependencyInjection
         services.AddScoped<
             IIntegrationMessageHandler<HealthReviewStateChangedV1>,
             HealthReviewStateChangedHandler>();
+
+        services.AddScoped<
+            IDroneMissionRepository, DroneMissionRepository>();
+
+        services.AddScoped<
+            IMissionQueries, MissionQueries>();
 
         services.AddIntegrationConsumer<
             HealthReviewStateChangedProcessor>(
