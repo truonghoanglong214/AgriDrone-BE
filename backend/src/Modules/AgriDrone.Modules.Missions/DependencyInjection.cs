@@ -1,13 +1,17 @@
+using AgriDrone.IntegrationContracts.Health;
+using AgriDrone.IntegrationContracts.Mapping;
+using AgriDrone.IntegrationContracts.Messaging;
+using AgriDrone.Modules.Missions.Application.Abstractions;
 using AgriDrone.Modules.Missions.Domain.Drones;
 using AgriDrone.Modules.Missions.Domain.Media;
 using AgriDrone.Modules.Missions.Domain.Missions;
 using AgriDrone.Modules.Missions.Domain.Observations;
 using AgriDrone.Modules.Missions.Domain.Processing;
 using AgriDrone.Modules.Missions.Domain.Telemetry;
-using AgriDrone.Modules.Missions.Application.Integration;
+using AgriDrone.Modules.Missions.Infrastructure.Integration;
 using AgriDrone.Modules.Missions.Infrastructure.Persistence;
-using AgriDrone.IntegrationContracts.Mapping;
-using AgriDrone.IntegrationContracts.Messaging;
+using AgriDrone.Modules.Missions.Infrastructure.Queries;
+using AgriDrone.Modules.Missions.Infrastructure.Repositories;
 using AgriDrone.SharedInfrastructure.Messaging;
 using AgriDrone.SharedInfrastructure.Messaging.Consumers;
 using AgriDrone.SharedInfrastructure.Persistence;
@@ -52,7 +56,21 @@ public static class DependencyInjection
                         "system",
                         translator)
                     .MapEnum<MatchStrategy>("match_strategy", "system", translator)));
+        services.AddScoped<IMissionsUnitOfWork>(
+                serviceProvider =>
+                    serviceProvider.GetRequiredService<MissionsDbContext>());
 
+        services.AddScoped<
+            IDroneRepository,
+            DroneRepository>();
+
+        services.AddScoped<
+            IDroneStatusChangeRepository,
+            DroneStatusChangeRepository>();
+
+        services.AddScoped<
+            IDroneQueries,
+            DroneQueries>();
         var assembly = typeof(DependencyInjection).Assembly;
 
         services.AddMediatR(mediatR =>
@@ -66,6 +84,15 @@ public static class DependencyInjection
             ZoneMapPublishedHandler>();
         services.AddIntegrationConsumer<ZoneMapPublishedProcessor>(
             IntegrationConsumerNames.Be2ZoneMapPublishedV1);
+
+        services.AddScoped<
+            IIntegrationMessageHandler<HealthReviewStateChangedV1>,
+            HealthReviewStateChangedHandler>();
+
+        services.AddIntegrationConsumer<
+            HealthReviewStateChangedProcessor>(
+            IntegrationConsumerNames
+                .Be2HealthReviewStateChangedV1);
 
         return services;
     }

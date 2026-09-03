@@ -1,5 +1,6 @@
 using AgriDrone.IntegrationContracts.Mapping;
 using AgriDrone.IntegrationContracts.Notifications;
+using AgriDrone.IntegrationContracts.Health;
 
 namespace AgriDrone.IntegrationContracts.Messaging;
 
@@ -25,4 +26,20 @@ public static class IntegrationEventDescriptors
             IntegrationEventTypes.TenantInvitationEmailRequestedV1,
             IntegrationSchemaVersions.V1,
             RequiresActorId: true);
+
+    public static IntegrationEventDescriptor<HealthObservationsReadyV1>
+        HealthObservationsReadyV1
+        { get; } =
+        new(
+            IntegrationEventTypes.HealthObservationsReadyV1,
+            IntegrationSchemaVersions.V1,
+            RequiresActorId: false);
+
+    public static IntegrationEventDescriptor<HealthReviewStateChangedV1>
+        HealthReviewStateChangedV1
+        { get; } =
+        new(
+            IntegrationEventTypes.HealthReviewStateChangedV1,
+            IntegrationSchemaVersions.V1,
+            RequiresActorId: false);
 }

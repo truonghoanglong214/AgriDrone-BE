@@ -6,7 +6,7 @@ using AgriDrone.SharedInfrastructure.Messaging.Consumers;
 using AgriDrone.SharedInfrastructure.Messaging.Inbox;
 using Microsoft.EntityFrameworkCore;
 
-namespace AgriDrone.Modules.Missions.Application.Integration;
+namespace AgriDrone.Modules.Missions.Infrastructure.Integration;
 
 internal sealed class ZoneMapPublishedHandler(
     MissionsDbContext dbContext,

@@ -1,3 +1,4 @@
+using AgriDrone.Modules.Missions.Application.Abstractions;
 using AgriDrone.Modules.Missions.Domain.Drones;
 using AgriDrone.Modules.Missions.Domain.Media;
 using AgriDrone.Modules.Missions.Domain.Missions;
@@ -10,31 +11,47 @@ using Microsoft.EntityFrameworkCore;
 
 namespace AgriDrone.Modules.Missions.Infrastructure.Persistence;
 
-internal sealed class MissionsDbContext(DbContextOptions<MissionsDbContext> options)
-    : DbContext(options)
+internal sealed class MissionsDbContext(
+    DbContextOptions<MissionsDbContext> options)
+    : DbContext(options), IMissionsUnitOfWork
 {
     public DbSet<Drone> Drones => Set<Drone>();
 
-    public DbSet<DroneMission> DroneMissions => Set<DroneMission>();
+    public DbSet<DroneStatusChange> DroneStatusChanges =>
+        Set<DroneStatusChange>();
 
-    public DbSet<MediaAsset> MediaAssets => Set<MediaAsset>();
+    public DbSet<DroneMission> DroneMissions =>
+        Set<DroneMission>();
 
-    public DbSet<MissionMedia> MissionMedia => Set<MissionMedia>();
+    public DbSet<MediaAsset> MediaAssets =>
+        Set<MediaAsset>();
 
-    public DbSet<AiModelVersion> AiModelVersions => Set<AiModelVersion>();
+    public DbSet<MissionMedia> MissionMedia =>
+        Set<MissionMedia>();
 
-    public DbSet<AiProcessingJob> AiProcessingJobs => Set<AiProcessingJob>();
+    public DbSet<AiModelVersion> AiModelVersions =>
+        Set<AiModelVersion>();
 
-    public DbSet<AiThresholdProfile> AiThresholdProfiles => Set<AiThresholdProfile>();
+    public DbSet<AiProcessingJob> AiProcessingJobs =>
+        Set<AiProcessingJob>();
 
-    public DbSet<AiDetectionThreshold> AiDetectionThresholds => Set<AiDetectionThreshold>();
+    public DbSet<AiThresholdProfile> AiThresholdProfiles =>
+        Set<AiThresholdProfile>();
 
-    public DbSet<MissionPlantObservation> MissionPlantObservations => Set<MissionPlantObservation>();
+    public DbSet<AiDetectionThreshold> AiDetectionThresholds =>
+        Set<AiDetectionThreshold>();
 
-    public DbSet<ObservationMatchCandidate> ObservationMatchCandidates =>
-        Set<ObservationMatchCandidate>();
+    public DbSet<MissionPlantObservation>
+        MissionPlantObservations =>
+            Set<MissionPlantObservation>();
 
-    public DbSet<MissionTelemetryPoint> MissionTelemetryPoints => Set<MissionTelemetryPoint>();
+    public DbSet<ObservationMatchCandidate>
+        ObservationMatchCandidates =>
+            Set<ObservationMatchCandidate>();
+
+    public DbSet<MissionTelemetryPoint>
+        MissionTelemetryPoints =>
+            Set<MissionTelemetryPoint>();
 
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
 
@@ -43,7 +60,8 @@ internal sealed class MissionsDbContext(DbContextOptions<MissionsDbContext> opti
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.HasDefaultSchema("mission");
-        modelBuilder.ApplyConfigurationsFromAssembly(typeof(MissionsDbContext).Assembly);
+        modelBuilder.ApplyConfigurationsFromAssembly(
+            typeof(MissionsDbContext).Assembly);
         modelBuilder.ApplyConfiguration(new InboxMessageConfiguration());
         modelBuilder.ApplyConfiguration(new OutboxMessageConfiguration());
     }
