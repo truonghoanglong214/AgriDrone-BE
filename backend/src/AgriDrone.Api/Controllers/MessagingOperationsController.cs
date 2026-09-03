@@ -1,5 +1,5 @@
 using AgriDrone.Api.Contracts.Messaging;
-using AgriDrone.Modules.Identity.Application.Authorization;
+using AgriDrone.SharedInfrastructure.Authorization;
 using AgriDrone.SharedInfrastructure.Messaging.Recovery;
 using AgriDrone.SharedKernel.Application.Abstractions;
 using AgriDrone.SharedKernel.Application.Abstractions.Execution;
@@ -10,7 +10,7 @@ namespace AgriDrone.Api.Controllers;
 
 [ApiController]
 [Route("api/system/messaging")]
-[Authorize(Policy = IdentityAuthorizationPolicies.SystemAdmin)]
+[Authorize(Policy = AccessAuthorizationPolicies.SystemAdmin)]
 public sealed class MessagingOperationsController(
     IMessagingRecoveryService recoveryService,
     ICurrentUser currentUser,

@@ -8,6 +8,7 @@ using AgriDrone.Modules.Missions;
 using AgriDrone.Modules.Notifications;
 using AgriDrone.Modules.Plants;
 using AgriDrone.SharedInfrastructure.Authentication;
+using AgriDrone.SharedInfrastructure.Authorization;
 using AgriDrone.SharedInfrastructure.ExceptionHandling;
 using AgriDrone.SharedInfrastructure.Execution;
 using AgriDrone.SharedInfrastructure.Health;
@@ -74,6 +75,7 @@ builder.Services
     .AddAgriDroneHealthChecks()
     .AddExecutionContext()
     .AddJwtAuthentication(builder.Configuration)
+    .AddAccessAuthorization()
     .AddValidationPipeline()
     .AddGlobalExceptionHandling();
 

@@ -4,10 +4,10 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace AgriDrone.Modules.Farms.Application.Abstractions.Features.GetFarm
+namespace AgriDrone.Modules.Farms.Application.Features.CreateFarm
 {
-    public sealed record FarmListItemResponse(
-        Guid id,
+    public sealed record CreateFarmResponse(
+        Guid farmId,
         Guid tenantId,
         string code,
         string name,
@@ -16,6 +16,6 @@ namespace AgriDrone.Modules.Farms.Application.Abstractions.Features.GetFarm
         Point? centerPoint,
         decimal? areaHectares,
         GeneralStatus status,
-        DateTimeOffset createdAt,
-        Guid createdBy);
+        Guid createdBy,
+        DateTimeOffset createdAt);
 }

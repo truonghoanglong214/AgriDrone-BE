@@ -1,5 +1,5 @@
 using AgriDrone.Api.Contracts.TenantMembership;
-using AgriDrone.Modules.Identity.Application.Authorization;
+using AgriDrone.SharedInfrastructure.Authorization;
 using AgriDrone.Modules.Identity.Application.Features.TransferTenantOwnership;
 using AgriDrone.SharedInfrastructure.Http;
 using MediatR;
@@ -10,7 +10,7 @@ namespace AgriDrone.Api.Controllers;
 
 [Route("api/tenants/current")]
 [ApiController]
-[Authorize(Policy = IdentityAuthorizationPolicies.TenantOwner)]
+[Authorize(Policy = AccessAuthorizationPolicies.TenantOwner)]
 public sealed class TenantOwnershipController(ISender sender)
     : ControllerBase
 {

@@ -15,6 +15,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Application\NewFolder\" />
+    <Folder Include="Infrastructure\Authorization\" />
   </ItemGroup>
 </Project>

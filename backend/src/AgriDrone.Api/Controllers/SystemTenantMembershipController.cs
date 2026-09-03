@@ -1,4 +1,4 @@
-﻿using AgriDrone.Modules.Identity.Application.Authorization;
+﻿using AgriDrone.SharedInfrastructure.Authorization;
 using AgriDrone.Modules.Identity.Application.Features.ActivateTenantMembership;
 using AgriDrone.Modules.Identity.Application.Features.DeactivateTenantMembership;
 using AgriDrone.SharedInfrastructure.Http;
@@ -11,7 +11,7 @@ namespace AgriDrone.Api.Controllers
 {
     [Route("api/system/tenant-memberships")]
     [ApiController]
-    [Authorize(Policy = IdentityAuthorizationPolicies.SystemAdmin)]
+    [Authorize(Policy = AccessAuthorizationPolicies.SystemAdmin)]
     public sealed class SystemTenantMembershipController(
         ISender sender) : ControllerBase
     {

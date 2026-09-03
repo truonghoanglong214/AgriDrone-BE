@@ -1,5 +1,5 @@
 using AgriDrone.Api.Contracts.TenantMembership;
-using AgriDrone.Modules.Identity.Application.Authorization;
+using AgriDrone.SharedInfrastructure.Authorization;
 using AgriDrone.Modules.Identity.Application.Features.UpdateTenantMembershipStatus;
 using AgriDrone.Modules.Identity.Application.Features.UpdateTenantRole;
 using AgriDrone.Modules.Identity.Domain.Tenants;
@@ -14,7 +14,7 @@ namespace AgriDrone.Api.Controllers;
 
 [Route("api/tenants/current/members")]
 [ApiController]
-[Authorize(Policy = IdentityAuthorizationPolicies.TenantOwner)]
+[Authorize(Policy = AccessAuthorizationPolicies.TenantOwner)]
 public sealed class TenantMembershipController(ISender sender) : ControllerBase
 {
     [HttpPut("{userId:guid}/role")]

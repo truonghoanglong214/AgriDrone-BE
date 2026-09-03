@@ -1,5 +1,5 @@
 ﻿using AgriDrone.Api.Contracts.Tenants;
-using AgriDrone.Modules.Identity.Application.Authorization;
+using AgriDrone.SharedInfrastructure.Authorization;
 using AgriDrone.Modules.Identity.Application.Features.ActivateTenant;
 using AgriDrone.Modules.Identity.Application.Features.CreateTenant;
 using AgriDrone.Modules.Identity.Application.Features.DeactivateTenant;
@@ -16,7 +16,7 @@ namespace AgriDrone.Api.Controllers
 {
     [Route("api/system/tenants")]
     [ApiController]
-    [Authorize(Policy = IdentityAuthorizationPolicies.SystemAdmin)]
+    [Authorize(Policy = AccessAuthorizationPolicies.SystemAdmin)]
     public sealed class SystemTenantsController(ISender sender) : ControllerBase
     {
         [HttpPost]

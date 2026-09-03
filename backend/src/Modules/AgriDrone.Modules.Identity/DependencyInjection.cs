@@ -4,7 +4,6 @@ using AgriDrone.Modules.Identity.Application.Abstractions.Messaging;
 using AgriDrone.Modules.Identity.Application.Abstractions.Persistence;
 using AgriDrone.Modules.Identity.Application.Abstractions.Queries;
 using AgriDrone.Modules.Identity.Application.Abstractions.Services;
-using AgriDrone.Modules.Identity.Application.Authorization;
 using AgriDrone.Modules.Identity.Application.Invitations.Creation;
 using AgriDrone.Modules.Identity.Application.Invitations.EmailDelivery;
 using AgriDrone.Modules.Identity.Application.Options;
@@ -32,7 +31,6 @@ using AgriDrone.SharedInfrastructure.Persistence;
 using AgriDrone.SharedKernel.Application.Abstractions.Authorization;
 using AgriDrone.SharedKernel.Domain;
 using FluentValidation;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -71,6 +69,7 @@ public static class DependencyInjection
         services.AddSingleton<
             IValidateOptions<TenantInvitationOptions>,
             TenantInvitationOptionsValidator>();
+
         services.AddSingleton<
             IValidateOptions<PasswordResetOptions>,
             PasswordResetOptionsValidator>();
@@ -99,8 +98,6 @@ public static class DependencyInjection
         services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
         services.AddScoped<ITenantSelectionTokenService, TenantSelectionTokenService>();
         services.AddScoped<IEffectiveAccessService, EffectiveAccessService>();
-        services.AddScoped<IAuthorizationHandler, TenantRoleAuthorizationHandler>();
-        services.AddScoped<IAuthorizationHandler, FarmRoleAuthorizationHandler>();
         services.AddScoped<IPasswordService, PasswordService>();
         services.AddScoped<ITenantRepository, TenantRepository>();
         services.AddScoped<ITenantMembershipRepository, TenantMembershipRepository>();
@@ -114,50 +111,6 @@ public static class DependencyInjection
         services.AddSingleton<IInvitationTokenService, InvitationTokenService>();
         services.AddSingleton<IPasswordResetTokenService, PasswordResetTokenService>();
         services.AddIntegrationConsumer<TenantInvitationEmailRequestedProcessor>(IntegrationConsumerNames.EmailTenantInvitationV1);
-
-        services.AddAuthorization(authorization =>
-        {
-            authorization.AddPolicy(
-                IdentityAuthorizationPolicies.SystemAdmin,
-                policy => policy
-                    .RequireAuthenticatedUser()
-                    .RequireRole(SystemRoles.SystemAdmin));
-
-            authorization.AddPolicy(
-                IdentityAuthorizationPolicies.TenantMember,
-                policy => policy
-                    .RequireAuthenticatedUser()
-                    .AddRequirements(new TenantRoleRequirement(
-                        TenantAccessLevel.Member)));
-
-            authorization.AddPolicy(
-                IdentityAuthorizationPolicies.TenantAdmin,
-                policy => policy
-                    .RequireAuthenticatedUser()
-                    .AddRequirements(new TenantRoleRequirement(
-                        TenantAccessLevel.Admin)));
-
-            authorization.AddPolicy(
-                IdentityAuthorizationPolicies.TenantOwner,
-                policy => policy
-                    .RequireAuthenticatedUser()
-                    .AddRequirements(new TenantRoleRequirement(
-                        TenantAccessLevel.Owner)));
-
-            authorization.AddPolicy(
-                IdentityAuthorizationPolicies.FarmMember,
-                policy => policy
-                    .RequireAuthenticatedUser()
-                    .AddRequirements(new FarmRoleRequirement(
-                        FarmAccessLevel.Member)));
-
-            authorization.AddPolicy(
-                IdentityAuthorizationPolicies.FarmManager,
-                policy => policy
-                    .RequireAuthenticatedUser()
-                    .AddRequirements(new FarmRoleRequirement(
-                        FarmAccessLevel.Manager)));
-        });
 
         var assembly = typeof(DependencyInjection).Assembly;
 

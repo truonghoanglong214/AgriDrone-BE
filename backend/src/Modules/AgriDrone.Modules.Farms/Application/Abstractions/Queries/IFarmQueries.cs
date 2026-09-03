@@ -1,4 +1,4 @@
-﻿using AgriDrone.Modules.Farms.Application.Abstractions.Features.GetFarm;
+﻿using AgriDrone.Modules.Farms.Application.Features.GetFarm;
 using AgriDrone.SharedKernel.Application.Pagination;
 using Microsoft.AspNetCore.Http.Features;
 using System;
