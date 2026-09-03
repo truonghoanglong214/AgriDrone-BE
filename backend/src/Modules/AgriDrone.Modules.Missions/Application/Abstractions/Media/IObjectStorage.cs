@@ -10,8 +10,9 @@ public interface IObjectStorage
         string storageUri,
         CancellationToken cancellationToken = default);
 
-    Task<Stream> OpenReadAsync(
+    Task ReadAsync(
         string storageUri,
+        Func<Stream, CancellationToken, Task> reader,
         CancellationToken cancellationToken = default);
 
     Task<Uri> CreateDownloadUriAsync(

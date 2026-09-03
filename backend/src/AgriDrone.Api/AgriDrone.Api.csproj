@@ -3,6 +3,7 @@
     <ProjectReference Include="..\BuildingBlocks\AgriDrone.Database\AgriDrone.Database.csproj" />
     <ProjectReference Include="..\BuildingBlocks\AgriDrone.SharedInfrastructure\AgriDrone.SharedInfrastructure.csproj" />
     <ProjectReference Include="..\Integrations\AgriDrone.Integrations.Email\AgriDrone.Integrations.Email.csproj" />
+    <ProjectReference Include="..\Integrations\AgriDrone.Integrations.Media\AgriDrone.Integrations.Media.csproj" />
     <ProjectReference Include="..\Modules\AgriDrone.Modules.Identity\AgriDrone.Modules.Identity.csproj" />
     <ProjectReference Include="..\Modules\AgriDrone.Modules.Farms\AgriDrone.Modules.Farms.csproj" />
     <ProjectReference Include="..\Modules\AgriDrone.Modules.Plants\AgriDrone.Modules.Plants.csproj" />

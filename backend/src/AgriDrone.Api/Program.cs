@@ -1,5 +1,6 @@
 using AgriDrone.Database;
 using AgriDrone.Integrations.Email;
+using AgriDrone.Integrations.Media;
 using AgriDrone.Modules.Farms;
 using AgriDrone.Modules.FieldTasks;
 using AgriDrone.Modules.Harvests;
@@ -13,8 +14,8 @@ using AgriDrone.SharedInfrastructure.Execution;
 using AgriDrone.SharedInfrastructure.Health;
 using AgriDrone.SharedInfrastructure.Messaging;
 using AgriDrone.SharedInfrastructure.Validation;
-using Microsoft.OpenApi;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.OpenApi;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -61,6 +62,7 @@ builder.Services.AddCors(options =>
 // Modules
 builder.Services
     .AddEmailIntegration(builder.Configuration)
+    .AddMediaIntegration(builder.Configuration)
     .AddAgriDroneDatabase(builder.Configuration)
     .AddFarmsModule(builder.Configuration)
     .AddFieldTasksModule(builder.Configuration)
@@ -117,5 +119,10 @@ app.MapHealthChecks(
     {
         Predicate = registration => registration.Tags.Contains("ready")
     });
-
+app.MapHealthChecks(
+    "/health/minio",
+    new HealthCheckOptions
+    {
+        Predicate = registration => registration.Tags.Contains("minio")
+    });
 app.Run();
