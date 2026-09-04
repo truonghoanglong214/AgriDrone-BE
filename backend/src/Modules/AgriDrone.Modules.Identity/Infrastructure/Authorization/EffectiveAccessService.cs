@@ -75,7 +75,9 @@ internal sealed class EffectiveAccessService(IdentityDbContext dbContext)
             return tenantStateDecision;
         }
 
-        if (tenantAccessState!.Role == TenantMemberRole.Owner)
+        if (tenantAccessState!.Role == TenantMemberRole.Owner ||
+            tenantAccessState.Role == TenantMemberRole.TenantAdmin &&
+            requiredAccess == FarmAccessLevel.Member)
         {
             return AccessDecision.Allow();
         }

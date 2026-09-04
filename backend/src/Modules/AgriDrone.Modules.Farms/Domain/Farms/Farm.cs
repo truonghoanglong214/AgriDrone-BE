@@ -104,13 +104,19 @@ public sealed class Farm : AggregateRoot
 
     public void UpdateDetails(
         string name,
-        string address,
+        string? address,
         Polygon? boundary,
         Point? centerPoint,
         decimal? areaHectares,
         DateTimeOffset updateAt)
     {
         DomainGuard.Utc(updateAt);
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+
+        if (areaHectares < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(areaHectares));
+        }
 
         Address = address;
         Name = name;

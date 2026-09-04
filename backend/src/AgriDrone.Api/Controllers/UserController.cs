@@ -53,6 +53,7 @@ namespace AgriDrone.Api.Controllers
         }
 
         [HttpPut("/current/profile")]
+        [Authorize]
         public async Task<IResult> UpdateUserProfile(
             [FromBody] UpdateUserProfileRequest request,
             CancellationToken cancellationToken)
@@ -69,6 +70,7 @@ namespace AgriDrone.Api.Controllers
         }
 
         [HttpPut("/current/change-password")]
+        [Authorize]
         public async Task<IResult> UpdatePassword(
             [FromBody] UpdateUserPasswordRequest request,
             CancellationToken cancellationToken)

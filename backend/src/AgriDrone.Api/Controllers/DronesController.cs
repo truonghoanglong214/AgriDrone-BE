@@ -1,11 +1,11 @@
 ﻿using AgriDrone.Api.Contracts.Drones;
-using AgriDrone.Modules.Identity.Application.Authorization;
 using AgriDrone.Modules.Missions.Application
     .Features.Drones.ChangeDroneStatus;
 using AgriDrone.Modules.Missions.Application
     .Features.Drones.GetAvailableDrones;
 using AgriDrone.Modules.Missions.Application
     .Features.Drones.RegisterDrone;
+using AgriDrone.SharedInfrastructure.Authorization;
 using AgriDrone.SharedInfrastructure.Http;
 using AgriDrone.SharedKernel.Application.Abstractions;
 using AgriDrone.SharedKernel.Application.Abstractions.Authorization;
@@ -23,7 +23,7 @@ public sealed class DronesController(
 {
     [HttpPost("api/tenants/{tenantId:guid}/drones")]
     [Authorize(
-        Policy = IdentityAuthorizationPolicies.SystemAdmin)]
+        Policy = AccessAuthorizationPolicies.SystemAdmin)]
     public async Task<IResult> RegisterDrone(
         Guid tenantId,
         [FromBody] RegisterDroneRequest request,
@@ -57,7 +57,7 @@ public sealed class DronesController(
     [HttpPatch(
         "api/tenants/{tenantId:guid}/drones/{droneId:guid}/status")]
     [Authorize(
-        Policy = IdentityAuthorizationPolicies.SystemAdmin)]
+        Policy = AccessAuthorizationPolicies.SystemAdmin)]
     public async Task<IResult> ChangeStatus(
         Guid tenantId,
         Guid droneId,
@@ -98,7 +98,7 @@ public sealed class DronesController(
                 new FarmAccessTarget(
                     tenantId,
                     farmId),
-                IdentityAuthorizationPolicies.FarmManager);
+                AccessAuthorizationPolicies.FarmManage);
 
         if (!authorizationResult.Succeeded)
         {

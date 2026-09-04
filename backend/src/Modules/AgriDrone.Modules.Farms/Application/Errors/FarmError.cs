@@ -20,6 +20,16 @@ namespace AgriDrone.Modules.Farms.Application.Errors
         public static AppError AccessDenied() =>
             AppError.Forbidden(
                 "Farm.AccessDenied",
-                "The user does not have an active membership in the selected Farm.");
+                "The user does not have the required access to the selected farm.");
+
+        public static AppError FarmNotFound(Guid farmId) =>
+            AppError.Validation(
+                "Farm.FarmNotFound",
+                $"Farm with ID '{farmId}' was not found.");
+
+        public static AppError ConcurrentUpdate() =>
+            AppError.Conflict(
+                "Farm.ConcurrentUpdate",
+                "The farm was changed by another request. Reload it and try again.");
     }
 }

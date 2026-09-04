@@ -3,6 +3,7 @@ using AgriDrone.Modules.Farms.Application.Errors;
 using AgriDrone.Modules.Farms.Domain.Farms;
 using AgriDrone.SharedKernel.Application;
 using AgriDrone.SharedKernel.Application.Abstractions;
+using AgriDrone.SharedKernel.Application.Abstractions.Authorization;
 using AgriDrone.SharedKernel.Domain;
 using MediatR;
 using System;
@@ -16,6 +17,7 @@ namespace AgriDrone.Modules.Farms.Application.Features.CreateFarm
         ICurrentTenant currentTenant,
         ICurrentUser currentUser,
         IFarmUnitOfWork unitOfWork,
+        IEffectiveAccessService effectiveAccessService,
         TimeProvider timeProvider) : IRequestHandler<CreateFarmCommand, Result<CreateFarmResponse>>
     {
         public async Task<Result<CreateFarmResponse>> Handle(CreateFarmCommand request, CancellationToken cancellationToken)
@@ -26,8 +28,20 @@ namespace AgriDrone.Modules.Farms.Application.Features.CreateFarm
             if (currentUser.UserId is not Guid userId)
                 return Result.Failure<CreateFarmResponse>(AuthenticationError.CurrentUserRequired());
 
+            var access = await effectiveAccessService.CheckTenantAsync(
+                userId,
+                tenantId,
+                TenantAccessLevel.Admin,
+                cancellationToken);
+
+            if (!access.IsAllowed)
+            {
+                return Result.Failure<CreateFarmResponse>(
+                    FarmError.AccessDenied());
+            }
+
             var now = timeProvider.GetUtcNow();
-            var normalizedCode = request.code.ToUpperInvariant();
+            var normalizedCode = request.code.Trim().ToUpperInvariant();
             var existingCode = await farmRepository.GetByCodeAsync(tenantId, normalizedCode, cancellationToken);
 
             if (existingCode is not null)

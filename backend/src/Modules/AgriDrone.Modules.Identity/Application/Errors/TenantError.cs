@@ -17,7 +17,7 @@ public static class TenantError
     public static AppError AccessDenied() =>
         AppError.Forbidden(
             "Tenant.AccessDenied",
-            "The user does not have an active membership in the selected tenant.");
+            "The user does not have the required access to the selected tenant.");
 
     public static AppError ContextRequired() =>
         AppError.Unauthorized(
