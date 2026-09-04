@@ -3,9 +3,16 @@ namespace AgriDrone.Modules.Missions.Domain.Missions;
 public enum MissionStatus
 {
     Draft,
-    Ready,
-    Flying,
+    Scheduled,
+    InFlight,
+    FlightCompleted,
+    Uploading,
+    ReadyForProcessing,
+    Processing,
+    AwaitingReview,
     Completed,
     Cancelled,
-    Failed
+    FlightFailed,
+    UploadFailed,
+    ProcessingFailed
 }

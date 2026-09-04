@@ -2,4 +2,12 @@
   <ItemGroup>
     <ProjectReference Include="..\..\BuildingBlocks\AgriDrone.SharedKernel\AgriDrone.SharedKernel.csproj" />
   </ItemGroup>
+	<ItemGroup>
+		<FrameworkReference Include="Microsoft.AspNetCore.App" />
+		<PackageReference Include="Minio" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\..\Modules\AgriDrone.Modules.Missions\AgriDrone.Modules.Missions.csproj" />
+	</ItemGroup>
 </Project>

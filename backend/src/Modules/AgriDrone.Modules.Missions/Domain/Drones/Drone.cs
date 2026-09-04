@@ -228,6 +228,54 @@ public sealed class Drone : AggregateRoot
         UpdatedAt = retiredAt;
     }
 
+    public void StartMission(DateTimeOffset startedAt)
+    {
+        EnsureTimestampIsProvided(
+            startedAt,
+            nameof(startedAt));
+
+        if (Status != DroneStatus.Available)
+        {
+            throw new InvalidOperationException(
+                "Only an available drone can start a mission.");
+        }
+
+        Status = DroneStatus.InMission;
+        UpdatedAt = startedAt;
+    }
+
+    public void CompleteMission(DateTimeOffset completedAt)
+    {
+        EnsureTimestampIsProvided(
+            completedAt,
+            nameof(completedAt));
+
+        if (Status != DroneStatus.InMission)
+        {
+            throw new InvalidOperationException(
+                "Only a drone in mission can complete its flight.");
+        }
+
+        Status = DroneStatus.Available;
+        UpdatedAt = completedAt;
+    }
+
+    public void FailMission(DateTimeOffset failedAt)
+    {
+        EnsureTimestampIsProvided(
+            failedAt,
+            nameof(failedAt));
+
+        if (Status != DroneStatus.InMission)
+        {
+            throw new InvalidOperationException(
+                "Only a drone in mission can report a flight failure.");
+        }
+
+        Status = DroneStatus.Maintenance;
+        UpdatedAt = failedAt;
+    }
+
     private static JsonElement CreateSpecificationsSnapshot(
         JsonElement? specifications)
     {

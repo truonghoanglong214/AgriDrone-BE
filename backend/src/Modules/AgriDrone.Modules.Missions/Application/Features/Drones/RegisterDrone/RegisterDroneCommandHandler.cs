@@ -1,17 +1,22 @@
-﻿using AgriDrone.Modules.Missions.Application.Abstractions;
+﻿using AgriDrone.Modules.Missions.Application.Abstractions.Missions;
 using AgriDrone.Modules.Missions.Application.Errors;
 using AgriDrone.Modules.Missions.Domain.Drones;
+using AgriDrone.SharedInfrastructure.Auditing;
 using AgriDrone.SharedKernel.Application;
 using AgriDrone.SharedKernel.Application.Abstractions;
+using AgriDrone.SharedKernel.Application.Abstractions.Execution;
 using MediatR;
+using System.Text.Json;
 
 namespace AgriDrone.Modules.Missions.Application
     .Features.Drones.RegisterDrone;
 
 internal sealed class RegisterDroneCommandHandler(
     IDroneRepository droneRepository,
-    IDroneStatusChangeRepository statusChangeRepository,
     IMissionsUnitOfWork unitOfWork,
+    IAuditWriter auditWriter,
+    IExecutionContext executionContext,
+    TimeProvider timeProvider,
     ICurrentUser currentUser)
     : IRequestHandler<
         RegisterDroneCommand,
@@ -67,7 +72,7 @@ internal sealed class RegisterDroneCommandHandler(
                     normalizedRegistration));
         }
 
-        var now = DateTimeOffset.UtcNow;
+        var now = timeProvider.GetUtcNow();
 
         var drone = Drone.Create(
             request.TenantId,
@@ -83,17 +88,27 @@ internal sealed class RegisterDroneCommandHandler(
             request.WeightKg,
             request.Notes,
             now);
-
-        var initialStatusChange = DroneStatusChange.Create(
-            drone.TenantId,
-            drone.Id,
-            previousStatus: null,
-            newStatus: drone.Status,
-            changedBy: userId,
-            changedAt: now);
-
         droneRepository.Add(drone);
-        statusChangeRepository.Add(initialStatusChange);
+        using var newData =
+            JsonSerializer.SerializeToDocument(new
+            {
+                Status = drone.Status.ToString(),
+                drone.Code,
+                drone.Name
+            });
+
+                auditWriter.AddUserAction(
+                    sink: unitOfWork,
+                    tenantId: drone.TenantId,
+                    farmId: null,
+                    actorId: userId,
+                    correlationId: executionContext.CorrelationId,
+                    entityType: nameof(Drone),
+                    entityId: drone.Id,
+                    action: "REGISTER",
+                    oldData: null,
+                    newData: newData,
+                    createdAt: now);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
