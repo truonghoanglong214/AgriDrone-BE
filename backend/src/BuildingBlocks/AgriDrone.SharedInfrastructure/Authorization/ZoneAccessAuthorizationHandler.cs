@@ -2,29 +2,30 @@ using AgriDrone.SharedKernel.Application.Abstractions.Authorization;
 using AgriDrone.SharedKernel.Application.Abstractions.Execution;
 using Microsoft.AspNetCore.Authorization;
 
-namespace AgriDrone.Modules.Identity.Infrastructure.Authorization;
+namespace AgriDrone.SharedInfrastructure.Authorization;
 
-internal sealed class FarmRoleAuthorizationHandler(
+internal sealed class ZoneAccessAuthorizationHandler(
     IExecutionContext executionContext,
     IEffectiveAccessService effectiveAccessService)
-    : AuthorizationHandler<FarmRoleRequirement>
+    : AuthorizationHandler<ZoneAccessRequirement>
 {
     protected override async Task HandleRequirementAsync(
         AuthorizationHandlerContext context,
-        FarmRoleRequirement requirement)
+        ZoneAccessRequirement requirement)
     {
         if (executionContext.ActorId is not Guid actorId ||
             executionContext.TenantId is not Guid tenantId ||
-            context.Resource is not FarmAccessTarget target ||
+            context.Resource is not ZoneAccessTarget target ||
             target.TenantId != tenantId)
         {
             return;
         }
 
-        var decision = await effectiveAccessService.CheckFarmAsync(
+        var decision = await effectiveAccessService.CheckZoneAsync(
             actorId,
             tenantId,
             target.FarmId,
+            target.ZoneId,
             requirement.RequiredAccess,
             CancellationToken.None);
 

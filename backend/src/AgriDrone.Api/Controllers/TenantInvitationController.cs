@@ -1,5 +1,5 @@
 using AgriDrone.Api.Contracts.TenantInvitations;
-using AgriDrone.Modules.Identity.Application.Authorization;
+using AgriDrone.SharedInfrastructure.Authorization;
 using AgriDrone.Modules.Identity.Application.Features.AcceptTenantInvitation;
 using AgriDrone.Modules.Identity.Application.Features.InviteTenantAdmin;
 using AgriDrone.SharedInfrastructure.Http;
@@ -14,7 +14,7 @@ namespace AgriDrone.Api.Controllers;
 public sealed class TenantInvitationController(ISender sender) : ControllerBase
 {
     [HttpPost("/current/invitations/tenant-admin")]
-    [Authorize(Policy = IdentityAuthorizationPolicies.TenantOwner)]
+    [Authorize(Policy = AccessAuthorizationPolicies.TenantOwner)]
     public async Task<IResult> InviteTenantAdmin(
         [FromBody] InviteTenantAdminRequest request,
         CancellationToken cancellationToken)

@@ -1,5 +1,5 @@
 ﻿using AgriDrone.Api.Contracts.Users;
-using AgriDrone.Modules.Identity.Application.Authorization;
+using AgriDrone.SharedInfrastructure.Authorization;
 using AgriDrone.Modules.Identity.Application.Features.GetTenantUsers;
 using AgriDrone.Modules.Identity.Application.Features.GetUsers;
 using AgriDrone.Modules.Identity.Application.Features.UpdateUser;
@@ -17,7 +17,7 @@ namespace AgriDrone.Api.Controllers
     public class UserController(ISender sender) : ControllerBase
     {
         [HttpGet]
-        [Authorize(Policy = IdentityAuthorizationPolicies.SystemAdmin)]
+        [Authorize(Policy = AccessAuthorizationPolicies.SystemAdmin)]
         public async Task<IResult> GetUsers(
         [FromQuery] GetUserRequest request,
         CancellationToken cancellationToken)
@@ -36,7 +36,7 @@ namespace AgriDrone.Api.Controllers
         }
 
         [HttpGet("/tenants/current/users")]
-        [Authorize(Policy = IdentityAuthorizationPolicies.TenantAdmin)]
+        [Authorize(Policy = AccessAuthorizationPolicies.TenantAdmin)]
         public async Task<IResult> GetTenantUsers(
             [FromQuery] GetTenantUserRequest request,
             CancellationToken cancellationToken)
@@ -53,6 +53,7 @@ namespace AgriDrone.Api.Controllers
         }
 
         [HttpPut("/current/profile")]
+        [Authorize]
         public async Task<IResult> UpdateUserProfile(
             [FromBody] UpdateUserProfileRequest request,
             CancellationToken cancellationToken)
@@ -69,6 +70,7 @@ namespace AgriDrone.Api.Controllers
         }
 
         [HttpPut("/current/change-password")]
+        [Authorize]
         public async Task<IResult> UpdatePassword(
             [FromBody] UpdateUserPasswordRequest request,
             CancellationToken cancellationToken)

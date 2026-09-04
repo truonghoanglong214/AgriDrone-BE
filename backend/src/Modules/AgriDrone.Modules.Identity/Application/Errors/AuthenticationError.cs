@@ -10,7 +10,7 @@ public static class AuthenticationError
             "A valid user context is required.");
 
     public static AppError InvalidCredentials() =>
-        AppError.Validation(
+        AppError.Unauthorized(
             "User.InvalidCredentials",
             "Invalid email or password.");
 

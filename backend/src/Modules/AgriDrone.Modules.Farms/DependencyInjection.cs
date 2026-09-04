@@ -38,6 +38,7 @@ public static class DependencyInjection
         services.AddScoped<IFarmUnitOfWork>(serviceProvider =>
             serviceProvider.GetRequiredService<FarmsDbContext>());
         services.AddScoped<IFarmRepository, FarmRepository>();
+        services.AddScoped<IFarmQueries, FarmQueries>();
         services.AddScoped<IFarmZoneRepository, FarmZoneRepository>();
         services.AddScoped<IFarmQueries, FarmQueries>();
         services.AddScoped<

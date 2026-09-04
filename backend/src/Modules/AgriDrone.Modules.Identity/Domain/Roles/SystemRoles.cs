@@ -1,8 +1,10 @@
+using AgriDrone.SharedKernel.Application.Abstractions.Authorization;
+
 namespace AgriDrone.Modules.Identity.Domain.Roles;
 
 public static class SystemRoles
 {
-    public const string SystemAdmin = "SYSTEM_ADMIN";
+    public const string SystemAdmin = SystemRoleCodes.SystemAdmin;
 
     public static readonly IReadOnlyCollection<SystemRoleDefinition> All =
     [

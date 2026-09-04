@@ -1,4 +1,4 @@
-﻿using AgriDrone.Modules.Farms.Application.Abstractions.Features.GetFarm;
+﻿using AgriDrone.Modules.Farms.Application.Features.GetFarm;
 using AgriDrone.Modules.Farms.Application.Abstractions.Queries;
 using AgriDrone.Modules.Farms.Infrastructure.Persistence;
 using AgriDrone.SharedInfrastructure.Persistence.Pagination;

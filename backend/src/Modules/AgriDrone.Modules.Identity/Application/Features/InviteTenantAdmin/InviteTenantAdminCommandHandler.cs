@@ -4,6 +4,7 @@ using AgriDrone.Modules.Identity.Domain.TenantInvitations;
 using AgriDrone.Modules.Identity.Domain.Tenants;
 using AgriDrone.SharedKernel.Application;
 using AgriDrone.SharedKernel.Application.Abstractions;
+using AgriDrone.SharedKernel.Application.Abstractions.Authorization;
 using MediatR;
 
 namespace AgriDrone.Modules.Identity.Application.Features.InviteTenantAdmin;
@@ -11,6 +12,7 @@ namespace AgriDrone.Modules.Identity.Application.Features.InviteTenantAdmin;
 internal sealed class InviteTenantAdminCommandHandler(
     ICurrentUser currentUser,
     ICurrentTenant currentTenant,
+    IEffectiveAccessService effectiveAccessService,
     ITenantInvitationService invitationService)
     : IRequestHandler<InviteTenantAdminCommand, Result<InviteTenantAdminResponse>>
 {
@@ -23,6 +25,18 @@ internal sealed class InviteTenantAdminCommandHandler(
         {
             return Result.Failure<InviteTenantAdminResponse>(
                 TenantError.ContextRequired());
+        }
+
+        var access = await effectiveAccessService.CheckTenantAsync(
+            inviterUserId,
+            tenantId,
+            TenantAccessLevel.Owner,
+            cancellationToken);
+
+        if (!access.IsAllowed)
+        {
+            return Result.Failure<InviteTenantAdminResponse>(
+                TenantError.AccessDenied());
         }
 
         var result = await invitationService.InviteAsync(

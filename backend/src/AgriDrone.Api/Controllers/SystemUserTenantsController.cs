@@ -1,5 +1,5 @@
 using AgriDrone.Api.Contracts.Tenants;
-using AgriDrone.Modules.Identity.Application.Authorization;
+using AgriDrone.SharedInfrastructure.Authorization;
 using AgriDrone.Modules.Identity.Application.Features.GetUserTenants;
 using AgriDrone.SharedInfrastructure.Http;
 using MediatR;
@@ -11,7 +11,7 @@ namespace AgriDrone.Api.Controllers;
 
 [Route("api/system/users")]
 [ApiController]
-[Authorize(Policy = IdentityAuthorizationPolicies.SystemAdmin)]
+[Authorize(Policy = AccessAuthorizationPolicies.SystemAdmin)]
 public sealed class SystemUserTenantsController(ISender sender) : ControllerBase
 {
     [HttpGet("{userId:guid}/tenants")]
