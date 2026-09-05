@@ -1,5 +1,4 @@
 ﻿using AgriDrone.Api.Contracts.Missions;
-using AgriDrone.Modules.Identity.Application.Authorization;
 using AgriDrone.Modules.Missions.Application
     .Features.Missions.CreateMission;
 using AgriDrone.Modules.Missions.Application
@@ -8,6 +7,7 @@ using AgriDrone.Modules.Missions.Application
     .Features.Missions.ScheduleMission;
 using AgriDrone.Modules.Missions.Application
     .Features.Missions.TransitionMission;
+using AgriDrone.SharedInfrastructure.Authorization;
 using AgriDrone.SharedInfrastructure.Http;
 using AgriDrone.SharedKernel.Application.Abstractions;
 using AgriDrone.SharedKernel.Application
@@ -175,7 +175,7 @@ public sealed class MissionsController(
                 new FarmAccessTarget(
                     tenantId,
                     farmId),
-                IdentityAuthorizationPolicies.FarmManager);
+                AccessAuthorizationPolicies.FarmManage);
 
         return authorization.Succeeded
             ? null

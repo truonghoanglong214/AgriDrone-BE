@@ -17,6 +17,7 @@ namespace AgriDrone.Modules.Farms.Infrastructure.Repositories
             return context.FarmZones
                 .AnyAsync(farmZone =>
                 farmZone.Farm.TenantId == tenantId &&
+                farmZone.Farm.DeletedAt == null &&
                 farmZone.FarmId == farmId &&
                 farmZone.Code == normalizedCode &&
                 farmZone.DeletedAt == null &&
@@ -37,7 +38,9 @@ namespace AgriDrone.Modules.Farms.Infrastructure.Repositories
                 .AsNoTracking()
                 .SingleOrDefaultAsync(farmZone =>
                 farmZone.Farm.TenantId == tenantId &&
-                farmZone.Code == code &&
+                farmZone.Farm.DeletedAt == null &&
+                farmZone.FarmId == farmId &&
+                farmZone.Code == normalizedCode &&
                 farmZone.DeletedAt == null, cancellationToken);
         }
 
@@ -46,6 +49,7 @@ namespace AgriDrone.Modules.Farms.Infrastructure.Repositories
             .AsNoTracking()
             .SingleOrDefaultAsync(farmZone =>
             farmZone.Farm.TenantId == tenantId &&
+            farmZone.Farm.DeletedAt == null &&
             farmZone.FarmId == farmId &&
             farmZone.Id == zoneId &&
             farmZone.DeletedAt == null, cancellationToken);
