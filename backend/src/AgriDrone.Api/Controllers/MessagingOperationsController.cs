@@ -16,6 +16,11 @@ public sealed class MessagingOperationsController(
     ICurrentUser currentUser,
     IExecutionContext executionContext) : ControllerBase
 {
+    /// <summary>Khôi phục một Outbox message bị đánh dấu DEAD.</summary>
+    /// <remarks>
+    /// System Admin đưa message về trạng thái Retry, reset số lần thử nhưng giữ
+    /// nguyên MessageId và payload. Thao tác được ghi audit với actor và correlation ID.
+    /// </remarks>
     [HttpPost("outbox/{messageId:guid}/redrive")]
     public async Task<IResult> RedriveOutbox(
         Guid messageId,
@@ -32,6 +37,12 @@ public sealed class MessagingOperationsController(
             : Results.NotFound();
     }
 
+    /// <summary>Khôi phục message từ dead-letter queue.</summary>
+    /// <remarks>
+    /// System Admin chuyển tối đa 1 đến 100 message của consumer từ DLQ về main
+    /// exchange, giữ body và MessageId gốc, đồng thời bổ sung metadata redrive.
+    /// Message trong DLQ chỉ được ACK sau publisher confirm.
+    /// </remarks>
     [HttpPost("dead-letters/{consumerName}/redrive")]
     public async Task<IResult> RedriveDeadLetters(
         string consumerName,

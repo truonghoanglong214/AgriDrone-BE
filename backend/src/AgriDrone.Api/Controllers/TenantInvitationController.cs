@@ -13,6 +13,11 @@ namespace AgriDrone.Api.Controllers;
 [ApiController]
 public sealed class TenantInvitationController(ISender sender) : ControllerBase
 {
+    /// <summary>Mời Tenant Admin vào tenant hiện tại.</summary>
+    /// <remarks>
+    /// Tenant Owner tạo lời mời có thời hạn cho email được chỉ định. Lời mời dùng
+    /// để tạo hoặc liên kết tài khoản với membership Tenant Admin.
+    /// </remarks>
     [HttpPost("/current/invitations/tenant-admin")]
     [Authorize(Policy = AccessAuthorizationPolicies.TenantOwner)]
     public async Task<IResult> InviteTenantAdmin(
@@ -30,6 +35,11 @@ public sealed class TenantInvitationController(ISender sender) : ControllerBase
                 statusCode: StatusCodes.Status201Created));
     }
 
+    /// <summary>Chấp nhận lời mời tham gia tenant.</summary>
+    /// <remarks>
+    /// Xác thực invitation token, tạo tài khoản nếu cần và kích hoạt tenant
+    /// membership theo vai trò đã được mời. Token chỉ được sử dụng một lần.
+    /// </remarks>
     [AllowAnonymous]
     [HttpPost("/invitations/accept")]
     public async Task<IResult> AcceptTenantInvitation(

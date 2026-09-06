@@ -14,6 +14,11 @@ namespace AgriDrone.Api.Controllers;
 [Authorize(Policy = AccessAuthorizationPolicies.SystemAdmin)]
 public sealed class SystemUserTenantsController(ISender sender) : ControllerBase
 {
+    /// <summary>Lấy các tenant mà một người dùng tham gia.</summary>
+    /// <remarks>
+    /// System Admin truy vấn danh sách tenant membership của người dùng theo
+    /// trang, bao gồm vai trò và trạng thái membership tương ứng.
+    /// </remarks>
     [HttpGet("{userId:guid}/tenants")]
     public async Task<IResult> GetUserTenantsAsync(
         [FromRoute] Guid userId,

@@ -16,6 +16,11 @@ namespace AgriDrone.Api.Controllers
     [ApiController]
     public class AuthController(ISender sender) : ControllerBase
     {
+        /// <summary>Đăng ký tài khoản và tenant mới.</summary>
+        /// <remarks>
+        /// Tạo đồng thời người dùng, tenant đang hoạt động và tenant membership
+        /// với vai trò Owner cho người đăng ký.
+        /// </remarks>
         [AllowAnonymous]
         [HttpPost("register")]
         public async Task<IResult> Register(
@@ -41,6 +46,12 @@ namespace AgriDrone.Api.Controllers
                     statusCode: StatusCodes.Status201Created));
         }
 
+        /// <summary>Đăng nhập hệ thống.</summary>
+        /// <remarks>
+        /// Xác thực email và mật khẩu. Nếu người dùng chỉ thuộc một tenant thì
+        /// trả access token; nếu thuộc nhiều tenant thì trả selection token và
+        /// danh sách tenant để người dùng chọn ngữ cảnh làm việc.
+        /// </remarks>
         [AllowAnonymous]
         [HttpPost("login")]
         public async Task<IResult> Login(
@@ -60,6 +71,11 @@ namespace AgriDrone.Api.Controllers
                     statusCode: StatusCodes.Status200OK));
         }
 
+        /// <summary>Yêu cầu đặt lại mật khẩu.</summary>
+        /// <remarks>
+        /// Tạo token đặt lại mật khẩu và gửi liên kết qua email nếu tài khoản
+        /// tồn tại. API luôn trả thông báo chung để không làm lộ email đăng ký.
+        /// </remarks>
         [AllowAnonymous]
         [HttpPost("forgot-password")]
         public async Task<IResult> ForgotPassword(
@@ -76,6 +92,11 @@ namespace AgriDrone.Api.Controllers
                     statusCode: StatusCodes.Status202Accepted));
         }
 
+        /// <summary>Đặt lại mật khẩu bằng token.</summary>
+        /// <remarks>
+        /// Tiêu thụ token đặt lại mật khẩu một lần và cập nhật mật khẩu mới
+        /// cho tài khoản đang hoạt động.
+        /// </remarks>
         [AllowAnonymous]
         [HttpPost("reset-password")]
         public async Task<IResult> ResetPassword(
@@ -93,6 +114,11 @@ namespace AgriDrone.Api.Controllers
                 response => Results.Ok(response));
         }
 
+        /// <summary>Chọn tenant cho phiên đăng nhập.</summary>
+        /// <remarks>
+        /// Kiểm tra selection token và tenant membership đang hoạt động, sau đó
+        /// phát access token chứa ngữ cảnh tenant đã chọn.
+        /// </remarks>
         [AllowAnonymous]
         [HttpPost("select-tenant")]
         public async Task<IResult> SelectTenant(

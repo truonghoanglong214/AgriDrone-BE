@@ -17,6 +17,11 @@ namespace AgriDrone.Api.Controllers;
 [Authorize(Policy = AccessAuthorizationPolicies.TenantOwner)]
 public sealed class TenantMembershipController(ISender sender) : ControllerBase
 {
+    /// <summary>Cập nhật vai trò thành viên trong tenant hiện tại.</summary>
+    /// <remarks>
+    /// Tenant Owner chuyển vai trò giữa Member và Tenant Admin. Endpoint không
+    /// cho phép gán hoặc gỡ vai trò Owner và không cho actor tự đổi vai trò.
+    /// </remarks>
     [HttpPut("{userId:guid}/role")]
     public async Task<IResult> UpdateRole(
         [FromRoute] Guid userId,
@@ -39,6 +44,11 @@ public sealed class TenantMembershipController(ISender sender) : ControllerBase
             () => Results.NoContent());
     }
 
+    /// <summary>Cập nhật trạng thái thành viên trong tenant hiện tại.</summary>
+    /// <remarks>
+    /// Tenant Owner kích hoạt hoặc vô hiệu hóa membership của một thành viên.
+    /// Membership Owner đang hoạt động không thể bị vô hiệu hóa qua endpoint này.
+    /// </remarks>
     [HttpPut("{userId:guid}/status")]
     public async Task<IResult> UpdateStatus(
         [FromRoute] Guid userId,

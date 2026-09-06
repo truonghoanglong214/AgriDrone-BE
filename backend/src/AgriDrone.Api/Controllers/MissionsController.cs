@@ -26,6 +26,12 @@ public sealed class MissionsController(
     ICurrentTenant currentTenant)
     : ControllerBase
 {
+    /// <summary>Tạo Mission ở trạng thái Draft.</summary>
+    /// <remarks>
+    /// Farm Manager tạo Mission Mapping hoặc Health Inspection cho một Zone active.
+    /// Health Inspection phải tham chiếu confirmed map của Zone; mã Mission là duy
+    /// nhất trong Farm. Drone và các tham chiếu phải thuộc đúng tenant.
+    /// </remarks>
     [HttpPost("api/farms/{farmId:guid}/missions")]
     public async Task<IResult> CreateMission(
         Guid farmId,
@@ -63,6 +69,12 @@ public sealed class MissionsController(
                 mission));
     }
 
+    /// <summary>Lập lịch cho Mission Draft.</summary>
+    /// <remarks>
+    /// Chuyển Mission từ Draft sang Scheduled sau khi kiểm tra drone đang Available,
+    /// không giao lịch và khoảng thời gian hợp lệ. ExpectedVersion bảo vệ khỏi cập
+    /// nhật đồng thời.
+    /// </remarks>
     [HttpPatch(
         "api/farms/{farmId:guid}/missions/" +
         "{missionId:guid}/schedule")]
@@ -97,6 +109,12 @@ public sealed class MissionsController(
             Results.Ok);
     }
 
+    /// <summary>Chuyển trạng thái chuyến bay của Mission.</summary>
+    /// <remarks>
+    /// Thực hiện các transition được phép: Scheduled sang InFlight, InFlight sang
+    /// FlightCompleted hoặc FlightFailed, và Draft/Scheduled sang Cancelled. Khi
+    /// bắt đầu hoặc kết thúc chuyến bay, trạng thái drone được cập nhật đồng bộ.
+    /// </remarks>
     [HttpPatch(
         "api/farms/{farmId:guid}/missions/" +
         "{missionId:guid}/status")]
@@ -131,6 +149,11 @@ public sealed class MissionsController(
             Results.Ok);
     }
 
+    /// <summary>Lấy chi tiết Mission.</summary>
+    /// <remarks>
+    /// Trả toàn bộ thông tin Mission thuộc đúng tenant và farm, gồm Zone, drone,
+    /// pilot, loại Mission, lịch bay, trạng thái, source map và version hiện tại.
+    /// </remarks>
     [HttpGet(
         "api/farms/{farmId:guid}/missions/" +
         "{missionId:guid}")]

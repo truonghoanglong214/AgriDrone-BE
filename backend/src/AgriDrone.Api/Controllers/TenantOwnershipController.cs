@@ -14,6 +14,11 @@ namespace AgriDrone.Api.Controllers;
 public sealed class TenantOwnershipController(ISender sender)
     : ControllerBase
 {
+    /// <summary>Chuyển quyền sở hữu tenant hiện tại.</summary>
+    /// <remarks>
+    /// Tenant Owner chuyển vai trò Owner cho một thành viên active trong cùng
+    /// tenant. Owner cũ được hạ xuống Tenant Admin trong cùng transaction.
+    /// </remarks>
     [HttpPost("transfer-ownership")]
     public async Task<IResult> TransferOwnership(
         [FromBody] TransferTenantOwnershipRequest request,

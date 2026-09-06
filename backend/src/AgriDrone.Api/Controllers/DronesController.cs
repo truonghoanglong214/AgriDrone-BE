@@ -21,6 +21,11 @@ public sealed class DronesController(
     IAuthorizationService authorizationService,
     ICurrentTenant currentTenant) : ControllerBase
 {
+    /// <summary>Đăng ký drone cho tenant.</summary>
+    /// <remarks>
+    /// System Admin tạo hồ sơ drone với mã, model, thông số kỹ thuật và thông tin
+    /// đăng ký. Mã drone và serial number phải đáp ứng quy tắc duy nhất.
+    /// </remarks>
     [HttpPost("api/tenants/{tenantId:guid}/drones")]
     [Authorize(
         Policy = AccessAuthorizationPolicies.SystemAdmin)]
@@ -54,6 +59,12 @@ public sealed class DronesController(
                 drone));
     }
 
+    /// <summary>Thay đổi trạng thái drone.</summary>
+    /// <remarks>
+    /// System Admin chuyển drone giữa các trạng thái vận hành như Available,
+    /// Maintenance hoặc Retired theo state transition được hỗ trợ. Khi hoàn tất
+    /// bảo trì, thời điểm bảo trì kế tiếp phải nằm trong tương lai.
+    /// </remarks>
     [HttpPatch(
         "api/tenants/{tenantId:guid}/drones/{droneId:guid}/status")]
     [Authorize(
@@ -79,6 +90,11 @@ public sealed class DronesController(
             response => Results.Ok(response));
     }
 
+    /// <summary>Tìm drone khả dụng cho khoảng thời gian Mission.</summary>
+    /// <remarks>
+    /// Farm Manager truy vấn các drone đang Available trong tenant và không có
+    /// Mission giao lịch với khoảng thời gian yêu cầu.
+    /// </remarks>
     [HttpGet(
         "api/farms/{farmId:guid}/drones/available")]
     [Authorize]

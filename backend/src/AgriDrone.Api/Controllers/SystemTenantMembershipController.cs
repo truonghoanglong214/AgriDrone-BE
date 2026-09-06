@@ -15,6 +15,11 @@ namespace AgriDrone.Api.Controllers
     public sealed class SystemTenantMembershipController(
         ISender sender) : ControllerBase
     {
+        /// <summary>Kích hoạt tenant membership.</summary>
+        /// <remarks>
+        /// System Admin khôi phục quyền truy cập tenant cho membership được chỉ
+        /// định và ghi nhận thay đổi trạng thái phục vụ audit.
+        /// </remarks>
         [HttpPut("{tenantMembershipId:guid}/activate")]
         public async Task<IResult> Activate(
             [FromRoute] Guid tenantMembershipId,
@@ -32,6 +37,11 @@ namespace AgriDrone.Api.Controllers
                 () => Results.NoContent());
         }
 
+        /// <summary>Vô hiệu hóa tenant membership.</summary>
+        /// <remarks>
+        /// System Admin thu hồi quyền truy cập tenant của membership được chỉ
+        /// định. Membership Owner đang hoạt động được bảo vệ khỏi thao tác này.
+        /// </remarks>
         [HttpPut("{tenantMembershipId:guid}/deactivate")]
         public async Task<IResult> Deactivate(
             [FromRoute] Guid tenantMembershipId,

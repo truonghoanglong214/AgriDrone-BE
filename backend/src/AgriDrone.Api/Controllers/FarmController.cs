@@ -25,6 +25,11 @@ namespace AgriDrone.Api.Controllers
     public class FarmController(
         ISender sender) : ControllerBase
     {
+        /// <summary>Lấy danh sách farm của tenant hiện tại.</summary>
+        /// <remarks>
+        /// Trả danh sách farm phân trang trong tenant từ access token. Chỉ Tenant
+        /// Admin hoặc Owner được phép xem catalog farm qua endpoint này.
+        /// </remarks>
         [HttpGet]
         [Authorize(Policy = AccessAuthorizationPolicies.TenantAdmin)]
         public async Task<IResult> GetFarms(
@@ -42,6 +47,11 @@ namespace AgriDrone.Api.Controllers
                 farms => Results.Ok(FarmResponseMapper.ToResponse(farms)));
         }
 
+        /// <summary>Tạo farm trong tenant hiện tại.</summary>
+        /// <remarks>
+        /// Tenant Admin hoặc Owner tạo farm với mã duy nhất trong tenant, thông
+        /// tin vị trí và boundary GeoJSON sử dụng hệ tọa độ WGS84 (SRID 4326).
+        /// </remarks>
         [HttpPost]
         [Authorize(Policy = AccessAuthorizationPolicies.TenantAdmin)]
         public async Task<IResult> CreateFarm(
@@ -63,6 +73,11 @@ namespace AgriDrone.Api.Controllers
                 farm => Results.Ok(FarmResponseMapper.ToResponse(farm)));
         }
 
+        /// <summary>Lấy chi tiết farm.</summary>
+        /// <remarks>
+        /// Trả thông tin farm thuộc tenant hiện tại khi người dùng có quyền đọc
+        /// farm thông qua tenant ownership hoặc farm membership.
+        /// </remarks>
         [HttpGet("{farmId:guid}")]
         [Authorize(Policy = AccessAuthorizationPolicies.TenantMember)]
         public async Task<IResult> GetFarmById(
@@ -78,6 +93,12 @@ namespace AgriDrone.Api.Controllers
                 farm => Results.Ok(FarmResponseMapper.ToResponse(farm)));
         }
 
+        /// <summary>Tạo zone trong farm.</summary>
+        /// <remarks>
+        /// Tenant Owner hoặc Farm Manager được assign tạo zone với mã duy nhất
+        /// trong farm. Boundary GeoJSON, nếu có, phải là Polygon SRID 4326 hợp lệ.
+        /// Zone mới được kích hoạt và bắt đầu ở version 1.
+        /// </remarks>
         [HttpPost("{farmId:guid}/zones")]
         [Authorize(Policy = AccessAuthorizationPolicies.TenantMember)]
         public async Task<IResult> CreateZone(
@@ -101,6 +122,11 @@ namespace AgriDrone.Api.Controllers
                     FarmZoneResponseMapper.ToResponse(zone)));
         }
 
+        /// <summary>Lấy danh sách zone theo farm.</summary>
+        /// <remarks>
+        /// Trả các zone chưa archive thuộc farm và tenant hiện tại. Kết quả được
+        /// lọc theo FarmAccessScope và ZoneAssignment đang hoạt động của người dùng.
+        /// </remarks>
         [HttpGet("{farmId:guid}/zones")]
         [Authorize(Policy = AccessAuthorizationPolicies.TenantMember)]
         public async Task<IResult> GetZonesByFarm(
@@ -116,6 +142,12 @@ namespace AgriDrone.Api.Controllers
                 zones => Results.Ok(FarmZoneResponseMapper.ToResponse(zones)));
         }
 
+        /// <summary>Lấy chi tiết zone.</summary>
+        /// <remarks>
+        /// Trả zone thuộc đúng farm và tenant hiện tại khi người dùng có quyền
+        /// qua FarmAccessScope hoặc ZoneAssignment. Response bao gồm version phục
+        /// vụ optimistic concurrency cho các thao tác cập nhật sau này.
+        /// </remarks>
         [HttpGet("{farmId:guid}/zones/{zoneId:guid}")]
         [Authorize(Policy = AccessAuthorizationPolicies.TenantMember)]
         public async Task<IResult> GetZoneById(
@@ -132,6 +164,11 @@ namespace AgriDrone.Api.Controllers
                 zone => Results.Ok(FarmZoneResponseMapper.ToResponse(zone)));
         }
 
+        /// <summary>Cập nhật thông tin farm.</summary>
+        /// <remarks>
+        /// Tenant Admin hoặc Owner cập nhật tên, địa chỉ, vị trí, boundary và
+        /// diện tích farm. ExpectedVersion được dùng để ngăn ghi đè cập nhật đồng thời.
+        /// </remarks>
         [HttpPut("{farmId:guid}")]
         [Authorize(Policy = AccessAuthorizationPolicies.TenantAdmin)]
         public async Task<IResult> UpdateFarmDetail(
