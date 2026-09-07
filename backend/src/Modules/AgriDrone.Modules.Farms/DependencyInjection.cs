@@ -44,6 +44,9 @@ public static class DependencyInjection
         services.AddScoped<
             IMissionPlanningReferenceQuery,
             MissionPlanningReferenceQuery>();
+        services.AddScoped<
+            IFarmAssignmentReferenceQuery,
+            FarmAssignmentReferenceQuery>();
 
         var assembly = typeof(DependencyInjection).Assembly;
 

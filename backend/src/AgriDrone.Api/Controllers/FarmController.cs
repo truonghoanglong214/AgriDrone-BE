@@ -17,6 +17,10 @@ using AgriDrone.Api.Contracts.Zones;
 using AgriDrone.Modules.Farms.Application.Features.CreateZone;
 using AgriDrone.Modules.Farms.Application.Features.GetZoneById;
 using AgriDrone.Modules.Farms.Application.Features.GetZonesByFarm;
+using AgriDrone.Api.Contracts.FarmMemberships;
+using AgriDrone.Modules.Identity.Application.Features.AssignFarmMember;
+using AgriDrone.Modules.Identity.Application.Features.GetFarmMemberAssignment;
+using AgriDrone.Modules.Identity.Domain.FarmMemberships;
 
 namespace AgriDrone.Api.Controllers
 {
@@ -162,6 +166,73 @@ namespace AgriDrone.Api.Controllers
             return result.ToHttpResult(
                 HttpContext,
                 zone => Results.Ok(FarmZoneResponseMapper.ToResponse(zone)));
+        }
+
+        /// <summary>Gán Tenant Admin quản lý farm.</summary>
+        /// <remarks>
+        /// Tenant Owner hoặc Tenant Admin gán một Tenant Admin đang hoạt động vào
+        /// farm hiện tại với vai trò Farm Manager và quyền truy cập tất cả zone.
+        /// Assignment chỉ có hiệu lực trong đúng farm được chỉ định.
+        /// </remarks>
+        [HttpPut("{farmId:guid}/members/{userId:guid}/assignment")]
+        [Authorize(Policy = AccessAuthorizationPolicies.TenantAdmin)]
+        public async Task<IResult> AssignFarmMember(
+            [FromRoute] Guid farmId,
+            [FromRoute] Guid userId,
+            [FromBody] AssignFarmMemberRequest request,
+            CancellationToken cancellationToken)
+        {
+            var role = request.Role switch
+            {
+                AssignFarmMemberRoleValue.Manager => FarmMemberRole.Manager,
+                AssignFarmMemberRoleValue.Worker => FarmMemberRole.Worker,
+                _ => (FarmMemberRole)(-1)
+            };
+
+            var accessScope = request.AccessScope switch
+            {
+                AssignFarmAccessScopeValue.AllZones => FarmAccessScope.AllZones,
+                AssignFarmAccessScopeValue.SelectedZones => FarmAccessScope.SelectedZones,
+                _ => (FarmAccessScope)(-1)
+            };
+
+            var command = new AssignFarmMemberCommand(
+                farmId,
+                userId,
+                role,
+                accessScope,
+                request.ZoneIds ?? [],
+                request.ExpectedVersion,
+                request.Reason);
+
+            var result = await sender.Send(command, cancellationToken);
+
+            return result.ToHttpResult(
+                HttpContext,
+                assignment => Results.Ok(
+                    FarmMembershipResponseMapper.ToResponse(assignment)));
+        }
+
+        /// <summary>Lấy assignment của một thành viên trong farm.</summary>
+        /// <remarks>
+        /// Tenant Owner hoặc Tenant Admin lấy vai trò, phạm vi zone, trạng thái
+        /// và version hiện tại của assignment để hiển thị hoặc cập nhật an toàn.
+        /// Chỉ trả assignment thuộc farm và tenant hiện tại.
+        /// </remarks>
+        [HttpGet("{farmId:guid}/members/{userId:guid}/assignment")]
+        [Authorize(Policy = AccessAuthorizationPolicies.TenantAdmin)]
+        public async Task<IResult> GetFarmMemberAssignment(
+            [FromRoute] Guid farmId,
+            [FromRoute] Guid userId,
+            CancellationToken cancellationToken)
+        {
+            var query = new GetFarmMemberAssignmentQuery(farmId, userId);
+            var result = await sender.Send(query, cancellationToken);
+
+            return result.ToHttpResult(
+                HttpContext,
+                assignment => Results.Ok(
+                    FarmMembershipResponseMapper.ToResponse(assignment)));
         }
 
         /// <summary>Cập nhật thông tin farm.</summary>

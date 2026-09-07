@@ -69,6 +69,13 @@ public sealed class FarmMembershipConfiguration : IEntityTypeConfiguration<FarmM
             .HasDefaultValueSql("NOW()")
             .IsRequired();
 
+        builder.Property(membership => membership.Version)
+            .HasColumnName("version")
+            .HasColumnType("bigint")
+            .HasDefaultValue(1L)
+            .IsConcurrencyToken()
+            .IsRequired();
+
         builder.HasIndex(membership => new { membership.FarmId, membership.UserId })
             .HasDatabaseName("uq_farm_memberships_farm_user")
             .IsUnique();

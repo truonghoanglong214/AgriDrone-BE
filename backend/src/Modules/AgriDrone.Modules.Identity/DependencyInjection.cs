@@ -92,6 +92,7 @@ public static class DependencyInjection
         services.AddScoped<IUserQueries, UserQueries>();
         services.AddScoped<ITenantQueries, TenantQueries>();
         services.AddScoped<ITenantMembershipQueries, TenantMembershipQueries>();
+        services.AddScoped<IFarmMembershipQueries, FarmMembershipQueries>();
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IRoleRepository, RoleRepository>();
         services.AddScoped<ISystemAdminBootstrapLock, SystemAdminBootstrapLock>();
@@ -101,6 +102,7 @@ public static class DependencyInjection
         services.AddScoped<IPasswordService, PasswordService>();
         services.AddScoped<ITenantRepository, TenantRepository>();
         services.AddScoped<ITenantMembershipRepository, TenantMembershipRepository>();
+        services.AddScoped<IFarmMembershipRepository, FarmMembershipRepository>();
         services.AddScoped<ITenantInvitationRepository, TenantInvitationRepository>();
         services.AddScoped<IPasswordResetTokenRepository, PasswordResetTokenRepository>();
         services.AddScoped<IPasswordResetEmailDelivery, PasswordResetEmailDelivery>();
