@@ -4,7 +4,7 @@ using AgriDrone.Modules.Identity.Application.Abstractions.Services;
 using AgriDrone.Modules.Identity.Application.Features.UpdateUser;
 using AgriDrone.Modules.Identity.Domain.Users;
 using AgriDrone.SharedKernel.Application;
-using AgriDrone.SharedKernel.Application.Abstractions;
+using AgriDrone.SharedKernel.Application.Abstractions.Execution;
 using MediatR;
 using System;
 using System.Collections.Generic;
@@ -14,14 +14,14 @@ using System.Text;
 namespace AgriDrone.Modules.Identity.Application.Features.UpdateUserPassword
 {
     internal sealed class UpdateUserPasswordCommandHandler(
-        ICurrentUser currentUser,
+        IExecutionContext executionContext,
         IUserRepository userRepository,
         IIdentityUnitOfWork unitOfWork,
         IPasswordService passwordService) : IRequestHandler<UpdateUserPasswordCommand, Result<UpdateUserPasswordResponse>>
     {
         public async Task<Result<UpdateUserPasswordResponse>> Handle(UpdateUserPasswordCommand request, CancellationToken cancellationToken)
         {
-            if (currentUser.UserId is not Guid currentUserId)
+            if (executionContext.ActorId is not Guid currentUserId)
                 return Result.Failure<UpdateUserPasswordResponse>(AuthenticationError.CurrentUserRequired());
 
             var user = await userRepository.GetByIdAsync(currentUserId, cancellationToken);

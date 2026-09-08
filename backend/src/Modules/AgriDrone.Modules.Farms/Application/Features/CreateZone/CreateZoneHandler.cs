@@ -3,8 +3,8 @@ using AgriDrone.Modules.Farms.Application.Errors;
 using AgriDrone.Modules.Farms.Domain.Farms;
 using AgriDrone.Modules.Farms.Domain.Zones;
 using AgriDrone.SharedKernel.Application;
-using AgriDrone.SharedKernel.Application.Abstractions;
 using AgriDrone.SharedKernel.Application.Abstractions.Authorization;
+using AgriDrone.SharedKernel.Application.Abstractions.Execution;
 using AgriDrone.SharedKernel.Domain;
 using MediatR;
 using System;
@@ -17,17 +17,16 @@ namespace AgriDrone.Modules.Farms.Application.Features.CreateZone
         IFarmZoneRepository farmZoneRepository,
         IFarmRepository farmRepository,
         IFarmUnitOfWork unitOfWork,
-        ICurrentUser currentUser,
-        ICurrentTenant currentTenant,
+        IExecutionContext executionContext,
         IEffectiveAccessService effectiveAccessService,
         TimeProvider timeProvider) : IRequestHandler<CreateZoneCommand, Result<CreateZoneResponse>>
     {
         public async Task<Result<CreateZoneResponse>> Handle(CreateZoneCommand request, CancellationToken cancellationToken)
         {
-            if (currentUser.UserId is not Guid userId)
+            if (executionContext.ActorId is not Guid userId)
                 return Result.Failure<CreateZoneResponse>(AuthenticationError.CurrentUserRequired());
 
-            if (currentTenant.TenantId is not Guid tenantId)
+            if (executionContext.TenantId is not Guid tenantId)
                 return Result.Failure<CreateZoneResponse>(AuthenticationError.CurrentTenantRequired());
 
             var access = await effectiveAccessService.CheckFarmAsync(

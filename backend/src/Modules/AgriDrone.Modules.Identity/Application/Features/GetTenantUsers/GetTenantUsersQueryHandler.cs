@@ -3,8 +3,8 @@ using AgriDrone.Modules.Identity.Application.Abstractions.Queries;
 using AgriDrone.SharedKernel.Application.Pagination;
 using MediatR;
 using AgriDrone.Modules.Identity.Application.Errors;
-using AgriDrone.SharedKernel.Application.Abstractions;
 using AgriDrone.SharedKernel.Application.Abstractions.Authorization;
+using AgriDrone.SharedKernel.Application.Abstractions.Execution;
 using System;
 using System.Collections.Generic;
 using System.Text;
@@ -13,8 +13,7 @@ namespace AgriDrone.Modules.Identity.Application.Features.GetTenantUsers
 {
     internal sealed class GetTenantUsersQueryHandler(
         ITenantMembershipQueries tenantMembershipQueries,
-        ICurrentTenant currentTenant,
-        ICurrentUser currentUser,
+        IExecutionContext executionContext,
         IEffectiveAccessService effectiveAccessService) : IRequestHandler<GetTenantUsersQuery, Result<PagedResult<TenantUsersListItemResponse>>>
     {
         public async Task<Result<PagedResult<TenantUsersListItemResponse>>> Handle(
@@ -23,13 +22,13 @@ namespace AgriDrone.Modules.Identity.Application.Features.GetTenantUsers
         {
             var pageRequest = new PagedRequest(request.PageNumber, request.PageSize);
 
-            if (currentTenant.TenantId is not Guid tenantId)
+            if (executionContext.TenantId is not Guid tenantId)
             {
                 return Result.Failure<PagedResult<TenantUsersListItemResponse>>(
                     TenantError.ContextRequired());
             }
 
-            if (currentUser.UserId is not Guid userId)
+            if (executionContext.ActorId is not Guid userId)
             {
                 return Result.Failure<PagedResult<TenantUsersListItemResponse>>(
                     AuthenticationError.CurrentUserRequired());

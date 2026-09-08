@@ -3,13 +3,13 @@ using AgriDrone.Modules.Identity.Application.Invitations.Creation;
 using AgriDrone.Modules.Identity.Domain.TenantInvitations;
 using AgriDrone.Modules.Identity.Domain.Tenants;
 using AgriDrone.SharedKernel.Application;
-using AgriDrone.SharedKernel.Application.Abstractions;
+using AgriDrone.SharedKernel.Application.Abstractions.Execution;
 using MediatR;
 
 namespace AgriDrone.Modules.Identity.Application.Features.ProvisionTenantOwner;
 
 internal sealed class ProvisionTenantOwnerCommandHandler(
-    ICurrentUser currentUser,
+    IExecutionContext executionContext,
     ITenantInvitationService invitationService)
     : IRequestHandler<
         ProvisionTenantOwnerCommand,
@@ -19,7 +19,7 @@ internal sealed class ProvisionTenantOwnerCommandHandler(
         ProvisionTenantOwnerCommand request,
         CancellationToken cancellationToken)
     {
-        if (currentUser.UserId is not Guid requestedByUserId)
+        if (executionContext.ActorId is not Guid requestedByUserId)
         {
             return Result.Failure<ProvisionTenantOwnerResponse>(
                 AuthenticationError.CurrentUserRequired());

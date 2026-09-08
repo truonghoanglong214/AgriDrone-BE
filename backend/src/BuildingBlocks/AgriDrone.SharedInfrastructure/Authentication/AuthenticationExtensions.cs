@@ -1,12 +1,9 @@
-﻿using AgriDrone.SharedKernel.Application.Abstractions;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using System;
-using System.Collections.Generic;
-using System.Text;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
+using System.Text;
 
 namespace AgriDrone.SharedInfrastructure.Authentication
 {
@@ -31,11 +28,6 @@ namespace AgriDrone.SharedInfrastructure.Authentication
 
             services.Configure<JwtOptions>(
                 configuration.GetSection(JwtOptions.SectionName));
-
-            services.AddHttpContextAccessor();
-
-            services.AddScoped<ICurrentUser, CurrentUser>();
-            services.AddScoped<ICurrentTenant, CurrentTenant>();
 
             services
                 .AddAuthentication(

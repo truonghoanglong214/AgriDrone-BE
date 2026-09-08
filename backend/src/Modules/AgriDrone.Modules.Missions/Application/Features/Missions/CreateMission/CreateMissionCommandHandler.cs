@@ -27,6 +27,12 @@ internal sealed class CreateMissionCommandHandler(
         CreateMissionCommand request,
         CancellationToken cancellationToken)
     {
+        if (executionContext.TenantId is not Guid tenantId)
+        {
+            return Result.Failure<MissionResponse>(
+                MissionError.CurrentTenantRequired());
+        }
+
         if (executionContext.ActorId is not Guid actorId)
         {
             return Result.Failure<MissionResponse>(
@@ -34,7 +40,7 @@ internal sealed class CreateMissionCommandHandler(
         }
 
         if (!await referenceQuery.IsActiveZoneAsync(
-                request.TenantId,
+                tenantId,
                 request.FarmId,
                 request.ZoneId,
                 cancellationToken))
@@ -46,7 +52,7 @@ internal sealed class CreateMissionCommandHandler(
         if (request.MissionType == MissionType.HealthInspection &&
             request.SourceMapVersionId is Guid sourceMapVersionId &&
             !await referenceQuery.IsConfirmedMapVersionAsync(
-                request.TenantId,
+                tenantId,
                 request.FarmId,
                 request.ZoneId,
                 sourceMapVersionId,
@@ -58,7 +64,7 @@ internal sealed class CreateMissionCommandHandler(
 
         var drone = await droneRepository.GetByIdAsync(
             request.DroneId,
-            request.TenantId,
+            tenantId,
             cancellationToken);
 
         if (drone is null)
@@ -91,7 +97,7 @@ internal sealed class CreateMissionCommandHandler(
         var now = timeProvider.GetUtcNow();
 
         var mission = DroneMission.Create(
-            request.TenantId,
+            tenantId,
             request.FarmId,
             request.ZoneId,
             request.DroneId,

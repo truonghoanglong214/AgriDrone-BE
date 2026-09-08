@@ -18,4 +18,28 @@ public static class FarmZoneError
         AppError.Forbidden(
             "FarmZone.AccessDenied",
             "The user does not have access to the selected farm zone.");
+
+    public static AppError BoundaryOutsideFarm() =>
+        AppError.Validation(
+            "FarmZone.BoundaryOutsideFarm",
+            "The zone boundary must be contained within the farm boundary.");
+
+    public static AppError BoundaryOverlaps() =>
+        AppError.Conflict(
+            "FarmZone.BoundaryOverlaps",
+            "The zone boundary overlaps another active zone in this farm.");
+
+    public static AppError ConcurrentUpdate() =>
+            AppError.Conflict(
+                "FarmZone.ConcurrentUpdate",
+                "The zone was changed by another request. Reload it and try again.");
+
+    public static AppError ActiveDependenciesExist(
+        int activeMissionCount,
+        int openFieldTaskCount) =>
+        AppError.Conflict(
+            "FarmZone.ActiveDependenciesExist",
+            "The zone cannot be archived while active dependencies remain. " +
+            $"Active missions: {activeMissionCount}; " +
+            $"open field tasks: {openFieldTaskCount}.");
 }

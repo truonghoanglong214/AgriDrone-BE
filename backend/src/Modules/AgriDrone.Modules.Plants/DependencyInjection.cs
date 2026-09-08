@@ -1,3 +1,4 @@
+using AgriDrone.IntegrationContracts.Farms;
 using AgriDrone.Modules.Plants.Domain.Conditions;
 using AgriDrone.Modules.Plants.Domain.Diseases;
 using AgriDrone.Modules.Plants.Domain.Mapping;
@@ -5,6 +6,7 @@ using AgriDrone.Modules.Plants.Domain.Plants;
 using AgriDrone.Modules.Plants.Domain.Scans;
 using AgriDrone.Modules.Plants.Domain.Verifications;
 using AgriDrone.Modules.Plants.Infrastructure.Persistence;
+using AgriDrone.Modules.Plants.Infrastructure.Queries;
 using AgriDrone.SharedInfrastructure.Persistence;
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
@@ -55,6 +57,10 @@ public static class DependencyInjection
         services.AddValidatorsFromAssembly(
             assembly,
             includeInternalTypes: true);
+
+        services.AddScoped<
+            IPlantArchiveReferenceQuery,
+            PlantArchiveReferenceQuery>();
 
         return services;
     }

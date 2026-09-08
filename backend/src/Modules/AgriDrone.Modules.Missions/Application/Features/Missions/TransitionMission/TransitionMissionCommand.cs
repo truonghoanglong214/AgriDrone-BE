@@ -6,7 +6,6 @@ namespace AgriDrone.Modules.Missions.Application
     .Features.Missions.TransitionMission;
 
 public sealed record TransitionMissionCommand(
-    Guid TenantId,
     Guid FarmId,
     Guid MissionId,
     MissionStatus TargetStatus,

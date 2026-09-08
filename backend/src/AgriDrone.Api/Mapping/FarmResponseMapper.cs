@@ -35,7 +35,9 @@ internal static class FarmResponseMapper
             farm.areaHectares,
             farm.status,
             farm.createdAt,
-            farm.createdBy);
+            farm.createdBy,
+            farm.updatedAt,
+            farm.version);
 
     public static UpdateFarmDetailResponse ToResponse(UpdateFarmDetailResult farm) =>
         new(

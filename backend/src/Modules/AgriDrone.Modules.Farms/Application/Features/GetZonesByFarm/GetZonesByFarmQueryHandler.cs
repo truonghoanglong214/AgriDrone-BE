@@ -2,8 +2,8 @@ using AgriDrone.Modules.Farms.Application.Abstractions.Queries;
 using AgriDrone.Modules.Farms.Application.Errors;
 using AgriDrone.Modules.Farms.Domain.Farms;
 using AgriDrone.SharedKernel.Application;
-using AgriDrone.SharedKernel.Application.Abstractions;
 using AgriDrone.SharedKernel.Application.Abstractions.Authorization;
+using AgriDrone.SharedKernel.Application.Abstractions.Execution;
 using MediatR;
 
 namespace AgriDrone.Modules.Farms.Application.Features.GetZonesByFarm;
@@ -11,8 +11,7 @@ namespace AgriDrone.Modules.Farms.Application.Features.GetZonesByFarm;
 internal sealed class GetZonesByFarmQueryHandler(
     IFarmRepository farmRepository,
     IFarmZoneQueries farmZoneQueries,
-    ICurrentTenant currentTenant,
-    ICurrentUser currentUser,
+    IExecutionContext executionContext,
     IEffectiveAccessService effectiveAccessService)
     : IRequestHandler<
         GetZonesByFarmQuery,
@@ -22,13 +21,13 @@ internal sealed class GetZonesByFarmQueryHandler(
         GetZonesByFarmQuery request,
         CancellationToken cancellationToken)
     {
-        if (currentTenant.TenantId is not Guid tenantId)
+        if (executionContext.TenantId is not Guid tenantId)
         {
             return Result.Failure<IReadOnlyList<ZoneListItemResponse>>(
                 AuthenticationError.CurrentTenantRequired());
         }
 
-        if (currentUser.UserId is not Guid userId)
+        if (executionContext.ActorId is not Guid userId)
         {
             return Result.Failure<IReadOnlyList<ZoneListItemResponse>>(
                 AuthenticationError.CurrentUserRequired());

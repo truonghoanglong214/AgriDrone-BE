@@ -2,7 +2,7 @@ using AgriDrone.Modules.Identity.Application.Errors;
 using AgriDrone.Modules.Identity.Application.Abstractions.Persistence;
 using AgriDrone.Modules.Identity.Domain.Users;
 using AgriDrone.SharedKernel.Application;
-using AgriDrone.SharedKernel.Application.Abstractions;
+using AgriDrone.SharedKernel.Application.Abstractions.Execution;
 using MediatR;
 using Microsoft.EntityFrameworkCore.Query;
 using System;
@@ -14,12 +14,12 @@ namespace AgriDrone.Modules.Identity.Application.Features.UpdateUser
 {
     internal sealed class UpdateUserCommandHandler(
         IUserRepository userRepository,
-        ICurrentUser currentUser,
+        IExecutionContext executionContext,
         IIdentityUnitOfWork unitOfWork) : IRequestHandler<UpdateUserCommand, Result<UpdateUserResponse>>
     {
         public async Task<Result<UpdateUserResponse>>  Handle(UpdateUserCommand request, CancellationToken cancellationToken)
         {
-            if (currentUser.UserId is not Guid currentUserId)
+            if (executionContext.ActorId is not Guid currentUserId)
                 return Result.Failure<UpdateUserResponse>(AuthenticationError.CurrentUserRequired());
 
             var user = await userRepository.GetByIdAsync(currentUserId, cancellationToken);

@@ -1,8 +1,8 @@
 ﻿using AgriDrone.Modules.Farms.Application.Errors;
 using AgriDrone.Modules.Farms.Domain.Farms;
 using AgriDrone.SharedKernel.Application;
-using AgriDrone.SharedKernel.Application.Abstractions;
 using AgriDrone.SharedKernel.Application.Abstractions.Authorization;
+using AgriDrone.SharedKernel.Application.Abstractions.Execution;
 using MediatR;
 using System;
 using System.Collections.Generic;
@@ -12,18 +12,17 @@ namespace AgriDrone.Modules.Farms.Application.Features.GetFarmById
 {
     internal sealed class GetFarmByIdHandler(
         IFarmRepository farmRepository,
-        ICurrentTenant currentTenant,
-        ICurrentUser currentUser,
+        IExecutionContext executionContext,
         IEffectiveAccessService effectiveAccessService) : IRequestHandler<GetFarmByIdCommand, Result<GetFarmByIdResponse>>
     {
         public async Task<Result<GetFarmByIdResponse>> Handle(GetFarmByIdCommand request, CancellationToken cancellationToken)
         {
-            if(currentTenant.TenantId is not Guid tenantId)
+            if(executionContext.TenantId is not Guid tenantId)
             {
                 return Result.Failure<GetFarmByIdResponse>(AuthenticationError.CurrentTenantRequired());
             }
 
-            if (currentUser.UserId is not Guid userId)
+            if (executionContext.ActorId is not Guid userId)
             {
                 return Result.Failure<GetFarmByIdResponse>(
                     AuthenticationError.CurrentUserRequired());
@@ -59,7 +58,9 @@ namespace AgriDrone.Modules.Farms.Application.Features.GetFarmById
                 farm.AreaHectares,
                 farm.Status,
                 farm.CreatedAt,
-                farm.CreatedBy));
+                farm.CreatedBy,
+                farm.UpdatedAt,
+                farm.Version));
 
         }
     }

@@ -7,9 +7,6 @@ internal sealed class ScheduleMissionCommandValidator
 {
     public ScheduleMissionCommandValidator()
     {
-        RuleFor(command => command.TenantId)
-            .NotEmpty();
-
         RuleFor(command => command.FarmId)
             .NotEmpty();
 

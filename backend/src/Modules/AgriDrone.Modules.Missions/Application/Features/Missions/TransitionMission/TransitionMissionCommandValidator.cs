@@ -9,9 +9,6 @@ internal sealed class TransitionMissionCommandValidator
 {
     public TransitionMissionCommandValidator()
     {
-        RuleFor(command => command.TenantId)
-            .NotEmpty();
-
         RuleFor(command => command.FarmId)
             .NotEmpty();
 

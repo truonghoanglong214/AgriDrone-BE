@@ -8,9 +8,6 @@ internal sealed class GetMissionDetailsQueryValidator
 {
     public GetMissionDetailsQueryValidator()
     {
-        RuleFor(query => query.TenantId)
-            .NotEmpty();
-
         RuleFor(query => query.FarmId)
             .NotEmpty();
 

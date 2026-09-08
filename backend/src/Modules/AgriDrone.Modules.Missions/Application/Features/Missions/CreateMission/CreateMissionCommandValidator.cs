@@ -9,7 +9,6 @@ internal sealed class CreateMissionCommandValidator
 {
     public CreateMissionCommandValidator()
     {
-        RuleFor(command => command.TenantId).NotEmpty();
         RuleFor(command => command.FarmId).NotEmpty();
         RuleFor(command => command.ZoneId).NotEmpty();
         RuleFor(command => command.DroneId).NotEmpty();

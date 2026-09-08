@@ -1,7 +1,6 @@
 using AgriDrone.Api.Contracts.Messaging;
 using AgriDrone.SharedInfrastructure.Authorization;
 using AgriDrone.SharedInfrastructure.Messaging.Recovery;
-using AgriDrone.SharedKernel.Application.Abstractions;
 using AgriDrone.SharedKernel.Application.Abstractions.Execution;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -13,7 +12,6 @@ namespace AgriDrone.Api.Controllers;
 [Authorize(Policy = AccessAuthorizationPolicies.SystemAdmin)]
 public sealed class MessagingOperationsController(
     IMessagingRecoveryService recoveryService,
-    ICurrentUser currentUser,
     IExecutionContext executionContext) : ControllerBase
 {
     /// <summary>Khôi phục một Outbox message bị đánh dấu DEAD.</summary>
@@ -68,7 +66,7 @@ public sealed class MessagingOperationsController(
     }
 
     private Guid RequireActor() =>
-        currentUser.UserId is Guid actorId && actorId != Guid.Empty
+        executionContext.ActorId is Guid actorId && actorId != Guid.Empty
             ? actorId
             : throw new InvalidOperationException(
                 "A System Admin actor is required for messaging recovery.");

@@ -9,9 +9,9 @@ using AgriDrone.Modules.Missions.Application
     .Features.Missions.TransitionMission;
 using AgriDrone.SharedInfrastructure.Authorization;
 using AgriDrone.SharedInfrastructure.Http;
-using AgriDrone.SharedKernel.Application.Abstractions;
 using AgriDrone.SharedKernel.Application
     .Abstractions.Authorization;
+using AgriDrone.SharedKernel.Application.Abstractions.Execution;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -23,7 +23,7 @@ namespace AgriDrone.Api.Controllers;
 public sealed class MissionsController(
     ISender sender,
     IAuthorizationService authorizationService,
-    ICurrentTenant currentTenant)
+    IExecutionContext executionContext)
     : ControllerBase
 {
     /// <summary>Tạo Mission ở trạng thái Draft.</summary>
@@ -47,7 +47,6 @@ public sealed class MissionsController(
         }
 
         var command = new CreateMissionCommand(
-            currentTenant.TenantId!.Value,
             farmId,
             request.ZoneId,
             request.DroneId,
@@ -93,7 +92,6 @@ public sealed class MissionsController(
         }
 
         var command = new ScheduleMissionCommand(
-            currentTenant.TenantId!.Value,
             farmId,
             missionId,
             request.ScheduledAt,
@@ -133,7 +131,6 @@ public sealed class MissionsController(
         }
 
         var command = new TransitionMissionCommand(
-            currentTenant.TenantId!.Value,
             farmId,
             missionId,
             request.TargetStatus,
@@ -171,7 +168,6 @@ public sealed class MissionsController(
         }
 
         var query = new GetMissionDetailsQuery(
-            currentTenant.TenantId!.Value,
             farmId,
             missionId);
 
@@ -187,7 +183,7 @@ public sealed class MissionsController(
     private async Task<IResult?> AuthorizeFarmAsync(
         Guid farmId)
     {
-        if (currentTenant.TenantId is not Guid tenantId)
+        if (executionContext.TenantId is not Guid tenantId)
         {
             return Results.Unauthorized();
         }

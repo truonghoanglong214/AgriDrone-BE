@@ -14,7 +14,7 @@ namespace AgriDrone.Modules.Farms.Infrastructure.Repositories
         {
             var normalizedCode = code.Trim().ToUpperInvariant();
             return context.Farms
-                .AnyAsync(farm => farm.TenantId == tenantId && farm.Code == normalizedCode && farm.DeletedAt != null && (!excludingFarmId.HasValue || farm.Id != excludingFarmId.Value), cancellationToken);
+                .AnyAsync(farm => farm.TenantId == tenantId && farm.Code == normalizedCode && farm.DeletedAt == null && (!excludingFarmId.HasValue || farm.Id != excludingFarmId.Value), cancellationToken);
         }
 
         public void Add(Farm farm)

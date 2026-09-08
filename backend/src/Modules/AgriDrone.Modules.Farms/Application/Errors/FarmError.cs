@@ -31,5 +31,15 @@ namespace AgriDrone.Modules.Farms.Application.Errors
             AppError.Conflict(
                 "Farm.ConcurrentUpdate",
                 "The farm was changed by another request. Reload it and try again.");
+
+        public static AppError ActiveDependenciesExist(
+            int activeZoneCount,
+            int activeMissionCount,
+            int openFieldTaskCount) =>
+            AppError.Conflict(
+                "Farm.ActiveDependenciesExist",
+                "The farm cannot be archived while active dependencies remain. " +
+                $"Active zones: {activeZoneCount}; active missions: {activeMissionCount}; " +
+                $"open field tasks: {openFieldTaskCount}.");
     }
 }

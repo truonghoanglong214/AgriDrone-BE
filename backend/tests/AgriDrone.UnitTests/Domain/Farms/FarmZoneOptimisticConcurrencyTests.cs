@@ -23,12 +23,23 @@ public sealed class FarmZoneOptimisticConcurrencyTests
         var zone = CreateZone();
 
         zone.UpdateDetails(
-            "ZONE-002",
             "Updated zone",
             boundary: null,
             areaHectares: 2.5m,
             CreatedAt.AddMinutes(1));
 
+        Assert.Equal(2, zone.Version);
+    }
+
+    [Fact]
+    public void ArchiveIncrementsVersionOnlyWhenStateChanges()
+    {
+        var zone = CreateZone();
+
+        Assert.True(zone.Archive(CreatedAt.AddMinutes(1)));
+        Assert.Equal(2, zone.Version);
+
+        Assert.False(zone.Archive(CreatedAt.AddMinutes(2)));
         Assert.Equal(2, zone.Version);
     }
 

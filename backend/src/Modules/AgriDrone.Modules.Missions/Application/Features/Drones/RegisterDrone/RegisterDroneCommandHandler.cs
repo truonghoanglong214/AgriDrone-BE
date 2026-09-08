@@ -3,7 +3,6 @@ using AgriDrone.Modules.Missions.Application.Errors;
 using AgriDrone.Modules.Missions.Domain.Drones;
 using AgriDrone.SharedInfrastructure.Auditing;
 using AgriDrone.SharedKernel.Application;
-using AgriDrone.SharedKernel.Application.Abstractions;
 using AgriDrone.SharedKernel.Application.Abstractions.Execution;
 using MediatR;
 using System.Text.Json;
@@ -16,8 +15,7 @@ internal sealed class RegisterDroneCommandHandler(
     IMissionsUnitOfWork unitOfWork,
     IAuditWriter auditWriter,
     IExecutionContext executionContext,
-    TimeProvider timeProvider,
-    ICurrentUser currentUser)
+    TimeProvider timeProvider)
     : IRequestHandler<
         RegisterDroneCommand,
         Result<RegisterDroneResponse>>
@@ -26,7 +24,7 @@ internal sealed class RegisterDroneCommandHandler(
         RegisterDroneCommand request,
         CancellationToken cancellationToken)
     {
-        if (currentUser.UserId is not Guid userId)
+        if (executionContext.ActorId is not Guid userId)
         {
             return Result.Failure<RegisterDroneResponse>(
                 DroneError.CurrentUserRequired());

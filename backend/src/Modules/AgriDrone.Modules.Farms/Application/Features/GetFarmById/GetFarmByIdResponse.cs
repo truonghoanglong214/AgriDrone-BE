@@ -17,5 +17,7 @@ namespace AgriDrone.Modules.Farms.Application.Features.GetFarmById
         decimal? areaHectares,
         GeneralStatus status,
         DateTimeOffset createdAt,
-        Guid createdBy);
+        Guid createdBy,
+        DateTimeOffset updatedAt,
+        long version);
 }

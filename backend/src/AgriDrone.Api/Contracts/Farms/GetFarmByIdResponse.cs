@@ -13,4 +13,6 @@ public sealed record GetFarmByIdResponse(
     decimal? AreaHectares,
     GeneralStatus Status,
     DateTimeOffset CreatedAt,
-    Guid CreatedBy);
+    Guid CreatedBy,
+    DateTimeOffset UpdatedAt,
+    long Version);

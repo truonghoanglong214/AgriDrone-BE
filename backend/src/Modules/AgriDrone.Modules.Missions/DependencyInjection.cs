@@ -1,3 +1,4 @@
+using AgriDrone.IntegrationContracts.Farms;
 using AgriDrone.IntegrationContracts.Health;
 using AgriDrone.IntegrationContracts.Mapping;
 using AgriDrone.IntegrationContracts.Messaging;
@@ -96,6 +97,10 @@ public static class DependencyInjection
 
         services.AddScoped<
             IMissionQueries, MissionQueries>();
+
+        services.AddScoped<
+            IMissionArchiveReferenceQuery,
+            MissionArchiveReferenceQuery>();
 
         services.AddIntegrationConsumer<
             HealthReviewStateChangedProcessor>(

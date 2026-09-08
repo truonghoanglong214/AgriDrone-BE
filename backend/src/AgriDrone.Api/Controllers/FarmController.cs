@@ -13,6 +13,9 @@ using AgriDrone.Modules.Farms.Application.Features.CreateFarm;
 using AgriDrone.Modules.Identity.Application.Features.RegisterUser;
 using AgriDrone.Modules.Farms.Application.Features.GetFarmById;
 using AgriDrone.Modules.Farms.Application.Features.UpdateFarmDetail;
+using AgriDrone.Modules.Farms.Application.Features.UpdateZone;
+using AgriDrone.Modules.Farms.Application.Features.ArchiveFarm;
+using AgriDrone.Modules.Farms.Application.Features.ArchiveZone;
 using AgriDrone.Api.Contracts.Zones;
 using AgriDrone.Modules.Farms.Application.Features.CreateZone;
 using AgriDrone.Modules.Farms.Application.Features.GetZoneById;
@@ -166,6 +169,84 @@ namespace AgriDrone.Api.Controllers
             return result.ToHttpResult(
                 HttpContext,
                 zone => Results.Ok(FarmZoneResponseMapper.ToResponse(zone)));
+        }
+
+        /// <summary>Cập nhật thông tin một zone.</summary>
+        /// <remarks>
+        /// Owner hoặc Farm Manager có quyền trên đúng zone được phép cập nhật tên,
+        /// boundary và diện tích. ExpectedVersion ngăn ghi đè thay đổi đồng thời.
+        /// </remarks>
+        [HttpPut("{farmId:guid}/zones/{zoneId:guid}")]
+        [Authorize(Policy = AccessAuthorizationPolicies.TenantMember)]
+        public async Task<IResult> UpdateZone(
+            [FromRoute] Guid farmId,
+            [FromRoute] Guid zoneId,
+            [FromBody] UpdateZoneRequest request,
+            CancellationToken cancellationToken)
+        {
+            var command = new UpdateZoneCommand(
+                farmId,
+                zoneId,
+                request.Name,
+                GeoJsonGeometryMapper.ToPolygon(request.Boundary),
+                request.AreaHectares,
+                request.ExpectedVersion);
+
+            var result = await sender.Send(command, cancellationToken);
+
+            return result.ToHttpResult(
+                HttpContext,
+                zone => Results.Ok(FarmZoneResponseMapper.ToResponse(zone)));
+        }
+
+        /// <summary>Archive một zone và giữ nguyên lịch sử liên quan.</summary>
+        /// <remarks>
+        /// Chỉ Tenant Owner được phép thực hiện. Yêu cầu bị từ chối nếu zone còn
+        /// Mission đang hoạt động hoặc Field Task chưa đóng.
+        /// </remarks>
+        [HttpPut("{farmId:guid}/zones/{zoneId:guid}/archive")]
+        [Authorize(Policy = AccessAuthorizationPolicies.TenantOwner)]
+        public async Task<IResult> ArchiveZone(
+            [FromRoute] Guid farmId,
+            [FromRoute] Guid zoneId,
+            [FromBody] ArchiveZoneRequest request,
+            CancellationToken cancellationToken)
+        {
+            var result = await sender.Send(
+                new ArchiveZoneCommand(
+                    farmId,
+                    zoneId,
+                    request.ExpectedVersion,
+                    request.Reason),
+                cancellationToken);
+
+            return result.ToHttpResult(
+                HttpContext,
+                () => Results.NoContent());
+        }
+
+        /// <summary>Archive một farm và giữ nguyên lịch sử liên quan.</summary>
+        /// <remarks>
+        /// Chỉ Tenant Owner được phép thực hiện. Farm chỉ được archive khi không
+        /// còn Zone, Mission hoặc Field Task đang hoạt động.
+        /// </remarks>
+        [HttpPut("{farmId:guid}/archive")]
+        [Authorize(Policy = AccessAuthorizationPolicies.TenantOwner)]
+        public async Task<IResult> ArchiveFarm(
+            [FromRoute] Guid farmId,
+            [FromBody] ArchiveFarmRequest request,
+            CancellationToken cancellationToken)
+        {
+            var result = await sender.Send(
+                new ArchiveFarmCommand(
+                    farmId,
+                    request.ExpectedVersion,
+                    request.Reason),
+                cancellationToken);
+
+            return result.ToHttpResult(
+                HttpContext,
+                () => Results.NoContent());
         }
 
         /// <summary>Gán Tenant Admin quản lý farm.</summary>

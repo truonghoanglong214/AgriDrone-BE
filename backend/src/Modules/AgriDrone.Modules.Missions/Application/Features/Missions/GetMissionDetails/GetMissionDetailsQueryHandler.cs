@@ -2,13 +2,15 @@
 using AgriDrone.Modules.Missions.Application.Abstractions.Missions;
 using AgriDrone.Modules.Missions.Application.Errors;
 using AgriDrone.SharedKernel.Application;
+using AgriDrone.SharedKernel.Application.Abstractions.Execution;
 using MediatR;
 
 namespace AgriDrone.Modules.Missions.Application
     .Features.Missions.GetMissionDetails;
 
 internal sealed class GetMissionDetailsQueryHandler(
-    IMissionQueries missionQueries)
+    IMissionQueries missionQueries,
+    IExecutionContext executionContext)
     : IRequestHandler<
         GetMissionDetailsQuery,
         Result<MissionResponse>>
@@ -17,8 +19,14 @@ internal sealed class GetMissionDetailsQueryHandler(
         GetMissionDetailsQuery request,
         CancellationToken cancellationToken)
     {
+        if (executionContext.TenantId is not Guid tenantId)
+        {
+            return Result.Failure<MissionResponse>(
+                MissionError.CurrentTenantRequired());
+        }
+
         var mission = await missionQueries.GetByIdAsync(
-            request.TenantId,
+            tenantId,
             request.FarmId,
             request.MissionId,
             cancellationToken);

@@ -79,20 +79,51 @@ public sealed class FarmZone : Entity
             createdAt);
     }
 
-    public void UpdateDetails(string code,
+    public void UpdateDetails(
         string name,
         Polygon? boundary,
         decimal? areaHectares,
         DateTimeOffset updateAt)
     {
         DomainGuard.Utc(updateAt);
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
-        Code = code;
+        if (areaHectares < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(areaHectares));
+        }
+
         Name = name;
         Boundary = boundary;
         AreaHectares = areaHectares;
         UpdatedAt = updateAt;
         Version++;
     }
+
+    public bool Archive(DateTimeOffset archivedAt)
+    {
+        DomainGuard.Utc(archivedAt);
+
+        if (DeletedAt.HasValue)
+        {
+            return false;
+        }
+
+        if (archivedAt < CreatedAt)
+        {
+            throw new ArgumentException(
+                "ArchivedAt cannot be earlier than CreatedAt.",
+                nameof(archivedAt));
+        }
+
+        Status = GeneralStatus.Inactive;
+        DeletedAt = archivedAt;
+        UpdatedAt = archivedAt;
+        Version++;
+
+        return true;
+    }
+
+    public bool IsArchived => DeletedAt.HasValue;
 
 }

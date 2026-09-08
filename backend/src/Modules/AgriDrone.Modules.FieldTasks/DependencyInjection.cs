@@ -1,6 +1,8 @@
+using AgriDrone.IntegrationContracts.Farms;
 using AgriDrone.Modules.FieldTasks.Domain.FieldTasks;
 using AgriDrone.Modules.FieldTasks.Domain.Updates;
 using AgriDrone.Modules.FieldTasks.Infrastructure.Persistence;
+using AgriDrone.Modules.FieldTasks.Infrastructure.Queries;
 using AgriDrone.SharedInfrastructure.Persistence;
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
@@ -34,6 +36,10 @@ public static class DependencyInjection
         services.AddValidatorsFromAssembly(
             assembly,
             includeInternalTypes: true);
+
+        services.AddScoped<
+            IFieldTaskArchiveReferenceQuery,
+            FieldTaskArchiveReferenceQuery>();
 
         return services;
     }

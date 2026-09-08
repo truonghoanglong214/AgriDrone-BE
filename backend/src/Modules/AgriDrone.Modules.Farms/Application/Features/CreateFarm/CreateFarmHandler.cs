@@ -2,8 +2,8 @@
 using AgriDrone.Modules.Farms.Application.Errors;
 using AgriDrone.Modules.Farms.Domain.Farms;
 using AgriDrone.SharedKernel.Application;
-using AgriDrone.SharedKernel.Application.Abstractions;
 using AgriDrone.SharedKernel.Application.Abstractions.Authorization;
+using AgriDrone.SharedKernel.Application.Abstractions.Execution;
 using AgriDrone.SharedKernel.Domain;
 using MediatR;
 using System;
@@ -14,18 +14,17 @@ namespace AgriDrone.Modules.Farms.Application.Features.CreateFarm
 {
     internal sealed class CreateFarmHandler(
         IFarmRepository farmRepository,
-        ICurrentTenant currentTenant,
-        ICurrentUser currentUser,
+        IExecutionContext executionContext,
         IFarmUnitOfWork unitOfWork,
         IEffectiveAccessService effectiveAccessService,
         TimeProvider timeProvider) : IRequestHandler<CreateFarmCommand, Result<CreateFarmResponse>>
     {
         public async Task<Result<CreateFarmResponse>> Handle(CreateFarmCommand request, CancellationToken cancellationToken)
         {
-            if (currentTenant.TenantId is not Guid tenantId)
+            if (executionContext.TenantId is not Guid tenantId)
                 return Result.Failure<CreateFarmResponse>(AuthenticationError.CurrentTenantRequired());
 
-            if (currentUser.UserId is not Guid userId)
+            if (executionContext.ActorId is not Guid userId)
                 return Result.Failure<CreateFarmResponse>(AuthenticationError.CurrentUserRequired());
 
             var access = await effectiveAccessService.CheckTenantAsync(

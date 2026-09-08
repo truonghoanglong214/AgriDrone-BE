@@ -7,7 +7,6 @@ namespace AgriDrone.Modules.Missions.Application
     .Features.Missions.CreateMission;
 
 public sealed record CreateMissionCommand(
-    Guid TenantId,
     Guid FarmId,
     Guid ZoneId,
     Guid DroneId,

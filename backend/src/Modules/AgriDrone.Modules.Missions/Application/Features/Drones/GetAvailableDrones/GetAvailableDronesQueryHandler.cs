@@ -1,7 +1,7 @@
 ﻿using AgriDrone.Modules.Missions.Application.Abstractions;
 using AgriDrone.Modules.Missions.Application.Errors;
 using AgriDrone.SharedKernel.Application;
-using AgriDrone.SharedKernel.Application.Abstractions;
+using AgriDrone.SharedKernel.Application.Abstractions.Execution;
 using MediatR;
 
 namespace AgriDrone.Modules.Missions.Application
@@ -9,7 +9,7 @@ namespace AgriDrone.Modules.Missions.Application
 
 internal sealed class GetAvailableDronesQueryHandler(
     IDroneQueries droneQueries,
-    ICurrentTenant currentTenant)
+    IExecutionContext executionContext)
     : IRequestHandler<
         GetAvailableDronesQuery,
         Result<IReadOnlyList<AvailableDroneResponse>>>
@@ -19,7 +19,7 @@ internal sealed class GetAvailableDronesQueryHandler(
         GetAvailableDronesQuery request,
         CancellationToken cancellationToken)
     {
-        if (currentTenant.TenantId is not Guid tenantId)
+        if (executionContext.TenantId is not Guid tenantId)
         {
             return Result.Failure<
                 IReadOnlyList<AvailableDroneResponse>>(

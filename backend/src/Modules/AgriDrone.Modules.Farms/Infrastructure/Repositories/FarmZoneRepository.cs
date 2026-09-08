@@ -1,6 +1,7 @@
 ﻿using AgriDrone.Modules.Farms.Domain.Zones;
 using AgriDrone.Modules.Farms.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using NetTopologySuite.Geometries;
 using System;
 using System.Collections.Generic;
 using System.Text;
@@ -25,10 +26,39 @@ namespace AgriDrone.Modules.Farms.Infrastructure.Repositories
                 farmZone.Id != excludingZoneId), cancellationToken);
         }
 
+        public Task<bool> ActiveBoundaryOverlapsAsync(
+            Guid tenantId,
+            Guid farmId,
+            Polygon boundary,
+            Guid? excludingZoneId = null,
+            CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(boundary);
+
+            return context.FarmZones.AnyAsync(
+                farmZone =>
+                    farmZone.Farm.TenantId == tenantId &&
+                    farmZone.Farm.DeletedAt == null &&
+                    farmZone.FarmId == farmId &&
+                    farmZone.DeletedAt == null &&
+                    farmZone.Boundary != null &&
+                    (!excludingZoneId.HasValue ||
+                     farmZone.Id != excludingZoneId.Value) &&
+                    farmZone.Boundary.Intersects(boundary) &&
+                    !farmZone.Boundary.Touches(boundary),
+                cancellationToken);
+        }
+
         public void Add(FarmZone zone)
         {
             ArgumentNullException.ThrowIfNull(zone);
             context.FarmZones.Add(zone);
+        }
+
+        public void Update(FarmZone zone)
+        {
+            ArgumentNullException.ThrowIfNull(zone);
+            context.FarmZones.Update(zone);
         }
 
         public Task<FarmZone?> GetByCodeAsync(Guid tenantId, Guid farmId, string code, CancellationToken cancellationToken = default)

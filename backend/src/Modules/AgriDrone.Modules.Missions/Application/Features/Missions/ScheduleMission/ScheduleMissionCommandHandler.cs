@@ -25,6 +25,12 @@ internal sealed class ScheduleMissionCommandHandler(
         ScheduleMissionCommand request,
         CancellationToken cancellationToken)
     {
+        if (executionContext.TenantId is not Guid tenantId)
+        {
+            return Result.Failure<MissionResponse>(
+                MissionError.CurrentTenantRequired());
+        }
+
         if (executionContext.ActorId is not Guid actorId)
         {
             return Result.Failure<MissionResponse>(
@@ -33,7 +39,7 @@ internal sealed class ScheduleMissionCommandHandler(
 
         var mission = await missionRepository.GetByIdAsync(
             request.MissionId,
-            request.TenantId,
+            tenantId,
             request.FarmId,
             cancellationToken);
 

@@ -7,8 +7,8 @@ using AgriDrone.Modules.Missions.Application
     .Features.Drones.RegisterDrone;
 using AgriDrone.SharedInfrastructure.Authorization;
 using AgriDrone.SharedInfrastructure.Http;
-using AgriDrone.SharedKernel.Application.Abstractions;
 using AgriDrone.SharedKernel.Application.Abstractions.Authorization;
+using AgriDrone.SharedKernel.Application.Abstractions.Execution;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -19,7 +19,7 @@ namespace AgriDrone.Api.Controllers;
 public sealed class DronesController(
     ISender sender,
     IAuthorizationService authorizationService,
-    ICurrentTenant currentTenant) : ControllerBase
+    IExecutionContext executionContext) : ControllerBase
 {
     /// <summary>Đăng ký drone cho tenant.</summary>
     /// <remarks>
@@ -103,7 +103,7 @@ public sealed class DronesController(
         [FromQuery] GetAvailableDronesRequest request,
         CancellationToken cancellationToken)
     {
-        if (currentTenant.TenantId is not Guid tenantId)
+        if (executionContext.TenantId is not Guid tenantId)
         {
             return Results.Unauthorized();
         }

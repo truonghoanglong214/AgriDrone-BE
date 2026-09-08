@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
+using NetTopologySuite.Geometries;
 
 namespace AgriDrone.Modules.Farms.Domain.Zones
 {
@@ -25,6 +26,14 @@ namespace AgriDrone.Modules.Farms.Domain.Zones
             Guid? excludingZoneId = null,
             CancellationToken cancellationToken = default);
 
+        Task<bool> ActiveBoundaryOverlapsAsync(
+            Guid tenantId,
+            Guid farmId,
+            Polygon boundary,
+            Guid? excludingZoneId = null,
+            CancellationToken cancellationToken = default);
+
         void Add(FarmZone zone);
+        void Update(FarmZone zone);
     }
 }

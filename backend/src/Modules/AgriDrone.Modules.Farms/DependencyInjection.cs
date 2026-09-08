@@ -42,6 +42,9 @@ public static class DependencyInjection
         services.AddScoped<IFarmZoneRepository, FarmZoneRepository>();
         services.AddScoped<IFarmZoneQueries, FarmZoneQueries>();
         services.AddScoped<
+            IFarmArchiveDependencyQuery,
+            FarmArchiveDependencyQuery>();
+        services.AddScoped<
             IMissionPlanningReferenceQuery,
             MissionPlanningReferenceQuery>();
         services.AddScoped<

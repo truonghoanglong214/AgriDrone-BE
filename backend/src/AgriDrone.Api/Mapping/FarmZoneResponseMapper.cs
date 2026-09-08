@@ -1,6 +1,7 @@
 using AgriDrone.Api.Contracts.Zones;
 using CreateZoneResult = AgriDrone.Modules.Farms.Application.Features.CreateZone.CreateZoneResponse;
 using GetZoneByIdResult = AgriDrone.Modules.Farms.Application.Features.GetZoneById.GetZoneByIdResponse;
+using UpdateZoneResult = AgriDrone.Modules.Farms.Application.Features.UpdateZone.UpdateZoneResponse;
 using ZoneListItemResult = AgriDrone.Modules.Farms.Application.Features.GetZonesByFarm.ZoneListItemResponse;
 
 namespace AgriDrone.Api.Mapping;
@@ -36,6 +37,18 @@ internal static class FarmZoneResponseMapper
             zone.Version,
             zone.CreatedAt,
             zone.CreatedBy,
+            zone.UpdatedAt);
+
+    public static UpdateZoneApiResponse ToResponse(UpdateZoneResult zone) =>
+        new(
+            zone.ZoneId,
+            zone.FarmId,
+            zone.Code,
+            zone.Name,
+            GeoJsonGeometryMapper.FromPolygon(zone.Boundary),
+            zone.AreaHectares,
+            zone.Status,
+            zone.Version,
             zone.UpdatedAt);
 
     private static ZoneListItemApiResponse ToResponse(ZoneListItemResult zone) =>
