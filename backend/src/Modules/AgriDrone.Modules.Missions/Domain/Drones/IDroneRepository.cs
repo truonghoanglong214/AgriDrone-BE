@@ -7,6 +7,10 @@ public interface IDroneRepository
         Guid tenantId,
         CancellationToken cancellationToken = default);
 
+    Task<bool> HasBlockingMissionAsync(
+    Guid droneId,
+    CancellationToken cancellationToken = default);
+
     Task<bool> CodeExistsAsync(
         Guid tenantId,
         string code,

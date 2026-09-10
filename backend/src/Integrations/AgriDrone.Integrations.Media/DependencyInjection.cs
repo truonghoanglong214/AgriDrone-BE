@@ -32,6 +32,9 @@ public static class DependencyInjection
             .Get<MinioStorageOptions>()
             ?? new MinioStorageOptions();
 
+        services.TryAddSingleton<
+            IChecksumCalculator, Sha256ChecksumCalculator>();
+
         if (!configuredOptions.Enabled)
         {
             return services;

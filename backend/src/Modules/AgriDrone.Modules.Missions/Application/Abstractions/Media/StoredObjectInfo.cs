@@ -2,6 +2,8 @@
 
 public sealed record StoredObjectInfo(
     string StorageUri,
+    string Provider,
+    string StorageKey,
     string MimeType,
     long FileSizeBytes,
     string? ChecksumAlgorithm,

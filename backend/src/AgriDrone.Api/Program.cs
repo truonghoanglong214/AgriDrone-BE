@@ -18,10 +18,27 @@ using AgriDrone.SharedInfrastructure.Validation;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.OpenApi;
 using System.Reflection;
+using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddControllers();
+builder.Services
+    .AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.Converters.Add(
+            new JsonStringEnumConverter(
+                namingPolicy: null,
+                allowIntegerValues: false));
+    });
+
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    options.SerializerOptions.Converters.Add(
+        new JsonStringEnumConverter(
+            namingPolicy: null,
+            allowIntegerValues: false));
+});
 
 // Swagger
 builder.Services.AddEndpointsApiExplorer();

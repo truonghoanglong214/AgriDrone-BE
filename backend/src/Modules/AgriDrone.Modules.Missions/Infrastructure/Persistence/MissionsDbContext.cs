@@ -1,4 +1,6 @@
+using AgriDrone.Modules.Missions.Application.Abstractions.Media;
 using AgriDrone.Modules.Missions.Application.Abstractions.Missions;
+using AgriDrone.Modules.Missions.Application.Abstractions.Telemetry;
 using AgriDrone.Modules.Missions.Domain.Drones;
 using AgriDrone.Modules.Missions.Domain.Media;
 using AgriDrone.Modules.Missions.Domain.Missions;
@@ -24,6 +26,18 @@ internal sealed class MissionsDbContext(
 
     private const string MissionFarmCodeConstraint =
         "uq_drone_missions_farm_code";
+
+    private const string TelemetryImportOperationConstraint =
+    "uq_telemetry_imports_operation";
+
+    private const string TelemetryImportMissionConstraint =
+        "uq_telemetry_imports_mission";
+
+    private const string TelemetrySequenceConstraint =
+        "uq_mission_telemetry_mission_sequence";
+
+    private const string TelemetryRecordedAtConstraint =
+        "uq_mission_telemetry_mission_recorded_at";
 
     public DbSet<Drone> Drones => Set<Drone>();
 
@@ -66,12 +80,14 @@ internal sealed class MissionsDbContext(
 
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 
+    public DbSet<MissionTelemetryImport> MissionTelemetryImports => Set<MissionTelemetryImport>();
+
     public void AddAuditLog(AuditLog auditLog)
     {
         ArgumentNullException.ThrowIfNull(auditLog);
         AuditLogs.Add(auditLog);
     }
-
+    public DbSet<MediaUploadSession> MediaUploadSessions => Set<MediaUploadSession>();
     public override async Task<int> SaveChangesAsync(
     CancellationToken cancellationToken = default)
     {
@@ -108,6 +124,37 @@ internal sealed class MissionsDbContext(
         {
             throw new MissionCodeConflictException(exception);
         }
+        catch (DbUpdateConcurrencyException exception)
+            when (exception.Entries.Any(
+        entry => entry.Entity is MediaUploadSession))
+        {
+            throw new UploadSessionConcurrencyException(exception);
+        }
+        catch (DbUpdateException exception)
+            when (exception.InnerException is PostgresException
+            {
+                SqlState: PostgresErrorCodes.UniqueViolation,
+                ConstraintName: "uq_upload_sessions_operation"
+            })
+        {
+            throw new UploadOperationConflictException(exception);
+        }
+
+        catch (DbUpdateException exception)
+            when (exception.InnerException is PostgresException
+            {
+                SqlState: PostgresErrorCodes.UniqueViolation,
+                ConstraintName:
+                    TelemetryImportOperationConstraint or
+                    TelemetryImportMissionConstraint or
+                    TelemetrySequenceConstraint or
+                    TelemetryRecordedAtConstraint
+            })
+        {
+            throw new TelemetryImportConflictException(
+                exception);
+        }
+
     }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
