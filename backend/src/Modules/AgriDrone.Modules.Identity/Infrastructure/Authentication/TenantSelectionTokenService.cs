@@ -52,7 +52,12 @@ internal sealed class TenantSelectionTokenService(
 
         try
         {
-            var principal = new JwtSecurityTokenHandler().ValidateToken(
+            var tokenHandler = new JwtSecurityTokenHandler
+            {
+                MapInboundClaims = false
+            };
+
+            var principal = tokenHandler.ValidateToken(
                 token,
                 new TokenValidationParameters
                 {
