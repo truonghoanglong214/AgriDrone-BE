@@ -19,7 +19,5 @@ public sealed record ActivateDependencySummary(
     int ActiveMissionCount,
     int OpenFieldTaskCount)
 {
-    public bool HasAny =>
-        DeactiveZoneCount > 0 ||
-        DeactiveMissionCount > 0;
+   
 }
