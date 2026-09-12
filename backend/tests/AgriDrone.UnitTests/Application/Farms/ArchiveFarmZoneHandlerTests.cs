@@ -28,8 +28,7 @@ public sealed class ArchiveFarmZoneHandlerTests
             new ArchiveZoneCommand(
                 fixture.Farm.Id,
                 fixture.Zone.Id,
-                fixture.Zone.Version,
-                "No longer cultivated"),
+                fixture.Zone.Version),
             CancellationToken.None);
 
         Assert.True(result.IsSuccess);
@@ -53,8 +52,7 @@ public sealed class ArchiveFarmZoneHandlerTests
             new ArchiveZoneCommand(
                 fixture.Farm.Id,
                 fixture.Zone.Id,
-                fixture.Zone.Version,
-                "No longer cultivated"),
+                fixture.Zone.Version),
             CancellationToken.None);
 
         Assert.True(result.IsFailure);
@@ -76,8 +74,7 @@ public sealed class ArchiveFarmZoneHandlerTests
             new ArchiveZoneCommand(
                 fixture.Farm.Id,
                 fixture.Zone.Id,
-                fixture.Zone.Version,
-                "No longer cultivated"),
+                fixture.Zone.Version),
             CancellationToken.None);
 
         Assert.True(result.IsFailure);
@@ -94,8 +91,7 @@ public sealed class ArchiveFarmZoneHandlerTests
         var result = await fixture.FarmHandler.Handle(
             new ArchiveFarmCommand(
                 fixture.Farm.Id,
-                fixture.Farm.Version,
-                "Farm closed"),
+                fixture.Farm.Version),
             CancellationToken.None);
 
         Assert.True(result.IsSuccess);
@@ -120,8 +116,7 @@ public sealed class ArchiveFarmZoneHandlerTests
         var result = await fixture.FarmHandler.Handle(
             new ArchiveFarmCommand(
                 fixture.Farm.Id,
-                fixture.Farm.Version,
-                "Farm closed"),
+                fixture.Farm.Version),
             CancellationToken.None);
 
         Assert.True(result.IsFailure);
@@ -138,8 +133,7 @@ public sealed class ArchiveFarmZoneHandlerTests
         var result = await fixture.FarmHandler.Handle(
             new ArchiveFarmCommand(
                 fixture.Farm.Id,
-                ExpectedVersion: 99,
-                "Farm closed"),
+                ExpectedVersion: 99),
             CancellationToken.None);
 
         Assert.True(result.IsFailure);
