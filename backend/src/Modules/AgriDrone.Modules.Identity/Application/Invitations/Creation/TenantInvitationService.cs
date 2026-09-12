@@ -130,8 +130,6 @@ internal sealed class TenantInvitationService(
 
             pendingInvitation.MarkExpired(now);
 
-            // Free the filtered unique index before inserting its replacement.
-            // The outer transaction keeps the update and insert atomic.
             await unitOfWork.SaveChangesAsync(cancellationToken);
         }
 
@@ -150,11 +148,22 @@ internal sealed class TenantInvitationService(
 
         tenantInvitationRepository.Add(invitation);
 
-        var payload = new TenantInvitationEmailRequestedV1(
-            invitation.Id,
-            token.PlainTextToken);
+        var payload = new EmailNotificationRequestedV1(
+            NotificationId: invitation.Id,
+            TemplateKey: EmailTemplateKeys.TenantInvitation,
+            Recipients: [new EmailRecipientV1(invitation.Email)],
+            Variables: new Dictionary<string, string>
+            {
+                [EmailTemplateVariableKeys.TenantName] = tenant.Name,
+                [EmailTemplateVariableKeys.RoleName] =
+                    GetRoleDisplayName(invitation.Role),
+                [EmailTemplateVariableKeys.ActionUrl] =
+                    BuildAcceptUrl(token.PlainTextToken),
+                [EmailTemplateVariableKeys.ExpiresAt] =
+                    invitation.ExpiresAt.ToString("O")
+            });
         var envelope = IntegrationEventEnvelopeFactory.Create(
-            IntegrationEventDescriptors.TenantInvitationEmailRequestedV1,
+            IntegrationEventDescriptors.EmailNotificationRequestedV1,
             messageId: Guid.NewGuid(),
             correlationId: executionContext.CorrelationId,
             tenantId: request.TenantId,
@@ -174,4 +183,26 @@ internal sealed class TenantInvitationService(
                 invitation.Email,
                 invitation.ExpiresAt));
     }
+
+    private string BuildAcceptUrl(string plainTextToken)
+    {
+        var separator = _invitationOptions.AcceptUrl.Contains('?')
+            ? '&'
+            : '?';
+
+        return $"{_invitationOptions.AcceptUrl}{separator}token=" +
+               Uri.EscapeDataString(plainTextToken);
+    }
+
+    private static string GetRoleDisplayName(TenantMemberRole role) =>
+        role switch
+        {
+            TenantMemberRole.Owner => "Tenant Owner",
+            TenantMemberRole.TenantAdmin => "Tenant Admin",
+            TenantMemberRole.Member => "Tenant Member",
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(role),
+                role,
+                "Unsupported tenant role.")
+        };
 }

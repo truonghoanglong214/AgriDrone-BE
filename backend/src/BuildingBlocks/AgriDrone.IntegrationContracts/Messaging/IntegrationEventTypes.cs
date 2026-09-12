@@ -15,6 +15,9 @@ namespace AgriDrone.IntegrationContracts.Messaging
         public const string TenantInvitationEmailRequestedV1 =
             "identity.tenant-invitation-email-requested.v1";
 
+        public const string EmailNotificationRequestedV1 =
+            "notification.email-requested.v1";
+
         public const string HealthObservationsReadyV1 =
             "health.observations-ready.v1";
 

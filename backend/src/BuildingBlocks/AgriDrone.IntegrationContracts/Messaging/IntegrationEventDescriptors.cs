@@ -27,6 +27,13 @@ public static class IntegrationEventDescriptors
             IntegrationSchemaVersions.V1,
             RequiresActorId: true);
 
+    public static IntegrationEventDescriptor<EmailNotificationRequestedV1>
+        EmailNotificationRequestedV1 { get; } =
+        new(
+            IntegrationEventTypes.EmailNotificationRequestedV1,
+            IntegrationSchemaVersions.V1,
+            RequiresActorId: false);
+
     public static IntegrationEventDescriptor<HealthObservationsReadyV1>
         HealthObservationsReadyV1
         { get; } =

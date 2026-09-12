@@ -74,6 +74,12 @@ internal sealed partial class SmtpEmailSender(
     private MimeMessage CreateMimeMessage(EmailMessage message)
     {
         var mimeMessage = new MimeMessage();
+
+        if (!string.IsNullOrWhiteSpace(message.MessageId))
+        {
+            mimeMessage.MessageId = message.MessageId;
+        }
+
         mimeMessage.From.Add(new MailboxAddress(_options.FromName, _options.FromAddress));
         AddRecipients(mimeMessage.To, message.To);
         AddRecipients(mimeMessage.Cc, message.Cc);
