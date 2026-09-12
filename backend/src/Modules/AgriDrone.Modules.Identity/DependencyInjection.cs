@@ -53,6 +53,11 @@ public static class DependencyInjection
             .ValidateOnStart();
 
         services
+            .AddOptions<TenantRegistrationOptions>()
+            .Bind(configuration.GetSection(TenantRegistrationOptions.SectionName))
+            .ValidateOnStart();
+
+        services
             .AddOptions<PasswordResetOptions>()
             .Bind(configuration.GetSection(PasswordResetOptions.SectionName))
             .ValidateOnStart();
@@ -69,6 +74,10 @@ public static class DependencyInjection
         services.AddSingleton<
             IValidateOptions<TenantInvitationOptions>,
             TenantInvitationOptionsValidator>();
+
+        services.AddSingleton<
+            IValidateOptions<TenantRegistrationOptions>,
+            TenantRegistrationOptionsValidator>();
 
         services.AddSingleton<
             IValidateOptions<PasswordResetOptions>,

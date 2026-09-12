@@ -47,11 +47,31 @@ public sealed class TenantInvitationServiceTests
         Assert.Equal(1, fixture.UnitOfWork.TransactionCount);
 
         var envelope = Assert.IsType<
-            IntegrationEventEnvelope<TenantInvitationEmailRequestedV1>>(
+            IntegrationEventEnvelope<EmailNotificationRequestedV1>>(
             fixture.Outbox.Envelope);
-        Assert.Equal(invitation.Id, envelope.Payload.InvitationId);
-        Assert.Equal(FakeInvitationTokenService.PlainTextToken,
-            envelope.Payload.PlainTextToken);
+        Assert.Equal(invitation.Id, envelope.Payload.NotificationId);
+        Assert.Equal(
+            EmailTemplateKeys.TenantInvitation,
+            envelope.Payload.TemplateKey);
+        var recipient = Assert.Single(envelope.Payload.Recipients);
+        Assert.Equal(invitation.Email, recipient.Address);
+        Assert.Equal(
+            fixture.Tenant.Name,
+            envelope.Payload.Variables[
+                EmailTemplateVariableKeys.TenantName]);
+        Assert.Equal(
+            "Tenant Admin",
+            envelope.Payload.Variables[
+                EmailTemplateVariableKeys.RoleName]);
+        Assert.Equal(
+            Now.AddHours(24).ToString("O"),
+            envelope.Payload.Variables[
+                EmailTemplateVariableKeys.ExpiresAt]);
+        Assert.Equal(
+            "https://example.test/invitations/accept?token=" +
+            FakeInvitationTokenService.PlainTextToken,
+            envelope.Payload.Variables[
+                EmailTemplateVariableKeys.ActionUrl]);
         Assert.Equal(fixture.Tenant.Id, envelope.TenantId);
         Assert.Equal(fixture.InviterId, envelope.ActorId);
         Assert.Equal(invitation.Id.ToString("D"), fixture.Outbox.PartitionKey);

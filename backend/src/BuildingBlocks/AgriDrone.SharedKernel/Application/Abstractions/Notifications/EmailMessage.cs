@@ -7,4 +7,5 @@ public sealed record EmailMessage(
     string? TextBody = null,
     IReadOnlyCollection<EmailRecipient>? Cc = null,
     IReadOnlyCollection<EmailRecipient>? Bcc = null,
-    EmailRecipient? ReplyTo = null);
+    EmailRecipient? ReplyTo = null,
+    string? MessageId = null);

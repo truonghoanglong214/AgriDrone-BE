@@ -1,4 +1,7 @@
+using AgriDrone.IntegrationContracts.Messaging;
+using AgriDrone.IntegrationContracts.Notifications;
 using AgriDrone.Modules.Identity.Application.Errors;
+using AgriDrone.Modules.Identity.Application.Abstractions.Messaging;
 using AgriDrone.Modules.Identity.Application.Abstractions.Persistence;
 using AgriDrone.Modules.Identity.Application.Abstractions.Services;
 using AgriDrone.Modules.Identity.Application.Invitations.Creation;
@@ -6,6 +9,7 @@ using AgriDrone.Modules.Identity.Domain.TenantInvitations;
 using AgriDrone.Modules.Identity.Domain.Tenants;
 using AgriDrone.Modules.Identity.Domain.Users;
 using AgriDrone.SharedKernel.Application;
+using AgriDrone.SharedKernel.Application.Abstractions.Execution;
 using AgriDrone.SharedKernel.Domain;
 using MediatR;
 
@@ -14,9 +18,13 @@ namespace AgriDrone.Modules.Identity.Application.Features.AcceptTenantInvitation
 internal sealed class AcceptTenantInvitationCommandHandler(
     IInvitationTokenService invitationTokenService,
     ITenantInvitationRepository tenantInvitationRepository,
+    ITenantRepository tenantRepository,
     IUserRepository userRepository,
     ITenantMembershipRepository tenantMembershipRepository,
     IPasswordService passwordService,
+    IIdentityIntegrationOutbox integrationOutbox,
+    IExecutionContext executionContext,
+    TimeProvider timeProvider,
     IIdentityUnitOfWork unitOfWork)
     : IRequestHandler<
         AcceptTenantInvitationCommand,
@@ -52,7 +60,7 @@ internal sealed class AcceptTenantInvitationCommandHandler(
         var invitation = await tenantInvitationRepository.GetByTokenHashAsync(
             tokenHash,
             cancellationToken);
-        var now = DateTimeOffset.UtcNow;
+        var now = timeProvider.GetUtcNow();
 
         if (invitation is null || !invitation.CanBeAccepted(now))
         {
@@ -67,6 +75,16 @@ internal sealed class AcceptTenantInvitationCommandHandler(
         {
             return Result.Failure<AcceptTenantInvitationResponse>(
                 TenantInvitationError.OwnerAlreadyAssigned());
+        }
+
+        var tenant = await tenantRepository.GetByIdIgnoreStatusAsync(
+            invitation.TenantId,
+            cancellationToken);
+
+        if (tenant is null)
+        {
+            return Result.Failure<AcceptTenantInvitationResponse>(
+                TenantError.NotFound());
         }
 
         var user = await userRepository.GetByEmailAsync(
@@ -124,6 +142,34 @@ internal sealed class AcceptTenantInvitationCommandHandler(
         tenantMembershipRepository.Add(membership);
         invitation.Accept(user.Id, now);
 
+        var notificationId = Guid.NewGuid();
+        var payload = new EmailNotificationRequestedV1(
+            NotificationId: notificationId,
+            TemplateKey: EmailTemplateKeys.TenantWelcome,
+            Recipients:
+            [
+                new EmailRecipientV1(user.Email, user.FullName)
+            ],
+            Variables: new Dictionary<string, string>
+            {
+                [EmailTemplateVariableKeys.UserName] = user.FullName,
+                [EmailTemplateVariableKeys.TenantName] = tenant.Name,
+                [EmailTemplateVariableKeys.RoleName] =
+                    GetRoleDisplayName(invitation.Role)
+            });
+        var envelope = IntegrationEventEnvelopeFactory.Create(
+            IntegrationEventDescriptors.EmailNotificationRequestedV1,
+            messageId: Guid.NewGuid(),
+            correlationId: executionContext.CorrelationId,
+            tenantId: invitation.TenantId,
+            actorId: user.Id,
+            occurredAt: now,
+            payload);
+
+        integrationOutbox.Add(
+            envelope,
+            partitionKey: notificationId.ToString("D"));
+
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         return Result.Success(
@@ -136,4 +182,16 @@ internal sealed class AcceptTenantInvitationCommandHandler(
 
     private static string? NormalizePhone(string? phone) =>
         string.IsNullOrWhiteSpace(phone) ? null : phone.Trim();
+
+    private static string GetRoleDisplayName(TenantMemberRole role) =>
+        role switch
+        {
+            TenantMemberRole.Owner => "Tenant Owner",
+            TenantMemberRole.TenantAdmin => "Tenant Admin",
+            TenantMemberRole.Member => "Tenant Member",
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(role),
+                role,
+                "Unsupported tenant role.")
+        };
 }
