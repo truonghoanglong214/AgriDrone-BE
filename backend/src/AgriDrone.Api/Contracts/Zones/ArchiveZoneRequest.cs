@@ -1,5 +1,4 @@
 namespace AgriDrone.Api.Contracts.Zones;
 
 public sealed record ArchiveZoneRequest(
-    long ExpectedVersion,
-    string Reason);
+    long ExpectedVersion);

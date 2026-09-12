@@ -6,5 +6,4 @@ namespace AgriDrone.Modules.Farms.Application.Features.ArchiveZone;
 public sealed record ArchiveZoneCommand(
     Guid FarmId,
     Guid ZoneId,
-    long ExpectedVersion,
-    string Reason) : IRequest<Result>;
+    long ExpectedVersion) : IRequest<Result>;

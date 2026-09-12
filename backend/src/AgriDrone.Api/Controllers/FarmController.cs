@@ -216,8 +216,7 @@ namespace AgriDrone.Api.Controllers
                 new ArchiveZoneCommand(
                     farmId,
                     zoneId,
-                    request.ExpectedVersion,
-                    request.Reason),
+                    request.ExpectedVersion),
                 cancellationToken);
 
             return result.ToHttpResult(
@@ -240,8 +239,7 @@ namespace AgriDrone.Api.Controllers
             var result = await sender.Send(
                 new ArchiveFarmCommand(
                     farmId,
-                    request.ExpectedVersion,
-                    request.Reason),
+                    request.ExpectedVersion),
                 cancellationToken);
 
             return result.ToHttpResult(

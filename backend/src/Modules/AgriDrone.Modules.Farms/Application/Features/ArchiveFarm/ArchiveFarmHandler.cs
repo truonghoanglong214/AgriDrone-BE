@@ -78,16 +78,14 @@ internal sealed class ArchiveFarmHandler(
                     dependencies.OpenFieldTaskCount));
         }
 
-        using var oldData = CreateAuditData(farm, reason: null);
+        using var oldData = CreateAuditData(farm);
 
         farmRepository.Update(farm);
 
         var now = timeProvider.GetUtcNow();
         farm.Archive(now);
 
-        using var newData = CreateAuditData(
-            farm,
-            request.Reason.Trim());
+        using var newData = CreateAuditData(farm);
 
         auditWriter.AddUserAction(
             sink: unitOfWork,
@@ -114,15 +112,12 @@ internal sealed class ArchiveFarmHandler(
         return Result.Success();
     }
 
-    private static JsonDocument CreateAuditData(
-        Farm farm,
-        string? reason) =>
+    private static JsonDocument CreateAuditData(Farm farm) =>
         JsonSerializer.SerializeToDocument(new
         {
             Status = farm.Status.ToString(),
             farm.DeletedAt,
             farm.UpdatedAt,
-            farm.Version,
-            Reason = reason
+            farm.Version
         });
 }

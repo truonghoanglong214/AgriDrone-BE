@@ -79,16 +79,14 @@ internal sealed class ArchiveZoneHandler(
                     dependencies.OpenFieldTaskCount));
         }
 
-        using var oldData = CreateAuditData(zone, reason: null);
+        using var oldData = CreateAuditData(zone);
 
         farmZoneRepository.Update(zone);
 
         var now = timeProvider.GetUtcNow();
         zone.Archive(now);
 
-        using var newData = CreateAuditData(
-            zone,
-            request.Reason.Trim());
+        using var newData = CreateAuditData(zone);
 
         auditWriter.AddUserAction(
             sink: unitOfWork,
@@ -115,15 +113,12 @@ internal sealed class ArchiveZoneHandler(
         return Result.Success();
     }
 
-    private static JsonDocument CreateAuditData(
-        FarmZone zone,
-        string? reason) =>
+    private static JsonDocument CreateAuditData(FarmZone zone) =>
         JsonSerializer.SerializeToDocument(new
         {
             Status = zone.Status.ToString(),
             zone.DeletedAt,
             zone.UpdatedAt,
-            zone.Version,
-            Reason = reason
+            zone.Version
         });
 }
