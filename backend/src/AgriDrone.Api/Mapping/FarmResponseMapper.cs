@@ -4,6 +4,7 @@ using CreateFarmResult = AgriDrone.Modules.Farms.Application.Features.CreateFarm
 using GetFarmByIdResult = AgriDrone.Modules.Farms.Application.Features.GetFarmById.GetFarmByIdResponse;
 using FarmListItemResult = AgriDrone.Modules.Farms.Application.Features.GetFarm.FarmListItemResponse;
 using UpdateFarmDetailResult = AgriDrone.Modules.Farms.Application.Features.UpdateFarmDetail.UpdateFarmDetailResponse;
+using ArchivedFarmResult = AgriDrone.Modules.Farms.Application.Features.GetArchivedFarms.ArchivedFarmResponse;
 
 namespace AgriDrone.Api.Mapping;
 
@@ -52,6 +53,31 @@ internal static class FarmResponseMapper
             farm.status,
             farm.updatedAt,
             farm.version);
+
+    public static ArchivedFarmApiResponse ToResponse(ArchivedFarmResult farm) =>
+        new(
+            farm.Id,
+            farm.TenantId,
+            farm.Code,
+            farm.Name,
+            farm.Address,
+            GeoJsonGeometryMapper.FromPolygon(farm.Boundary),
+            GeoJsonGeometryMapper.FromPoint(farm.CenterPoint),
+            farm.AreaHectares,
+            farm.Status,
+            farm.CreatedAt,
+            farm.CreatedBy,
+            farm.UpdatedAt,
+            farm.ArchivedAt,
+            farm.Version);
+
+    public static PagedResult<ArchivedFarmApiResponse> ToResponse(
+        PagedResult<ArchivedFarmResult> farms) =>
+        new(
+            farms.Items.Select(ToResponse).ToArray(),
+            farms.PageNumber,
+            farms.PageSize,
+            farms.TotalCount);
 
     public static PagedResult<FarmListItemApiResponse> ToResponse(
         PagedResult<FarmListItemResult> farms) =>

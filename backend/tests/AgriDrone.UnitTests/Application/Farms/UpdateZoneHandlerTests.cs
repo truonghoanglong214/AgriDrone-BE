@@ -277,6 +277,12 @@ public sealed class UpdateZoneHandlerTests
             CancellationToken cancellationToken = default) =>
             Task.FromResult<Farm?>(farm);
 
+        public Task<Farm?> GetByIdIncludingArchivedAsync(
+            Guid tenantId,
+            Guid farmId,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<Farm?>(farm);
+
         public Task<Farm?> GetByCodeAsync(
             Guid tenantId,
             string code,
