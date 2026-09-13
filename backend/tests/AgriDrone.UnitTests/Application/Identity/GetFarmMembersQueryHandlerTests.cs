@@ -3,45 +3,57 @@ using AgriDrone.Modules.Identity.Application.Abstractions.Queries;
 using AgriDrone.Modules.Identity.Application.Features.GetFarmMemberAssignment;
 using AgriDrone.Modules.Identity.Application.Features.GetFarmMembers;
 using AgriDrone.Modules.Identity.Domain.FarmMemberships;
+using AgriDrone.Modules.Identity.Domain.Tenants;
 using AgriDrone.SharedKernel.Application.Abstractions.Authorization;
 using AgriDrone.SharedKernel.Application.Abstractions.Execution;
-using AgriDrone.SharedKernel.Domain;
 using AgriDrone.SharedKernel.Application.Pagination;
+using AgriDrone.SharedKernel.Domain;
 using Xunit;
 
 namespace AgriDrone.UnitTests.Application.Identity;
 
-public sealed class GetFarmMemberAssignmentQueryHandlerTests
+public sealed class GetFarmMembersQueryHandlerTests
 {
     [Fact]
-    public async Task HandleReturnsAssignmentWithCurrentVersionAndZones()
+    public async Task HandleReturnsFilteredFarmMembersPage()
     {
         var fixture = CreateFixture();
-        var zoneIds = new[] { Guid.NewGuid(), Guid.NewGuid() };
-        fixture.Queries.Response = new GetFarmMemberAssignmentResponse(
+        var item = new FarmMemberListItemResponse(
             Guid.NewGuid(),
-            fixture.TenantId,
             fixture.FarmId,
-            fixture.UserId,
+            Guid.NewGuid(),
+            "manager@example.com",
+            "Farm Manager",
+            TenantMemberRole.Member,
             FarmMemberRole.Manager,
-            FarmAccessScope.SelectedZones,
-            zoneIds,
+            FarmAccessScope.AllZones,
+            [],
             GeneralStatus.Active,
-            4,
+            1,
             DateTimeOffset.UtcNow);
+        fixture.Queries.Response = new PagedResult<FarmMemberListItemResponse>(
+            [item],
+            2,
+            10,
+            11);
 
         var result = await fixture.Handler.Handle(
-            new GetFarmMemberAssignmentQuery(
+            new GetFarmMembersQuery(
                 fixture.FarmId,
-                fixture.UserId),
+                FarmMemberRole.Manager,
+                GeneralStatus.Active,
+                2,
+                10),
             CancellationToken.None);
 
         Assert.True(result.IsSuccess);
-        Assert.Equal(4, result.Value.Version);
-        Assert.Equal(zoneIds, result.Value.ZoneIds);
+        Assert.Same(fixture.Queries.Response, result.Value);
         Assert.Equal(fixture.TenantId, fixture.Queries.TenantId);
         Assert.Equal(fixture.FarmId, fixture.Queries.FarmId);
-        Assert.Equal(fixture.UserId, fixture.Queries.UserId);
+        Assert.Equal(FarmMemberRole.Manager, fixture.Queries.Role);
+        Assert.Equal(GeneralStatus.Active, fixture.Queries.Status);
+        Assert.Equal(2, fixture.Queries.PageRequest?.PageNumber);
+        Assert.Equal(10, fixture.Queries.PageRequest?.PageSize);
     }
 
     [Fact]
@@ -52,14 +64,13 @@ public sealed class GetFarmMemberAssignmentQueryHandlerTests
             AccessDenialReason.TenantRoleInsufficient);
 
         var result = await fixture.Handler.Handle(
-            new GetFarmMemberAssignmentQuery(
-                fixture.FarmId,
-                fixture.UserId),
+            CreateQuery(fixture),
             CancellationToken.None);
 
         Assert.True(result.IsFailure);
         Assert.Equal("Tenant.AccessDenied", result.Error.Code);
         Assert.Equal(0, fixture.Queries.CallCount);
+        Assert.Equal(0, fixture.FarmReferenceQuery.CallCount);
     }
 
     [Fact]
@@ -69,9 +80,7 @@ public sealed class GetFarmMemberAssignmentQueryHandlerTests
         fixture.FarmReferenceQuery.IsActive = false;
 
         var result = await fixture.Handler.Handle(
-            new GetFarmMemberAssignmentQuery(
-                fixture.FarmId,
-                fixture.UserId),
+            CreateQuery(fixture),
             CancellationToken.None);
 
         Assert.True(result.IsFailure);
@@ -79,30 +88,22 @@ public sealed class GetFarmMemberAssignmentQueryHandlerTests
         Assert.Equal(0, fixture.Queries.CallCount);
     }
 
-    [Fact]
-    public async Task HandleReturnsNotFoundWhenUserHasNoFarmAssignment()
-    {
-        var fixture = CreateFixture();
-
-        var result = await fixture.Handler.Handle(
-            new GetFarmMemberAssignmentQuery(
-                fixture.FarmId,
-                fixture.UserId),
-            CancellationToken.None);
-
-        Assert.True(result.IsFailure);
-        Assert.Equal("FarmMembership.NotFound", result.Error.Code);
-    }
+    private static GetFarmMembersQuery CreateQuery(Fixture fixture) =>
+        new(
+            fixture.FarmId,
+            null,
+            GeneralStatus.Active,
+            1,
+            20);
 
     private static Fixture CreateFixture()
     {
         var tenantId = Guid.NewGuid();
         var farmId = Guid.NewGuid();
-        var userId = Guid.NewGuid();
         var queries = new FakeFarmMembershipQueries();
         var farmReferenceQuery = new FakeFarmAssignmentReferenceQuery();
         var accessService = new FakeEffectiveAccessService();
-        var handler = new GetFarmMemberAssignmentQueryHandler(
+        var handler = new GetFarmMembersQueryHandler(
             queries,
             farmReferenceQuery,
             new FakeExecutionContext(tenantId, Guid.NewGuid()),
@@ -114,22 +115,21 @@ public sealed class GetFarmMemberAssignmentQueryHandlerTests
             farmReferenceQuery,
             accessService,
             tenantId,
-            farmId,
-            userId);
+            farmId);
     }
 
     private sealed record Fixture(
-        GetFarmMemberAssignmentQueryHandler Handler,
+        GetFarmMembersQueryHandler Handler,
         FakeFarmMembershipQueries Queries,
         FakeFarmAssignmentReferenceQuery FarmReferenceQuery,
         FakeEffectiveAccessService AccessService,
         Guid TenantId,
-        Guid FarmId,
-        Guid UserId);
+        Guid FarmId);
 
     private sealed class FakeFarmMembershipQueries : IFarmMembershipQueries
     {
-        public GetFarmMemberAssignmentResponse? Response { get; set; }
+        public PagedResult<FarmMemberListItemResponse> Response { get; set; } =
+            new([], 1, 20, 0);
 
         public int CallCount { get; private set; }
 
@@ -137,20 +137,18 @@ public sealed class GetFarmMemberAssignmentQueryHandlerTests
 
         public Guid? FarmId { get; private set; }
 
-        public Guid? UserId { get; private set; }
+        public FarmMemberRole? Role { get; private set; }
+
+        public GeneralStatus? Status { get; private set; }
+
+        public PagedRequest? PageRequest { get; private set; }
 
         public Task<GetFarmMemberAssignmentResponse?> GetAssignmentAsync(
             Guid tenantId,
             Guid farmId,
             Guid userId,
-            CancellationToken cancellationToken)
-        {
-            CallCount++;
-            TenantId = tenantId;
-            FarmId = farmId;
-            UserId = userId;
-            return Task.FromResult(Response);
-        }
+            CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
 
         public Task<PagedResult<FarmMemberListItemResponse>>
             GetMembersPageAsync(
@@ -159,8 +157,16 @@ public sealed class GetFarmMemberAssignmentQueryHandlerTests
                 FarmMemberRole? role,
                 GeneralStatus? status,
                 PagedRequest pagedRequest,
-                CancellationToken cancellationToken) =>
-            throw new NotSupportedException();
+                CancellationToken cancellationToken)
+        {
+            CallCount++;
+            TenantId = tenantId;
+            FarmId = farmId;
+            Role = role;
+            Status = status;
+            PageRequest = pagedRequest;
+            return Task.FromResult(Response);
+        }
     }
 
     private sealed class FakeFarmAssignmentReferenceQuery
@@ -168,11 +174,16 @@ public sealed class GetFarmMemberAssignmentQueryHandlerTests
     {
         public bool IsActive { get; set; } = true;
 
+        public int CallCount { get; private set; }
+
         public Task<bool> IsActiveFarmAsync(
             Guid tenantId,
             Guid farmId,
-            CancellationToken cancellationToken = default) =>
-            Task.FromResult(IsActive);
+            CancellationToken cancellationToken = default)
+        {
+            CallCount++;
+            return Task.FromResult(IsActive);
+        }
     }
 
     private sealed class FakeEffectiveAccessService : IEffectiveAccessService

@@ -94,6 +94,21 @@ public sealed class FarmMembership : Entity
         return true;
     }
 
+    public bool Deactivate(DateTimeOffset deactivatedAt)
+    {
+        DomainGuard.Utc(deactivatedAt);
+
+        if (Status == GeneralStatus.Inactive)
+        {
+            return false;
+        }
+
+        Status = GeneralStatus.Inactive;
+        Version++;
+
+        return true;
+    }
+
     private static void ValidateRole(FarmMemberRole role)
     {
         if (role is not FarmMemberRole.Manager and not FarmMemberRole.Worker)

@@ -17,12 +17,12 @@ internal sealed class AssignFarmMemberCommandValidator
         RuleFor(command => command.Role)
             .Equal(FarmMemberRole.Manager)
             .WithMessage(
-                "Tenant Admin assignment currently supports only the MANAGER farm role.");
+                "Farm Manager assignment currently supports only the MANAGER farm role.");
 
         RuleFor(command => command.AccessScope)
             .Equal(FarmAccessScope.AllZones)
             .WithMessage(
-                "Tenant Admin assignment currently supports only the ALL_ZONES access scope.");
+                "Farm Manager assignment currently supports only the ALL_ZONES access scope.");
 
         RuleFor(command => command.ZoneIds)
             .NotNull()

@@ -76,6 +76,29 @@ internal sealed class AssignFarmMemberCommandHandler(
                 TenantMembershipError.NotFound());
         }
 
+        if (tenantMembership.Role is not TenantMemberRole.Member and
+            not TenantMemberRole.TenantAdmin)
+        {
+            return Result.Failure<AssignFarmMemberResponse>(
+                FarmMembershipError.TargetTenantRoleNotAssignable());
+        }
+
+        if (tenantMembership.Role == TenantMemberRole.TenantAdmin)
+        {
+            var ownerAccessDecision =
+                await effectiveAccessService.CheckTenantAsync(
+                    actorId,
+                    tenantId,
+                    TenantAccessLevel.Owner,
+                    cancellationToken);
+
+            if (!ownerAccessDecision.IsAllowed)
+            {
+                return Result.Failure<AssignFarmMemberResponse>(
+                    TenantError.AccessDenied());
+            }
+        }
+
         if (tenantMembership.Status != GeneralStatus.Active)
         {
             return Result.Failure<AssignFarmMemberResponse>(
@@ -87,12 +110,6 @@ internal sealed class AssignFarmMemberCommandHandler(
         {
             return Result.Failure<AssignFarmMemberResponse>(
                 TenantMembershipError.TargetUserInactive());
-        }
-
-        if (tenantMembership.Role != TenantMemberRole.TenantAdmin)
-        {
-            return Result.Failure<AssignFarmMemberResponse>(
-                FarmMembershipError.TargetMustBeTenantAdmin());
         }
 
         var assignment = await farmMembershipRepository
@@ -135,6 +152,7 @@ internal sealed class AssignFarmMemberCommandHandler(
             ? null
             : JsonSerializer.SerializeToDocument(new
             {
+                UserId = assignment.UserId,
                 Role = assignment.Role.ToString(),
                 AccessScope = assignment.AccessScope.ToString(),
                 Status = assignment.Status.ToString(),
@@ -163,6 +181,7 @@ internal sealed class AssignFarmMemberCommandHandler(
 
         using var newData = JsonSerializer.SerializeToDocument(new
         {
+            UserId = assignment.UserId,
             Role = assignment.Role.ToString(),
             AccessScope = assignment.AccessScope.ToString(),
             Status = assignment.Status.ToString(),

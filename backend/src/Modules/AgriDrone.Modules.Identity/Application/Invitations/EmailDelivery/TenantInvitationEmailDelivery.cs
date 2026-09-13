@@ -4,6 +4,7 @@ using AgriDrone.Modules.Identity.Domain.TenantInvitations;
 using AgriDrone.Modules.Identity.Domain.Tenants;
 using AgriDrone.SharedKernel.Application;
 using AgriDrone.SharedKernel.Application.Abstractions.Notifications;
+using AgriDrone.SharedKernel.Domain;
 using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Generic;
@@ -98,6 +99,15 @@ namespace AgriDrone.Modules.Identity.Application.Invitations.EmailDelivery
                     AppError.NotFound(
                         "TenantInvitation.EmailDelivery.TenantNotFound",
                         "The invitation tenant was not found."));
+            }
+
+            if (tenant.Status != GeneralStatus.Active)
+            {
+                return Result.Success(
+                    TenantInvitationEmailDeliveryResult.Skipped(
+                        invitation.Id,
+                        invitation.Email,
+                        "The invitation tenant is inactive."));
             }
 
             var roleDisplayName = GetRoleDisplayName(invitation.Role);

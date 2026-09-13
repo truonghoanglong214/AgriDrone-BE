@@ -14,15 +14,15 @@ public static class FarmMembershipError
             "FarmMembership.FarmNotFound",
             "The selected farm was not found in the current tenant.");
 
-    public static AppError TargetMustBeTenantAdmin() =>
+    public static AppError TargetTenantRoleNotAssignable() =>
         AppError.Validation(
-            "FarmMembership.TargetMustBeTenantAdmin",
-            "Only an active Tenant Admin can be assigned by this operation.");
+            "FarmMembership.TargetTenantRoleNotAssignable",
+            "Only an active Member or Tenant Admin can receive a farm assignment.");
 
     public static AppError TargetTenantMembershipInactive() =>
         AppError.Conflict(
             "FarmMembership.TargetTenantMembershipInactive",
-            "The target Tenant Admin membership must be active.");
+            "The target tenant membership must be active.");
 
     public static AppError ExpectedVersionRequired() =>
         AppError.Conflict(
