@@ -4,9 +4,9 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace AgriDrone.Modules.Farms.Application.Features.ActivateFarm
+namespace AgriDrone.Modules.Farms.Application.Features.RestoreFarm
 {
-    internal sealed record ActivateFarmCommand(
+    public sealed record RestoreFarmCommand(
         Guid FarmId,
         long ExpectedVersion
     ) : IRequest<Result>;

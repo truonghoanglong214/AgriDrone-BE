@@ -36,6 +36,11 @@ namespace AgriDrone.Modules.Farms.Infrastructure.Repositories
             .AsNoTracking()
             .SingleOrDefaultAsync(farm => farm.TenantId == tenantId && farm.Id == farmId && farm.DeletedAt == null, cancellationToken);
 
+        public Task<Farm?> GetByIdIncludingArchivedAsync(Guid tenantId, Guid farmId, CancellationToken cancellationToken = default)
+            => context.Farms
+            .AsNoTracking()
+            .SingleOrDefaultAsync(farm => farm.TenantId == tenantId && farm.Id == farmId && farm.IsArchived, cancellationToken);
+
         public void Update(Farm farm)
             => context.Farms.Update(farm);
     }

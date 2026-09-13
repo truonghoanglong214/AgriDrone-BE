@@ -24,6 +24,9 @@ using AgriDrone.Api.Contracts.FarmMemberships;
 using AgriDrone.Modules.Identity.Application.Features.AssignFarmMember;
 using AgriDrone.Modules.Identity.Application.Features.GetFarmMemberAssignment;
 using AgriDrone.Modules.Identity.Domain.FarmMemberships;
+using AgriDrone.Modules.Farms.Application.Features.RestoreFarm;
+using AgriDrone.Modules.Farms.Application.Features.GetArchivedFarmById;
+using AgriDrone.Modules.Farms.Application.Features.GetArchivedFarms;
 
 namespace AgriDrone.Api.Controllers
 {
@@ -52,6 +55,48 @@ namespace AgriDrone.Api.Controllers
             return result.ToHttpResult(
                 HttpContext,
                 farms => Results.Ok(FarmResponseMapper.ToResponse(farms)));
+        }
+
+        /// <summary>Lấy danh sách farm đã archive của tenant hiện tại.</summary>
+        /// <remarks>
+        /// Chỉ Tenant Owner được phép xem danh sách. Response bao gồm thời điểm
+        /// archive và version hiện tại để phục vụ thao tác restore an toàn.
+        /// </remarks>
+        [HttpGet("archived")]
+        [Authorize(Policy = AccessAuthorizationPolicies.TenantOwner)]
+        public async Task<IResult> GetArchivedFarms(
+            [FromQuery] GetFarmsRequest request,
+            CancellationToken cancellationToken)
+        {
+            var query = new GetArchivedFarmsQuery(
+                request.PageNumber,
+                request.PageSize);
+
+            var result = await sender.Send(query, cancellationToken);
+
+            return result.ToHttpResult(
+                HttpContext,
+                farms => Results.Ok(FarmResponseMapper.ToResponse(farms)));
+        }
+
+        /// <summary>Lấy chi tiết một farm đã archive.</summary>
+        /// <remarks>
+        /// Chỉ Tenant Owner được phép xem. Farm phải thuộc tenant hiện tại và
+        /// đang ở trạng thái archived; nếu không, API trả về 404.
+        /// </remarks>
+        [HttpGet("{farmId:guid}/archived")]
+        [Authorize(Policy = AccessAuthorizationPolicies.TenantOwner)]
+        public async Task<IResult> GetArchivedFarmById(
+            [FromRoute] Guid farmId,
+            CancellationToken cancellationToken)
+        {
+            var result = await sender.Send(
+                new GetArchivedFarmByIdQuery(farmId),
+                cancellationToken);
+
+            return result.ToHttpResult(
+                HttpContext,
+                farm => Results.Ok(FarmResponseMapper.ToResponse(farm)));
         }
 
         /// <summary>Tạo farm trong tenant hiện tại.</summary>
@@ -238,6 +283,28 @@ namespace AgriDrone.Api.Controllers
         {
             var result = await sender.Send(
                 new ArchiveFarmCommand(
+                    farmId,
+                    request.ExpectedVersion),
+                cancellationToken);
+
+            return result.ToHttpResult(
+                HttpContext,
+                () => Results.NoContent());
+        }
+
+        /// <summary>Restore một farm và giữ nguyên lịch sử liên quan.</summary>
+        /// <remarks>
+        /// Chỉ Tenant Owner được phép thực hiện. Farm chỉ được restore khi Farm đang ở trạng thái archived.
+        /// </remarks>
+        [HttpPut("{farmId:guid}/restore")]
+        [Authorize(Policy = AccessAuthorizationPolicies.TenantOwner)]
+        public async Task<IResult> RestoreFarm(
+            [FromRoute] Guid farmId,
+            [FromBody] RestoreFarmRequest request,
+            CancellationToken cancellationToken)
+        {
+            var result = await sender.Send(
+                new RestoreFarmCommand(
                     farmId,
                     request.ExpectedVersion),
                 cancellationToken);

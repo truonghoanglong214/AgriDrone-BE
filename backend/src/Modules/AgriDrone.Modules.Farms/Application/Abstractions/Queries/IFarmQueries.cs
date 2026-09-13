@@ -1,4 +1,5 @@
 ﻿using AgriDrone.Modules.Farms.Application.Features.GetFarm;
+using AgriDrone.Modules.Farms.Application.Features.GetArchivedFarms;
 using AgriDrone.SharedKernel.Application.Pagination;
 using Microsoft.AspNetCore.Http.Features;
 using System;
@@ -12,6 +13,16 @@ namespace AgriDrone.Modules.Farms.Application.Abstractions.Queries
         Task<PagedResult<FarmListItemResponse>> GetFarmsPageAsync(
             Guid tenantId,
             PagedRequest pagedRequest,
+            CancellationToken cancellationToken);
+
+        Task<PagedResult<ArchivedFarmResponse>> GetArchivedFarmsPageAsync(
+            Guid tenantId,
+            PagedRequest pagedRequest,
+            CancellationToken cancellationToken);
+
+        Task<ArchivedFarmResponse?> GetArchivedFarmByIdAsync(
+            Guid tenantId,
+            Guid farmId,
             CancellationToken cancellationToken);
     }
 }

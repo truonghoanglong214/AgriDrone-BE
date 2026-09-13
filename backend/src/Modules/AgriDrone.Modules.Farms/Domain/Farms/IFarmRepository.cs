@@ -22,6 +22,11 @@ namespace AgriDrone.Modules.Farms.Domain.Farms
             Guid? excludingFarmId = null,
             CancellationToken cancellationToken = default);
 
+        Task<Farm?> GetByIdIncludingArchivedAsync(
+            Guid tenantId,
+            Guid farmId,
+            CancellationToken cancellationToken = default);
+
         void Add(Farm farm);
         void Update(Farm farm);
     }

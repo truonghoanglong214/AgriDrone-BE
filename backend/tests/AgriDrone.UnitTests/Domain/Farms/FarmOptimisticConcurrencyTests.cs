@@ -34,15 +34,16 @@ public sealed class FarmOptimisticConcurrencyTests
     }
 
     [Fact]
-    public void ActivateIncrementsVersionOnlyWhenStateChanges()
+    public void RestoreIncrementsVersionOnlyWhenStateChanges()
     {
-        var farm = CreateFarm(GeneralStatus.Inactive);
+        var farm = CreateFarm(GeneralStatus.Active);
+        farm.Archive(CreatedAt.AddMinutes(1));
 
-        Assert.True(farm.Activate(CreatedAt.AddMinutes(1)));
-        Assert.Equal(2, farm.Version);
+        Assert.True(farm.Restore(CreatedAt.AddMinutes(2)));
+        Assert.Equal(3, farm.Version);
 
-        Assert.False(farm.Activate(CreatedAt.AddMinutes(2)));
-        Assert.Equal(2, farm.Version);
+        Assert.False(farm.Restore(CreatedAt.AddMinutes(3)));
+        Assert.Equal(3, farm.Version);
     }
 
     [Fact]

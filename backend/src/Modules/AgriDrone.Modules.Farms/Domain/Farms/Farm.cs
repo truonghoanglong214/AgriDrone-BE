@@ -127,18 +127,18 @@ public sealed class Farm : AggregateRoot
         Version++;
     }
 
-    public bool Activate(DateTimeOffset activatedAt)
-    {
-        DomainGuard.Utc(activatedAt);
+    public bool Restore(DateTimeOffset restoredAt)
+    {   
+        DomainGuard.Utc(restoredAt);
 
-        if (Status == GeneralStatus.Active && DeletedAt is null)
+        if (!IsArchived)
         {
             return false;
         }
 
         Status = GeneralStatus.Active;
         DeletedAt = null;
-        UpdatedAt = activatedAt;
+        UpdatedAt = restoredAt;
         Version++;
 
         return true;

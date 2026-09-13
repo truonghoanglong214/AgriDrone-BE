@@ -1,5 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
+    <Compile Remove="Application\Features\ActivateZone\**" />
+    <EmbeddedResource Remove="Application\Features\ActivateZone\**" />
+    <None Remove="Application\Features\ActivateZone\**" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\..\BuildingBlocks\AgriDrone.IntegrationContracts\AgriDrone.IntegrationContracts.csproj" />
     <ProjectReference Include="..\..\BuildingBlocks\AgriDrone.SharedKernel\AgriDrone.SharedKernel.csproj" />
     <ProjectReference Include="..\..\BuildingBlocks\AgriDrone.SharedInfrastructure\AgriDrone.SharedInfrastructure.csproj" />
@@ -15,7 +20,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Application\Features\ActivateZone\" />
     <Folder Include="Infrastructure\Authorization\" />
   </ItemGroup>
 </Project>
