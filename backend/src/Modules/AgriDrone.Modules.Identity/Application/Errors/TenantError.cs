@@ -19,6 +19,11 @@ public static class TenantError
             "Tenant.AccessDenied",
             "The user does not have the required access to the selected tenant.");
 
+    public static AppError Inactive() =>
+        AppError.Forbidden(
+            "Tenant.Inactive",
+            "The tenant is inactive.");
+
     public static AppError ContextRequired() =>
         AppError.Unauthorized(
             "Tenant.ContextRequired",

@@ -87,6 +87,12 @@ internal sealed class AcceptTenantInvitationCommandHandler(
                 TenantError.NotFound());
         }
 
+        if (tenant.Status != GeneralStatus.Active)
+        {
+            return Result.Failure<AcceptTenantInvitationResponse>(
+                TenantError.Inactive());
+        }
+
         var user = await userRepository.GetByEmailAsync(
             invitation.Email,
             cancellationToken);

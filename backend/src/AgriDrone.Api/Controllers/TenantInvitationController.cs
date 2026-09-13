@@ -2,6 +2,8 @@ using AgriDrone.Api.Contracts.TenantInvitations;
 using AgriDrone.SharedInfrastructure.Authorization;
 using AgriDrone.Modules.Identity.Application.Features.AcceptTenantInvitation;
 using AgriDrone.Modules.Identity.Application.Features.InviteTenantAdmin;
+using AgriDrone.Modules.Identity.Application.Features.InviteTenantMember;
+using AgriDrone.Modules.Identity.Application.Features.PreviewTenantInvitation;
 using AgriDrone.SharedInfrastructure.Http;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -13,6 +15,26 @@ namespace AgriDrone.Api.Controllers;
 [ApiController]
 public sealed class TenantInvitationController(ISender sender) : ControllerBase
 {
+    /// <summary>Xem trước lời mời và xác định có cần tạo tài khoản.</summary>
+    /// <remarks>
+    /// Token phải còn hiệu lực và thuộc tenant đang hoạt động. Endpoint chỉ trả
+    /// email đã che một phần để frontend chọn đúng biểu mẫu accept invitation.
+    /// </remarks>
+    [AllowAnonymous]
+    [HttpPost("invitations/preview")]
+    public async Task<IResult> PreviewTenantInvitation(
+        [FromBody] PreviewTenantInvitationRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await sender.Send(
+            new PreviewTenantInvitationQuery(request.Token),
+            cancellationToken);
+
+        return result.ToHttpResult(
+            HttpContext,
+            response => Results.Ok(response));
+    }
+
     /// <summary>Mời Tenant Admin vào tenant hiện tại.</summary>
     /// <remarks>
     /// Tenant Owner tạo lời mời có thời hạn cho email được chỉ định. Lời mời dùng
@@ -26,6 +48,29 @@ public sealed class TenantInvitationController(ISender sender) : ControllerBase
     {
         var result = await sender.Send(
             new InviteTenantAdminCommand(request.Email),
+            cancellationToken);
+
+        return result.ToHttpResult(
+            HttpContext,
+            response => Results.Json(
+                response,
+                statusCode: StatusCodes.Status201Created));
+    }
+
+    /// <summary>Mời Member vào tenant hiện tại.</summary>
+    /// <remarks>
+    /// Tenant Admin hoặc Owner tạo lời mời có thời hạn. Khi chấp nhận, người
+    /// nhận trở thành Member của tenant nhưng chưa có quyền trên Farm nào cho
+    /// đến khi được gán Farm Membership riêng.
+    /// </remarks>
+    [HttpPost("/api/tenants/current/invitations/member")]
+    [Authorize(Policy = AccessAuthorizationPolicies.TenantAdmin)]
+    public async Task<IResult> InviteTenantMember(
+        [FromBody] InviteTenantMemberRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await sender.Send(
+            new InviteTenantMemberCommand(request.Email),
             cancellationToken);
 
         return result.ToHttpResult(

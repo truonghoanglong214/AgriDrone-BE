@@ -20,7 +20,7 @@ public sealed class AssignFarmMemberCommandHandlerTests
         new(2026, 9, 7, 10, 0, 0, TimeSpan.Zero);
 
     [Fact]
-    public async Task HandleAssignsActiveTenantAdminAsFarmManager()
+    public async Task HandleAssignsActiveTenantMemberAsFarmManager()
     {
         var fixture = CreateFixture();
 
@@ -77,9 +77,42 @@ public sealed class AssignFarmMemberCommandHandlerTests
     }
 
     [Fact]
-    public async Task HandleRejectsTargetWhoIsNotTenantAdmin()
+    public async Task HandleAlsoAssignsActiveTenantAdminAsFarmManager()
     {
-        var fixture = CreateFixture(TenantMemberRole.Member);
+        var fixture = CreateFixture(TenantMemberRole.TenantAdmin);
+
+        var result = await fixture.Handler.Handle(
+            CreateCommand(fixture),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.NotNull(fixture.FarmRepository.AddedMembership);
+        Assert.Equal(
+            FarmMemberRole.Manager,
+            fixture.FarmRepository.AddedMembership.Role);
+    }
+
+    [Fact]
+    public async Task HandleRejectsTenantAdminActorAssigningTenantAdmin()
+    {
+        var fixture = CreateFixture(TenantMemberRole.TenantAdmin);
+        fixture.AccessService.OwnerDecision = AccessDecision.Deny(
+            AccessDenialReason.TenantRoleInsufficient);
+
+        var result = await fixture.Handler.Handle(
+            CreateCommand(fixture),
+            CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("Tenant.AccessDenied", result.Error.Code);
+        Assert.Null(fixture.FarmRepository.AddedMembership);
+        Assert.Equal(0, fixture.UnitOfWork.SaveChangesCount);
+    }
+
+    [Fact]
+    public async Task HandleRejectsTargetTenantOwner()
+    {
+        var fixture = CreateFixture(TenantMemberRole.Owner);
 
         var result = await fixture.Handler.Handle(
             CreateCommand(fixture),
@@ -87,7 +120,7 @@ public sealed class AssignFarmMemberCommandHandlerTests
 
         Assert.True(result.IsFailure);
         Assert.Equal(
-            "FarmMembership.TargetMustBeTenantAdmin",
+            "FarmMembership.TargetTenantRoleNotAssignable",
             result.Error.Code);
         Assert.Equal(0, fixture.UnitOfWork.SaveChangesCount);
     }
@@ -191,7 +224,7 @@ public sealed class AssignFarmMemberCommandHandlerTests
             "Manage the farm");
 
     private static Fixture CreateFixture(
-        TenantMemberRole targetRole = TenantMemberRole.TenantAdmin)
+        TenantMemberRole targetRole = TenantMemberRole.Member)
     {
         var tenantId = Guid.NewGuid();
         var farmId = Guid.NewGuid();
@@ -437,12 +470,18 @@ public sealed class AssignFarmMemberCommandHandlerTests
         public AccessDecision Decision { get; set; } =
             AccessDecision.Allow();
 
+        public AccessDecision OwnerDecision { get; set; } =
+            AccessDecision.Allow();
+
         public Task<AccessDecision> CheckTenantAsync(
             Guid actorId,
             Guid tenantId,
             TenantAccessLevel requiredAccess,
             CancellationToken cancellationToken = default) =>
-            Task.FromResult(Decision);
+            Task.FromResult(
+                requiredAccess == TenantAccessLevel.Owner
+                    ? OwnerDecision
+                    : Decision);
 
         public Task<AccessDecision> CheckFarmAsync(
             Guid actorId,

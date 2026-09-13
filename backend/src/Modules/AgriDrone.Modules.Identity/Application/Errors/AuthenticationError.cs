@@ -9,6 +9,11 @@ public static class AuthenticationError
             "User.ContextRequired",
             "A valid user context is required.");
 
+    public static AppError CurrentTenantRequired() =>
+        AppError.Unauthorized(
+            "Tenant.ContextRequired",
+            "A valid tenant context is required.");
+
     public static AppError InvalidCredentials() =>
         AppError.Unauthorized(
             "User.InvalidCredentials",
