@@ -1,16 +1,14 @@
 using AgriDrone.Modules.Identity.Domain.FarmMemberships;
 using AgriDrone.SharedKernel.Domain;
 
-namespace AgriDrone.Modules.Identity.Application.Features.AssignFarmMember;
+namespace AgriDrone.Modules.Identity.Application.Abstractions.Queries;
 
-public sealed record AssignFarmMemberResponse(
+internal sealed record MyFarmAssignmentReadModel(
     Guid FarmMembershipId,
-    Guid TenantId,
     Guid FarmId,
-    Guid UserId,
     FarmMemberRole Role,
     FarmAccessScope AccessScope,
-    IReadOnlyCollection<Guid> ZoneIds,
+    IReadOnlyCollection<Guid> AssignedZoneIds,
     GeneralStatus Status,
     long Version,
     DateTimeOffset JoinedAt);

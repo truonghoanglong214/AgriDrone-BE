@@ -34,6 +34,29 @@ public sealed class FarmMembershipTests
         Assert.Equal(2, membership.Version);
     }
 
+    [Fact]
+    public void DeactivateRevokesActiveSelectedZoneAssignments()
+    {
+        var membership = FarmMembership.Create(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            FarmMemberRole.Worker,
+            FarmAccessScope.SelectedZones,
+            [Guid.NewGuid(), Guid.NewGuid()],
+            Guid.NewGuid(),
+            Now.AddDays(-1));
+
+        membership.Deactivate(Now);
+
+        Assert.DoesNotContain(
+            membership.ZoneAssignments,
+            assignment => assignment.RevokedAt is null);
+        Assert.All(
+            membership.ZoneAssignments,
+            assignment => Assert.Equal(Now, assignment.RevokedAt));
+    }
+
     private static FarmMembership CreateMembership() =>
         FarmMembership.Create(
             Guid.NewGuid(),

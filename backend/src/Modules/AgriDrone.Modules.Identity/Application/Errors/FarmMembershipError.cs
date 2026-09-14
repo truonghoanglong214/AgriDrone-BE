@@ -19,10 +19,20 @@ public static class FarmMembershipError
             "FarmMembership.TargetTenantRoleNotAssignable",
             "Only an active Member or Tenant Admin can receive a farm assignment.");
 
+    public static AppError TenantAdminMustBeManager() =>
+        AppError.Validation(
+            "FarmMembership.TenantAdminMustBeManager",
+            "A Tenant Admin can only receive the MANAGER farm role.");
+
     public static AppError TargetTenantMembershipInactive() =>
         AppError.Conflict(
             "FarmMembership.TargetTenantMembershipInactive",
             "The target tenant membership must be active.");
+
+    public static AppError InvalidZones() =>
+        AppError.Validation(
+            "FarmMembership.InvalidZones",
+            "Every selected zone must be active and belong to the selected farm.");
 
     public static AppError ExpectedVersionRequired() =>
         AppError.Conflict(

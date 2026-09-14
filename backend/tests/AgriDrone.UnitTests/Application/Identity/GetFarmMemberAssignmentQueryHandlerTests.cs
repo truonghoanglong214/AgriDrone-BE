@@ -2,6 +2,7 @@ using AgriDrone.IntegrationContracts.Farms;
 using AgriDrone.Modules.Identity.Application.Abstractions.Queries;
 using AgriDrone.Modules.Identity.Application.Features.GetFarmMemberAssignment;
 using AgriDrone.Modules.Identity.Application.Features.GetFarmMembers;
+using AgriDrone.Modules.Identity.Application.Features.GetMyFarmAssignments;
 using AgriDrone.Modules.Identity.Domain.FarmMemberships;
 using AgriDrone.SharedKernel.Application.Abstractions.Authorization;
 using AgriDrone.SharedKernel.Application.Abstractions.Execution;
@@ -161,6 +162,16 @@ public sealed class GetFarmMemberAssignmentQueryHandlerTests
                 PagedRequest pagedRequest,
                 CancellationToken cancellationToken) =>
             throw new NotSupportedException();
+
+        public Task<PagedResult<MyFarmAssignmentReadModel>>
+            GetMyAssignmentsPageAsync(
+                Guid tenantId,
+                Guid userId,
+                IReadOnlyCollection<Guid> activeFarmIds,
+                FarmMemberRole? role,
+                PagedRequest pagedRequest,
+                CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
     }
 
     private sealed class FakeFarmAssignmentReferenceQuery
@@ -173,6 +184,19 @@ public sealed class GetFarmMemberAssignmentQueryHandlerTests
             Guid farmId,
             CancellationToken cancellationToken = default) =>
             Task.FromResult(IsActive);
+
+        public Task<IReadOnlyCollection<FarmAssignmentReference>>
+            GetActiveFarmsAsync(
+            Guid tenantId,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<IReadOnlyCollection<FarmAssignmentZoneReference>>
+            GetActiveZonesAsync(
+                Guid tenantId,
+                IReadOnlyCollection<Guid> farmIds,
+                CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
     }
 
     private sealed class FakeEffectiveAccessService : IEffectiveAccessService

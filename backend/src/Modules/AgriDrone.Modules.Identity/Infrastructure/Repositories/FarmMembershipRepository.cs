@@ -15,10 +15,12 @@ internal sealed class FarmMembershipRepository(
         Guid farmId,
         Guid userId,
         CancellationToken cancellationToken) =>
-        context.FarmMemberships.SingleOrDefaultAsync(
-            membership =>
-                membership.TenantId == tenantId &&
-                membership.FarmId == farmId &&
-                membership.UserId == userId,
-            cancellationToken);
+        context.FarmMemberships
+            .Include(membership => membership.ZoneAssignments)
+            .SingleOrDefaultAsync(
+                membership =>
+                    membership.TenantId == tenantId &&
+                    membership.FarmId == farmId &&
+                    membership.UserId == userId,
+                cancellationToken);
 }
