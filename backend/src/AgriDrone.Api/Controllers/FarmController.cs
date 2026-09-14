@@ -317,11 +317,13 @@ namespace AgriDrone.Api.Controllers
                 () => Results.NoContent());
         }
 
-        /// <summary>Gán một thành viên quản lý farm.</summary>
+        /// <summary>Gán hoặc cập nhật vai trò của một thành viên trong farm.</summary>
         /// <remarks>
-        /// Tenant Owner hoặc Tenant Admin gán một Member hoặc Tenant Admin đang
-        /// hoạt động vào farm hiện tại với vai trò Farm Manager và quyền truy cập
-        /// tất cả zone. Assignment chỉ có hiệu lực trong đúng farm được chỉ định.
+        /// Hỗ trợ MANAGER hoặc WORKER với phạm vi ALL_ZONES hoặc SELECTED_ZONES.
+        /// ALL_ZONES yêu cầu ZoneIds rỗng; SELECTED_ZONES yêu cầu các ZoneIds
+        /// khác nhau, đang active và thuộc đúng farm. Tenant Admin chỉ thay đổi
+        /// assignment của Member; assignment của Tenant Admin chỉ Tenant Owner
+        /// được thay đổi. ExpectedVersion bắt buộc khi cập nhật assignment có sẵn.
         /// </remarks>
         [HttpPut("{farmId:guid}/members/{userId:guid}/assignment")]
         [Authorize(Policy = AccessAuthorizationPolicies.TenantAdmin)]

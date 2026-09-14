@@ -1,6 +1,7 @@
 using AgriDrone.Modules.Identity.Application.Abstractions.Queries;
 using AgriDrone.Modules.Identity.Application.Features.GetFarmMemberAssignment;
 using AgriDrone.Modules.Identity.Application.Features.GetFarmMembers;
+using AgriDrone.Modules.Identity.Application.Features.GetMyFarmAssignments;
 using AgriDrone.Modules.Identity.Domain.FarmMemberships;
 using AgriDrone.Modules.Identity.Domain.Users;
 using AgriDrone.Modules.Identity.Infrastructure.Persistence;
@@ -78,6 +79,52 @@ internal sealed class FarmMembershipQueries(
                 membership.User.Email,
                 membership.User.FullName,
                 membership.TenantMembership.Role,
+                membership.Role,
+                membership.AccessScope,
+                membership.ZoneAssignments
+                    .Where(assignment => assignment.RevokedAt == null)
+                    .OrderBy(assignment => assignment.ZoneId)
+                    .Select(assignment => assignment.ZoneId)
+                    .ToArray(),
+                membership.Status,
+                membership.Version,
+                membership.JoinedAt))
+            .ToPagedResultAsync(
+                pagedRequest,
+                cancellationToken);
+    }
+
+    public Task<PagedResult<MyFarmAssignmentReadModel>>
+        GetMyAssignmentsPageAsync(
+            Guid tenantId,
+            Guid userId,
+            IReadOnlyCollection<Guid> activeFarmIds,
+            FarmMemberRole? role,
+            PagedRequest pagedRequest,
+            CancellationToken cancellationToken)
+    {
+        var query = dbContext.FarmMemberships
+            .AsNoTracking()
+            .Where(membership =>
+                membership.TenantId == tenantId &&
+                membership.UserId == userId &&
+                activeFarmIds.Contains(membership.FarmId) &&
+                membership.Status == GeneralStatus.Active &&
+                membership.TenantMembership.Status == GeneralStatus.Active &&
+                membership.User.Status == UserStatus.Active &&
+                membership.User.DeletedAt == null);
+
+        if (role.HasValue)
+        {
+            query = query.Where(membership => membership.Role == role.Value);
+        }
+
+        return query
+            .OrderByDescending(membership => membership.JoinedAt)
+            .ThenByDescending(membership => membership.Id)
+            .Select(membership => new MyFarmAssignmentReadModel(
+                membership.Id,
+                membership.FarmId,
                 membership.Role,
                 membership.AccessScope,
                 membership.ZoneAssignments
