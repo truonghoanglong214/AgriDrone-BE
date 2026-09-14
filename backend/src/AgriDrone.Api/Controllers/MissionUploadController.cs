@@ -20,6 +20,13 @@ public sealed class MissionUploadController(
     IExecutionContext executionContext)
     : ControllerBase
 {
+    /// <summary>Hoàn tất giai đoạn upload của Mission.</summary>
+    /// <remarks>
+    /// Chỉ thành công khi Mission đang Uploading, không còn upload session hoạt
+    /// động, có tối thiểu một media hợp lệ và telemetry đã import từ hai điểm
+    /// trở lên. Backend kiểm tra flight route có SRID 4326 rồi chuyển Mission
+    /// sang ReadyForProcessing để bắt đầu xử lý AI.
+    /// </remarks>
     [HttpPost(
         "api/farms/{farmId:guid}/missions/" +
         "{missionId:guid}/upload/finalize")]

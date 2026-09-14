@@ -21,6 +21,13 @@ public sealed class MissionMediaController(
     IExecutionContext executionContext)
     : ControllerBase
 {
+    /// <summary>Tạo phiên tải lên media cho Mission.</summary>
+    /// <remarks>
+    /// Farm Manager tạo upload session idempotent bằng OperationId. API trả về
+    /// presigned URL để client tải file trực tiếp lên MinIO; backend không nhận
+    /// nội dung file trong request này. Chỉ chấp nhận ảnh JPEG/PNG hoặc video
+    /// MP4/MOV theo MediaType, checksum SHA-256 và ExpectedMissionVersion.
+    /// </remarks>
     [HttpPost(
         "api/farms/{farmId:guid}/missions/" +
         "{missionId:guid}/media/upload-sessions")]
@@ -78,6 +85,13 @@ public sealed class MissionMediaController(
                     value.ReusedOperation)));
     }
 
+    /// <summary>Xác nhận media đã được tải lên object storage.</summary>
+    /// <remarks>
+    /// Gọi API sau khi client PUT file thành công vào presigned URL. Backend
+    /// kiểm tra object trên MinIO, gồm kích thước, MIME type và SHA-256 checksum,
+    /// rồi chuyển upload session sang Completed. API có thể gọi lại an toàn khi
+    /// kết quả hoàn tất trước đó vẫn hợp lệ.
+    /// </remarks>
     [HttpPost(
     "api/farms/{farmId:guid}/missions/" +
     "{missionId:guid}/media/upload-sessions/" +
