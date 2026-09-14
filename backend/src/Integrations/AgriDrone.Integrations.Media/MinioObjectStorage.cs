@@ -74,11 +74,13 @@ internal sealed class MinioObjectStorage(
                 cancellationToken);
 
             return new StoredObjectInfo(
-                storageUri,
-                string.IsNullOrWhiteSpace(stat.ContentType)
+                StorageUri: storageUri,
+                Provider: "MinIO",
+                StorageKey: location.ObjectName,
+                MimeType: string.IsNullOrWhiteSpace(stat.ContentType)
                     ? DefaultMimeType
                     : stat.ContentType,
-                stat.Size,
+                FileSizeBytes: stat.Size,
                 ChecksumAlgorithm: null,
                 Checksum: null);
         }

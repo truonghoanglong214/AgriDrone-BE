@@ -217,11 +217,13 @@ public sealed class Drone : AggregateRoot
             return;
         }
 
-        if (Status != DroneStatus.Available &&
-            Status != DroneStatus.Maintenance)
+        if (Status is not DroneStatus.Available and
+            not DroneStatus.Maintenance and
+            not DroneStatus.Inactive)
         {
             throw new InvalidOperationException(
-                "Only an available or maintenance drone can be retired.");
+                "Only an available, maintenance or " +
+                "inactive drone can be retired.");
         }
 
         Status = DroneStatus.Retired;
@@ -304,6 +306,49 @@ public sealed class Drone : AggregateRoot
         return string.IsNullOrWhiteSpace(value)
             ? null
             : value.Trim().ToUpperInvariant();
+    }
+
+    public void Deactivate(DateTimeOffset deactivatedAt)
+    {
+        EnsureTimestampIsProvided(
+            deactivatedAt,
+            nameof(deactivatedAt));
+
+        if (Status == DroneStatus.Inactive)
+        {
+            return;
+        }
+
+        if (Status != DroneStatus.Available &&
+            Status != DroneStatus.Maintenance)
+        {
+            throw new InvalidOperationException(
+                "Only an available or maintenance drone can be deactivated.");
+        }
+
+        Status = DroneStatus.Inactive;
+        UpdatedAt = deactivatedAt;
+    }
+
+    public void Activate(DateTimeOffset activatedAt)
+    {
+        EnsureTimestampIsProvided(
+            activatedAt,
+            nameof(activatedAt));
+
+        if (Status == DroneStatus.Available)
+        {
+            return;
+        }
+
+        if (Status != DroneStatus.Inactive)
+        {
+            throw new InvalidOperationException(
+                "Only an inactive drone can be activated.");
+        }
+
+        Status = DroneStatus.Available;
+        UpdatedAt = activatedAt;
     }
 
     private static void EnsureTimestampIsProvided(

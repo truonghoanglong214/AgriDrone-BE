@@ -44,8 +44,19 @@ internal static class DroneError
             "Drone.InvalidStatusTransition",
             $"Drone cannot change from '{currentStatus}' to '{targetStatus}'.");
 
+    public static AppError NextMaintenanceNotAllowed() =>
+    AppError.Validation(
+        "Drone.NextMaintenanceNotAllowed",
+        "Next maintenance time can only be provided when completing maintenance.");
+
     public static AppError InvalidNextMaintenanceTime() =>
         AppError.Validation(
             "Drone.InvalidNextMaintenanceTime",
             "Next maintenance time must be later than maintenance completion time.");
+
+    public static AppError HasBlockingMission(Guid droneId) =>
+        AppError.Conflict(
+            "Drone.HasBlockingMission",
+            $"Drone with ID '{droneId}' is assigned " +
+            "to a draft, scheduled or in-flight mission.");
 }

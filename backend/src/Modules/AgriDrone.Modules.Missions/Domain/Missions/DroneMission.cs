@@ -498,6 +498,54 @@ public sealed class DroneMission : AggregateRoot
 
         return true;
     }
+
+    public void SetActualFlightRoute(
+    LineString flightRoute,
+    DateTimeOffset changedAt)
+    {
+        ArgumentNullException.ThrowIfNull(flightRoute);
+        DomainGuard.Utc(changedAt);
+
+        EnsureStatus(MissionStatus.Uploading);
+
+        if (flightRoute.IsEmpty ||
+            flightRoute.NumPoints < 2)
+        {
+            throw new ArgumentException(
+                "Actual flight route must contain at least two points.",
+                nameof(flightRoute));
+        }
+
+        if (flightRoute.SRID != 4326)
+        {
+            throw new ArgumentException(
+                "Actual flight route must use SRID 4326.",
+                nameof(flightRoute));
+        }
+
+        foreach (var coordinate in flightRoute.Coordinates)
+        {
+            if (!double.IsFinite(coordinate.X) ||
+                coordinate.X is < -180 or > 180)
+            {
+                throw new ArgumentException(
+                    "Flight route contains an invalid longitude.",
+                    nameof(flightRoute));
+            }
+
+            if (!double.IsFinite(coordinate.Y) ||
+                coordinate.Y is < -90 or > 90)
+            {
+                throw new ArgumentException(
+                    "Flight route contains an invalid latitude.",
+                    nameof(flightRoute));
+            }
+        }
+
+        FlightRoute = (LineString)flightRoute.Copy();
+        FlightRoute.SRID = 4326;
+        UpdatedAt = changedAt;
+    }
     private void EnsureStatus(MissionStatus expectedStatus)
     {
         if (Status != expectedStatus)

@@ -3,7 +3,9 @@ using AgriDrone.IntegrationContracts.Health;
 using AgriDrone.IntegrationContracts.Mapping;
 using AgriDrone.IntegrationContracts.Messaging;
 using AgriDrone.Modules.Missions.Application.Abstractions;
+using AgriDrone.Modules.Missions.Application.Abstractions.Media;
 using AgriDrone.Modules.Missions.Application.Abstractions.Missions;
+using AgriDrone.Modules.Missions.Application.Abstractions.Telemetry;
 using AgriDrone.Modules.Missions.Domain.Drones;
 using AgriDrone.Modules.Missions.Domain.Media;
 using AgriDrone.Modules.Missions.Domain.Missions;
@@ -106,6 +108,18 @@ public static class DependencyInjection
             HealthReviewStateChangedProcessor>(
             IntegrationConsumerNames
                 .Be2HealthReviewStateChangedV1);
+
+        services.AddScoped<
+            IMediaUploadSessionRepository, MediaUploadSessionRepository>();
+
+        services.AddScoped<
+            IMissionMediaRepository, MissionMediaRepository>();
+
+        services.AddScoped<
+            IMissionTelemetryRepository, MissionTelemetryRepository>();
+
+        services.AddScoped<
+            IMissionUploadReadinessQueries, MissionUploadReadinessQueries>();
 
         return services;
     }
