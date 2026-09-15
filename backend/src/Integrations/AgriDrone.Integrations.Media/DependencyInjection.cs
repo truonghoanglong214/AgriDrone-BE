@@ -63,6 +63,8 @@ public static class DependencyInjection
         services.AddSingleton<
             IObjectStorage,
             MinioObjectStorage>();
+        services.AddSingleton<IObjectStorageWriter>(provider =>
+            (MinioObjectStorage)provider.GetRequiredService<IObjectStorage>());
 
         services
             .AddHealthChecks()

@@ -20,6 +20,7 @@ namespace AgriDrone.Api.Controllers;
 
 [ApiController]
 [Authorize]
+[Route("api/missions")]
 public sealed class MissionsController(
     ISender sender,
     IAuthorizationService authorizationService,
@@ -32,9 +33,9 @@ public sealed class MissionsController(
     /// Health Inspection phải tham chiếu confirmed map của Zone; mã Mission là duy
     /// nhất trong Farm. Drone và các tham chiếu phải thuộc đúng tenant.
     /// </remarks>
-    [HttpPost("api/farms/{farmId:guid}/missions")]
+    [HttpPost]
     public async Task<IResult> CreateMission(
-        Guid farmId,
+        [FromQuery] Guid farmId,
         [FromBody] CreateMissionRequest request,
         CancellationToken cancellationToken)
     {
@@ -64,7 +65,7 @@ public sealed class MissionsController(
         return result.ToHttpResult(
             HttpContext,
             mission => Results.Created(
-                $"/api/farms/{farmId}/missions/{mission.Id}",
+                $"/api/missions/{mission.Id}?farmId={farmId}",
                 mission));
     }
 
@@ -74,11 +75,9 @@ public sealed class MissionsController(
     /// không giao lịch và khoảng thời gian hợp lệ. ExpectedVersion bảo vệ khỏi cập
     /// nhật đồng thời.
     /// </remarks>
-    [HttpPatch(
-        "api/farms/{farmId:guid}/missions/" +
-        "{missionId:guid}/schedule")]
+    [HttpPatch("{missionId:guid}/schedule")]
     public async Task<IResult> ScheduleMission(
-        Guid farmId,
+        [FromQuery] Guid farmId,
         Guid missionId,
         [FromBody] ScheduleMissionRequest request,
         CancellationToken cancellationToken)
@@ -113,11 +112,9 @@ public sealed class MissionsController(
     /// FlightCompleted hoặc FlightFailed, và Draft/Scheduled sang Cancelled. Khi
     /// bắt đầu hoặc kết thúc chuyến bay, trạng thái drone được cập nhật đồng bộ.
     /// </remarks>
-    [HttpPatch(
-        "api/farms/{farmId:guid}/missions/" +
-        "{missionId:guid}/status")]
+    [HttpPatch("{missionId:guid}/status")]
     public async Task<IResult> TransitionMission(
-        Guid farmId,
+        [FromQuery] Guid farmId,
         Guid missionId,
         [FromBody] TransitionMissionRequest request,
         CancellationToken cancellationToken)
@@ -151,11 +148,9 @@ public sealed class MissionsController(
     /// Trả toàn bộ thông tin Mission thuộc đúng tenant và farm, gồm Zone, drone,
     /// pilot, loại Mission, lịch bay, trạng thái, source map và version hiện tại.
     /// </remarks>
-    [HttpGet(
-        "api/farms/{farmId:guid}/missions/" +
-        "{missionId:guid}")]
+    [HttpGet("{missionId:guid}")]
     public async Task<IResult> GetMissionDetails(
-        Guid farmId,
+        [FromQuery] Guid farmId,
         Guid missionId,
         CancellationToken cancellationToken)
     {

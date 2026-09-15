@@ -12,7 +12,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace AgriDrone.Api.Controllers;
 
 [ApiController]
-[Route("api/system/drones")]
+[Route("api/drones/system")]
 [Authorize(
     Policy = AccessAuthorizationPolicies.SystemAdmin)]
 public sealed class SystemDronesController(
