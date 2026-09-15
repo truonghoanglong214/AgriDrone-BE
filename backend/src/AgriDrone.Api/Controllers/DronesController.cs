@@ -178,11 +178,10 @@ public sealed class DronesController(
     /// Farm Manager truy vấn các drone đang Available trong tenant và không có
     /// Mission giao lịch với khoảng thời gian yêu cầu.
     /// </remarks>
-    [HttpGet(
-        "/api/farms/{farmId:guid}/drones/available")]
+    [HttpGet("available")]
     [Authorize]
     public async Task<IResult> GetAvailableDrones(
-        Guid farmId,
+        [FromQuery] Guid farmId,
         [FromQuery] GetAvailableDronesRequest request,
         CancellationToken cancellationToken)
     {

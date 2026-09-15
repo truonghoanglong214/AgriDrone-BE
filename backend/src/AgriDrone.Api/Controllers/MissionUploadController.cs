@@ -27,11 +27,9 @@ public sealed class MissionUploadController(
     /// trở lên. Backend kiểm tra flight route có SRID 4326 rồi chuyển Mission
     /// sang ReadyForProcessing để bắt đầu xử lý AI.
     /// </remarks>
-    [HttpPost(
-        "api/farms/{farmId:guid}/missions/" +
-        "{missionId:guid}/upload/finalize")]
+    [HttpPost("api/missions/{missionId:guid}/upload/finalize")]
     public async Task<IResult> FinalizeMissionUpload(
-        Guid farmId,
+        [FromQuery] Guid farmId,
         Guid missionId,
         [FromBody] FinalizeMissionUploadRequest request,
         CancellationToken cancellationToken)
