@@ -1,5 +1,11 @@
 using AgriDrone.Api.Contracts.Missions;
 using AgriDrone.Modules.Missions.Application.Features.Media.UploadMissionMedia;
+using AgriDrone.Modules.Missions.Application.Features.Media;
+using AgriDrone.Modules.Missions.Application.Features.Media.GetMissionMedia;
+using AgriDrone.Modules.Missions.Application.Features.Media.GetMissionMediaDetails;
+using AgriDrone.Modules.Missions.Application.Features.Media.GetMissionMediaDownloadUrl;
+using AgriDrone.SharedInfrastructure.Http;
+using AgriDrone.SharedKernel.Application.Pagination;
 using AgriDrone.SharedInfrastructure.Authorization;
 using AgriDrone.SharedKernel.Application.Abstractions.Authorization;
 using AgriDrone.SharedKernel.Application.Abstractions.Execution;
@@ -11,6 +17,7 @@ namespace AgriDrone.Api.Controllers;
 
 [ApiController]
 [Authorize]
+[Route("api/missions/{missionId:guid}/farms/{farmId:guid}/media")]
 public sealed class MissionMediaController(
     ISender sender,
     IAuthorizationService authorizationService,
@@ -33,13 +40,13 @@ public sealed class MissionMediaController(
     /// File đã Completed được giữ lại. HTTP 200 nếu tất cả thành công, 207 nếu
     /// có lỗi. Response chứa kết quả theo index (bắt đầu từ 0) và tên từng file.
     /// </remarks>
-    [HttpPost("api/missions/{missionId:guid}/media")]
+    [HttpPost]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(5L * 1024 * 1024 * 1024 + 1024 * 1024)]
     [RequestFormLimits(MultipartBodyLengthLimit = 5L * 1024 * 1024 * 1024)]
     [ProducesResponseType(typeof(IReadOnlyList<UploadMissionMediaItemResponse>), 200)]
     [ProducesResponseType(typeof(IReadOnlyList<UploadMissionMediaItemResponse>), 207)]
-    public async Task<IResult> Upload([FromQuery] Guid farmId, [FromRoute] Guid missionId,
+    public async Task<IResult> Upload([FromRoute] Guid farmId, [FromRoute] Guid missionId,
         [FromForm] UploadMissionMediaRequest request, CancellationToken cancellationToken)
     {
         if (executionContext.TenantId is not Guid tenantId)
@@ -97,5 +104,81 @@ public sealed class MissionMediaController(
         }
 
         return Results.Json(results, statusCode: stopped ? 207 : StatusCodes.Status200OK);
+    }
+
+    /// <summary>Lấy danh sách media đã hoàn tất của Mission.</summary>
+    /// <remarks>
+    /// Yêu cầu FarmManage. Phân trang tối đa 100 phần tử, lọc MediaType/MediaRole.
+    /// Chỉ trả media Active thuộc đúng tenant, farm và mission; không trả storage URI.
+    /// Mission tồn tại chưa có media trả trang rỗng; mission không tồn tại trả 404.
+    /// </remarks>
+    [HttpGet]
+    [ProducesResponseType(typeof(PagedResult<MissionMediaResponse>), StatusCodes.Status200OK)]
+    public async Task<IResult> GetMedia(
+        [FromRoute] Guid farmId,
+        [FromRoute] Guid missionId,
+        [FromQuery] GetMissionMediaRequest request,
+        CancellationToken cancellationToken)
+    {
+        var denied = await AuthorizeFarmAsync(farmId);
+        if (denied is not null) return denied;
+
+        var result = await sender.Send(new GetMissionMediaQuery(
+            farmId, missionId, request.PageNumber, request.PageSize,
+            request.MediaType, request.MediaRole), cancellationToken);
+        return result.ToHttpResult(HttpContext, Results.Ok);
+    }
+
+    /// <summary>Lấy chi tiết media của Mission.</summary>
+    /// <remarks>
+    /// Yêu cầu FarmManage. Media phải Active và liên kết với đúng mission/farm/tenant.
+    /// Trả metadata, checksum và thông tin capture; không trả storage URI nội bộ.
+    /// </remarks>
+    [HttpGet("{mediaId:guid}")]
+    [ProducesResponseType(typeof(MissionMediaResponse), StatusCodes.Status200OK)]
+    public async Task<IResult> GetMediaDetails(
+        [FromRoute] Guid farmId,
+        [FromRoute] Guid missionId,
+        [FromRoute] Guid mediaId,
+        CancellationToken cancellationToken)
+    {
+        var denied = await AuthorizeFarmAsync(farmId);
+        if (denied is not null) return denied;
+
+        var result = await sender.Send(new GetMissionMediaDetailsQuery(
+            farmId, missionId, mediaId), cancellationToken);
+        return result.ToHttpResult(HttpContext, Results.Ok);
+    }
+
+    /// <summary>Cấp link xem/tải media có hiệu lực 5 phút.</summary>
+    /// <remarks>
+    /// Kiểm tra FarmManage, liên kết media và object trước khi cấp presigned GET URL.
+    /// Không cache response. Link đã cấp còn dùng được tới khi hết hạn.
+    /// </remarks>
+    [HttpGet("{mediaId:guid}/download-url")]
+    [ProducesResponseType(typeof(MissionMediaDownloadResponse), StatusCodes.Status200OK)]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    public async Task<IResult> GetDownloadUrl(
+        [FromRoute] Guid farmId,
+        [FromRoute] Guid missionId,
+        [FromRoute] Guid mediaId,
+        CancellationToken cancellationToken)
+    {
+        var denied = await AuthorizeFarmAsync(farmId);
+        if (denied is not null) return denied;
+
+        var result = await sender.Send(new GetMissionMediaDownloadUrlQuery(
+            farmId, missionId, mediaId), cancellationToken);
+        return result.ToHttpResult(HttpContext, Results.Ok);
+    }
+
+    private async Task<IResult?> AuthorizeFarmAsync(Guid farmId)
+    {
+        if (executionContext.TenantId is not Guid tenantId)
+            return Results.Unauthorized();
+
+        var authorization = await authorizationService.AuthorizeAsync(
+            User, new FarmAccessTarget(tenantId, farmId), AccessAuthorizationPolicies.FarmManage);
+        return authorization.Succeeded ? null : Results.Forbid();
     }
 }
