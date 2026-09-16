@@ -7,10 +7,12 @@ using AgriDrone.Modules.Identity.Application.Errors;
 using AgriDrone.Modules.Identity.Application.Options;
 using AgriDrone.Modules.Identity.Domain.Tenants;
 using AgriDrone.Modules.Identity.Domain.Users;
+using AgriDrone.SharedInfrastructure.Persistence;
 using AgriDrone.SharedKernel.Application;
 using AgriDrone.SharedKernel.Application.Abstractions.Execution;
 using AgriDrone.SharedKernel.Domain;
 using MediatR;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
 namespace AgriDrone.Modules.Identity.Application.Features.RegisterUser;
@@ -27,17 +29,43 @@ internal sealed class RegisterUserCommandHandler(
     IIdentityUnitOfWork unitOfWork)
     : IRequestHandler<RegisterUserCommand, Result<RegisterUserResponse>>
 {
+    private const string UserEmailConstraint =
+        "uq_users_email";
+    private const string ActiveTenantCodeConstraint =
+        "ux_tenants_code_active";
+
     private readonly TenantRegistrationOptions _registrationOptions =
         registrationOptions.Value;
 
-    public Task<Result<RegisterUserResponse>> Handle(
+    public async Task<Result<RegisterUserResponse>> Handle(
         RegisterUserCommand request,
-        CancellationToken cancellationToken) =>
-        unitOfWork.ExecuteInTransactionAsync(
-            transactionCancellationToken => RegisterAsync(
-                request,
-                transactionCancellationToken),
-            cancellationToken);
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await unitOfWork.ExecuteInTransactionAsync(
+                transactionCancellationToken => RegisterAsync(
+                    request,
+                    transactionCancellationToken),
+                cancellationToken);
+        }
+        catch (DbUpdateException exception)
+            when (exception.IsUniqueConstraintViolation(
+                UserEmailConstraint))
+        {
+            return Result.Failure<RegisterUserResponse>(
+                UserError.EmailAlreadyExists(
+                    request.Email.Trim().ToLowerInvariant()));
+        }
+        catch (DbUpdateException exception)
+            when (exception.IsUniqueConstraintViolation(
+                ActiveTenantCodeConstraint))
+        {
+            return Result.Failure<RegisterUserResponse>(
+                TenantError.CodeAlreadyExists(
+                    request.TenantCode.Trim().ToUpperInvariant()));
+        }
+    }
 
     private async Task<Result<RegisterUserResponse>> RegisterAsync(
         RegisterUserCommand request,

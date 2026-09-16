@@ -1,4 +1,6 @@
 using AgriDrone.IntegrationContracts.Farms;
+using AgriDrone.Modules.Plants.Application.Abstractions.Persistence;
+using AgriDrone.Modules.Plants.Application.Abstractions.Queries;
 using AgriDrone.Modules.Plants.Domain.Conditions;
 using AgriDrone.Modules.Plants.Domain.Diseases;
 using AgriDrone.Modules.Plants.Domain.Mapping;
@@ -7,6 +9,8 @@ using AgriDrone.Modules.Plants.Domain.Scans;
 using AgriDrone.Modules.Plants.Domain.Verifications;
 using AgriDrone.Modules.Plants.Infrastructure.Persistence;
 using AgriDrone.Modules.Plants.Infrastructure.Queries;
+using AgriDrone.Modules.Plants.Infrastructure.Repositories;
+using AgriDrone.SharedInfrastructure.Auditing;
 using AgriDrone.SharedInfrastructure.Persistence;
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
@@ -48,7 +52,14 @@ public static class DependencyInjection
                     .MapEnum<ConditionReviewDecision>(
                         "condition_review_decision",
                         "system",
+                        translator)
+                    .MapEnum<AuditActorType>(
+                        "audit_actor_type",
+                        "system",
                         translator)));
+
+        services.AddScoped<IPlantsUnitOfWork>(serviceProvider =>
+            serviceProvider.GetRequiredService<PlantsDbContext>());
 
         var assembly = typeof(DependencyInjection).Assembly;
 
@@ -58,9 +69,9 @@ public static class DependencyInjection
             assembly,
             includeInternalTypes: true);
 
-        services.AddScoped<
-            IPlantArchiveReferenceQuery,
-            PlantArchiveReferenceQuery>();
+        services.AddScoped<IPlantArchiveReferenceQuery,PlantArchiveReferenceQuery>();
+        services.AddScoped<IHealthLevelQueries, HealthLevelQuery>();
+        services.AddScoped<IPlantConditionRepository, PlantConditionRepository>();
 
         return services;
     }

@@ -12,7 +12,10 @@ namespace AgriDrone.Modules.Farms.Application.Features.CreateFarm
 
             RuleFor(farm => farm.code)
                 .NotEmpty().WithMessage("Farm code is required.")
-                .MaximumLength(30).WithMessage("Farm code must not exceed 30 characters.");
+                .MaximumLength(30).WithMessage("Farm code must not exceed 30 characters.")
+                .Matches("^[A-Za-z][A-Za-z0-9_]*$")
+                .WithMessage(
+                "Condition code may contain letters, numbers and underscores."); ;
 
             RuleFor(farm => farm.name)
                 .NotEmpty().WithMessage("Farm name is required.")
