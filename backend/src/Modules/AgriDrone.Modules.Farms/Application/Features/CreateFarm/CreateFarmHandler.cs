@@ -1,14 +1,13 @@
 ﻿using AgriDrone.Modules.Farms.Application.Abstractions.Persistence;
 using AgriDrone.Modules.Farms.Application.Errors;
 using AgriDrone.Modules.Farms.Domain.Farms;
+using AgriDrone.SharedInfrastructure.Persistence;
 using AgriDrone.SharedKernel.Application;
 using AgriDrone.SharedKernel.Application.Abstractions.Authorization;
 using AgriDrone.SharedKernel.Application.Abstractions.Execution;
 using AgriDrone.SharedKernel.Domain;
 using MediatR;
-using System;
-using System.Collections.Generic;
-using System.Text;
+using Microsoft.EntityFrameworkCore;
 
 namespace AgriDrone.Modules.Farms.Application.Features.CreateFarm
 {
@@ -19,6 +18,9 @@ namespace AgriDrone.Modules.Farms.Application.Features.CreateFarm
         IEffectiveAccessService effectiveAccessService,
         TimeProvider timeProvider) : IRequestHandler<CreateFarmCommand, Result<CreateFarmResponse>>
     {
+        private const string ActiveFarmCodeConstraint =
+            "ux_farms_tenant_code_active";
+
         public async Task<Result<CreateFarmResponse>> Handle(CreateFarmCommand request, CancellationToken cancellationToken)
         {
             if (executionContext.TenantId is not Guid tenantId)
@@ -59,7 +61,18 @@ namespace AgriDrone.Modules.Farms.Application.Features.CreateFarm
                 now);
 
             farmRepository.Add(newFarm);
-            await unitOfWork.SaveChangesAsync(cancellationToken);
+
+            try
+            {
+                await unitOfWork.SaveChangesAsync(cancellationToken);
+            }
+            catch (DbUpdateException exception)
+                when (exception.IsUniqueConstraintViolation(
+                    ActiveFarmCodeConstraint))
+            {
+                return Result.Failure<CreateFarmResponse>(
+                    FarmError.CodeAlreadyExists(normalizedCode));
+            }
 
             return Result.Success(
                 new CreateFarmResponse(
