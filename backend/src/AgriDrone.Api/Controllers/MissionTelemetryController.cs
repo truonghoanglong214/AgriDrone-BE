@@ -27,9 +27,9 @@ public sealed class MissionTelemetryController(
     /// đang Uploading. Mỗi Mission chỉ có một telemetry import; OperationId hỗ
     /// trợ retry an toàn khi client gửi lại cùng payload.
     /// </remarks>
-    [HttpPost("api/missions/{missionId:guid}/telemetry/imports")]
+    [HttpPost("api/missions/{missionId:guid}/farms/{farmId:guid}/telemetry/imports")]
     public async Task<IResult> ImportTelemetry(
-        [FromQuery] Guid farmId,
+        [FromRoute] Guid farmId,
         Guid missionId,
         [FromBody] ImportMissionTelemetryRequest request,
         CancellationToken cancellationToken)

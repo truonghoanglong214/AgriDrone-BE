@@ -114,6 +114,7 @@ public static class DependencyInjection
 
         services.AddScoped<
             IMissionMediaRepository, MissionMediaRepository>();
+        services.AddScoped<IMissionMediaQueries, MissionMediaQueries>();
 
         services.AddScoped<
             IMissionTelemetryRepository, MissionTelemetryRepository>();
