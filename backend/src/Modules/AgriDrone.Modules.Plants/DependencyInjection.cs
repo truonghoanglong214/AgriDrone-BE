@@ -71,6 +71,7 @@ public static class DependencyInjection
 
         services.AddScoped<IPlantArchiveReferenceQuery,PlantArchiveReferenceQuery>();
         services.AddScoped<IHealthLevelQueries, HealthLevelQuery>();
+        services.AddScoped<IPlantConditionQueries, PlantConditionQueries>();
         services.AddScoped<IPlantConditionRepository, PlantConditionRepository>();
 
         return services;

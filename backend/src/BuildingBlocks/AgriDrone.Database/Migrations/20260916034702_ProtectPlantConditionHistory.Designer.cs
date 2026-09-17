@@ -4,6 +4,7 @@ using System.Text.Json;
 using AgriDrone.Database;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using NetTopologySuite.Geometries;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
@@ -13,9 +14,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace AgriDrone.Database.Migrations
 {
     [DbContext(typeof(AgriDroneSchemaDbContext))]
-    partial class AgriDroneSchemaDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260916034702_ProtectPlantConditionHistory")]
+    partial class ProtectPlantConditionHistory
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -25,7 +28,7 @@ namespace AgriDrone.Database.Migrations
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "ai_job_status", new[] { "QUEUED", "PROCESSING", "COMPLETED", "FAILED", "CANCELLED" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "ai_job_type", new[] { "MAPPING", "HEALTH_INSPECTION", "FRAME_EXTRACTION", "PLANT_DETECTION", "PLANT_MATCHING", "DISEASE_DETECTION" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "ai_model_type", new[] { "PLANT_DETECTION", "PLANT_TRACKING", "PLANT_MATCHING", "DISEASE_DETECTION", "SEVERITY_ANALYSIS", "MULTI_TASK" });
-            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "altitude_reference", new[] { "RELATIVE_TO_TAKEOFF", "AGL", "MSL", "UNKNOWN" });
+            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "altitude_reference", new[] { "AGL", "MSL", "UNKNOWN" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "audit_actor_type", new[] { "USER", "AI", "SYSTEM" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "condition_review_decision", new[] { "CONFIRMED", "CORRECTED", "REJECTED" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "condition_type", new[] { "DISEASE", "ABIOTIC_DAMAGE", "MECHANICAL_DAMAGE", "OTHER" });
@@ -974,49 +977,18 @@ namespace AgriDrone.Database.Migrations
                         .HasColumnType("character varying(100)")
                         .HasColumnName("name");
 
-                    b.Property<DateTimeOffset?>("RetiredAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("retired_at");
-
-                    b.Property<int>("RevisionNumber")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(1)
-                        .HasColumnName("revision_number");
-
-                    b.Property<Guid?>("SupersedesId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("supersedes_id");
-
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at")
                         .HasDefaultValueSql("NOW()");
 
-                    b.Property<long>("Version")
-                        .IsConcurrencyToken()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint")
-                        .HasDefaultValue(1L)
-                        .HasColumnName("version");
-
                     b.HasKey("Id")
                         .HasName("pk_harvest_quality_grades");
 
                     b.HasIndex("Code")
                         .IsUnique()
-                        .HasDatabaseName("uq_quality_grades_active_code")
-                        .HasFilter("is_active = TRUE");
-
-                    b.HasIndex("SupersedesId")
-                        .IsUnique()
-                        .HasDatabaseName("uq_quality_grades_supersedes")
-                        .HasFilter("supersedes_id IS NOT NULL");
-
-                    b.HasIndex("Code", "RevisionNumber")
-                        .IsUnique()
-                        .HasDatabaseName("uq_quality_grades_code_revision");
+                        .HasDatabaseName("uq_quality_grades_code");
 
                     b.ToTable("harvest_quality_grades", "harvest", t =>
                         {
@@ -1973,133 +1945,6 @@ namespace AgriDrone.Database.Migrations
                         });
                 });
 
-            modelBuilder.Entity("AgriDrone.Modules.Missions.Domain.Media.MediaUploadSession", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<string>("ChecksumAlgorithm")
-                        .IsRequired()
-                        .HasMaxLength(16)
-                        .HasColumnType("character varying(16)")
-                        .HasColumnName("checksum_algorithm");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
-
-                    b.Property<Guid>("CreatedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("created_by");
-
-                    b.Property<string>("ExpectedChecksum")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .HasColumnName("expected_checksum");
-
-                    b.Property<DateTimeOffset>("ExpiresAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("expires_at");
-
-                    b.Property<Guid>("FarmId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("farm_id");
-
-                    b.Property<string>("FileName")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)")
-                        .HasColumnName("file_name");
-
-                    b.Property<long>("FileSizeBytes")
-                        .HasColumnType("bigint")
-                        .HasColumnName("file_size_bytes");
-
-                    b.Property<Guid>("MediaAssetId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("media_asset_id");
-
-                    b.Property<int>("MediaType")
-                        .HasColumnType("system.media_type")
-                        .HasColumnName("media_type");
-
-                    b.Property<string>("MimeType")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("mime_type");
-
-                    b.Property<Guid>("MissionId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("mission_id");
-
-                    b.Property<Guid>("OperationId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("operation_id");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasColumnName("status");
-
-                    b.Property<string>("StorageUri")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("storage_uri");
-
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("tenant_id");
-
-                    b.Property<DateTimeOffset>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at");
-
-                    b.Property<uint>("Version")
-                        .IsConcurrencyToken()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("xid")
-                        .HasColumnName("xmin");
-
-                    b.HasKey("Id")
-                        .HasName("pk_media_upload_sessions");
-
-                    b.HasIndex("MediaAssetId")
-                        .IsUnique()
-                        .HasDatabaseName("uq_upload_sessions_media_asset");
-
-                    b.HasIndex("StorageUri")
-                        .IsUnique()
-                        .HasDatabaseName("uq_upload_sessions_storage_uri");
-
-                    b.HasIndex("MissionId", "FarmId");
-
-                    b.HasIndex("MissionId", "TenantId");
-
-                    b.HasIndex("Status", "ExpiresAt")
-                        .HasDatabaseName("ix_upload_sessions_cleanup");
-
-                    b.HasIndex("TenantId", "MissionId", "OperationId")
-                        .IsUnique()
-                        .HasDatabaseName("uq_upload_sessions_operation");
-
-                    b.ToTable("media_upload_sessions", "mission", t =>
-                        {
-                            t.HasCheckConstraint("ck_upload_sessions_checksum", "checksum_algorithm = 'SHA256' AND expected_checksum ~ '^[0-9a-f]{64}$'");
-
-                            t.HasCheckConstraint("ck_upload_sessions_expiry", "expires_at > created_at");
-
-                            t.HasCheckConstraint("ck_upload_sessions_file_size", "file_size_bytes > 0");
-
-                            t.HasCheckConstraint("ck_upload_sessions_status", "status IN ('Pending', 'Verifying', 'Completed', 'Failed', 'Expired', 'Aborted')");
-
-                            t.HasCheckConstraint("ck_upload_sessions_updated_at", "updated_at >= created_at");
-                        });
-                });
-
             modelBuilder.Entity("AgriDrone.Modules.Missions.Domain.Media.MissionMedia", b =>
                 {
                     b.Property<Guid>("MissionId")
@@ -2979,88 +2824,6 @@ namespace AgriDrone.Database.Migrations
                             t.HasCheckConstraint("ck_ai_threshold_profile_effective_time", "effective_to IS NULL OR effective_from IS NULL OR effective_to >= effective_from");
 
                             t.HasCheckConstraint("ck_ai_threshold_profile_version_positive", "version_number >= 1");
-                        });
-                });
-
-            modelBuilder.Entity("AgriDrone.Modules.Missions.Domain.Telemetry.MissionTelemetryImport", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<Guid>("CreatedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("created_by");
-
-                    b.Property<Guid>("FarmId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("farm_id");
-
-                    b.Property<DateTimeOffset>("FirstRecordedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("first_recorded_at");
-
-                    b.Property<DateTimeOffset>("ImportedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("imported_at");
-
-                    b.Property<DateTimeOffset>("LastRecordedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("last_recorded_at");
-
-                    b.Property<Guid>("MissionId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("mission_id");
-
-                    b.Property<Guid>("OperationId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("operation_id");
-
-                    b.Property<string>("PayloadChecksum")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character(64)")
-                        .HasColumnName("payload_checksum")
-                        .IsFixedLength();
-
-                    b.Property<int>("PointCount")
-                        .HasColumnType("integer")
-                        .HasColumnName("point_count");
-
-                    b.Property<string>("SourceFileName")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)")
-                        .HasColumnName("source_file_name");
-
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("tenant_id");
-
-                    b.HasKey("Id")
-                        .HasName("pk_mission_telemetry_imports");
-
-                    b.HasIndex("MissionId")
-                        .IsUnique()
-                        .HasDatabaseName("uq_telemetry_imports_mission");
-
-                    b.HasIndex("MissionId", "FarmId");
-
-                    b.HasIndex("MissionId", "TenantId");
-
-                    b.HasIndex("TenantId", "MissionId", "OperationId")
-                        .IsUnique()
-                        .HasDatabaseName("uq_telemetry_imports_operation");
-
-                    b.ToTable("mission_telemetry_imports", "mission", t =>
-                        {
-                            t.HasComment("Idempotency record for an atomic normalized telemetry import.");
-
-                            t.HasCheckConstraint("ck_telemetry_imports_checksum", "payload_checksum ~ '^[0-9a-f]{64}$'");
-
-                            t.HasCheckConstraint("ck_telemetry_imports_point_count", "point_count >= 2");
-
-                            t.HasCheckConstraint("ck_telemetry_imports_time_range", "last_recorded_at > first_recorded_at");
                         });
                 });
 
@@ -4724,15 +4487,6 @@ namespace AgriDrone.Database.Migrations
                     b.Navigation("HarvestBatch");
                 });
 
-            modelBuilder.Entity("AgriDrone.Modules.Harvests.Domain.Quality.HarvestQualityGrade", b =>
-                {
-                    b.HasOne("AgriDrone.Modules.Harvests.Domain.Quality.HarvestQualityGrade", null)
-                        .WithMany()
-                        .HasForeignKey("SupersedesId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .HasConstraintName("fk_quality_grades_superseded_grade_id");
-                });
-
             modelBuilder.Entity("AgriDrone.Modules.Harvests.Domain.Seasons.Season", b =>
                 {
                     b.HasOne("AgriDrone.Modules.Farms.Domain.Farms.Farm", null)
@@ -4917,25 +4671,6 @@ namespace AgriDrone.Database.Migrations
                         .HasPrincipalKey("Id", "TenantId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("fk_media_assets_farms_same_tenant");
-                });
-
-            modelBuilder.Entity("AgriDrone.Modules.Missions.Domain.Media.MediaUploadSession", b =>
-                {
-                    b.HasOne("AgriDrone.Modules.Missions.Domain.Missions.DroneMission", null)
-                        .WithMany()
-                        .HasForeignKey("MissionId", "FarmId")
-                        .HasPrincipalKey("Id", "FarmId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_upload_sessions_mission_farm");
-
-                    b.HasOne("AgriDrone.Modules.Missions.Domain.Missions.DroneMission", null)
-                        .WithMany()
-                        .HasForeignKey("MissionId", "TenantId")
-                        .HasPrincipalKey("Id", "TenantId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_upload_sessions_mission_tenant");
                 });
 
             modelBuilder.Entity("AgriDrone.Modules.Missions.Domain.Media.MissionMedia", b =>
@@ -5151,25 +4886,6 @@ namespace AgriDrone.Database.Migrations
                         .HasConstraintName("fk_ai_threshold_profiles_model_versions_model_id");
 
                     b.Navigation("ModelVersion");
-                });
-
-            modelBuilder.Entity("AgriDrone.Modules.Missions.Domain.Telemetry.MissionTelemetryImport", b =>
-                {
-                    b.HasOne("AgriDrone.Modules.Missions.Domain.Missions.DroneMission", null)
-                        .WithMany()
-                        .HasForeignKey("MissionId", "FarmId")
-                        .HasPrincipalKey("Id", "FarmId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_telemetry_imports_mission_farm");
-
-                    b.HasOne("AgriDrone.Modules.Missions.Domain.Missions.DroneMission", null)
-                        .WithMany()
-                        .HasForeignKey("MissionId", "TenantId")
-                        .HasPrincipalKey("Id", "TenantId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_telemetry_imports_mission_tenant");
                 });
 
             modelBuilder.Entity("AgriDrone.Modules.Missions.Domain.Telemetry.MissionTelemetryPoint", b =>

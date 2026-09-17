@@ -53,6 +53,27 @@ public sealed class HarvestQualityGradeConfiguration
             .HasDefaultValue(true)
             .IsRequired();
 
+        builder.Property(grade => grade.RevisionNumber)
+            .HasColumnName("revision_number")
+            .HasColumnType("integer")
+            .HasDefaultValue(1)
+            .IsRequired();
+
+        builder.Property(grade => grade.SupersedesId)
+            .HasColumnName("supersedes_id")
+            .HasColumnType("uuid");
+
+        builder.Property(grade => grade.Version)
+            .HasColumnName("version")
+            .HasColumnType("bigint")
+            .HasDefaultValue(1L)
+            .IsConcurrencyToken()
+            .IsRequired();
+
+        builder.Property(grade => grade.RetiredAt)
+            .HasColumnName("retired_at")
+            .HasColumnType("timestamp with time zone");
+
         builder.Property(grade => grade.CreatedAt)
             .HasColumnName("created_at")
             .HasColumnType("timestamp with time zone")
@@ -65,8 +86,29 @@ public sealed class HarvestQualityGradeConfiguration
             .HasDefaultValueSql("NOW()")
             .IsRequired();
 
-        builder.HasIndex(grade => grade.Code)
-            .HasDatabaseName("uq_quality_grades_code")
+        builder.HasIndex(grade => new
+            {
+                grade.Code,
+                grade.RevisionNumber
+            })
+            .HasDatabaseName("uq_quality_grades_code_revision")
             .IsUnique();
+
+        builder.HasIndex(grade => grade.Code)
+            .HasDatabaseName("uq_quality_grades_active_code")
+            .HasFilter("is_active = TRUE")
+            .IsUnique();
+
+        builder.HasIndex(grade => grade.SupersedesId)
+            .HasDatabaseName("uq_quality_grades_supersedes")
+            .HasFilter("supersedes_id IS NOT NULL")
+            .IsUnique();
+
+        builder.HasOne<HarvestQualityGrade>()
+            .WithMany()
+            .HasForeignKey(grade => grade.SupersedesId)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName(
+                "fk_quality_grades_superseded_grade_id");
     }
 }

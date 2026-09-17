@@ -1,5 +1,7 @@
 using AgriDrone.Api.Contracts.PlantConditions;
 using AgriDrone.Modules.Plants.Application.Features.CreatePlantCondition;
+using AgriDrone.Modules.Plants.Application.Features.RetirePlantCondition;
+using AgriDrone.Modules.Plants.Application.Features.VersionPlantCondition;
 using AgriDrone.Modules.Plants.Domain.Conditions;
 using AgriDrone.SharedInfrastructure.Authorization;
 using AgriDrone.SharedInfrastructure.Http;
@@ -42,6 +44,47 @@ public sealed class SystemPlantConditionsController(
             response => Results.Json(
                 MapResponse(response),
                 statusCode: StatusCodes.Status201Created));
+    }
+
+    /// <summary>Tạo revision tiếp theo từ một plant condition đang active.</summary>
+    [HttpPost("{conditionId:guid}/versions")]
+    public async Task<IResult> CreateVersion(
+        [FromRoute] Guid conditionId,
+        [FromBody] VersionPlantConditionRequest request,
+        CancellationToken cancellationToken)
+    {
+        var command = new VersionPlantConditionCommand(
+            conditionId,
+            request.Name,
+            request.ScientificName,
+            request.Description,
+            request.ExpectedVersion);
+
+        var result = await sender.Send(command, cancellationToken);
+
+        return result.ToHttpResult(
+            HttpContext,
+            response => Results.Json(
+                MapResponse(response),
+                statusCode: StatusCodes.Status201Created));
+    }
+
+    /// <summary>Ngừng sử dụng một plant condition đang active.</summary>
+    [HttpPut("{conditionId:guid}/retire")]
+    public async Task<IResult> Retire(
+        [FromRoute] Guid conditionId,
+        [FromBody] RetirePlantConditionRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await sender.Send(
+            new RetirePlantConditionCommand(
+                conditionId,
+                request.ExpectedVersion),
+            cancellationToken);
+
+        return result.ToHttpResult(
+            HttpContext,
+            () => Results.NoContent());
     }
 
     private static PlantConditionApiResponse MapResponse(
