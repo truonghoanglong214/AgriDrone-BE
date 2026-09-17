@@ -106,5 +106,12 @@ public sealed class PlantConditionConfiguration : IEntityTypeConfiguration<Plant
             .HasDatabaseName("uq_plant_conditions_supersedes")
             .HasFilter("supersedes_id IS NOT NULL")
             .IsUnique();
+
+        builder.HasOne<PlantCondition>()
+            .WithMany()
+            .HasForeignKey(condition => condition.SupersedesId)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName(
+                "fk_plant_conditions_superseded_condition_id");
     }
 }

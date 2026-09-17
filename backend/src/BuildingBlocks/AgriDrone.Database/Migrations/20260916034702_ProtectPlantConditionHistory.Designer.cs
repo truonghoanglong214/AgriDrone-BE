@@ -4,6 +4,7 @@ using System.Text.Json;
 using AgriDrone.Database;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using NetTopologySuite.Geometries;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
@@ -13,9 +14,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace AgriDrone.Database.Migrations
 {
     [DbContext(typeof(AgriDroneSchemaDbContext))]
-    partial class AgriDroneSchemaDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260916034702_ProtectPlantConditionHistory")]
+    partial class ProtectPlantConditionHistory
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -974,49 +977,18 @@ namespace AgriDrone.Database.Migrations
                         .HasColumnType("character varying(100)")
                         .HasColumnName("name");
 
-                    b.Property<DateTimeOffset?>("RetiredAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("retired_at");
-
-                    b.Property<int>("RevisionNumber")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(1)
-                        .HasColumnName("revision_number");
-
-                    b.Property<Guid?>("SupersedesId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("supersedes_id");
-
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at")
                         .HasDefaultValueSql("NOW()");
 
-                    b.Property<long>("Version")
-                        .IsConcurrencyToken()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint")
-                        .HasDefaultValue(1L)
-                        .HasColumnName("version");
-
                     b.HasKey("Id")
                         .HasName("pk_harvest_quality_grades");
 
                     b.HasIndex("Code")
                         .IsUnique()
-                        .HasDatabaseName("uq_quality_grades_active_code")
-                        .HasFilter("is_active = TRUE");
-
-                    b.HasIndex("SupersedesId")
-                        .IsUnique()
-                        .HasDatabaseName("uq_quality_grades_supersedes")
-                        .HasFilter("supersedes_id IS NOT NULL");
-
-                    b.HasIndex("Code", "RevisionNumber")
-                        .IsUnique()
-                        .HasDatabaseName("uq_quality_grades_code_revision");
+                        .HasDatabaseName("uq_quality_grades_code");
 
                     b.ToTable("harvest_quality_grades", "harvest", t =>
                         {
@@ -4513,15 +4485,6 @@ namespace AgriDrone.Database.Migrations
                         .HasConstraintName("fk_plant_harvest_plant_same_farm");
 
                     b.Navigation("HarvestBatch");
-                });
-
-            modelBuilder.Entity("AgriDrone.Modules.Harvests.Domain.Quality.HarvestQualityGrade", b =>
-                {
-                    b.HasOne("AgriDrone.Modules.Harvests.Domain.Quality.HarvestQualityGrade", null)
-                        .WithMany()
-                        .HasForeignKey("SupersedesId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .HasConstraintName("fk_quality_grades_superseded_grade_id");
                 });
 
             modelBuilder.Entity("AgriDrone.Modules.Harvests.Domain.Seasons.Season", b =>

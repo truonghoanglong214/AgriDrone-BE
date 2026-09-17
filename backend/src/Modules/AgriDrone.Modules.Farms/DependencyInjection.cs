@@ -41,15 +41,9 @@ public static class DependencyInjection
         services.AddScoped<IFarmQueries, FarmQueries>();
         services.AddScoped<IFarmZoneRepository, FarmZoneRepository>();
         services.AddScoped<IFarmZoneQueries, FarmZoneQueries>();
-        services.AddScoped<
-            IFarmArchiveDependencyQuery,
-            FarmArchiveDependencyQuery>();
-        services.AddScoped<
-            IMissionPlanningReferenceQuery,
-            MissionPlanningReferenceQuery>();
-        services.AddScoped<
-            IFarmAssignmentReferenceQuery,
-            FarmAssignmentReferenceQuery>();
+        services.AddScoped<IFarmArchiveDependencyQuery, FarmArchiveDependencyQuery>();
+        services.AddScoped<IMissionPlanningReferenceQuery, MissionPlanningReferenceQuery>();
+        services.AddScoped<IFarmAssignmentReferenceQuery, FarmAssignmentReferenceQuery>();
 
         var assembly = typeof(DependencyInjection).Assembly;
 

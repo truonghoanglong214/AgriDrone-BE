@@ -52,18 +52,7 @@ namespace AgriDrone.Modules.Plants.Application.Features.CreatePlantCondition
                 return Result.Failure<PlantConditionResponse>(PlantConditionError.CodeAlreadyExists(normalizedCode));
             }
 
-            return Result.Success(new PlantConditionResponse(
-                plantCondition.Id,
-                plantCondition.Code,
-                plantCondition.Name,
-                plantCondition.ScientificName,
-                plantCondition.ConditionType,
-                plantCondition.Description,
-                plantCondition.RevisionNumber,
-                plantCondition.IsActive,
-                plantCondition.CreatedAt,
-                plantCondition.RetiredAt,
-                plantCondition.Version));
+            return Result.Success(PlantConditionResponse.From(plantCondition));
         }
     }
 }

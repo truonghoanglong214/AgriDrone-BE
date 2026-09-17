@@ -1,10 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+using AgriDrone.Modules.Plants.Application.Features.GetActivePlantConditions;
 
-namespace AgriDrone.Modules.Plants.Application.Abstractions.Queries
+namespace AgriDrone.Modules.Plants.Application.Abstractions.Queries;
+
+internal interface IPlantConditionQueries
 {
-    public interface IPlantConditionQueries
-    {
-    }
+    Task<IReadOnlyList<PlantConditionCatalogResponse>> GetActiveAsync(
+        CancellationToken cancellationToken = default);
 }
