@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using AgriDrone.Modules.Missions.Application
     .Abstractions.Media;
 using AgriDrone.Modules.Missions.Application
@@ -8,6 +8,8 @@ using AgriDrone.SharedInfrastructure.Auditing;
 using AgriDrone.SharedKernel.Application;
 using AgriDrone.SharedKernel.Application
     .Abstractions.Execution;
+using AgriDrone.Modules.Missions.Application
+    .Abstractions.Processing;
 using MediatR;
 
 namespace AgriDrone.Modules.Missions.Application
@@ -19,6 +21,7 @@ internal sealed class FinalizeMissionUploadCommandHandler(
     IMissionsUnitOfWork unitOfWork,
     IAuditWriter auditWriter,
     IExecutionContext executionContext,
+    IMissionProcessingQueue processingQueue,
     TimeProvider timeProvider)
     : IRequestHandler<
         FinalizeMissionUploadCommand,
@@ -143,6 +146,13 @@ internal sealed class FinalizeMissionUploadCommandHandler(
             return Result.Failure<FinalizeMissionUploadResult>(
                 FinalizeMissionUploadError.ConcurrentUpdate());
         }
+
+        await processingQueue.EnqueueAsync(
+            new MissionProcessingWorkItem(
+                mission.TenantId,
+                mission.FarmId,
+                mission.Id),
+            cancellationToken);
 
         return Result.Success(
             new FinalizeMissionUploadResult(

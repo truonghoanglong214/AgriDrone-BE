@@ -5,7 +5,9 @@ using AgriDrone.IntegrationContracts.Messaging;
 using AgriDrone.Modules.Missions.Application.Abstractions;
 using AgriDrone.Modules.Missions.Application.Abstractions.Media;
 using AgriDrone.Modules.Missions.Application.Abstractions.Missions;
+using AgriDrone.Modules.Missions.Application.Abstractions.Processing;
 using AgriDrone.Modules.Missions.Application.Abstractions.Telemetry;
+using AgriDrone.Modules.Missions.Infrastructure.Processing;
 using AgriDrone.Modules.Missions.Domain.Drones;
 using AgriDrone.Modules.Missions.Domain.Media;
 using AgriDrone.Modules.Missions.Domain.Missions;
@@ -121,6 +123,21 @@ public static class DependencyInjection
 
         services.AddScoped<
             IMissionUploadReadinessQueries, MissionUploadReadinessQueries>();
+
+        services.AddOptions<GeotagOptions>()
+            .Bind(configuration.GetSection(GeotagOptions.SectionName));
+
+        services.AddSingleton<
+            IMissionProcessingQueue, MissionProcessingQueue>();
+
+        services.AddScoped<
+            IGeotagService, PythonGeotagService>();
+
+        services.AddScoped<
+            IMissionProcessor, MissionProcessor>();
+
+        services.AddHostedService<
+            MissionProcessingBackgroundService>();
 
         return services;
     }
