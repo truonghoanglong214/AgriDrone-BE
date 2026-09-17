@@ -20,7 +20,7 @@ public sealed class AssignFarmMemberCommandHandlerTests
         new(2026, 9, 7, 10, 0, 0, TimeSpan.Zero);
 
     [Fact]
-    public async Task HandleAssignsActiveTenantAdminAsFarmManager()
+    public async Task HandleAssignsActiveTenantMemberAsFarmManager()
     {
         var fixture = CreateFixture();
 
@@ -77,9 +77,298 @@ public sealed class AssignFarmMemberCommandHandlerTests
     }
 
     [Fact]
-    public async Task HandleRejectsTargetWhoIsNotTenantAdmin()
+    public async Task HandleAlsoAssignsActiveTenantAdminAsFarmManager()
     {
-        var fixture = CreateFixture(TenantMemberRole.Member);
+        var fixture = CreateFixture(TenantMemberRole.TenantAdmin);
+
+        var result = await fixture.Handler.Handle(
+            CreateCommand(fixture),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.NotNull(fixture.FarmRepository.AddedMembership);
+        Assert.Equal(
+            FarmMemberRole.Manager,
+            fixture.FarmRepository.AddedMembership.Role);
+    }
+
+    [Fact]
+    public async Task HandleAssignsWorkerToSelectedZones()
+    {
+        var fixture = CreateFixture();
+        var zoneIds = new[] { Guid.NewGuid(), Guid.NewGuid() };
+        fixture.FarmReferenceQuery.ActiveZones = zoneIds
+            .Select((zoneId, index) => new FarmAssignmentZoneReference(
+                fixture.FarmId,
+                zoneId,
+                $"ZONE-{index + 1}",
+                $"Zone {index + 1}",
+                null))
+            .ToArray();
+
+        var result = await fixture.Handler.Handle(
+            CreateCommand(
+                fixture,
+                role: FarmMemberRole.Worker,
+                accessScope: FarmAccessScope.SelectedZones,
+                zoneIds: zoneIds),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(FarmMemberRole.Worker, result.Value.Role);
+        Assert.Equal(FarmAccessScope.SelectedZones, result.Value.AccessScope);
+        Assert.Equal(zoneIds.Order(), result.Value.ZoneIds);
+        Assert.Equal(
+            zoneIds.Order(),
+            fixture.FarmRepository.Membership!.ZoneAssignments
+                .Where(assignment => assignment.RevokedAt is null)
+                .Select(assignment => assignment.ZoneId)
+                .Order());
+    }
+
+    [Fact]
+    public async Task HandleUpdatesManagerAllZonesToWorkerSelectedZones()
+    {
+        var fixture = CreateFixture();
+        var zoneId = Guid.NewGuid();
+        fixture.FarmReferenceQuery.ActiveZones =
+        [
+            new(fixture.FarmId, zoneId, "ZONE-1", "Zone 1", null)
+        ];
+        fixture.FarmRepository.Membership = FarmMembership.Create(
+            fixture.TenantId,
+            fixture.FarmId,
+            fixture.TargetUserId,
+            FarmMemberRole.Manager,
+            FarmAccessScope.AllZones,
+            Now.AddDays(-1));
+
+        var result = await fixture.Handler.Handle(
+            CreateCommand(
+                fixture,
+                expectedVersion: 1,
+                role: FarmMemberRole.Worker,
+                accessScope: FarmAccessScope.SelectedZones,
+                zoneIds: [zoneId]),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(FarmMemberRole.Worker, result.Value.Role);
+        Assert.Equal(FarmAccessScope.SelectedZones, result.Value.AccessScope);
+        Assert.Equal([zoneId], result.Value.ZoneIds);
+        Assert.Equal(2, result.Value.Version);
+    }
+
+    [Fact]
+    public async Task HandleUpdatesSelectedZoneSetAndIncrementsVersionOnce()
+    {
+        var fixture = CreateFixture();
+        var removedZoneId = Guid.NewGuid();
+        var retainedZoneId = Guid.NewGuid();
+        var addedZoneId = Guid.NewGuid();
+        var membership = FarmMembership.Create(
+            fixture.TenantId,
+            fixture.FarmId,
+            fixture.TargetUserId,
+            FarmMemberRole.Worker,
+            FarmAccessScope.SelectedZones,
+            [removedZoneId, retainedZoneId],
+            Guid.NewGuid(),
+            Now.AddDays(-1));
+        fixture.FarmRepository.Membership = membership;
+        fixture.FarmReferenceQuery.ActiveZones =
+        [
+            new(fixture.FarmId, removedZoneId, "ZONE-1", "Zone 1", null),
+            new(fixture.FarmId, retainedZoneId, "ZONE-2", "Zone 2", null),
+            new(fixture.FarmId, addedZoneId, "ZONE-3", "Zone 3", null)
+        ];
+
+        var result = await fixture.Handler.Handle(
+            CreateCommand(
+                fixture,
+                expectedVersion: 1,
+                role: FarmMemberRole.Worker,
+                accessScope: FarmAccessScope.SelectedZones,
+                zoneIds: [retainedZoneId, addedZoneId]),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(2, membership.Version);
+        Assert.Equal(
+            new[] { addedZoneId, retainedZoneId }.Order(),
+            membership.ZoneAssignments
+                .Where(assignment => assignment.RevokedAt is null)
+                .Select(assignment => assignment.ZoneId)
+                .Order());
+        Assert.NotNull(membership.ZoneAssignments.Single(
+            assignment => assignment.ZoneId == removedZoneId).RevokedAt);
+    }
+
+    [Fact]
+    public async Task HandleUpdatesSelectedZonesToAllZonesAndRevokesExplicitZones()
+    {
+        var fixture = CreateFixture();
+        var zoneId = Guid.NewGuid();
+        var membership = FarmMembership.Create(
+            fixture.TenantId,
+            fixture.FarmId,
+            fixture.TargetUserId,
+            FarmMemberRole.Worker,
+            FarmAccessScope.SelectedZones,
+            [zoneId],
+            Guid.NewGuid(),
+            Now.AddDays(-1));
+        fixture.FarmRepository.Membership = membership;
+        fixture.FarmReferenceQuery.ActiveZones =
+        [
+            new(fixture.FarmId, zoneId, "ZONE-1", "Zone 1", null)
+        ];
+
+        var result = await fixture.Handler.Handle(
+            CreateCommand(
+                fixture,
+                expectedVersion: 1,
+                accessScope: FarmAccessScope.AllZones),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(FarmAccessScope.AllZones, membership.AccessScope);
+        Assert.DoesNotContain(
+            membership.ZoneAssignments,
+            assignment => assignment.RevokedAt is null);
+        Assert.Empty(result.Value.ZoneIds);
+    }
+
+    [Fact]
+    public async Task HandleRejectsSelectedZoneOutsideFarm()
+    {
+        var fixture = CreateFixture();
+
+        var result = await fixture.Handler.Handle(
+            CreateCommand(
+                fixture,
+                role: FarmMemberRole.Worker,
+                accessScope: FarmAccessScope.SelectedZones,
+                zoneIds: [Guid.NewGuid()]),
+            CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("FarmMembership.InvalidZones", result.Error.Code);
+        Assert.Null(fixture.FarmRepository.AddedMembership);
+        Assert.Equal(0, fixture.UnitOfWork.SaveChangesCount);
+    }
+
+    [Fact]
+    public async Task HandleIsIdempotentWhenSelectedZonesMatchRegardlessOfOrder()
+    {
+        var fixture = CreateFixture();
+        var firstZoneId = Guid.NewGuid();
+        var secondZoneId = Guid.NewGuid();
+        var membership = FarmMembership.Create(
+            fixture.TenantId,
+            fixture.FarmId,
+            fixture.TargetUserId,
+            FarmMemberRole.Worker,
+            FarmAccessScope.SelectedZones,
+            [firstZoneId, secondZoneId],
+            Guid.NewGuid(),
+            Now.AddDays(-1));
+        fixture.FarmRepository.Membership = membership;
+        fixture.FarmReferenceQuery.ActiveZones =
+        [
+            new(fixture.FarmId, firstZoneId, "ZONE-1", "Zone 1", null),
+            new(fixture.FarmId, secondZoneId, "ZONE-2", "Zone 2", null)
+        ];
+
+        var result = await fixture.Handler.Handle(
+            CreateCommand(
+                fixture,
+                role: FarmMemberRole.Worker,
+                accessScope: FarmAccessScope.SelectedZones,
+                zoneIds: [secondZoneId, firstZoneId]),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(1, result.Value.Version);
+        Assert.Equal(0, fixture.UnitOfWork.SaveChangesCount);
+    }
+
+    [Fact]
+    public async Task HandleRequiresVersionWhenOnlySelectedZonesChange()
+    {
+        var fixture = CreateFixture();
+        var currentZoneId = Guid.NewGuid();
+        var replacementZoneId = Guid.NewGuid();
+        var membership = FarmMembership.Create(
+            fixture.TenantId,
+            fixture.FarmId,
+            fixture.TargetUserId,
+            FarmMemberRole.Worker,
+            FarmAccessScope.SelectedZones,
+            [currentZoneId],
+            Guid.NewGuid(),
+            Now.AddDays(-1));
+        fixture.FarmRepository.Membership = membership;
+        fixture.FarmReferenceQuery.ActiveZones =
+        [
+            new(fixture.FarmId, currentZoneId, "ZONE-1", "Zone 1", null),
+            new(fixture.FarmId, replacementZoneId, "ZONE-2", "Zone 2", null)
+        ];
+
+        var result = await fixture.Handler.Handle(
+            CreateCommand(
+                fixture,
+                role: FarmMemberRole.Worker,
+                accessScope: FarmAccessScope.SelectedZones,
+                zoneIds: [replacementZoneId]),
+            CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(
+            "FarmMembership.ExpectedVersionRequired",
+            result.Error.Code);
+        Assert.Equal(1, membership.Version);
+        Assert.Equal(0, fixture.UnitOfWork.SaveChangesCount);
+    }
+
+    [Fact]
+    public async Task HandleRejectsTenantAdminActorAssigningTenantAdmin()
+    {
+        var fixture = CreateFixture(TenantMemberRole.TenantAdmin);
+        fixture.AccessService.OwnerDecision = AccessDecision.Deny(
+            AccessDenialReason.TenantRoleInsufficient);
+
+        var result = await fixture.Handler.Handle(
+            CreateCommand(fixture),
+            CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("Tenant.AccessDenied", result.Error.Code);
+        Assert.Null(fixture.FarmRepository.AddedMembership);
+        Assert.Equal(0, fixture.UnitOfWork.SaveChangesCount);
+    }
+
+    [Fact]
+    public async Task HandleRejectsWorkerRoleForTenantAdminTarget()
+    {
+        var fixture = CreateFixture(TenantMemberRole.TenantAdmin);
+
+        var result = await fixture.Handler.Handle(
+            CreateCommand(fixture, role: FarmMemberRole.Worker),
+            CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(
+            "FarmMembership.TenantAdminMustBeManager",
+            result.Error.Code);
+        Assert.Null(fixture.FarmRepository.AddedMembership);
+        Assert.Equal(0, fixture.UnitOfWork.SaveChangesCount);
+    }
+
+    [Fact]
+    public async Task HandleRejectsTargetTenantOwner()
+    {
+        var fixture = CreateFixture(TenantMemberRole.Owner);
 
         var result = await fixture.Handler.Handle(
             CreateCommand(fixture),
@@ -87,7 +376,7 @@ public sealed class AssignFarmMemberCommandHandlerTests
 
         Assert.True(result.IsFailure);
         Assert.Equal(
-            "FarmMembership.TargetMustBeTenantAdmin",
+            "FarmMembership.TargetTenantRoleNotAssignable",
             result.Error.Code);
         Assert.Equal(0, fixture.UnitOfWork.SaveChangesCount);
     }
@@ -180,18 +469,21 @@ public sealed class AssignFarmMemberCommandHandlerTests
 
     private static AssignFarmMemberCommand CreateCommand(
         Fixture fixture,
-        long? expectedVersion = null) =>
+        long? expectedVersion = null,
+        FarmMemberRole role = FarmMemberRole.Manager,
+        FarmAccessScope accessScope = FarmAccessScope.AllZones,
+        IReadOnlyCollection<Guid>? zoneIds = null) =>
         new(
             fixture.FarmId,
             fixture.TargetUserId,
-            FarmMemberRole.Manager,
-            FarmAccessScope.AllZones,
-            [],
+            role,
+            accessScope,
+            zoneIds ?? [],
             expectedVersion,
             "Manage the farm");
 
     private static Fixture CreateFixture(
-        TenantMemberRole targetRole = TenantMemberRole.TenantAdmin)
+        TenantMemberRole targetRole = TenantMemberRole.Member)
     {
         var tenantId = Guid.NewGuid();
         var farmId = Guid.NewGuid();
@@ -306,11 +598,30 @@ public sealed class AssignFarmMemberCommandHandlerTests
     {
         public bool IsActive { get; set; } = true;
 
+        public IReadOnlyCollection<FarmAssignmentZoneReference> ActiveZones
+        {
+            get;
+            set;
+        } = [];
+
         public Task<bool> IsActiveFarmAsync(
             Guid tenantId,
             Guid farmId,
             CancellationToken cancellationToken = default) =>
             Task.FromResult(IsActive);
+
+        public Task<IReadOnlyCollection<FarmAssignmentReference>>
+            GetActiveFarmsAsync(
+            Guid tenantId,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<IReadOnlyCollection<FarmAssignmentZoneReference>>
+            GetActiveZonesAsync(
+                Guid tenantId,
+                IReadOnlyCollection<Guid> farmIds,
+                CancellationToken cancellationToken = default) =>
+            Task.FromResult(ActiveZones);
     }
 
     private sealed class FakeTenantMembershipRepository
@@ -437,12 +748,18 @@ public sealed class AssignFarmMemberCommandHandlerTests
         public AccessDecision Decision { get; set; } =
             AccessDecision.Allow();
 
+        public AccessDecision OwnerDecision { get; set; } =
+            AccessDecision.Allow();
+
         public Task<AccessDecision> CheckTenantAsync(
             Guid actorId,
             Guid tenantId,
             TenantAccessLevel requiredAccess,
             CancellationToken cancellationToken = default) =>
-            Task.FromResult(Decision);
+            Task.FromResult(
+                requiredAccess == TenantAccessLevel.Owner
+                    ? OwnerDecision
+                    : Decision);
 
         public Task<AccessDecision> CheckFarmAsync(
             Guid actorId,

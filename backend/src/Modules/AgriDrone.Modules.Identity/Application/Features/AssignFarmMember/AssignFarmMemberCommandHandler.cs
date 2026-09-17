@@ -64,6 +64,23 @@ internal sealed class AssignFarmMemberCommandHandler(
                 FarmMembershipError.FarmNotFound());
         }
 
+        if (request.AccessScope == FarmAccessScope.SelectedZones)
+        {
+            var activeZones = await farmReferenceQuery.GetActiveZonesAsync(
+                tenantId,
+                [request.FarmId],
+                cancellationToken);
+            var activeZoneIds = activeZones
+                .Select(zone => zone.ZoneId)
+                .ToHashSet();
+
+            if (request.ZoneIds.Any(zoneId => !activeZoneIds.Contains(zoneId)))
+            {
+                return Result.Failure<AssignFarmMemberResponse>(
+                    FarmMembershipError.InvalidZones());
+            }
+        }
+
         var tenantMembership = await tenantMembershipRepository
             .GetByUserAndTenantIdAsync(
                 request.UserId,
@@ -74,6 +91,35 @@ internal sealed class AssignFarmMemberCommandHandler(
         {
             return Result.Failure<AssignFarmMemberResponse>(
                 TenantMembershipError.NotFound());
+        }
+
+        if (tenantMembership.Role is not TenantMemberRole.Member and
+            not TenantMemberRole.TenantAdmin)
+        {
+            return Result.Failure<AssignFarmMemberResponse>(
+                FarmMembershipError.TargetTenantRoleNotAssignable());
+        }
+
+        if (tenantMembership.Role == TenantMemberRole.TenantAdmin)
+        {
+            if (request.Role != FarmMemberRole.Manager)
+            {
+                return Result.Failure<AssignFarmMemberResponse>(
+                    FarmMembershipError.TenantAdminMustBeManager());
+            }
+
+            var ownerAccessDecision =
+                await effectiveAccessService.CheckTenantAsync(
+                    actorId,
+                    tenantId,
+                    TenantAccessLevel.Owner,
+                    cancellationToken);
+
+            if (!ownerAccessDecision.IsAllowed)
+            {
+                return Result.Failure<AssignFarmMemberResponse>(
+                    TenantError.AccessDenied());
+            }
         }
 
         if (tenantMembership.Status != GeneralStatus.Active)
@@ -89,12 +135,6 @@ internal sealed class AssignFarmMemberCommandHandler(
                 TenantMembershipError.TargetUserInactive());
         }
 
-        if (tenantMembership.Role != TenantMemberRole.TenantAdmin)
-        {
-            return Result.Failure<AssignFarmMemberResponse>(
-                FarmMembershipError.TargetMustBeTenantAdmin());
-        }
-
         var assignment = await farmMembershipRepository
             .GetByFarmAndUserAsync(
                 tenantId,
@@ -103,9 +143,10 @@ internal sealed class AssignFarmMemberCommandHandler(
                 cancellationToken);
 
         if (assignment is not null &&
-            assignment.Role == request.Role &&
-            assignment.AccessScope == request.AccessScope &&
-            assignment.Status == GeneralStatus.Active)
+            assignment.Matches(
+                request.Role,
+                request.AccessScope,
+                request.ZoneIds))
         {
             return Result.Success(ToResponse(assignment));
         }
@@ -135,8 +176,10 @@ internal sealed class AssignFarmMemberCommandHandler(
             ? null
             : JsonSerializer.SerializeToDocument(new
             {
+                UserId = assignment.UserId,
                 Role = assignment.Role.ToString(),
                 AccessScope = assignment.AccessScope.ToString(),
+                ZoneIds = GetConfiguredZoneIds(assignment),
                 Status = assignment.Status.ToString(),
                 Version = assignment.Version
             });
@@ -149,6 +192,8 @@ internal sealed class AssignFarmMemberCommandHandler(
                 request.UserId,
                 request.Role,
                 request.AccessScope,
+                request.ZoneIds,
+                actorId,
                 now);
 
             farmMembershipRepository.Add(assignment);
@@ -158,15 +203,18 @@ internal sealed class AssignFarmMemberCommandHandler(
             assignment.Assign(
                 request.Role,
                 request.AccessScope,
+                request.ZoneIds,
+                actorId,
                 now);
         }
 
         using var newData = JsonSerializer.SerializeToDocument(new
         {
+            UserId = assignment.UserId,
             Role = assignment.Role.ToString(),
             AccessScope = assignment.AccessScope.ToString(),
             Status = assignment.Status.ToString(),
-            ZoneIds = request.ZoneIds,
+            ZoneIds = GetConfiguredZoneIds(assignment),
             request.Reason
         });
 
@@ -210,7 +258,22 @@ internal sealed class AssignFarmMemberCommandHandler(
             assignment.UserId,
             assignment.Role,
             assignment.AccessScope,
+            GetConfiguredZoneIds(assignment),
             assignment.Status,
             assignment.Version,
             assignment.JoinedAt);
+
+    private static Guid[] GetConfiguredZoneIds(FarmMembership assignment)
+    {
+        if (assignment.AccessScope == FarmAccessScope.AllZones)
+        {
+            return [];
+        }
+
+        return assignment.ZoneAssignments
+            .Where(zoneAssignment => zoneAssignment.RevokedAt is null)
+            .Select(zoneAssignment => zoneAssignment.ZoneId)
+            .OrderBy(zoneId => zoneId)
+            .ToArray();
+    }
 }

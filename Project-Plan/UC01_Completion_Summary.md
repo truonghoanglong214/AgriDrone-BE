@@ -5,53 +5,115 @@
 - **Dự án**: AgriDrone — Smart Dragon Fruit Farm Management System Using Drone and AI
 - **Mã đồ án**: FA26SE218
 - **Use case**: BE2-UC01 — Drone Registry & Availability
-- **Ngày cập nhật**: 24/08/2026
-- **Trạng thái**: `Done`
-- **Phạm vi đánh giá**: Code nghiệp vụ, API, phân quyền, persistence và migration; không bao gồm unit test, integration test hoặc contract test.
+- **Ngày cập nhật**: 09/09/2026
+- **Trạng thái**: `Done về chức năng; còn một cleanup vị trí folder`
+- **Phạm vi đánh giá**: Domain, Application, Infrastructure, API, phân quyền, persistence, migration và build; chưa bao gồm unit test, integration test hoặc API authorization test riêng cho Drone.
 
-## 2. Mục tiêu
+## 2. Quyết định nghiệp vụ đã điều chỉnh
 
-UC01 quản lý danh mục Drone ở cấp hệ thống và cung cấp danh sách Drone khả dụng để Farm Manager lựa chọn khi lập Mission.
+Drone được xem là tài sản thuộc `Tenant`, không thuộc riêng một Farm và không do `SystemAdmin` sở hữu.
+
+Phân quyền được chốt như sau:
+
+- `TenantAdmin` đại diện tenant đăng ký, xem và quyết định trạng thái vận hành của Drone thuộc tenant hiện tại.
+- `SystemAdmin` chỉ theo dõi Drone xuyên tenant để hỗ trợ vận hành; không đăng ký, thay đổi trạng thái hoặc retire Drone.
+- Farm Owner/Manager chỉ xem Drone khả dụng trong tenant để lựa chọn khi lập Mission.
+
+Thay đổi này thay thế phân quyền UC01 ban đầu vốn giao việc đăng ký và đổi trạng thái Drone cho `SystemAdmin`.
+
+## 3. Mục tiêu nghiệp vụ
 
 UC01 bảo đảm:
 
-- Drone mới được đăng ký với trạng thái `Available`.
+- Drone mới được đăng ký vào tenant trong JWT và mặc định ở trạng thái `Available`.
+- TenantAdmin không phải nhập `TenantId` bằng tay và không thể quản lý Drone của tenant khác.
+- TenantAdmin xem được danh sách và chi tiết Drone thuộc tenant hiện tại.
+- TenantAdmin quản lý trạng thái vận hành của Drone.
+- SystemAdmin xem được danh sách và chi tiết Drone xuyên tenant nhưng không có API mutation.
 - Chỉ Drone hợp lệ và đang `Available` mới được dùng cho Mission mới.
-- Drone đang bảo trì hoặc đã retire không được bắt đầu Mission.
+- Drone đang bảo trì, ngừng hoạt động, đang bay hoặc đã retire không được bắt đầu Mission.
+- Drone có Mission đang chặn không được chuyển sang trạng thái làm Drone mất khả dụng.
 - Không có hai Mission giữ lịch giao nhau trên cùng một Drone.
-- Drone đã phát sinh lịch sử không bị hard-delete.
-- Mọi lần đăng ký hoặc đổi trạng thái đều có audit.
+- Drone có lịch sử không bị hard-delete.
+- Đăng ký và thay đổi trạng thái đều được ghi vào shared audit.
 
-## 3. Phân quyền API
+## 4. Phân quyền và API
 
-| API | Quyền truy cập | Mục đích |
-|---|---|---|
-| `POST /api/tenants/{tenantId}/drones` | `SYSTEM_ADMIN` | Đăng ký Drone mới cho tenant |
-| `PATCH /api/tenants/{tenantId}/drones/{droneId}/status` | `SYSTEM_ADMIN` | Chuyển trạng thái bảo trì, hoàn tất bảo trì hoặc retire Drone |
-| `GET /api/farms/{farmId}/drones/available` | Tenant `Owner` hoặc `Manager` của đúng Farm | Lấy danh sách Drone khả dụng trong khoảng thời gian Mission |
+### 4.1. TenantAdmin
 
-Endpoint lấy Drone khả dụng sử dụng resource-based authorization với:
+| API | Mục đích |
+|---|---|
+| `POST /api/drones` | Đăng ký Drone vào tenant hiện tại |
+| `GET /api/drones` | Lấy danh sách Drone của tenant, có phân trang, tìm kiếm và lọc trạng thái |
+| `GET /api/drones/{droneId}` | Lấy chi tiết Drone thuộc tenant hiện tại |
+| `PATCH /api/drones/{droneId}/operational-status` | Thay đổi trạng thái vận hành của Drone thuộc tenant hiện tại |
+
+Tất cả endpoint trên sử dụng:
+
+```text
+AccessAuthorizationPolicies.TenantAdmin
+```
+
+`TenantId` được lấy từ `ICurrentTenant`, không xuất hiện trong route hoặc request body. Repository/query tiếp tục dùng `TenantId` để cô lập dữ liệu.
+
+Policy `TenantAdmin` cũng cho phép tenant `Owner`, vì `Owner` có mức tenant access cao hơn `Admin`.
+
+### 4.2. SystemAdmin
+
+| API | Mục đích |
+|---|---|
+| `GET /api/system/drones` | Xem danh sách Drone toàn hệ thống; có thể lọc theo `TenantId`, trạng thái và từ khóa |
+| `GET /api/system/drones/{droneId}` | Xem chi tiết một Drone xuyên tenant |
+
+Controller sử dụng:
+
+```text
+AccessAuthorizationPolicies.SystemAdmin
+```
+
+SystemAdmin không có endpoint `POST`, `PUT`, `PATCH` hoặc `DELETE` đối với Drone.
+
+### 4.3. Farm Owner/Manager
+
+| API | Mục đích |
+|---|---|
+| `GET /api/farms/{farmId}/drones/available` | Lấy Drone khả dụng trong khoảng thời gian dự kiến của Mission |
+
+Endpoint sử dụng resource-based authorization:
 
 ```text
 FarmAccessTarget(TenantId, FarmId)
+AccessAuthorizationPolicies.FarmManage
 ```
 
-`TenantId` được lấy từ tenant context của người dùng. `FarmId` được lấy từ URL và dùng để kiểm tra quyền trên Farm.
+`TenantId` lấy từ tenant context. `FarmId` lấy từ route và chỉ dùng để kiểm tra quyền trên Farm; Drone vẫn thuộc Tenant.
 
-## 4. Phạm vi sở hữu Drone
+## 5. Phạm vi sở hữu và tenant isolation
 
-Drone thuộc về `Tenant`, không thuộc riêng một Farm.
+- Một Drone thuộc đúng một Tenant.
+- Một Drone có thể phục vụ nhiều Farm trong cùng Tenant.
+- TenantAdmin chỉ truy vấn và thay đổi Drone có `Drone.TenantId` trùng tenant trong JWT.
+- Khi `droneId` tồn tại ở tenant khác, endpoint TenantAdmin trả về `NotFound` thay vì làm lộ dữ liệu.
+- Query SystemAdmin được tách thành method có tên `GetSystemPageAsync` và `GetSystemDetailsAsync`; query TenantAdmin luôn bắt buộc `TenantId`.
+- SystemAdmin chỉ được gọi query xuyên tenant thông qua controller có policy `SystemAdmin`.
 
-Quy tắc áp dụng:
+## 6. Đăng ký Drone
 
-- Một Drone có thể được sử dụng cho nhiều Farm trong cùng Tenant.
-- `farmId` trong API availability chỉ dùng để kiểm tra quyền của Owner/Manager.
-- Sau khi được cấp quyền, hệ thống trả các Drone khả dụng thuộc Tenant hiện tại.
-- Dữ liệu Drone của Tenant khác không được trả về.
+Khi đăng ký:
 
-## 5. Trạng thái Drone
+1. API lấy `TenantId` từ JWT.
+2. Validator kiểm tra code, tên, model, manufacturer, serial, registration, trọng lượng và khoảng ngày đăng ký.
+3. Code, serial và registration number được chuẩn hóa.
+4. Hệ thống chống trùng trong cùng Tenant đối với:
+   - `Code`.
+   - `SerialNumber`.
+   - `RegistrationNumber`.
+5. Domain tạo Drone mới với trạng thái `Available`.
+6. Shared audit ghi action `REGISTER`.
 
-Hệ thống giữ đầy đủ các trạng thái:
+## 7. Trạng thái Drone
+
+Các trạng thái:
 
 ```text
 Available
@@ -61,36 +123,57 @@ Inactive
 Retired
 ```
 
-Trong phạm vi UC01, API quản trị hỗ trợ:
+TenantAdmin được phép thực hiện:
 
 ```text
 Available   -> Maintenance
 Maintenance -> Available
+Available   -> Inactive
+Maintenance -> Inactive
+Inactive    -> Available
 Available   -> Retired
 Maintenance -> Retired
+Inactive    -> Retired
+```
+
+Mission lifecycle tự quản lý:
+
+```text
+Available -> InMission
+InMission -> Available     khi chuyến bay hoàn thành
+InMission -> Maintenance   khi chuyến bay thất bại
 ```
 
 Quy tắc:
 
-- Drone mới mặc định là `Available`.
 - `Retired` là trạng thái cuối và không thể quay lại hoạt động.
-- Gửi lại cùng trạng thái được xử lý idempotent, không tạo audit trùng.
-- `InMission` và `Inactive` được giữ để tương thích mô hình nhưng không phải transition quản trị của UC01.
+- TenantAdmin không thể trực tiếp đặt trạng thái `InMission`; trạng thái này chỉ do Mission lifecycle thay đổi.
+- Gửi lại đúng trạng thái hiện tại được xử lý idempotent và không ghi audit trùng.
+- `NextMaintenanceAt` chỉ được truyền khi hoàn tất bảo trì `Maintenance -> Available`.
+- Thời điểm bảo trì tiếp theo phải lớn hơn thời điểm hoàn tất bảo trì.
+- Thay đổi thành công ghi shared audit action `CHANGE_OPERATIONAL_STATUS`.
 
-## 6. Audit trạng thái
+## 8. Mission đang chặn thay đổi trạng thái
 
-Mỗi lần đăng ký hoặc thay đổi trạng thái tạo một `DroneStatusChange` gồm:
+Khi target status là một trong các trạng thái làm Drone không còn khả dụng:
 
-- `TenantId`.
-- `DroneId`.
-- Trạng thái trước.
-- Trạng thái mới.
-- Người thực hiện.
-- Thời điểm thực hiện.
+```text
+Maintenance
+Inactive
+Retired
+```
 
-UC01 không cung cấp API hoặc repository hard-delete Drone, nhờ đó lịch sử Mission và trạng thái được giữ lại.
+Backend từ chối nếu Drone đang được gán vào Mission có trạng thái:
 
-## 7. Quy tắc Drone khả dụng
+```text
+Draft
+Scheduled
+InFlight
+```
+
+TenantAdmin phải hủy hoặc xử lý Mission đang gán trước khi thay đổi trạng thái Drone. Quy tắc này tránh trường hợp một Mission `Scheduled` bắt đầu với Drone không còn `Available`.
+
+## 9. Quy tắc Drone khả dụng
 
 Một Drone được trả về khi đồng thời thỏa mãn:
 
@@ -98,40 +181,16 @@ Một Drone được trả về khi đồng thời thỏa mãn:
 Đúng Tenant
 AND chưa bị soft-delete
 AND Status = Available
-AND đã tới ngày đăng ký hoạt động
-AND đăng ký còn hiệu lực đến cuối Mission
-AND không bị trùng thời gian bảo trì
-AND không có Mission Ready/Flying giao lịch
+AND RegistrationDate không sau ngày bắt đầu Mission
+AND RegistrationExpiryDate không trước ngày kết thúc Mission
+AND NextMaintenanceAt không nằm trước thời điểm kết thúc Mission
+AND không có Mission Scheduled/InFlight giao thời gian
 ```
 
-### 7.1. Biên thời gian bảo trì
-
-Mission được phép kết thúc đúng lúc lịch bảo trì bắt đầu:
-
-```text
-Mission:     [08:00, 09:00)
-Maintenance: [09:00, ...)
-```
-
-Điều kiện query:
-
-```text
-NextMaintenanceAt >= Mission.EndAt
-```
-
-### 7.2. Biên thời gian Mission
-
-Khoảng lịch sử dụng quy ước nửa kín:
+Khoảng thời gian sử dụng quy ước nửa kín:
 
 ```text
 [StartAt, EndAt)
-```
-
-Vì vậy hai Mission nối tiếp nhau không bị xem là giao lịch:
-
-```text
-Mission A: [08:00, 09:00)
-Mission B: [09:00, 10:00)
 ```
 
 Hai khoảng giao nhau khi:
@@ -141,85 +200,128 @@ ExistingStart < NewEnd
 AND ExistingEnd > NewStart
 ```
 
-## 8. Database và migration
+Vì vậy hai Mission nối tiếp nhau không bị xem là giao lịch:
 
-Migration UC01:
+```text
+Mission A: [08:00, 09:00)
+Mission B: [09:00, 10:00)
+```
+
+## 10. Audit và lịch sử
+
+UC01 ban đầu sử dụng bảng `mission.drone_status_changes`. Khi UC02 được triển khai, migration:
+
+```text
+20260901054425_CompleteMissionLifecycleUc02AndMigrateDroneAudit
+```
+
+đã:
+
+1. Chuyển lịch sử cũ từ `mission.drone_status_changes` sang `system.audit_logs`.
+2. Xóa bảng audit riêng `mission.drone_status_changes`.
+3. Chuyển code đăng ký, thay đổi trạng thái và Mission lifecycle sang shared audit.
+
+Các action hiện được sử dụng:
+
+```text
+REGISTER
+CHANGE_OPERATIONAL_STATUS
+MISSION_STATUS_CHANGE
+```
+
+UC01 không cung cấp hard-delete API hoặc repository method cho Drone, nhờ đó lịch sử Mission và audit được giữ lại.
+
+## 11. Database và migration
+
+Migration nền của UC01:
 
 ```text
 20260820151810_CompleteDroneRegistryUc01
 ```
 
-Migration bổ sung:
+Migration này bổ sung:
 
 - PostgreSQL extension `btree_gist`.
 - Cột `mission.drone_missions.scheduled_end_at`.
 - Check constraint yêu cầu `scheduled_end_at > scheduled_at` khi có đủ hai giá trị.
-- Exclusion constraint `ex_drone_missions_no_schedule_overlap`.
-- Bảng `mission.drone_status_changes`.
-- Foreign key bảo đảm Drone và audit thuộc cùng Tenant.
-- Các index phục vụ availability query và status history.
+- Exclusion constraint chống hai Mission giữ lịch giao nhau trên cùng Drone.
+- Index phục vụ availability query.
 - Giá trị `RETIRED` trong enum `system.drone_status`.
+- Nền audit Drone ban đầu, sau đó được UC02 chuyển sang shared audit như mô tả ở trên.
 
-Exclusion constraint chỉ giữ lịch cho Mission có trạng thái:
+Các thay đổi phân quyền, list/detail và query SystemAdmin hiện tại không thay đổi schema, vì vậy không cần migration mới.
 
-```text
-Ready
-Flying
-```
-
-## 9. Thành phần đã triển khai
+## 12. Cấu trúc source chuẩn
 
 ```text
 AgriDrone.Modules.Missions/
 ├── Domain/Drones/
 │   ├── Drone.cs
 │   ├── DroneStatus.cs
-│   ├── DroneStatusChange.cs
-│   ├── IDroneRepository.cs
-│   └── IDroneStatusChangeRepository.cs
+│   └── IDroneRepository.cs
 ├── Application/
 │   ├── Abstractions/
 │   │   ├── DroneErrors.cs
-│   │   ├── IDroneQueries.cs
-│   │   └── IMissionsUnitOfWork.cs
+│   │   └── IDroneQueries.cs
 │   └── Features/Drones/
 │       ├── RegisterDrone/
 │       ├── ChangeDroneStatus/
-│       └── GetAvailableDrones/
+│       ├── GetAvailableDrones/
+│       ├── GetDrones/
+│       ├── GetDroneDetails/
+│       ├── GetSystemDrones/
+│       └── GetSystemDroneDetails/
 ├── Infrastructure/
 │   ├── Queries/DroneQueries.cs
 │   ├── Repositories/DroneRepository.cs
-│   ├── Repositories/DroneStatusChangeRepository.cs
 │   └── Persistence/Configurations/
 │       ├── DroneConfiguration.cs
-│       ├── DroneMissionConfiguration.cs
-│       └── DroneStatusChangeConfiguration.cs
+│       └── DroneMissionConfiguration.cs
 └── DependencyInjection.cs
 
 AgriDrone.Api/
 ├── Contracts/Drones/
-└── Controllers/DronesController.cs
+└── Controllers/
+    ├── DronesController.cs
+    └── SystemDronesController.cs
 ```
 
-## 10. Kết quả hoàn thành
+Mỗi use case có query/command, validator và handler riêng. API request nằm trong API project; domain behavior nằm trong `Drone`; EF query và repository implementation nằm trong Infrastructure.
 
-UC01 đã hoàn thành các yêu cầu nghiệp vụ trong phạm vi dự án:
-
-- Quản lý đăng ký Drone.
-- Quản lý trạng thái và retire Drone.
-- Ghi nhận audit trạng thái.
-- Lọc Drone khả dụng theo Tenant, trạng thái, đăng ký, bảo trì và lịch Mission.
-- Phân quyền đúng cho System Admin, Tenant Owner và Farm Manager.
-- Chống giao lịch ở cả query và PostgreSQL constraint.
-- Hoàn thiện API, Application, Domain, Infrastructure, DI và migration.
-- Không hard-delete Drone có lịch sử.
-
-## 11. Bước tiếp theo
-
-Use case tiếp theo:
+Tại thời điểm cập nhật, ba file `GetSystemDronesQuery`, `GetSystemDronesQueryValidator` và `GetSystemDronesQueryHandler` đang nằm vật lý tại:
 
 ```text
-BE2-UC02 — Mission Lifecycle
+Application/Features/GetSystemDrones/
 ```
 
-UC02 cần xây dựng lifecycle của `DroneMission`, sử dụng Drone availability và database scheduling constraint đã hoàn thiện trong UC01.
+Namespace của chúng đã đúng, nên build không lỗi. Tuy nhiên, để thống nhất với các feature Drone còn lại, cần chuyển folder này thành:
+
+```text
+Application/Features/Drones/GetSystemDrones/
+```
+
+## 13. Kết quả xác minh
+
+Lần build gần nhất ngày 09/09/2026:
+
+```text
+dotnet build backend/AgriDrone.sln --no-restore
+
+Build succeeded.
+0 Warning(s)
+0 Error(s)
+```
+
+Chưa có test riêng cho các use case Drone. Vì vậy trạng thái hoàn thành ở đây xác nhận chức năng và build đúng theo phạm vi đã chốt, không phải xác nhận runtime hoặc authorization test đầy đủ.
+
+## 14. Kết luận
+
+UC01 hiện cung cấp đầy đủ:
+
+- TenantAdmin đăng ký, xem và quản lý trạng thái Drone của tenant hiện tại.
+- SystemAdmin theo dõi danh sách và chi tiết Drone xuyên tenant ở chế độ read-only.
+- Farm Owner/Manager lấy danh sách Drone khả dụng để lập Mission.
+- Tenant isolation, availability, chống trùng lịch, blocking Mission và shared audit.
+- Không hard-delete và không có SystemAdmin mutation API.
+
+Sau khi chuyển đúng folder `GetSystemDrones`, UC01 có thể được giữ ổn định và bước triển khai tiếp theo là tiếp tục BE2-UC03 với `CompleteUploadSession`, telemetry JSON chuẩn hóa và finalize upload.

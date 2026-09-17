@@ -148,22 +148,11 @@ internal sealed class TenantInvitationService(
 
         tenantInvitationRepository.Add(invitation);
 
-        var payload = new EmailNotificationRequestedV1(
-            NotificationId: invitation.Id,
-            TemplateKey: EmailTemplateKeys.TenantInvitation,
-            Recipients: [new EmailRecipientV1(invitation.Email)],
-            Variables: new Dictionary<string, string>
-            {
-                [EmailTemplateVariableKeys.TenantName] = tenant.Name,
-                [EmailTemplateVariableKeys.RoleName] =
-                    GetRoleDisplayName(invitation.Role),
-                [EmailTemplateVariableKeys.ActionUrl] =
-                    BuildAcceptUrl(token.PlainTextToken),
-                [EmailTemplateVariableKeys.ExpiresAt] =
-                    invitation.ExpiresAt.ToString("O")
-            });
+        var payload = new TenantInvitationEmailRequestedV1(
+            invitation.Id,
+            token.PlainTextToken);
         var envelope = IntegrationEventEnvelopeFactory.Create(
-            IntegrationEventDescriptors.EmailNotificationRequestedV1,
+            IntegrationEventDescriptors.TenantInvitationEmailRequestedV1,
             messageId: Guid.NewGuid(),
             correlationId: executionContext.CorrelationId,
             tenantId: request.TenantId,
@@ -184,25 +173,4 @@ internal sealed class TenantInvitationService(
                 invitation.ExpiresAt));
     }
 
-    private string BuildAcceptUrl(string plainTextToken)
-    {
-        var separator = _invitationOptions.AcceptUrl.Contains('?')
-            ? '&'
-            : '?';
-
-        return $"{_invitationOptions.AcceptUrl}{separator}token=" +
-               Uri.EscapeDataString(plainTextToken);
-    }
-
-    private static string GetRoleDisplayName(TenantMemberRole role) =>
-        role switch
-        {
-            TenantMemberRole.Owner => "Tenant Owner",
-            TenantMemberRole.TenantAdmin => "Tenant Admin",
-            TenantMemberRole.Member => "Tenant Member",
-            _ => throw new ArgumentOutOfRangeException(
-                nameof(role),
-                role,
-                "Unsupported tenant role.")
-        };
 }

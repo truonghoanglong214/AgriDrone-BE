@@ -11,8 +11,20 @@ internal sealed class MinioObjectStorage(
     IMinioClient minioClient,
     IOptions<MinioStorageOptions> options,
     TimeProvider timeProvider)
-    : IObjectStorage
+    : IObjectStorage, IObjectStorageWriter
 {
+    public async Task UploadAsync(string storageUri, Stream content, long length,
+        string mimeType, CancellationToken cancellationToken = default)
+    {
+        var location = ParseStorageUri(storageUri);
+        await minioClient.PutObjectAsync(new PutObjectArgs()
+            .WithBucket(location.Bucket)
+            .WithObject(location.ObjectName)
+            .WithStreamData(content)
+            .WithObjectSize(length)
+            .WithContentType(mimeType), cancellationToken);
+    }
+
     private const string StorageUriScheme = "minio";
     private const string DefaultMimeType =
         "application/octet-stream";
@@ -74,11 +86,13 @@ internal sealed class MinioObjectStorage(
                 cancellationToken);
 
             return new StoredObjectInfo(
-                storageUri,
-                string.IsNullOrWhiteSpace(stat.ContentType)
+                StorageUri: storageUri,
+                Provider: "MinIO",
+                StorageKey: location.ObjectName,
+                MimeType: string.IsNullOrWhiteSpace(stat.ContentType)
                     ? DefaultMimeType
                     : stat.ContentType,
-                stat.Size,
+                FileSizeBytes: stat.Size,
                 ChecksumAlgorithm: null,
                 Checksum: null);
         }

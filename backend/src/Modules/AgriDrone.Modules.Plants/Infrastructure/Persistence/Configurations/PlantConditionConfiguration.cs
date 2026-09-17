@@ -50,6 +50,16 @@ public sealed class PlantConditionConfiguration : IEntityTypeConfiguration<Plant
             .HasColumnName("description")
             .HasColumnType("text");
 
+        builder.Property(condition => condition.RevisionNumber)
+            .HasColumnName("revision_number")
+            .HasColumnType("integer")
+            .HasDefaultValue(1)
+            .IsRequired();
+
+        builder.Property(condition => condition.SupersedesId)
+            .HasColumnName("supersedes_id")
+            .HasColumnType("uuid");
+
         builder.Property(condition => condition.IsActive)
             .HasColumnName("is_active")
             .HasColumnType("boolean")
@@ -68,8 +78,33 @@ public sealed class PlantConditionConfiguration : IEntityTypeConfiguration<Plant
             .HasDefaultValueSql("NOW()")
             .IsRequired();
 
+        builder.Property(condition => condition.RetiredAt)
+            .HasColumnName("retired_at")
+            .HasColumnType("timestamp with time zone");
+
+        builder.Property(condition => condition.Version)
+            .HasColumnName("version")
+            .HasColumnType("bigint")
+            .HasDefaultValue(1L)
+            .IsConcurrencyToken()
+            .IsRequired();
+
+        builder.HasIndex(condition => new
+            {
+                condition.Code,
+                condition.RevisionNumber
+            })
+            .HasDatabaseName("uq_plant_conditions_code_revision")
+            .IsUnique();
+
         builder.HasIndex(condition => condition.Code)
-            .HasDatabaseName("uq_plant_conditions_code")
+            .HasDatabaseName("uq_plant_conditions_active_code")
+            .HasFilter("is_active = TRUE")
+            .IsUnique();
+
+        builder.HasIndex(condition => condition.SupersedesId)
+            .HasDatabaseName("uq_plant_conditions_supersedes")
+            .HasFilter("supersedes_id IS NOT NULL")
             .IsUnique();
     }
 }

@@ -2,9 +2,11 @@
 using AgriDrone.Modules.Missions.Application.Errors;
 using AgriDrone.Modules.Missions.Domain.Drones;
 using AgriDrone.SharedInfrastructure.Auditing;
+using AgriDrone.SharedInfrastructure.Persistence;
 using AgriDrone.SharedKernel.Application;
 using AgriDrone.SharedKernel.Application.Abstractions.Execution;
 using MediatR;
+using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
 
 namespace AgriDrone.Modules.Missions.Application
@@ -20,6 +22,13 @@ internal sealed class RegisterDroneCommandHandler(
         RegisterDroneCommand,
         Result<RegisterDroneResponse>>
 {
+    private const string DroneCodeConstraint =
+        "uq_drones_tenant_code";
+    private const string DroneSerialNumberConstraint =
+        "uq_drones_tenant_serial_number";
+    private const string DroneRegistrationNumberConstraint =
+        "uq_drones_tenant_registration_number";
+
     public async Task<Result<RegisterDroneResponse>> Handle(
         RegisterDroneCommand request,
         CancellationToken cancellationToken)
@@ -108,7 +117,33 @@ internal sealed class RegisterDroneCommandHandler(
                     newData: newData,
                     createdAt: now);
 
-        await unitOfWork.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException exception)
+            when (exception.IsUniqueConstraintViolation(
+                DroneCodeConstraint))
+        {
+            return Result.Failure<RegisterDroneResponse>(
+                DroneError.CodeAlreadyExists(normalizedCode));
+        }
+        catch (DbUpdateException exception)
+            when (exception.IsUniqueConstraintViolation(
+                DroneSerialNumberConstraint))
+        {
+            return Result.Failure<RegisterDroneResponse>(
+                DroneError.SerialNumberAlreadyExists(
+                    normalizedSerial!));
+        }
+        catch (DbUpdateException exception)
+            when (exception.IsUniqueConstraintViolation(
+                DroneRegistrationNumberConstraint))
+        {
+            return Result.Failure<RegisterDroneResponse>(
+                DroneError.RegistrationNumberAlreadyExists(
+                    normalizedRegistration!));
+        }
 
         return Result.Success(MapResponse(drone));
     }

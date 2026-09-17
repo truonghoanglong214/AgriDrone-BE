@@ -64,18 +64,50 @@ public sealed class FarmMembership : Entity
         };
     }
 
+    public static FarmMembership Create(
+        Guid tenantId,
+        Guid farmId,
+        Guid userId,
+        FarmMemberRole role,
+        FarmAccessScope accessScope,
+        IReadOnlyCollection<Guid> zoneIds,
+        Guid assignedBy,
+        DateTimeOffset createdAt)
+    {
+        var membership = Create(
+            tenantId,
+            farmId,
+            userId,
+            role,
+            accessScope,
+            createdAt);
+
+        ValidateZones(accessScope, zoneIds);
+        membership.SynchronizeZones(zoneIds, assignedBy, createdAt);
+
+        return membership;
+    }
+
     public bool Assign(
         FarmMemberRole role,
         FarmAccessScope accessScope,
+        IReadOnlyCollection<Guid> zoneIds,
+        Guid assignedBy,
         DateTimeOffset assignedAt)
     {
+        DomainGuard.NotEmpty(assignedBy);
         DomainGuard.Utc(assignedAt);
         ValidateRole(role);
         ValidateAccessScope(accessScope);
+        ValidateZones(accessScope, zoneIds);
 
-        if (Role == role &&
-            AccessScope == accessScope &&
-            Status == GeneralStatus.Active)
+        var membershipChanged =
+            Role != role ||
+            AccessScope != accessScope ||
+            Status != GeneralStatus.Active;
+        var zonesChanged = !HasSameActiveZones(zoneIds);
+
+        if (!membershipChanged && !zonesChanged)
         {
             return false;
         }
@@ -89,6 +121,43 @@ public sealed class FarmMembership : Entity
             JoinedAt = assignedAt;
         }
 
+        SynchronizeZones(zoneIds, assignedBy, assignedAt);
+        Version++;
+
+        return true;
+    }
+
+    public bool Matches(
+        FarmMemberRole role,
+        FarmAccessScope accessScope,
+        IReadOnlyCollection<Guid> zoneIds)
+    {
+        ValidateRole(role);
+        ValidateAccessScope(accessScope);
+        ValidateZones(accessScope, zoneIds);
+
+        return Role == role &&
+            AccessScope == accessScope &&
+            Status == GeneralStatus.Active &&
+            HasSameActiveZones(zoneIds);
+    }
+
+    public bool Deactivate(DateTimeOffset deactivatedAt)
+    {
+        DomainGuard.Utc(deactivatedAt);
+
+        if (Status == GeneralStatus.Inactive)
+        {
+            return false;
+        }
+
+        foreach (var zoneAssignment in ZoneAssignments.Where(
+                     assignment => assignment.RevokedAt is null))
+        {
+            zoneAssignment.Revoke(deactivatedAt);
+        }
+
+        Status = GeneralStatus.Inactive;
         Version++;
 
         return true;
@@ -108,6 +177,78 @@ public sealed class FarmMembership : Entity
             not FarmAccessScope.SelectedZones)
         {
             throw new ArgumentOutOfRangeException(nameof(accessScope));
+        }
+    }
+
+    private static void ValidateZones(
+        FarmAccessScope accessScope,
+        IReadOnlyCollection<Guid> zoneIds)
+    {
+        ArgumentNullException.ThrowIfNull(zoneIds);
+
+        if (accessScope == FarmAccessScope.AllZones && zoneIds.Count != 0)
+        {
+            throw new ArgumentException(
+                "Zone IDs must be empty for ALL_ZONES access.",
+                nameof(zoneIds));
+        }
+
+        if (accessScope == FarmAccessScope.SelectedZones &&
+            (zoneIds.Count == 0 ||
+             zoneIds.Any(zoneId => zoneId == Guid.Empty) ||
+             zoneIds.Distinct().Count() != zoneIds.Count))
+        {
+            throw new ArgumentException(
+                "Selected zone IDs must be non-empty and distinct.",
+                nameof(zoneIds));
+        }
+    }
+
+    private bool HasSameActiveZones(IReadOnlyCollection<Guid> zoneIds)
+    {
+        var requestedZoneIds = AccessScope == FarmAccessScope.AllZones
+            ? Array.Empty<Guid>()
+            : zoneIds;
+        var activeZoneIds = ZoneAssignments
+            .Where(assignment => assignment.RevokedAt is null)
+            .Select(assignment => assignment.ZoneId)
+            .ToHashSet();
+
+        return activeZoneIds.SetEquals(requestedZoneIds);
+    }
+
+    private void SynchronizeZones(
+        IReadOnlyCollection<Guid> zoneIds,
+        Guid assignedBy,
+        DateTimeOffset assignedAt)
+    {
+        var requestedZoneIds = AccessScope == FarmAccessScope.AllZones
+            ? new HashSet<Guid>()
+            : zoneIds.ToHashSet();
+        var activeAssignments = ZoneAssignments
+            .Where(assignment => assignment.RevokedAt is null)
+            .ToArray();
+
+        foreach (var assignment in activeAssignments.Where(
+                     assignment => !requestedZoneIds.Contains(assignment.ZoneId)))
+        {
+            assignment.Revoke(assignedAt);
+        }
+
+        var activeZoneIds = activeAssignments
+            .Where(assignment => assignment.RevokedAt is null)
+            .Select(assignment => assignment.ZoneId)
+            .ToHashSet();
+
+        foreach (var zoneId in requestedZoneIds.Where(
+                     zoneId => !activeZoneIds.Contains(zoneId)))
+        {
+            ZoneAssignments.Add(ZoneAssignment.Create(
+                Id,
+                FarmId,
+                zoneId,
+                assignedBy,
+                assignedAt));
         }
     }
 }

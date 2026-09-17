@@ -20,15 +20,19 @@ internal sealed class ChangeDroneStatusCommandValidator
                 status is
                     DroneStatus.Available or
                     DroneStatus.Maintenance or
+                    DroneStatus.Inactive or
                     DroneStatus.Retired)
             .WithMessage(
-                "Only Available, Maintenance and Retired are supported.");
+                "Only Available, Maintenance, Inactive " +
+                "or Retired are supported.");
 
         RuleFor(command => command)
             .Must(command =>
-                command.TargetStatus == DroneStatus.Available ||
+                command.TargetStatus ==
+                    DroneStatus.Available ||
                 !command.NextMaintenanceAt.HasValue)
             .WithMessage(
-                "NextMaintenanceAt can only be supplied when completing maintenance.");
+                "NextMaintenanceAt can only be supplied " +
+                "when changing the drone to Available.");
     }
 }

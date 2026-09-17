@@ -1,10 +1,13 @@
 using AgriDrone.IntegrationContracts.Farms;
 using AgriDrone.Modules.Identity.Application.Abstractions.Queries;
 using AgriDrone.Modules.Identity.Application.Features.GetFarmMemberAssignment;
+using AgriDrone.Modules.Identity.Application.Features.GetFarmMembers;
+using AgriDrone.Modules.Identity.Application.Features.GetMyFarmAssignments;
 using AgriDrone.Modules.Identity.Domain.FarmMemberships;
 using AgriDrone.SharedKernel.Application.Abstractions.Authorization;
 using AgriDrone.SharedKernel.Application.Abstractions.Execution;
 using AgriDrone.SharedKernel.Domain;
+using AgriDrone.SharedKernel.Application.Pagination;
 using Xunit;
 
 namespace AgriDrone.UnitTests.Application.Identity;
@@ -149,6 +152,26 @@ public sealed class GetFarmMemberAssignmentQueryHandlerTests
             UserId = userId;
             return Task.FromResult(Response);
         }
+
+        public Task<PagedResult<FarmMemberListItemResponse>>
+            GetMembersPageAsync(
+                Guid tenantId,
+                Guid farmId,
+                FarmMemberRole? role,
+                GeneralStatus? status,
+                PagedRequest pagedRequest,
+                CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public Task<PagedResult<MyFarmAssignmentReadModel>>
+            GetMyAssignmentsPageAsync(
+                Guid tenantId,
+                Guid userId,
+                IReadOnlyCollection<Guid> activeFarmIds,
+                FarmMemberRole? role,
+                PagedRequest pagedRequest,
+                CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
     }
 
     private sealed class FakeFarmAssignmentReferenceQuery
@@ -161,6 +184,19 @@ public sealed class GetFarmMemberAssignmentQueryHandlerTests
             Guid farmId,
             CancellationToken cancellationToken = default) =>
             Task.FromResult(IsActive);
+
+        public Task<IReadOnlyCollection<FarmAssignmentReference>>
+            GetActiveFarmsAsync(
+            Guid tenantId,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<IReadOnlyCollection<FarmAssignmentZoneReference>>
+            GetActiveZonesAsync(
+                Guid tenantId,
+                IReadOnlyCollection<Guid> farmIds,
+                CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
     }
 
     private sealed class FakeEffectiveAccessService : IEffectiveAccessService

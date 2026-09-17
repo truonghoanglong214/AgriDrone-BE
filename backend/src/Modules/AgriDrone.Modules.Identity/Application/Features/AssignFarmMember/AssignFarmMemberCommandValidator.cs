@@ -15,20 +15,31 @@ internal sealed class AssignFarmMemberCommandValidator
             .NotEmpty();
 
         RuleFor(command => command.Role)
-            .Equal(FarmMemberRole.Manager)
-            .WithMessage(
-                "Tenant Admin assignment currently supports only the MANAGER farm role.");
+            .IsInEnum();
 
         RuleFor(command => command.AccessScope)
-            .Equal(FarmAccessScope.AllZones)
-            .WithMessage(
-                "Tenant Admin assignment currently supports only the ALL_ZONES access scope.");
+            .IsInEnum();
 
         RuleFor(command => command.ZoneIds)
-            .NotNull()
-            .Must(zoneIds => zoneIds.Count == 0)
+            .NotNull();
+
+        RuleFor(command => command.ZoneIds)
+            .Must(zoneIds => zoneIds is not null && zoneIds.Count == 0)
+            .When(command =>
+                command.AccessScope == FarmAccessScope.AllZones)
             .WithMessage(
                 "ZoneIds must be empty when AccessScope is ALL_ZONES.");
+
+        RuleFor(command => command.ZoneIds)
+            .Must(zoneIds =>
+                zoneIds is not null &&
+                zoneIds.Count > 0 &&
+                zoneIds.All(zoneId => zoneId != Guid.Empty) &&
+                zoneIds.Distinct().Count() == zoneIds.Count)
+            .When(command =>
+                command.AccessScope == FarmAccessScope.SelectedZones)
+            .WithMessage(
+                "ZoneIds must contain distinct, non-empty zone IDs when AccessScope is SELECTED_ZONES.");
 
         RuleFor(command => command.Reason)
             .MaximumLength(500);

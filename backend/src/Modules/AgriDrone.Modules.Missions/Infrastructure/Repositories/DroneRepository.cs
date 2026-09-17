@@ -1,11 +1,15 @@
 ﻿using AgriDrone.Modules.Missions.Domain.Drones;
-using AgriDrone.Modules.Missions.Infrastructure.Persistence;
+using AgriDrone.Modules.Missions.Domain.Missions;
+using AgriDrone.Modules.Missions
+    .Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
-namespace AgriDrone.Modules.Missions.Infrastructure.Repositories;
+namespace AgriDrone.Modules.Missions
+    .Infrastructure.Repositories;
 
 internal sealed class DroneRepository(
-    MissionsDbContext dbContext) : IDroneRepository
+    MissionsDbContext dbContext)
+    : IDroneRepository
 {
     public Task<Drone?> GetByIdAsync(
         Guid droneId,
@@ -20,6 +24,20 @@ internal sealed class DroneRepository(
             cancellationToken);
     }
 
+    public Task<bool> HasBlockingMissionAsync(
+    Guid droneId,
+    CancellationToken cancellationToken = default)
+    {
+        return dbContext.DroneMissions.AnyAsync(
+            mission =>
+                mission.DroneId == droneId &&
+                (
+                    mission.Status == MissionStatus.Draft ||
+                    mission.Status == MissionStatus.Scheduled ||
+                    mission.Status == MissionStatus.InFlight
+                ),
+            cancellationToken);
+    }
     public Task<bool> CodeExistsAsync(
         Guid tenantId,
         string code,
@@ -52,7 +70,8 @@ internal sealed class DroneRepository(
         return dbContext.Drones.AnyAsync(
             drone =>
                 drone.TenantId == tenantId &&
-                drone.RegistrationNumber == registrationNumber,
+                drone.RegistrationNumber ==
+                    registrationNumber,
             cancellationToken);
     }
 

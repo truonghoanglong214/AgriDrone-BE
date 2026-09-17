@@ -10,6 +10,7 @@ public sealed record AssignFarmMemberResponse(
     Guid UserId,
     FarmMemberRole Role,
     FarmAccessScope AccessScope,
+    IReadOnlyCollection<Guid> ZoneIds,
     GeneralStatus Status,
     long Version,
     DateTimeOffset JoinedAt);

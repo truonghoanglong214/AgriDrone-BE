@@ -2,14 +2,13 @@
 using AgriDrone.Modules.Farms.Application.Errors;
 using AgriDrone.Modules.Farms.Domain.Farms;
 using AgriDrone.Modules.Farms.Domain.Zones;
+using AgriDrone.SharedInfrastructure.Persistence;
 using AgriDrone.SharedKernel.Application;
 using AgriDrone.SharedKernel.Application.Abstractions.Authorization;
 using AgriDrone.SharedKernel.Application.Abstractions.Execution;
 using AgriDrone.SharedKernel.Domain;
 using MediatR;
-using System;
-using System.Collections.Generic;
-using System.Text;
+using Microsoft.EntityFrameworkCore;
 
 namespace AgriDrone.Modules.Farms.Application.Features.CreateZone
 {
@@ -21,6 +20,9 @@ namespace AgriDrone.Modules.Farms.Application.Features.CreateZone
         IEffectiveAccessService effectiveAccessService,
         TimeProvider timeProvider) : IRequestHandler<CreateZoneCommand, Result<CreateZoneResponse>>
     {
+        private const string ActiveZoneCodeConstraint =
+            "ux_farm_zones_farm_code_active";
+
         public async Task<Result<CreateZoneResponse>> Handle(CreateZoneCommand request, CancellationToken cancellationToken)
         {
             if (executionContext.ActorId is not Guid userId)
@@ -71,7 +73,18 @@ namespace AgriDrone.Modules.Farms.Application.Features.CreateZone
                 now);
             
             farmZoneRepository.Add(newZone);
-            await unitOfWork.SaveChangesAsync(cancellationToken);
+
+            try
+            {
+                await unitOfWork.SaveChangesAsync(cancellationToken);
+            }
+            catch (DbUpdateException exception)
+                when (exception.IsUniqueConstraintViolation(
+                    ActiveZoneCodeConstraint))
+            {
+                return Result.Failure<CreateZoneResponse>(
+                    FarmZoneError.CodeAlreadyExists(normalizedCode));
+            }
 
             return Result.Success(
                 new CreateZoneResponse(

@@ -15,11 +15,15 @@ using AgriDrone.SharedKernel.Application.Abstractions.Execution;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using AgriDrone.Modules.Missions.Application.Features.Missions.GetMissions;
+using AgriDrone.Modules.Missions.Application.Features.Missions;
+using AgriDrone.SharedKernel.Application.Pagination;
 
 namespace AgriDrone.Api.Controllers;
 
 [ApiController]
 [Authorize]
+[Route("api/missions")]
 public sealed class MissionsController(
     ISender sender,
     IAuthorizationService authorizationService,
@@ -32,9 +36,9 @@ public sealed class MissionsController(
     /// Health Inspection phải tham chiếu confirmed map của Zone; mã Mission là duy
     /// nhất trong Farm. Drone và các tham chiếu phải thuộc đúng tenant.
     /// </remarks>
-    [HttpPost("api/farms/{farmId:guid}/missions")]
+    [HttpPost("farms/{farmId:guid}")]
     public async Task<IResult> CreateMission(
-        Guid farmId,
+        [FromRoute] Guid farmId,
         [FromBody] CreateMissionRequest request,
         CancellationToken cancellationToken)
     {
@@ -64,7 +68,7 @@ public sealed class MissionsController(
         return result.ToHttpResult(
             HttpContext,
             mission => Results.Created(
-                $"/api/farms/{farmId}/missions/{mission.Id}",
+                $"/api/missions/{mission.Id}/farms/{farmId}",
                 mission));
     }
 
@@ -74,11 +78,9 @@ public sealed class MissionsController(
     /// không giao lịch và khoảng thời gian hợp lệ. ExpectedVersion bảo vệ khỏi cập
     /// nhật đồng thời.
     /// </remarks>
-    [HttpPatch(
-        "api/farms/{farmId:guid}/missions/" +
-        "{missionId:guid}/schedule")]
+    [HttpPatch("{missionId:guid}/farms/{farmId:guid}/schedule")]
     public async Task<IResult> ScheduleMission(
-        Guid farmId,
+        [FromRoute] Guid farmId,
         Guid missionId,
         [FromBody] ScheduleMissionRequest request,
         CancellationToken cancellationToken)
@@ -113,11 +115,9 @@ public sealed class MissionsController(
     /// FlightCompleted hoặc FlightFailed, và Draft/Scheduled sang Cancelled. Khi
     /// bắt đầu hoặc kết thúc chuyến bay, trạng thái drone được cập nhật đồng bộ.
     /// </remarks>
-    [HttpPatch(
-        "api/farms/{farmId:guid}/missions/" +
-        "{missionId:guid}/status")]
+    [HttpPatch("{missionId:guid}/farms/{farmId:guid}/status")]
     public async Task<IResult> TransitionMission(
-        Guid farmId,
+        [FromRoute] Guid farmId,
         Guid missionId,
         [FromBody] TransitionMissionRequest request,
         CancellationToken cancellationToken)
@@ -151,11 +151,10 @@ public sealed class MissionsController(
     /// Trả toàn bộ thông tin Mission thuộc đúng tenant và farm, gồm Zone, drone,
     /// pilot, loại Mission, lịch bay, trạng thái, source map và version hiện tại.
     /// </remarks>
-    [HttpGet(
-        "api/farms/{farmId:guid}/missions/" +
-        "{missionId:guid}")]
+    [HttpGet("{missionId:guid}/farms/{farmId:guid}")]
+    [ProducesResponseType(typeof(MissionResponse), StatusCodes.Status200OK)]
     public async Task<IResult> GetMissionDetails(
-        Guid farmId,
+        [FromRoute] Guid farmId,
         Guid missionId,
         CancellationToken cancellationToken)
     {
@@ -178,6 +177,30 @@ public sealed class MissionsController(
         return result.ToHttpResult(
             HttpContext,
             Results.Ok);
+    }
+
+    /// <summary>Lấy danh sách Mission của Farm.</summary>
+    /// <remarks>
+    /// Yêu cầu FarmManage. Phân trang tối đa 100 phần tử; lọc ZoneId, DroneId,
+    /// MissionType, Status và tìm kiếm mã Mission. Sắp xếp mới nhất trước.
+    /// Chỉ trả Mission thuộc tenant hiện tại và Farm được phép truy cập.
+    /// </remarks>
+    [HttpGet("farms/{farmId:guid}")]
+    [ProducesResponseType(typeof(PagedResult<MissionListItemResponse>), StatusCodes.Status200OK)]
+    public async Task<IResult> GetMissions(
+        [FromRoute] Guid farmId,
+        [FromQuery] GetMissionsRequest request,
+        CancellationToken cancellationToken)
+    {
+        var authorization = await AuthorizeFarmAsync(farmId);
+        if (authorization is not null)
+            return authorization;
+
+        var result = await sender.Send(new GetMissionsQuery(
+            farmId, request.PageNumber, request.PageSize, request.ZoneId,
+            request.DroneId, request.MissionType, request.Status, request.Search),
+            cancellationToken);
+        return result.ToHttpResult(HttpContext, Results.Ok);
     }
 
     private async Task<IResult?> AuthorizeFarmAsync(

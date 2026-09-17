@@ -25,4 +25,48 @@ public sealed class ZoneAssignment : Entity
     public FarmMembership FarmMembership { get; private set; } = null!;
 
     public User AssignedByUser { get; private set; } = null!;
+
+    public static ZoneAssignment Create(
+        Guid farmMembershipId,
+        Guid farmId,
+        Guid zoneId,
+        Guid assignedBy,
+        DateTimeOffset assignedAt)
+    {
+        DomainGuard.NotEmpty(farmMembershipId);
+        DomainGuard.NotEmpty(farmId);
+        DomainGuard.NotEmpty(zoneId);
+        DomainGuard.NotEmpty(assignedBy);
+        DomainGuard.Utc(assignedAt);
+
+        return new ZoneAssignment
+        {
+            Id = Guid.NewGuid(),
+            FarmMembershipId = farmMembershipId,
+            FarmId = farmId,
+            ZoneId = zoneId,
+            AssignedBy = assignedBy,
+            AssignedAt = assignedAt
+        };
+    }
+
+    public bool Revoke(DateTimeOffset revokedAt)
+    {
+        DomainGuard.Utc(revokedAt);
+
+        if (revokedAt < AssignedAt)
+        {
+            throw new ArgumentException(
+                "RevokedAt cannot be earlier than AssignedAt.",
+                nameof(revokedAt));
+        }
+
+        if (RevokedAt.HasValue)
+        {
+            return false;
+        }
+
+        RevokedAt = revokedAt;
+        return true;
+    }
 }
