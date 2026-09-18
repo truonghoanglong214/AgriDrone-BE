@@ -1,6 +1,7 @@
 using AgriDrone.Database;
 using AgriDrone.Integrations.Email;
 using AgriDrone.Integrations.Media;
+using AgriDrone.Integrations.Media.Telemetry;
 using AgriDrone.Modules.Farms;
 using AgriDrone.Modules.FieldTasks;
 using AgriDrone.Modules.Harvests;
@@ -90,6 +91,7 @@ builder.Services.AddCors(options =>
 builder.Services
     .AddEmailIntegration(builder.Configuration)
     .AddMediaIntegration(builder.Configuration)
+    .AddTelemetryNormalization(builder.Configuration)
     .AddAgriDroneDatabase(builder.Configuration)
     .AddFarmsModule(builder.Configuration)
     .AddFieldTasksModule(builder.Configuration)
@@ -106,6 +108,7 @@ builder.Services
     .AddAccessAuthorization()
     .AddValidationPipeline()
     .AddGlobalExceptionHandling();
+
 
 var app = builder.Build();
 
