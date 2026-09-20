@@ -98,6 +98,7 @@ if (builder.Configuration.GetValue<bool>(
     await app.Services.MigrateAgriDroneDatabaseAsync();
 }
 
+await app.Services.ValidateCoreMasterDataAsync();
 await app.Services.BootstrapSystemAdminAsync();
 
 app.UseExceptionHandler();

@@ -1,6 +1,7 @@
 using AgriDrone.Database;
 using AgriDrone.IntegrationContracts.Mapping;
 using AgriDrone.IntegrationContracts.Messaging;
+using AgriDrone.Modules.Plants;
 using AgriDrone.SharedInfrastructure.Messaging;
 using AgriDrone.SharedInfrastructure.Messaging.Consumers;
 using AgriDrone.SharedKernel.Application.Abstractions.Authorization;
@@ -52,6 +53,7 @@ public sealed class MappingApprovalIdempotencyIntegrationTests
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddIntegrationMessagingFoundation(configuration);
+        services.AddPlantsModule(configuration);
         services.AddMappingPublicationPersistence(configuration);
         services.AddSingleton<IEffectiveAccessService, AllowAllAccessService>();
         await using var provider = services.BuildServiceProvider();
