@@ -1,4 +1,5 @@
 using AgriDrone.IntegrationContracts.Farms;
+using AgriDrone.IntegrationContracts.Plants;
 using AgriDrone.Modules.Plants.Application.Abstractions.Persistence;
 using AgriDrone.Modules.Plants.Application.Abstractions.Queries;
 using AgriDrone.Modules.Plants.Domain.Conditions;
@@ -7,10 +8,13 @@ using AgriDrone.Modules.Plants.Domain.Mapping;
 using AgriDrone.Modules.Plants.Domain.Plants;
 using AgriDrone.Modules.Plants.Domain.Scans;
 using AgriDrone.Modules.Plants.Domain.Verifications;
+using AgriDrone.Modules.Plants.Infrastructure.Health;
+using AgriDrone.Modules.Plants.Infrastructure.Initialization;
 using AgriDrone.Modules.Plants.Infrastructure.Persistence;
 using AgriDrone.Modules.Plants.Infrastructure.Queries;
 using AgriDrone.Modules.Plants.Infrastructure.Repositories;
 using AgriDrone.SharedInfrastructure.Auditing;
+using AgriDrone.SharedInfrastructure.Caching;
 using AgriDrone.SharedInfrastructure.Persistence;
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
@@ -60,6 +64,12 @@ public static class DependencyInjection
 
         services.AddScoped<IPlantsUnitOfWork>(serviceProvider =>
             serviceProvider.GetRequiredService<PlantsDbContext>());
+        services.AddScoped<HealthLevelSeedValidator>();
+
+        services.AddHealthChecks()
+            .AddCheck<HealthLevelSeedReadinessHealthCheck>(
+                "health-level-seeds",
+                tags: ["ready"]);
 
         var assembly = typeof(DependencyInjection).Assembly;
 
@@ -69,10 +79,13 @@ public static class DependencyInjection
             assembly,
             includeInternalTypes: true);
 
-        services.AddScoped<IPlantArchiveReferenceQuery,PlantArchiveReferenceQuery>();
+        services.AddScoped<IPlantArchiveReferenceQuery, PlantArchiveReferenceQuery>();
+        services.AddScoped<IHealthLevelReferenceQuery, HealthLevelReferenceQuery>();
+        services.AddScoped<IPlantReferenceSource, PlantReferenceSource>();
         services.AddScoped<IHealthLevelQueries, HealthLevelQuery>();
         services.AddScoped<IPlantConditionQueries, PlantConditionQueries>();
         services.AddScoped<IPlantConditionRepository, PlantConditionRepository>();
+        services.AddScoped<IPlantRepository, PlantRepository>();
 
         return services;
     }

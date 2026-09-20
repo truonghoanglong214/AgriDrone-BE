@@ -13,17 +13,19 @@ public sealed class PlantChangeEvent : Entity
     private PlantChangeEvent(
         Guid id,
         Guid farmId,
-        Guid missionId,
+        Guid? missionId,
         Guid plantId,
         PlantChangeType changeType,
+        PlantChangeSource source,
         Point? oldLocation,
         Point newLocation,
         int? oldRowIndex,
-        int newRowIndex,
+        int? newRowIndex,
         int? oldColumnIndex,
-        int newColumnIndex,
+        int? newColumnIndex,
         PlantLifecycleStatus? oldLifecycleStatus,
         Guid actorId,
+        string? notes,
         DateTimeOffset createdAt)
     {
         Id = id;
@@ -31,7 +33,7 @@ public sealed class PlantChangeEvent : Entity
         MissionId = missionId;
         PlantId = plantId;
         ChangeType = changeType;
-        Source = PlantChangeSource.MissionAi;
+        Source = source;
         OldLocation = CopyPoint(oldLocation);
         NewLocation = CopyPoint(newLocation);
         OldRowIndex = oldRowIndex;
@@ -42,6 +44,7 @@ public sealed class PlantChangeEvent : Entity
         NewLifecycleStatus = PlantLifecycleStatus.Active;
         CreatedBy = actorId;
         Status = ReviewStatus.Confirmed;
+        Notes = notes;
         ReviewedBy = actorId;
         ReviewedAt = createdAt;
         CreatedAt = createdAt;
@@ -139,6 +142,50 @@ public sealed class PlantChangeEvent : Entity
             actorId,
             createdAt);
 
+    public static PlantChangeEvent ManualRegistered(
+        Guid farmId,
+        Guid plantId,
+        Point location,
+        int? rowIndex,
+        int? columnIndex,
+        Guid actorId,
+        string reason,
+        DateTimeOffset createdAt)
+    {
+        DomainGuard.NotEmpty(farmId);
+        DomainGuard.NotEmpty(plantId);
+        DomainGuard.NotEmpty(actorId);
+        EnsureLocation(location, nameof(location));
+        EnsureOptionalGridPosition(rowIndex, columnIndex);
+
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            throw new ArgumentException(
+                "Manual plant registration reason is required.",
+                nameof(reason));
+        }
+
+        DomainGuard.Utc(createdAt);
+
+        return new PlantChangeEvent(
+            Guid.NewGuid(),
+            farmId,
+            missionId: null,
+            plantId,
+            PlantChangeType.NewPlant,
+            PlantChangeSource.Manual,
+            oldLocation: null,
+            location,
+            oldRowIndex: null,
+            rowIndex,
+            oldColumnIndex: null,
+            columnIndex,
+            oldLifecycleStatus: null,
+            actorId,
+            reason.Trim(),
+            createdAt);
+    }
+
     private static PlantChangeEvent Create(
         Guid farmId,
         Guid missionId,
@@ -158,7 +205,7 @@ public sealed class PlantChangeEvent : Entity
         DomainGuard.NotEmpty(missionId);
         DomainGuard.NotEmpty(plantId);
         DomainGuard.NotEmpty(actorId);
-        ArgumentNullException.ThrowIfNull(newLocation);
+        EnsureLocation(newLocation, nameof(newLocation));
         ArgumentOutOfRangeException.ThrowIfLessThan(newRowIndex, 1);
         ArgumentOutOfRangeException.ThrowIfLessThan(newColumnIndex, 1);
         DomainGuard.Utc(createdAt);
@@ -169,6 +216,7 @@ public sealed class PlantChangeEvent : Entity
             missionId,
             plantId,
             changeType,
+            PlantChangeSource.MissionAi,
             oldLocation,
             newLocation,
             oldRowIndex,
@@ -177,7 +225,79 @@ public sealed class PlantChangeEvent : Entity
             newColumnIndex,
             oldLifecycleStatus,
             actorId,
+            notes: null,
             createdAt);
+    }
+
+    private static void EnsureOptionalGridPosition(
+        int? rowIndex,
+        int? columnIndex)
+    {
+        if (rowIndex.HasValue != columnIndex.HasValue)
+        {
+            throw new ArgumentException(
+                "Row index and column index must either both be provided or both be omitted.",
+                nameof(rowIndex));
+        }
+
+        if (!rowIndex.HasValue)
+        {
+            return;
+        }
+
+        ArgumentOutOfRangeException.ThrowIfLessThan(
+            rowIndex.Value,
+            1,
+            nameof(rowIndex));
+        ArgumentOutOfRangeException.ThrowIfLessThan(
+            columnIndex!.Value,
+            1,
+            nameof(columnIndex));
+    }
+
+    private static void EnsureLocation(
+        Point location,
+        string parameterName)
+    {
+        if (location is null)
+        {
+            throw new ArgumentNullException(parameterName);
+        }
+
+        if (location.IsEmpty)
+        {
+            throw new ArgumentException(
+                "Location cannot be empty.",
+                parameterName);
+        }
+
+        if (location.SRID != 4326)
+        {
+            throw new ArgumentException(
+                "Location must have SRID 4326.",
+                parameterName);
+        }
+
+        if (!double.IsFinite(location.X) || !double.IsFinite(location.Y))
+        {
+            throw new ArgumentException(
+                "Location coordinates must be finite numbers.",
+                parameterName);
+        }
+
+        if (location.X is < -180 or > 180)
+        {
+            throw new ArgumentOutOfRangeException(
+                parameterName,
+                "Longitude must be between -180 and 180 degrees.");
+        }
+
+        if (location.Y is < -90 or > 90)
+        {
+            throw new ArgumentOutOfRangeException(
+                parameterName,
+                "Latitude must be between -90 and 90 degrees.");
+        }
     }
 
     private static Point? CopyPoint(Point? point) =>
