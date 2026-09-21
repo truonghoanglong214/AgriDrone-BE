@@ -1,19 +1,21 @@
 ﻿using AgriDrone.Modules.Harvests.Application.Abstractions.Persistence;
 using AgriDrone.Modules.Harvests.Application.Errors;
 using AgriDrone.Modules.Harvests.Domain.Quality;
+using AgriDrone.SharedInfrastructure.Auditing;
 using AgriDrone.SharedInfrastructure.Persistence;
 using AgriDrone.SharedKernel.Application;
+using AgriDrone.SharedKernel.Application.Abstractions.Execution;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
-using System;
-using System.Collections.Generic;
-using System.Text;
+using System.Text.Json;
 
 namespace AgriDrone.Modules.Harvests.Application.Features.CreateHarvestQualityGrade
 {
     internal sealed class CreateHarvestQualityGradeHandler(
         IHarvestQualityGradeRepository repository,
         IHarvestsUnitOfWork unitOfWork,
+        IAuditWriter auditWriter,
+        IExecutionContext executionContext,
         TimeProvider timeProvider) : IRequestHandler<CreateHarvestQualityGradeCommand, Result<HarvestQualityGradeResponse>>
     {
         private static readonly string[] CodeConstraints =
@@ -24,6 +26,9 @@ namespace AgriDrone.Modules.Harvests.Application.Features.CreateHarvestQualityGr
 
         public async Task<Result<HarvestQualityGradeResponse>> Handle(CreateHarvestQualityGradeCommand request, CancellationToken cancellationToken)
         {
+            if (executionContext.ActorId is not Guid actorId)
+                return Result.Failure<HarvestQualityGradeResponse>(HarvestQualityGradeError.CurrentUserRequired());
+
             var normalizedCode = request.Code.Trim().ToUpperInvariant();
 
             var existingCode = await repository.CodeExistsAsync(
@@ -40,6 +45,26 @@ namespace AgriDrone.Modules.Harvests.Application.Features.CreateHarvestQualityGr
                 now);
 
             repository.Add(grade);
+
+            using var newData = JsonSerializer.SerializeToDocument(new
+            {
+                grade.Code,
+                grade.Name,
+                grade.DisplayOrder,
+                grade.RevisionNumber,
+                grade.IsActive
+            });
+
+            auditWriter.AddSystemAdminAction(
+                unitOfWork,
+                actorId,
+                executionContext.CorrelationId,
+                "HarvestQualityGrade",
+                grade.Id,
+                "CREATE",
+                oldData: null,
+                newData,
+                now);
 
             try
             {

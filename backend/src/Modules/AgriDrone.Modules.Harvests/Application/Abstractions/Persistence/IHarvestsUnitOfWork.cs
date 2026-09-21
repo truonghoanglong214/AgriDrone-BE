@@ -1,11 +1,9 @@
 ﻿using AgriDrone.SharedKernel.Application.Abstractions;
-using System;
-using System.Collections.Generic;
-using System.Text;
+using AgriDrone.SharedInfrastructure.Auditing;
 
 namespace AgriDrone.Modules.Harvests.Application.Abstractions.Persistence
 {
-    internal interface IHarvestsUnitOfWork : IUnitOfWork
+    internal interface IHarvestsUnitOfWork : IUnitOfWork, IAuditLogSink
     {
         Task<T> ExecuteInTransactionAsync<T>(
             Func<CancellationToken, Task<T>> operation,

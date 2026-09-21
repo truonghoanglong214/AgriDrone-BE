@@ -26,5 +26,10 @@ namespace AgriDrone.Modules.Harvests.Application.Errors
             AppError.Conflict(
                 "HarvestQualityGrade.ConcurrentUpdate",
                 "The harvest quality grade was changed by another request.");
+
+        public static AppError CurrentUserRequired() =>
+            AppError.Unauthorized(
+                "HarvestQualityGrade.CurrentUserRequired",
+                "An authenticated system administrator is required.");
     }
 }

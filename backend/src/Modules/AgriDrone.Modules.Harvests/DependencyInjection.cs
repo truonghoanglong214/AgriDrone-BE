@@ -7,6 +7,7 @@ using AgriDrone.Modules.Harvests.Domain.Seasons;
 using AgriDrone.Modules.Harvests.Infrastructure.Persistence;
 using AgriDrone.Modules.Harvests.Infrastructure.Queries;
 using AgriDrone.Modules.Harvests.Infrastructure.Repositories;
+using AgriDrone.SharedInfrastructure.Auditing;
 using AgriDrone.SharedInfrastructure.Persistence;
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
@@ -30,7 +31,8 @@ public static class DependencyInjection
                 npgsql => npgsql
                     .MapEnum<HarvestBatchStatus>("harvest_batch_status", "system", translator)
                     .MapEnum<HarvestRecordSource>("harvest_record_source", "system", translator)
-                    .MapEnum<SeasonStatus>("season_status", "system", translator)));
+                    .MapEnum<SeasonStatus>("season_status", "system", translator)
+                    .MapEnum<AuditActorType>("audit_actor_type", "system", translator)));
 
         services.AddScoped<IHarvestsUnitOfWork>(serviceProvider =>
             serviceProvider.GetRequiredService<HarvestsDbContext>());

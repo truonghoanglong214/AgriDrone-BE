@@ -26,5 +26,10 @@ namespace AgriDrone.Modules.Plants.Application.Errors
             AppError.Conflict(
                 "PlantCondition.ConcurrentUpdate",
                 "The plant condition was changed by another request. Reload it and try again.");
+
+        public static AppError CurrentUserRequired() =>
+            AppError.Unauthorized(
+                "PlantCondition.CurrentUserRequired",
+                "An authenticated system administrator is required.");
     }
 }

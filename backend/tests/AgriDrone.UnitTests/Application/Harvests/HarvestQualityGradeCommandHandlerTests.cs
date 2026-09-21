@@ -3,7 +3,10 @@ using AgriDrone.Modules.Harvests.Application.Features.CreateHarvestQualityGrade;
 using AgriDrone.Modules.Harvests.Application.Features.RetireHarvestQualityGrade;
 using AgriDrone.Modules.Harvests.Application.Features.VersionHarvestQualityGrade;
 using AgriDrone.Modules.Harvests.Domain.Quality;
+using AgriDrone.SharedInfrastructure.Auditing;
+using AgriDrone.SharedKernel.Application.Abstractions.Execution;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 using Xunit;
 
 namespace AgriDrone.UnitTests.Application.Harvests;
@@ -16,6 +19,34 @@ public sealed class HarvestQualityGradeCommandHandlerTests
     private static readonly DateTimeOffset Now =
         CreatedAt.AddHours(1);
 
+    private static readonly Guid ActorId = Guid.NewGuid();
+    private static readonly Guid CorrelationId = Guid.NewGuid();
+
+    [Fact]
+    public async Task CreateRejectsMissingAuthenticatedAdministrator()
+    {
+        var repository = new FakeHarvestQualityGradeRepository();
+        var unitOfWork = new FakeHarvestsUnitOfWork();
+        var handler = new CreateHarvestQualityGradeHandler(
+            repository,
+            unitOfWork,
+            new FakeAuditWriter(),
+            new FakeExecutionContext(actorId: null, CorrelationId),
+            new FixedTimeProvider(Now));
+
+        var result = await handler.Handle(
+            new CreateHarvestQualityGradeCommand("GRADE", "Grade", 1),
+            CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(
+            "HarvestQualityGrade.CurrentUserRequired",
+            result.Error.Code);
+        Assert.Empty(repository.AddedGrades);
+        Assert.Equal(0, unitOfWork.SaveCallCount);
+        Assert.Empty(unitOfWork.AuditLogs);
+    }
+
     [Fact]
     public async Task CreateAddsFirstRevisionAndSavesOnce()
     {
@@ -24,6 +55,8 @@ public sealed class HarvestQualityGradeCommandHandlerTests
         var handler = new CreateHarvestQualityGradeHandler(
             repository,
             unitOfWork,
+            new FakeAuditWriter(),
+            new FakeExecutionContext(ActorId, CorrelationId),
             new FixedTimeProvider(Now));
 
         var result = await handler.Handle(
@@ -39,6 +72,7 @@ public sealed class HarvestQualityGradeCommandHandlerTests
         Assert.True(result.Value.IsActive);
         Assert.Single(repository.AddedGrades);
         Assert.Equal(1, unitOfWork.SaveCallCount);
+        Assert.Equal("CREATE", Assert.Single(unitOfWork.AuditLogs).Action);
     }
 
     [Fact]
@@ -52,6 +86,8 @@ public sealed class HarvestQualityGradeCommandHandlerTests
         var handler = new CreateHarvestQualityGradeHandler(
             repository,
             unitOfWork,
+            new FakeAuditWriter(),
+            new FakeExecutionContext(ActorId, CorrelationId),
             new FixedTimeProvider(Now));
 
         var result = await handler.Handle(
@@ -81,6 +117,8 @@ public sealed class HarvestQualityGradeCommandHandlerTests
         var handler = new VersionHarvestQualityGradeHandler(
             repository,
             unitOfWork,
+            new FakeAuditWriter(),
+            new FakeExecutionContext(ActorId, CorrelationId),
             new FixedTimeProvider(Now));
 
         var result = await handler.Handle(
@@ -104,6 +142,7 @@ public sealed class HarvestQualityGradeCommandHandlerTests
         Assert.Equal(next.Id, result.Value.Id);
         Assert.Equal(1, unitOfWork.TransactionCallCount);
         Assert.Equal(2, unitOfWork.SaveCallCount);
+        Assert.Equal("VERSION", Assert.Single(unitOfWork.AuditLogs).Action);
     }
 
     [Fact]
@@ -118,6 +157,8 @@ public sealed class HarvestQualityGradeCommandHandlerTests
         var handler = new VersionHarvestQualityGradeHandler(
             repository,
             unitOfWork,
+            new FakeAuditWriter(),
+            new FakeExecutionContext(ActorId, CorrelationId),
             new FixedTimeProvider(Now));
 
         var result = await handler.Handle(
@@ -148,6 +189,8 @@ public sealed class HarvestQualityGradeCommandHandlerTests
         var handler = new RetireHarvestQualityGradeHandler(
             repository,
             unitOfWork,
+            new FakeAuditWriter(),
+            new FakeExecutionContext(ActorId, CorrelationId),
             new FixedTimeProvider(Now));
 
         var result = await handler.Handle(
@@ -162,6 +205,7 @@ public sealed class HarvestQualityGradeCommandHandlerTests
         Assert.Equal(2, grade.Version);
         Assert.Equal(1, repository.UpdateCallCount);
         Assert.Equal(1, unitOfWork.SaveCallCount);
+        Assert.Equal("RETIRE", Assert.Single(unitOfWork.AuditLogs).Action);
     }
 
     [Fact]
@@ -177,6 +221,8 @@ public sealed class HarvestQualityGradeCommandHandlerTests
         var handler = new RetireHarvestQualityGradeHandler(
             repository,
             unitOfWork,
+            new FakeAuditWriter(),
+            new FakeExecutionContext(ActorId, CorrelationId),
             new FixedTimeProvider(Now));
 
         var result = await handler.Handle(
@@ -205,6 +251,8 @@ public sealed class HarvestQualityGradeCommandHandlerTests
         var handler = new RetireHarvestQualityGradeHandler(
             repository,
             unitOfWork,
+            new FakeAuditWriter(),
+            new FakeExecutionContext(ActorId, CorrelationId),
             new FixedTimeProvider(Now));
 
         var result = await handler.Handle(
@@ -236,6 +284,8 @@ public sealed class HarvestQualityGradeCommandHandlerTests
         var handler = new RetireHarvestQualityGradeHandler(
             repository,
             unitOfWork,
+            new FakeAuditWriter(),
+            new FakeExecutionContext(ActorId, CorrelationId),
             new FixedTimeProvider(Now));
 
         var result = await handler.Handle(
@@ -287,6 +337,7 @@ public sealed class HarvestQualityGradeCommandHandlerTests
         public int SaveCallCount { get; private set; }
         public int TransactionCallCount { get; private set; }
         public Exception? SaveException { get; init; }
+        public List<AuditLog> AuditLogs { get; } = [];
 
         public Task<int> SaveChangesAsync(
             CancellationToken cancellationToken = default)
@@ -308,6 +359,58 @@ public sealed class HarvestQualityGradeCommandHandlerTests
             TransactionCallCount++;
             return await operation(cancellationToken);
         }
+
+        public void AddAuditLog(AuditLog auditLog) =>
+            AuditLogs.Add(auditLog);
+    }
+
+    private sealed class FakeAuditWriter : IAuditWriter
+    {
+        public void AddUserAction(
+            IAuditLogSink sink,
+            Guid tenantId,
+            Guid? farmId,
+            Guid actorId,
+            Guid correlationId,
+            string entityType,
+            Guid entityId,
+            string action,
+            JsonDocument? oldData,
+            JsonDocument? newData,
+            DateTimeOffset createdAt) =>
+            throw new NotSupportedException();
+
+        public void AddSystemAdminAction(
+            IAuditLogSink sink,
+            Guid actorId,
+            Guid correlationId,
+            string entityType,
+            Guid entityId,
+            string action,
+            JsonDocument? oldData,
+            JsonDocument? newData,
+            DateTimeOffset createdAt) =>
+            sink.AddAuditLog(AuditLog.ForSystemAdminAction(
+                actorId,
+                correlationId,
+                entityType,
+                entityId,
+                action,
+                oldData,
+                newData,
+                createdAt));
+    }
+
+    private sealed class FakeExecutionContext(
+        Guid? actorId,
+        Guid correlationId) : IExecutionContext
+    {
+        public bool IsInitialized => true;
+        public Guid? TenantId => null;
+        public Guid? ActorId => actorId;
+        public Guid CorrelationId => correlationId;
+        public Guid? MessageId => null;
+        public ExecutionContextSource Source => ExecutionContextSource.Http;
     }
 
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
