@@ -3,6 +3,8 @@ using AgriDrone.Modules.Harvests.Domain.HarvestBatches;
 using AgriDrone.Modules.Harvests.Domain.PlantHarvests;
 using AgriDrone.Modules.Harvests.Domain.Quality;
 using AgriDrone.Modules.Harvests.Domain.Seasons;
+using AgriDrone.SharedInfrastructure.Auditing;
+using AgriDrone.SharedInfrastructure.Persistence.Configurations;
 using Microsoft.EntityFrameworkCore;
 
 namespace AgriDrone.Modules.Harvests.Infrastructure.Persistence;
@@ -21,6 +23,14 @@ internal sealed class HarvestsDbContext(DbContextOptions<HarvestsDbContext> opti
     public DbSet<PlantHarvestQualityDetail> PlantHarvestQualityDetails =>
         Set<PlantHarvestQualityDetail>();
 
+    public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+
+    public void AddAuditLog(AuditLog auditLog)
+    {
+        ArgumentNullException.ThrowIfNull(auditLog);
+        AuditLogs.Add(auditLog);
+    }
+
     public async Task<T> ExecuteInTransactionAsync<T>(Func<CancellationToken, Task<T>> operation, CancellationToken cancellationToken = default)
     {
         await using var transaction =
@@ -37,5 +47,6 @@ internal sealed class HarvestsDbContext(DbContextOptions<HarvestsDbContext> opti
     {
         modelBuilder.HasDefaultSchema("harvest");
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(HarvestsDbContext).Assembly);
+        modelBuilder.ApplyConfiguration(new AuditLogConfiguration());
     }
 }

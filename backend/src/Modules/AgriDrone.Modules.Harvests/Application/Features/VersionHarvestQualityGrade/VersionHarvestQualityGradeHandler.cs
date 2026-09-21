@@ -2,16 +2,21 @@ using AgriDrone.Modules.Harvests.Application.Abstractions.Persistence;
 using AgriDrone.Modules.Harvests.Application.Errors;
 using AgriDrone.Modules.Harvests.Application.Features.CreateHarvestQualityGrade;
 using AgriDrone.Modules.Harvests.Domain.Quality;
+using AgriDrone.SharedInfrastructure.Auditing;
 using AgriDrone.SharedInfrastructure.Persistence;
 using AgriDrone.SharedKernel.Application;
+using AgriDrone.SharedKernel.Application.Abstractions.Execution;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 
 namespace AgriDrone.Modules.Harvests.Application.Features.VersionHarvestQualityGrade;
 
 internal sealed class VersionHarvestQualityGradeHandler(
     IHarvestQualityGradeRepository repository,
     IHarvestsUnitOfWork unitOfWork,
+    IAuditWriter auditWriter,
+    IExecutionContext executionContext,
     TimeProvider timeProvider)
     : IRequestHandler<
         VersionHarvestQualityGradeCommand,
@@ -28,6 +33,12 @@ internal sealed class VersionHarvestQualityGradeHandler(
         VersionHarvestQualityGradeCommand request,
         CancellationToken cancellationToken)
     {
+        if (executionContext.ActorId is not Guid actorId)
+        {
+            return Result.Failure<HarvestQualityGradeResponse>(
+                HarvestQualityGradeError.CurrentUserRequired());
+        }
+
         var current = await repository.GetByIdAsync(
             request.GradeId,
             cancellationToken);
@@ -50,12 +61,30 @@ internal sealed class VersionHarvestQualityGradeHandler(
                 HarvestQualityGradeError.ConcurrentUpdate());
         }
 
+        var now = timeProvider.GetUtcNow();
+        using var oldData = JsonSerializer.SerializeToDocument(new
+        {
+            current.Name,
+            current.DisplayOrder,
+            current.RevisionNumber,
+            current.IsActive
+        });
+
         repository.Update(current);
 
         var nextVersion = current.CreateNextVersion(
             request.Name,
             request.DisplayOrder,
-            timeProvider.GetUtcNow());
+            now);
+
+        using var newData = JsonSerializer.SerializeToDocument(new
+        {
+            nextVersion.Name,
+            nextVersion.DisplayOrder,
+            nextVersion.RevisionNumber,
+            nextVersion.SupersedesId,
+            nextVersion.IsActive
+        });
 
         try
         {
@@ -66,6 +95,17 @@ internal sealed class VersionHarvestQualityGradeHandler(
                         transactionCancellationToken);
 
                     repository.Add(nextVersion);
+
+                    auditWriter.AddSystemAdminAction(
+                        unitOfWork,
+                        actorId,
+                        executionContext.CorrelationId,
+                        "HarvestQualityGrade",
+                        nextVersion.Id,
+                        "VERSION",
+                        oldData,
+                        newData,
+                        now);
 
                     await unitOfWork.SaveChangesAsync(
                         transactionCancellationToken);

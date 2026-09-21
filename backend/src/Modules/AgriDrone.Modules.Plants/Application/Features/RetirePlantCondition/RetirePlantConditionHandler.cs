@@ -1,15 +1,20 @@
 using AgriDrone.Modules.Plants.Application.Abstractions.Persistence;
 using AgriDrone.Modules.Plants.Application.Errors;
 using AgriDrone.Modules.Plants.Domain.Conditions;
+using AgriDrone.SharedInfrastructure.Auditing;
 using AgriDrone.SharedKernel.Application;
+using AgriDrone.SharedKernel.Application.Abstractions.Execution;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 
 namespace AgriDrone.Modules.Plants.Application.Features.RetirePlantCondition;
 
 internal sealed class RetirePlantConditionHandler(
     IPlantConditionRepository plantConditionRepository,
     IPlantsUnitOfWork unitOfWork,
+    IAuditWriter auditWriter,
+    IExecutionContext executionContext,
     TimeProvider timeProvider)
     : IRequestHandler<RetirePlantConditionCommand, Result>
 {
@@ -17,6 +22,11 @@ internal sealed class RetirePlantConditionHandler(
         RetirePlantConditionCommand request,
         CancellationToken cancellationToken)
     {
+        if (executionContext.ActorId is not Guid actorId)
+        {
+            return Result.Failure(PlantConditionError.CurrentUserRequired());
+        }
+
         var condition = await plantConditionRepository.GetByIdAsync(
             request.ConditionId,
             cancellationToken);
@@ -36,8 +46,34 @@ internal sealed class RetirePlantConditionHandler(
             return Result.Failure(PlantConditionError.ConcurrentUpdate());
         }
 
+        var now = timeProvider.GetUtcNow();
+        using var oldData = JsonSerializer.SerializeToDocument(new
+        {
+            condition.IsActive,
+            condition.RetiredAt,
+            condition.Version
+        });
+
         plantConditionRepository.Update(condition);
-        condition.Retire(timeProvider.GetUtcNow());
+        condition.Retire(now);
+
+        using var newData = JsonSerializer.SerializeToDocument(new
+        {
+            condition.IsActive,
+            condition.RetiredAt,
+            condition.Version
+        });
+
+        auditWriter.AddSystemAdminAction(
+            unitOfWork,
+            actorId,
+            executionContext.CorrelationId,
+            "PlantCondition",
+            condition.Id,
+            "RETIRE",
+            oldData,
+            newData,
+            now);
 
         try
         {
