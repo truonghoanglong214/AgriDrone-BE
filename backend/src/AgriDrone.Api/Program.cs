@@ -1,6 +1,7 @@
 using AgriDrone.Database;
 using AgriDrone.Integrations.Email;
 using AgriDrone.Integrations.Media;
+using AgriDrone.Api.Legacy;
 using AgriDrone.Modules.Farms;
 using AgriDrone.Modules.FieldTasks;
 using AgriDrone.Modules.Harvests;
@@ -23,11 +24,18 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
 
+builder.Services
+    .AddOptions<LegacyFeaturesOptions>()
+    .Bind(builder.Configuration.GetSection(
+        LegacyFeaturesOptions.SectionName));
+
 // Swagger
 builder.Services.AddEndpointsApiExplorer();
 
 builder.Services.AddSwaggerGen(options =>
 {
+    options.OperationFilter<LegacyEndpointOperationFilter>();
+
     var xmlFileName =
         $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
     var xmlFilePath = Path.Combine(
@@ -111,10 +119,13 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
+app.UseRouting();
+
 app.UseCors("Frontend");
 
 app.UseAuthentication();
 app.UseExecutionContext();
+app.UseMiddleware<LegacyEndpointGateMiddleware>();
 app.UseAuthorization();
 
 app.MapControllers();

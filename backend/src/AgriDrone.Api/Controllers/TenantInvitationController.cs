@@ -5,6 +5,7 @@ using AgriDrone.Modules.Identity.Application.Features.InviteTenantAdmin;
 using AgriDrone.Modules.Identity.Application.Features.InviteTenantMember;
 using AgriDrone.Modules.Identity.Application.Features.PreviewTenantInvitation;
 using AgriDrone.SharedInfrastructure.Http;
+using AgriDrone.Api.Legacy;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -42,6 +43,9 @@ public sealed class TenantInvitationController(ISender sender) : ControllerBase
     /// </remarks>
     [HttpPost("/current/invitations/tenant-admin")]
     [Authorize(Policy = AccessAuthorizationPolicies.TenantOwner)]
+    [LegacyEndpoint(
+        "tenant-invitations.tenant-admin",
+        "Customer Tenants use a single TenantOwner provisioned by approved Survey Request onboarding.")]
     public async Task<IResult> InviteTenantAdmin(
         [FromBody] InviteTenantAdminRequest request,
         CancellationToken cancellationToken)
@@ -65,6 +69,9 @@ public sealed class TenantInvitationController(ISender sender) : ControllerBase
     /// </remarks>
     [HttpPost("/api/tenants/current/invitations/member")]
     [Authorize(Policy = AccessAuthorizationPolicies.TenantAdmin)]
+    [LegacyEndpoint(
+        "tenant-invitations.member",
+        "Tenant Member and Worker onboarding is outside the Be-Plan scope.")]
     public async Task<IResult> InviteTenantMember(
         [FromBody] InviteTenantMemberRequest request,
         CancellationToken cancellationToken)

@@ -1,0 +1,3024 @@
+{
+  "openapi": "3.0.4",
+  "info": {
+    "title": "AgriDrone.Api",
+    "version": "1.0"
+  },
+  "paths": {
+    "/api/auth/register": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Đăng ký tài khoản và tenant mới.",
+        "description": "Tạo đồng thời người dùng, tenant đang hoạt động và tenant membership\r\nvới vai trò Owner cho người đăng ký.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterUserRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterUserRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterUserRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/auth/login": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Đăng nhập hệ thống.",
+        "description": "Xác thực email và mật khẩu. Nếu người dùng chỉ thuộc một tenant thì\r\ntrả access token; nếu thuộc nhiều tenant thì trả selection token và\r\ndanh sách tenant để người dùng chọn ngữ cảnh làm việc.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginUserRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginUserRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginUserRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/auth/forgot-password": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Yêu cầu đặt lại mật khẩu.",
+        "description": "Tạo token đặt lại mật khẩu và gửi liên kết qua email nếu tài khoản\r\ntồn tại. API luôn trả thông báo chung để không làm lộ email đăng ký.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForgotPasswordRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForgotPasswordRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForgotPasswordRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/auth/reset-password": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Đặt lại mật khẩu bằng token.",
+        "description": "Tiêu thụ token đặt lại mật khẩu một lần và cập nhật mật khẩu mới\r\ncho tài khoản đang hoạt động.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetPasswordRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetPasswordRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetPasswordRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/auth/select-tenant": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Chọn tenant cho phiên đăng nhập.",
+        "description": "Kiểm tra selection token và tenant membership đang hoạt động, sau đó\r\nphát access token chứa ngữ cảnh tenant đã chọn.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SelectTenantRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SelectTenantRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/SelectTenantRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/tenants/{tenantId}/drones": {
+      "post": {
+        "tags": [
+          "Drones"
+        ],
+        "summary": "Đăng ký drone cho tenant.",
+        "description": "System Admin tạo hồ sơ drone với mã, model, thông số kỹ thuật và thông tin\r\nđăng ký. Mã drone và serial number phải đáp ứng quy tắc duy nhất.",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterDroneRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterDroneRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterDroneRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/tenants/{tenantId}/drones/{droneId}/status": {
+      "patch": {
+        "tags": [
+          "Drones"
+        ],
+        "summary": "Thay đổi trạng thái drone.",
+        "description": "System Admin chuyển drone giữa các trạng thái vận hành như Available,\r\nMaintenance hoặc Retired theo state transition được hỗ trợ. Khi hoàn tất\r\nbảo trì, thời điểm bảo trì kế tiếp phải nằm trong tương lai.",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "droneId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeDroneStatusRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeDroneStatusRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeDroneStatusRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/farms/{farmId}/drones/available": {
+      "get": {
+        "tags": [
+          "Drones"
+        ],
+        "summary": "Tìm drone khả dụng cho khoảng thời gian Mission.",
+        "description": "Farm Manager truy vấn các drone đang Available trong tenant và không có\r\nMission giao lịch với khoảng thời gian yêu cầu.",
+        "parameters": [
+          {
+            "name": "farmId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "StartAt",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "EndAt",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/farms": {
+      "get": {
+        "tags": [
+          "Farm"
+        ],
+        "summary": "Lấy danh sách farm của tenant hiện tại.",
+        "description": "Trả danh sách farm phân trang trong tenant từ access token. Chỉ Tenant\r\nAdmin hoặc Owner được phép xem catalog farm qua endpoint này.",
+        "parameters": [
+          {
+            "name": "PageNumber",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "PageSize",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Farm"
+        ],
+        "summary": "Tạo farm trong tenant hiện tại.",
+        "description": "Tenant Admin hoặc Owner tạo farm với mã duy nhất trong tenant, thông\r\ntin vị trí và boundary GeoJSON sử dụng hệ tọa độ WGS84 (SRID 4326).",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateFarmRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateFarmRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateFarmRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/farms/archived": {
+      "get": {
+        "tags": [
+          "Farm"
+        ],
+        "summary": "Lấy danh sách farm đã archive của tenant hiện tại.",
+        "description": "Chỉ Tenant Owner được phép xem danh sách. Response bao gồm thời điểm\r\narchive và version hiện tại để phục vụ thao tác restore an toàn.",
+        "parameters": [
+          {
+            "name": "PageNumber",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "PageSize",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/farms/{farmId}/archived": {
+      "get": {
+        "tags": [
+          "Farm"
+        ],
+        "summary": "Lấy chi tiết một farm đã archive.",
+        "description": "Chỉ Tenant Owner được phép xem. Farm phải thuộc tenant hiện tại và\r\nđang ở trạng thái archived; nếu không, API trả về 404.",
+        "parameters": [
+          {
+            "name": "farmId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/farms/{farmId}": {
+      "get": {
+        "tags": [
+          "Farm"
+        ],
+        "summary": "Lấy chi tiết farm.",
+        "description": "Trả thông tin farm thuộc tenant hiện tại khi người dùng có quyền đọc\r\nfarm thông qua tenant ownership hoặc farm membership.",
+        "parameters": [
+          {
+            "name": "FarmId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Farm"
+        ],
+        "summary": "Cập nhật thông tin farm.",
+        "description": "Tenant Admin hoặc Owner cập nhật tên, địa chỉ, vị trí, boundary và\r\ndiện tích farm. ExpectedVersion được dùng để ngăn ghi đè cập nhật đồng thời.",
+        "parameters": [
+          {
+            "name": "farmId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateFarmDetailRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateFarmDetailRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateFarmDetailRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/farms/{farmId}/zones": {
+      "post": {
+        "tags": [
+          "Farm"
+        ],
+        "summary": "Tạo zone trong farm.",
+        "description": "Tenant Owner hoặc Farm Manager được assign tạo zone với mã duy nhất\r\ntrong farm. Boundary GeoJSON, nếu có, phải là Polygon SRID 4326 hợp lệ.\r\nZone mới được kích hoạt và bắt đầu ở version 1.",
+        "parameters": [
+          {
+            "name": "farmId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateZoneRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateZoneRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateZoneRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Farm"
+        ],
+        "summary": "Lấy danh sách zone theo farm.",
+        "description": "Trả các zone chưa archive thuộc farm và tenant hiện tại. Kết quả được\r\nlọc theo FarmAccessScope và ZoneAssignment đang hoạt động của người dùng.",
+        "parameters": [
+          {
+            "name": "farmId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/farms/{farmId}/zones/{zoneId}": {
+      "get": {
+        "tags": [
+          "Farm"
+        ],
+        "summary": "Lấy chi tiết zone.",
+        "description": "Trả zone thuộc đúng farm và tenant hiện tại khi người dùng có quyền\r\nqua FarmAccessScope hoặc ZoneAssignment. Response bao gồm version phục\r\nvụ optimistic concurrency cho các thao tác cập nhật sau này.",
+        "parameters": [
+          {
+            "name": "farmId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "zoneId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Farm"
+        ],
+        "summary": "Cập nhật thông tin một zone.",
+        "description": "Owner hoặc Farm Manager có quyền trên đúng zone được phép cập nhật tên,\r\nboundary và diện tích. ExpectedVersion ngăn ghi đè thay đổi đồng thời.",
+        "parameters": [
+          {
+            "name": "farmId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "zoneId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateZoneRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateZoneRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateZoneRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/farms/{farmId}/zones/{zoneId}/archive": {
+      "put": {
+        "tags": [
+          "Farm"
+        ],
+        "summary": "Archive một zone và giữ nguyên lịch sử liên quan.",
+        "description": "Chỉ Tenant Owner được phép thực hiện. Yêu cầu bị từ chối nếu zone còn\r\nMission đang hoạt động hoặc Field Task chưa đóng.",
+        "parameters": [
+          {
+            "name": "farmId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "zoneId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArchiveZoneRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArchiveZoneRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArchiveZoneRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/farms/{farmId}/archive": {
+      "put": {
+        "tags": [
+          "Farm"
+        ],
+        "summary": "Archive một farm và giữ nguyên lịch sử liên quan.",
+        "description": "Chỉ Tenant Owner được phép thực hiện. Farm chỉ được archive khi không\r\ncòn Zone, Mission hoặc Field Task đang hoạt động.",
+        "parameters": [
+          {
+            "name": "farmId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArchiveFarmRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArchiveFarmRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArchiveFarmRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/farms/{farmId}/restore": {
+      "put": {
+        "tags": [
+          "Farm"
+        ],
+        "summary": "Restore một farm và giữ nguyên lịch sử liên quan.",
+        "description": "Chỉ Tenant Owner được phép thực hiện. Farm chỉ được restore khi Farm đang ở trạng thái archived.",
+        "parameters": [
+          {
+            "name": "farmId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RestoreFarmRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RestoreFarmRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/RestoreFarmRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/farms/{farmId}/members/{userId}/assignment": {
+      "put": {
+        "tags": [
+          "Farm"
+        ],
+        "summary": "Gán hoặc cập nhật vai trò của một thành viên trong farm.",
+        "description": "Hỗ trợ MANAGER hoặc WORKER với phạm vi ALL_ZONES hoặc SELECTED_ZONES.\r\nALL_ZONES yêu cầu ZoneIds rỗng; SELECTED_ZONES yêu cầu các ZoneIds\r\nkhác nhau, đang active và thuộc đúng farm. Tenant Admin chỉ thay đổi\r\nassignment của Member; assignment của Tenant Admin chỉ Tenant Owner\r\nđược thay đổi. ExpectedVersion bắt buộc khi cập nhật assignment có sẵn.",
+        "parameters": [
+          {
+            "name": "farmId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssignFarmMemberRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssignFarmMemberRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssignFarmMemberRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Farm"
+        ],
+        "summary": "Thu hồi assignment của một thành viên khỏi farm.",
+        "description": "Tenant Admin được thu hồi assignment của Member; assignment của một\r\nTenant Admin chỉ có thể bị thu hồi bởi Tenant Owner. Dữ liệu không bị\r\nxóa mà chuyển sang Inactive và có thể được gán lại sau này.",
+        "parameters": [
+          {
+            "name": "farmId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevokeFarmMemberAssignmentRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevokeFarmMemberAssignmentRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevokeFarmMemberAssignmentRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Farm"
+        ],
+        "summary": "Lấy assignment của một thành viên trong farm.",
+        "description": "Tenant Owner hoặc Tenant Admin lấy vai trò, phạm vi zone, trạng thái\r\nvà version hiện tại của assignment để hiển thị hoặc cập nhật an toàn.\r\nChỉ trả assignment thuộc farm và tenant hiện tại.",
+        "parameters": [
+          {
+            "name": "farmId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/farms/{farmId}/members": {
+      "get": {
+        "tags": [
+          "Farm"
+        ],
+        "summary": "Lấy danh sách thành viên được gán vào farm.",
+        "description": "Tenant Owner hoặc Tenant Admin lọc assignment theo vai trò Manager hoặc\r\nWorker. Mặc định chỉ trả assignment đang hoạt động. Với ALL_ZONES,\r\nZoneIds rỗng có nghĩa là thành viên có quyền trên toàn bộ zone của farm.",
+        "parameters": [
+          {
+            "name": "farmId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Role",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/FarmMemberRoleValue"
+            }
+          },
+          {
+            "name": "Status",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/FarmMembershipStatusValue"
+            }
+          },
+          {
+            "name": "PageNumber",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "PageSize",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/catalog/harvest-quality-grades": {
+      "get": {
+        "tags": [
+          "HarvestCatalog"
+        ],
+        "summary": "Lấy các fruit quality grade đang được phép chọn khi tạo record mới.",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/system/messaging/outbox/{messageId}/redrive": {
+      "post": {
+        "tags": [
+          "MessagingOperations"
+        ],
+        "summary": "Khôi phục một Outbox message bị đánh dấu DEAD.",
+        "description": "System Admin đưa message về trạng thái Retry, reset số lần thử nhưng giữ\r\nnguyên MessageId và payload. Thao tác được ghi audit với actor và correlation ID.",
+        "parameters": [
+          {
+            "name": "messageId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/system/messaging/dead-letters/{consumerName}/redrive": {
+      "post": {
+        "tags": [
+          "MessagingOperations"
+        ],
+        "summary": "Khôi phục message từ dead-letter queue.",
+        "description": "System Admin chuyển tối đa 1 đến 100 message của consumer từ DLQ về main\r\nexchange, giữ body và MessageId gốc, đồng thời bổ sung metadata redrive.\r\nMessage trong DLQ chỉ được ACK sau publisher confirm.",
+        "parameters": [
+          {
+            "name": "consumerName",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RedriveDeadLettersRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RedriveDeadLettersRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/RedriveDeadLettersRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/farms/{farmId}/missions": {
+      "post": {
+        "tags": [
+          "Missions"
+        ],
+        "summary": "Tạo Mission ở trạng thái Draft.",
+        "description": "Farm Manager tạo Mission Mapping hoặc Health Inspection cho một Zone active.\r\nHealth Inspection phải tham chiếu confirmed map của Zone; mã Mission là duy\r\nnhất trong Farm. Drone và các tham chiếu phải thuộc đúng tenant.",
+        "parameters": [
+          {
+            "name": "farmId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateMissionRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateMissionRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateMissionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/farms/{farmId}/missions/{missionId}/schedule": {
+      "patch": {
+        "tags": [
+          "Missions"
+        ],
+        "summary": "Lập lịch cho Mission Draft.",
+        "description": "Chuyển Mission từ Draft sang Scheduled sau khi kiểm tra drone đang Available,\r\nkhông giao lịch và khoảng thời gian hợp lệ. ExpectedVersion bảo vệ khỏi cập\r\nnhật đồng thời.",
+        "parameters": [
+          {
+            "name": "farmId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "missionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScheduleMissionRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScheduleMissionRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScheduleMissionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/farms/{farmId}/missions/{missionId}/status": {
+      "patch": {
+        "tags": [
+          "Missions"
+        ],
+        "summary": "Chuyển trạng thái chuyến bay của Mission.",
+        "description": "Thực hiện các transition được phép: Scheduled sang InFlight, InFlight sang\r\nFlightCompleted hoặc FlightFailed, và Draft/Scheduled sang Cancelled. Khi\r\nbắt đầu hoặc kết thúc chuyến bay, trạng thái drone được cập nhật đồng bộ.",
+        "parameters": [
+          {
+            "name": "farmId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "missionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransitionMissionRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransitionMissionRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransitionMissionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/farms/{farmId}/missions/{missionId}": {
+      "get": {
+        "tags": [
+          "Missions"
+        ],
+        "summary": "Lấy chi tiết Mission.",
+        "description": "Trả toàn bộ thông tin Mission thuộc đúng tenant và farm, gồm Zone, drone,\r\npilot, loại Mission, lịch bay, trạng thái, source map và version hiện tại.",
+        "parameters": [
+          {
+            "name": "farmId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "missionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/catalog/health-levels": {
+      "get": {
+        "tags": [
+          "PlantCatalog"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/catalog/plant-conditions": {
+      "get": {
+        "tags": [
+          "PlantCatalog"
+        ],
+        "summary": "Lấy các plant condition đang được phép chọn khi tạo record mới.",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/system/harvest-quality-grades": {
+      "post": {
+        "tags": [
+          "SystemHarvestQualityGrade"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateHarvestQualityGradeRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateHarvestQualityGradeRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateHarvestQualityGradeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/system/harvest-quality-grades/{gradeId}/versions": {
+      "post": {
+        "tags": [
+          "SystemHarvestQualityGrade"
+        ],
+        "summary": "Tạo version tiếp theo từ một quality grade đang active.",
+        "parameters": [
+          {
+            "name": "gradeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VersionHarvestQualityGradeRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VersionHarvestQualityGradeRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/VersionHarvestQualityGradeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/system/harvest-quality-grades/{gradeId}/retire": {
+      "put": {
+        "tags": [
+          "SystemHarvestQualityGrade"
+        ],
+        "summary": "Ngừng sử dụng một quality grade đang active.",
+        "parameters": [
+          {
+            "name": "gradeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RetireHarvestQualityGradeRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RetireHarvestQualityGradeRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/RetireHarvestQualityGradeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/system/plant-conditions": {
+      "post": {
+        "tags": [
+          "SystemPlantConditions"
+        ],
+        "summary": "Tạo condition mới trong danh mục sức khỏe cây.",
+        "description": "System Admin tạo revision đầu tiên của một bệnh hoặc dạng tổn thương.\r\nCode được chuẩn hóa thành chữ hoa và phải duy nhất trong toàn bộ lịch sử\r\ncủa danh mục.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePlantConditionRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePlantConditionRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePlantConditionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/system/plant-conditions/{conditionId}/versions": {
+      "post": {
+        "tags": [
+          "SystemPlantConditions"
+        ],
+        "summary": "Tạo revision tiếp theo từ một plant condition đang active.",
+        "parameters": [
+          {
+            "name": "conditionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VersionPlantConditionRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VersionPlantConditionRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/VersionPlantConditionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/system/plant-conditions/{conditionId}/retire": {
+      "put": {
+        "tags": [
+          "SystemPlantConditions"
+        ],
+        "summary": "Ngừng sử dụng một plant condition đang active.",
+        "parameters": [
+          {
+            "name": "conditionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RetirePlantConditionRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RetirePlantConditionRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/RetirePlantConditionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/system/tenant-memberships/{tenantMembershipId}/activate": {
+      "put": {
+        "tags": [
+          "SystemTenantMembership"
+        ],
+        "summary": "Kích hoạt tenant membership.",
+        "description": "System Admin khôi phục quyền truy cập tenant cho membership được chỉ\r\nđịnh và ghi nhận thay đổi trạng thái phục vụ audit.",
+        "parameters": [
+          {
+            "name": "tenantMembershipId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/system/tenant-memberships/{tenantMembershipId}/deactivate": {
+      "put": {
+        "tags": [
+          "SystemTenantMembership"
+        ],
+        "summary": "Vô hiệu hóa tenant membership.",
+        "description": "System Admin thu hồi quyền truy cập tenant của membership được chỉ\r\nđịnh. Membership Owner đang hoạt động được bảo vệ khỏi thao tác này.",
+        "parameters": [
+          {
+            "name": "tenantMembershipId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/system/tenants": {
+      "post": {
+        "tags": [
+          "SystemTenants"
+        ],
+        "summary": "Tạo tenant mới.",
+        "description": "System Admin tạo bản ghi tenant; việc cấp Owner được thực hiện riêng\r\nqua owner provisioning.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTenantRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTenantRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTenantRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/system/tenants/{tenantId}/activate": {
+      "put": {
+        "tags": [
+          "SystemTenants"
+        ],
+        "summary": "Kích hoạt tenant.",
+        "description": "Chuyển tenant sang trạng thái Active để các membership hợp lệ có thể\r\nsử dụng tenant làm ngữ cảnh nghiệp vụ.",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/system/tenants/{tenantId}/deactivate": {
+      "put": {
+        "tags": [
+          "SystemTenants"
+        ],
+        "summary": "Vô hiệu hóa tenant.",
+        "description": "Chuyển tenant sang trạng thái Inactive; các request nghiệp vụ mới của\r\ntenant sẽ bị từ chối bởi kiểm tra effective access.",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/system/tenants/{tenantId}/owner-provisionings": {
+      "post": {
+        "tags": [
+          "SystemTenants"
+        ],
+        "summary": "Cấp Owner cho tenant.",
+        "description": "System Admin tạo lời mời Owner Provisioning cho email được chỉ định.\r\nMembership Owner chỉ được tạo khi người nhận chấp nhận lời mời và tenant\r\nchưa có Owner đang hoạt động.",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProvisionTenantOwnerRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProvisionTenantOwnerRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProvisionTenantOwnerRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/system/tenants/all": {
+      "get": {
+        "tags": [
+          "SystemTenants"
+        ],
+        "summary": "Lấy danh sách tenant toàn hệ thống.",
+        "description": "Trả danh sách tenant phân trang dành riêng cho System Admin.",
+        "parameters": [
+          {
+            "name": "PageNumber",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "PageSize",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/system/users/{userId}/tenants": {
+      "get": {
+        "tags": [
+          "SystemUserTenants"
+        ],
+        "summary": "Lấy các tenant mà một người dùng tham gia.",
+        "description": "System Admin truy vấn danh sách tenant membership của người dùng theo\r\ntrang, bao gồm vai trò và trạng thái membership tương ứng.",
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "PageNumber",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "PageSize",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/auth/invitations/preview": {
+      "post": {
+        "tags": [
+          "TenantInvitation"
+        ],
+        "summary": "Xem trước lời mời và xác định có cần tạo tài khoản.",
+        "description": "Token phải còn hiệu lực và thuộc tenant đang hoạt động. Endpoint chỉ trả\r\nemail đã che một phần để frontend chọn đúng biểu mẫu accept invitation.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreviewTenantInvitationRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreviewTenantInvitationRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreviewTenantInvitationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/current/invitations/tenant-admin": {
+      "post": {
+        "tags": [
+          "TenantInvitation"
+        ],
+        "summary": "Mời Tenant Admin vào tenant hiện tại.",
+        "description": "Tenant Owner tạo lời mời có thời hạn cho email được chỉ định. Lời mời dùng\r\nđể tạo hoặc liên kết tài khoản với membership Tenant Admin.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InviteTenantAdminRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InviteTenantAdminRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/InviteTenantAdminRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/tenants/current/invitations/member": {
+      "post": {
+        "tags": [
+          "TenantInvitation"
+        ],
+        "summary": "Mời Member vào tenant hiện tại.",
+        "description": "Tenant Admin hoặc Owner tạo lời mời có thời hạn. Khi chấp nhận, người\r\nnhận trở thành Member của tenant nhưng chưa có quyền trên Farm nào cho\r\nđến khi được gán Farm Membership riêng.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InviteTenantMemberRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InviteTenantMemberRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/InviteTenantMemberRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/invitations/accept": {
+      "post": {
+        "tags": [
+          "TenantInvitation"
+        ],
+        "summary": "Chấp nhận lời mời tham gia tenant.",
+        "description": "Xác thực invitation token, tạo tài khoản nếu cần và kích hoạt tenant\r\nmembership theo vai trò đã được mời. Token chỉ được sử dụng một lần.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AcceptTenantInvitationRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AcceptTenantInvitationRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/AcceptTenantInvitationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/tenants/current/members/{userId}/role": {
+      "put": {
+        "tags": [
+          "TenantMembership"
+        ],
+        "summary": "Cập nhật vai trò thành viên trong tenant hiện tại.",
+        "description": "Tenant Owner chuyển vai trò giữa Member và Tenant Admin. Endpoint không\r\ncho phép gán hoặc gỡ vai trò Owner và không cho actor tự đổi vai trò.",
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTenantRoleRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTenantRoleRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTenantRoleRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/tenants/current/members/{userId}/status": {
+      "put": {
+        "tags": [
+          "TenantMembership"
+        ],
+        "summary": "Cập nhật trạng thái thành viên trong tenant hiện tại.",
+        "description": "Tenant Owner kích hoạt hoặc vô hiệu hóa membership của một thành viên.\r\nMembership Owner đang hoạt động không thể bị vô hiệu hóa qua endpoint này.",
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTenantMembershipStatusRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTenantMembershipStatusRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTenantMembershipStatusRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/tenants/current/transfer-ownership": {
+      "post": {
+        "tags": [
+          "TenantOwnership"
+        ],
+        "summary": "Chuyển quyền sở hữu tenant hiện tại.",
+        "description": "Tenant Owner chuyển vai trò Owner cho một thành viên active trong cùng\r\ntenant. Owner cũ được hạ xuống Tenant Admin trong cùng transaction.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransferTenantOwnershipRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransferTenantOwnershipRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransferTenantOwnershipRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/users": {
+      "get": {
+        "tags": [
+          "User"
+        ],
+        "summary": "Lấy danh sách người dùng toàn hệ thống.",
+        "description": "Trả danh sách phân trang dành cho System Admin, không giới hạn theo\r\ntenant đang chọn.",
+        "parameters": [
+          {
+            "name": "PageNumber",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "PageSize",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/tenants/current/users": {
+      "get": {
+        "tags": [
+          "User"
+        ],
+        "summary": "Lấy thành viên của tenant hiện tại.",
+        "description": "Trả danh sách người dùng và tenant membership theo tenant trong access\r\ntoken. Chỉ Tenant Admin hoặc Owner được phép truy vấn.",
+        "parameters": [
+          {
+            "name": "PageNumber",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "PageSize",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/users/me/farm-assignments": {
+      "get": {
+        "tags": [
+          "User"
+        ],
+        "summary": "Lấy các farm đang được gán cho người dùng hiện tại.",
+        "description": "UserId được lấy từ access token và tenant được lấy từ tenant context.\r\nMặc định chỉ trả assignment đang Active. Farm đã archive không xuất\r\nhiện trong kết quả, kể cả khi assignment cũ vẫn còn Active.",
+        "parameters": [
+          {
+            "name": "Role",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/FarmMemberRoleValue"
+            }
+          },
+          {
+            "name": "PageNumber",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "PageSize",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/current/profile": {
+      "put": {
+        "tags": [
+          "User"
+        ],
+        "summary": "Cập nhật hồ sơ người dùng hiện tại.",
+        "description": "Cập nhật họ tên và số điện thoại của người dùng đang đăng nhập; email\r\nvà quyền truy cập không thay đổi qua endpoint này.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateUserProfileRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateUserProfileRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateUserProfileRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/current/change-password": {
+      "put": {
+        "tags": [
+          "User"
+        ],
+        "summary": "Đổi mật khẩu của người dùng hiện tại.",
+        "description": "Xác minh mật khẩu cũ trước khi lưu mật khẩu mới cho tài khoản đang\r\nđăng nhập.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateUserPasswordRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateUserPasswordRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateUserPasswordRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AcceptTenantInvitationRequest": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "nullable": true
+          },
+          "password": {
+            "type": "string",
+            "nullable": true
+          },
+          "fullName": {
+            "type": "string",
+            "nullable": true
+          },
+          "phone": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ArchiveFarmRequest": {
+        "type": "object",
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ArchiveZoneRequest": {
+        "type": "object",
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false
+      },
+      "AssignFarmMemberRequest": {
+        "required": [
+          "accessScope",
+          "role"
+        ],
+        "type": "object",
+        "properties": {
+          "role": {
+            "$ref": "#/components/schemas/FarmMemberRoleValue"
+          },
+          "accessScope": {
+            "$ref": "#/components/schemas/FarmAccessScopeValue"
+          },
+          "zoneIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "nullable": true
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "reason": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ChangeDroneStatusRequest": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/DroneStatus"
+          },
+          "nextMaintenanceAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "CreateFarmRequest": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "nullable": true
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "address": {
+            "type": "string",
+            "nullable": true
+          },
+          "boundary": {
+            "$ref": "#/components/schemas/GeoJsonPolygonRequest"
+          },
+          "centerPoint": {
+            "$ref": "#/components/schemas/GeoJsonPointRequest"
+          },
+          "areaHectares": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "CreateHarvestQualityGradeRequest": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "nullable": true
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "displayOrder": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
+      "CreateMissionRequest": {
+        "type": "object",
+        "properties": {
+          "zoneId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "droneId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "pilotUserId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "missionCode": {
+            "type": "string",
+            "nullable": true
+          },
+          "missionType": {
+            "$ref": "#/components/schemas/MissionType"
+          },
+          "sourceMapVersionId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "flightParameters": {
+            "nullable": true
+          },
+          "notes": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "CreatePlantConditionRequest": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "nullable": true
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "scientificName": {
+            "type": "string",
+            "nullable": true
+          },
+          "conditionType": {
+            "$ref": "#/components/schemas/PlantConditionTypeValue"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "CreateTenantRequest": {
+        "type": "object",
+        "properties": {
+          "tenantCode": {
+            "type": "string",
+            "nullable": true
+          },
+          "tenantName": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "CreateZoneRequest": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "nullable": true
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "boundary": {
+            "$ref": "#/components/schemas/GeoJsonPolygonRequest"
+          },
+          "areaHectares": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "DroneStatus": {
+        "enum": [
+          0,
+          1,
+          2,
+          3,
+          4
+        ],
+        "type": "integer",
+        "format": "int32"
+      },
+      "FarmAccessScopeValue": {
+        "enum": [
+          "ALL_ZONES",
+          "SELECTED_ZONES"
+        ],
+        "type": "string"
+      },
+      "FarmMemberRoleValue": {
+        "enum": [
+          "MANAGER",
+          "WORKER"
+        ],
+        "type": "string"
+      },
+      "FarmMembershipStatusValue": {
+        "enum": [
+          "ACTIVE",
+          "INACTIVE"
+        ],
+        "type": "string"
+      },
+      "ForgotPasswordRequest": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "GeoJsonPointRequest": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "nullable": true
+          },
+          "coordinates": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "format": "double"
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "GeoJsonPolygonRequest": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "nullable": true
+          },
+          "coordinates": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "number",
+                  "format": "double"
+                }
+              }
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "InviteTenantAdminRequest": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "InviteTenantMemberRequest": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "LoginUserRequest": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "nullable": true
+          },
+          "password": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "MissionStatus": {
+        "enum": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12
+        ],
+        "type": "integer",
+        "format": "int32"
+      },
+      "MissionType": {
+        "enum": [
+          0,
+          1
+        ],
+        "type": "integer",
+        "format": "int32"
+      },
+      "PlantConditionTypeValue": {
+        "enum": [
+          "DISEASE",
+          "ABIOTIC_DAMAGE",
+          "MECHANICAL_DAMAGE",
+          "OTHER"
+        ],
+        "type": "string"
+      },
+      "PreviewTenantInvitationRequest": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProvisionTenantOwnerRequest": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "RedriveDeadLettersRequest": {
+        "type": "object",
+        "properties": {
+          "maximumMessages": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
+      "RegisterDroneRequest": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "nullable": true
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "model": {
+            "type": "string",
+            "nullable": true
+          },
+          "manufacturer": {
+            "type": "string",
+            "nullable": true
+          },
+          "specifications": {
+            "nullable": true
+          },
+          "serialNumber": {
+            "type": "string",
+            "nullable": true
+          },
+          "registrationNumber": {
+            "type": "string",
+            "nullable": true
+          },
+          "registrationDate": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "registrationExpiryDate": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "weightKg": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "notes": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "RegisterUserRequest": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "nullable": true
+          },
+          "password": {
+            "type": "string",
+            "nullable": true
+          },
+          "fullName": {
+            "type": "string",
+            "nullable": true
+          },
+          "phone": {
+            "type": "string",
+            "nullable": true
+          },
+          "tenantCode": {
+            "type": "string",
+            "nullable": true
+          },
+          "tenantName": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ResetPasswordRequest": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "nullable": true
+          },
+          "newPassword": {
+            "type": "string",
+            "nullable": true
+          },
+          "confirmPassword": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "RestoreFarmRequest": {
+        "type": "object",
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false
+      },
+      "RetireHarvestQualityGradeRequest": {
+        "type": "object",
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false
+      },
+      "RetirePlantConditionRequest": {
+        "type": "object",
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false
+      },
+      "RevokeFarmMemberAssignmentRequest": {
+        "required": [
+          "expectedVersion"
+        ],
+        "type": "object",
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "reason": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ScheduleMissionRequest": {
+        "type": "object",
+        "properties": {
+          "scheduledAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "scheduledEndAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
+      "SelectTenantRequest": {
+        "type": "object",
+        "properties": {
+          "selectionToken": {
+            "type": "string",
+            "nullable": true
+          },
+          "tenantId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "additionalProperties": false
+      },
+      "TransferTenantOwnershipRequest": {
+        "type": "object",
+        "properties": {
+          "newOwnerUserId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "additionalProperties": false
+      },
+      "TransitionMissionRequest": {
+        "type": "object",
+        "properties": {
+          "targetStatus": {
+            "$ref": "#/components/schemas/MissionStatus"
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "reason": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "UpdateFarmDetailRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "address": {
+            "type": "string",
+            "nullable": true
+          },
+          "boundary": {
+            "$ref": "#/components/schemas/GeoJsonPolygonRequest"
+          },
+          "centerPoint": {
+            "$ref": "#/components/schemas/GeoJsonPointRequest"
+          },
+          "areaHectares": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false
+      },
+      "UpdateTenantMembershipStatusRequest": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/UpdateTenantMembershipStatusValue"
+          }
+        },
+        "additionalProperties": false
+      },
+      "UpdateTenantMembershipStatusValue": {
+        "enum": [
+          "ACTIVE",
+          "INACTIVE"
+        ],
+        "type": "string"
+      },
+      "UpdateTenantRoleRequest": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "$ref": "#/components/schemas/UpdateTenantRoleValue"
+          }
+        },
+        "additionalProperties": false
+      },
+      "UpdateTenantRoleValue": {
+        "enum": [
+          "MEMBER",
+          "TENANT_ADMIN"
+        ],
+        "type": "string"
+      },
+      "UpdateUserPasswordRequest": {
+        "type": "object",
+        "properties": {
+          "oldPassword": {
+            "type": "string",
+            "nullable": true
+          },
+          "newPassword": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "UpdateUserProfileRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "phone": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "UpdateZoneRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "boundary": {
+            "$ref": "#/components/schemas/GeoJsonPolygonRequest"
+          },
+          "areaHectares": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false
+      },
+      "VersionHarvestQualityGradeRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "displayOrder": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false
+      },
+      "VersionPlantConditionRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "scientificName": {
+            "type": "string",
+            "nullable": true
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "securitySchemes": {
+      "Bearer": {
+        "type": "http",
+        "description": "Enter JWT token",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  },
+  "security": [
+    {
+      "Bearer": [ ]
+    }
+  ],
+  "tags": [
+    {
+      "name": "Auth"
+    },
+    {
+      "name": "Drones"
+    },
+    {
+      "name": "Farm"
+    },
+    {
+      "name": "HarvestCatalog"
+    },
+    {
+      "name": "MessagingOperations"
+    },
+    {
+      "name": "Missions"
+    },
+    {
+      "name": "PlantCatalog"
+    },
+    {
+      "name": "SystemHarvestQualityGrade"
+    },
+    {
+      "name": "SystemPlantConditions"
+    },
+    {
+      "name": "SystemTenantMembership"
+    },
+    {
+      "name": "SystemTenants"
+    },
+    {
+      "name": "SystemUserTenants"
+    },
+    {
+      "name": "TenantInvitation"
+    },
+    {
+      "name": "TenantMembership"
+    },
+    {
+      "name": "TenantOwnership"
+    },
+    {
+      "name": "User"
+    }
+  ]
+}

@@ -8,6 +8,7 @@ using AgriDrone.Modules.Missions.Application
 using AgriDrone.Modules.Missions.Application
     .Features.Missions.TransitionMission;
 using AgriDrone.SharedInfrastructure.Authorization;
+using AgriDrone.Api.Legacy;
 using AgriDrone.SharedInfrastructure.Http;
 using AgriDrone.SharedKernel.Application
     .Abstractions.Authorization;
@@ -33,6 +34,9 @@ public sealed class MissionsController(
     /// nhất trong Farm. Drone và các tham chiếu phải thuộc đúng tenant.
     /// </remarks>
     [HttpPost("api/farms/{farmId:guid}/missions")]
+    [LegacyEndpoint(
+        "missions.create-direct",
+        "Missions are prepared by the assigned SystemManager from a ready SurveyOrder.")]
     public async Task<IResult> CreateMission(
         Guid farmId,
         [FromBody] CreateMissionRequest request,
@@ -77,6 +81,9 @@ public sealed class MissionsController(
     [HttpPatch(
         "api/farms/{farmId:guid}/missions/" +
         "{missionId:guid}/schedule")]
+    [LegacyEndpoint(
+        "missions.schedule-direct",
+        "Mission scheduling requires SurveyOrder scope, appointment, payment and manager gates.")]
     public async Task<IResult> ScheduleMission(
         Guid farmId,
         Guid missionId,
@@ -116,6 +123,9 @@ public sealed class MissionsController(
     [HttpPatch(
         "api/farms/{farmId:guid}/missions/" +
         "{missionId:guid}/status")]
+    [LegacyEndpoint(
+        "missions.transition-direct",
+        "Mission transitions require assigned SystemManager and operational readiness checks.")]
     public async Task<IResult> TransitionMission(
         Guid farmId,
         Guid missionId,

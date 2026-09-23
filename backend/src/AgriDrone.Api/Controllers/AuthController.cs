@@ -5,6 +5,7 @@ using AgriDrone.Modules.Identity.Application.Features.RegisterUser;
 using AgriDrone.Modules.Identity.Application.Features.ResetPassword;
 using AgriDrone.Modules.Identity.Application.Features.SelectTenant;
 using AgriDrone.SharedInfrastructure.Http;
+using AgriDrone.Api.Legacy;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -23,6 +24,9 @@ namespace AgriDrone.Api.Controllers
         /// </remarks>
         [AllowAnonymous]
         [HttpPost("register")]
+        [LegacyEndpoint(
+            "auth.register",
+            "Submit a public Survey Request; customer onboarding starts only after SystemAdmin approval.")]
         public async Task<IResult> Register(
         [FromBody] RegisterUserRequest request,
         CancellationToken cancellationToken)

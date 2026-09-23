@@ -6,6 +6,7 @@ using AgriDrone.Modules.Missions.Application
 using AgriDrone.Modules.Missions.Application
     .Features.Drones.RegisterDrone;
 using AgriDrone.SharedInfrastructure.Authorization;
+using AgriDrone.Api.Legacy;
 using AgriDrone.SharedInfrastructure.Http;
 using AgriDrone.SharedKernel.Application.Abstractions.Authorization;
 using AgriDrone.SharedKernel.Application.Abstractions.Execution;
@@ -29,6 +30,9 @@ public sealed class DronesController(
     [HttpPost("api/tenants/{tenantId:guid}/drones")]
     [Authorize(
         Policy = AccessAuthorizationPolicies.SystemAdmin)]
+    [LegacyEndpoint(
+        "drones.register-tenant-scoped",
+        "Use the future system-owned drone registry under /api/system/drones.")]
     public async Task<IResult> RegisterDrone(
         Guid tenantId,
         [FromBody] RegisterDroneRequest request,
@@ -69,6 +73,9 @@ public sealed class DronesController(
         "api/tenants/{tenantId:guid}/drones/{droneId:guid}/status")]
     [Authorize(
         Policy = AccessAuthorizationPolicies.SystemAdmin)]
+    [LegacyEndpoint(
+        "drones.change-tenant-scoped-status",
+        "Use the future system-owned drone registry under /api/system/drones.")]
     public async Task<IResult> ChangeStatus(
         Guid tenantId,
         Guid droneId,
@@ -98,6 +105,9 @@ public sealed class DronesController(
     [HttpGet(
         "api/farms/{farmId:guid}/drones/available")]
     [Authorize]
+    [LegacyEndpoint(
+        "drones.get-tenant-scoped-availability",
+        "SystemManager mission preparation will select from globally available system-owned drones.")]
     public async Task<IResult> GetAvailableDrones(
         Guid farmId,
         [FromQuery] GetAvailableDronesRequest request,

@@ -4,6 +4,7 @@ using AgriDrone.Modules.Identity.Application.Features.UpdateTenantMembershipStat
 using AgriDrone.Modules.Identity.Application.Features.UpdateTenantRole;
 using AgriDrone.Modules.Identity.Domain.Tenants;
 using AgriDrone.SharedInfrastructure.Http;
+using AgriDrone.Api.Legacy;
 using AgriDrone.SharedKernel.Domain;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -23,6 +24,9 @@ public sealed class TenantMembershipController(ISender sender) : ControllerBase
     /// cho phép gán hoặc gỡ vai trò Owner và không cho actor tự đổi vai trò.
     /// </remarks>
     [HttpPut("{userId:guid}/role")]
+    [LegacyEndpoint(
+        "tenant-memberships.update-role",
+        "TenantAdmin and Member role mutation is retired; customer access is TenantOwner-only.")]
     public async Task<IResult> UpdateRole(
         [FromRoute] Guid userId,
         [FromBody] UpdateTenantRoleRequest request,
@@ -50,6 +54,9 @@ public sealed class TenantMembershipController(ISender sender) : ControllerBase
     /// Membership Owner đang hoạt động không thể bị vô hiệu hóa qua endpoint này.
     /// </remarks>
     [HttpPut("{userId:guid}/status")]
+    [LegacyEndpoint(
+        "tenant-memberships.update-status",
+        "Use the future TenantOwner lifecycle workflow instead of legacy member administration.")]
     public async Task<IResult> UpdateStatus(
         [FromRoute] Guid userId,
         [FromBody] UpdateTenantMembershipStatusRequest request,
