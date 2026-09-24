@@ -44,13 +44,10 @@ public sealed class LegacyOperationalFlowCharacterizationTests
     }
 
     [Fact]
-    [Trait("Category", "BePlanPhase0Characterization")]
-    public void DroneRegistrationCurrentlyRequiresTenantOwnership()
+    [Trait("Category", "BePlanPhase3")]
+    public void DroneRegistrationUsesSystemOwnership()
     {
-        var tenantId = Guid.NewGuid();
-
         var drone = Drone.Create(
-            tenantId,
             " drone-01 ",
             " Survey Drone ",
             "Mavic",
@@ -64,10 +61,16 @@ public sealed class LegacyOperationalFlowCharacterizationTests
             notes: null,
             Now);
 
-        Assert.Equal(tenantId, drone.TenantId);
+        Assert.Null(typeof(Drone).GetProperty("TenantId"));
         Assert.Equal("DRONE-01", drone.Code);
         Assert.Equal("SERIAL-01", drone.SerialNumber);
         Assert.Equal("VN-001", drone.RegistrationNumber);
+        Assert.Equal(DroneStatus.Available, drone.Status);
+
+        drone.Deactivate(Now.AddMinutes(1));
+        Assert.Equal(DroneStatus.Inactive, drone.Status);
+
+        drone.Reactivate(Now.AddMinutes(2));
         Assert.Equal(DroneStatus.Available, drone.Status);
     }
 

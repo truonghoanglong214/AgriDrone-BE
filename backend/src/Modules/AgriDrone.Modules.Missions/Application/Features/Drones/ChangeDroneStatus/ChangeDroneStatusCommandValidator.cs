@@ -9,9 +9,6 @@ internal sealed class ChangeDroneStatusCommandValidator
 {
     public ChangeDroneStatusCommandValidator()
     {
-        RuleFor(command => command.TenantId)
-            .NotEmpty();
-
         RuleFor(command => command.DroneId)
             .NotEmpty();
 
@@ -20,9 +17,10 @@ internal sealed class ChangeDroneStatusCommandValidator
                 status is
                     DroneStatus.Available or
                     DroneStatus.Maintenance or
+                    DroneStatus.Inactive or
                     DroneStatus.Retired)
             .WithMessage(
-                "Only Available, Maintenance and Retired are supported.");
+                "Only Available, Maintenance, Inactive and Retired are supported.");
 
         RuleFor(command => command)
             .Must(command =>

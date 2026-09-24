@@ -6,7 +6,6 @@ namespace AgriDrone.Modules.Missions.Application
     .Features.Drones.ChangeDroneStatus;
 
 public sealed record ChangeDroneStatusCommand(
-    Guid TenantId,
     Guid DroneId,
     DroneStatus TargetStatus,
     DateTimeOffset? NextMaintenanceAt)

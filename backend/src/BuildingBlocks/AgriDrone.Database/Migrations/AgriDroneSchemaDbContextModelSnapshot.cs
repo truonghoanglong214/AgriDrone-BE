@@ -33,6 +33,7 @@ namespace AgriDrone.Database.Migrations
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "farm_access_scope", new[] { "ALL_ZONES", "SELECTED_ZONES" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "farm_member_role", new[] { "MANAGER", "WORKER" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "finding_source", new[] { "AI", "MANUAL" });
+            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "flight_qualification_status", new[] { "PENDING", "QUALIFIED", "SUSPENDED", "REVOKED" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "general_status", new[] { "ACTIVE", "INACTIVE" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "harvest_batch_status", new[] { "DRAFT", "OPEN", "COMPLETED", "CANCELLED" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "harvest_record_source", new[] { "WEB", "MOBILE", "IMPORT" });
@@ -53,6 +54,8 @@ namespace AgriDrone.Database.Migrations
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "scan_media_role", new[] { "PRIMARY", "CONTEXT", "DETECTION_RESULT" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "scan_source", new[] { "DRONE_AI", "FIELD_MANUAL", "MANAGER" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "season_status", new[] { "PLANNED", "ACTIVE", "COMPLETED", "CANCELLED" });
+            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "system_manager_availability_status", new[] { "AVAILABLE", "UNAVAILABLE" });
+            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "system_manager_profile_status", new[] { "ACTIVE", "SUSPENDED" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "task_priority", new[] { "LOW", "MEDIUM", "HIGH", "URGENT" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "task_result", new[] { "CONFIRMED_DISEASE", "INCORRECT_AI_DETECTION", "PLANT_RECOVERED", "NEED_FURTHER_INSPECTION", "COMPLETED_OTHER" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "task_status", new[] { "OPEN", "ASSIGNED", "IN_PROGRESS", "COMPLETED", "CANCELLED" });
@@ -1310,6 +1313,141 @@ namespace AgriDrone.Database.Migrations
                         });
                 });
 
+            modelBuilder.Entity("AgriDrone.Modules.Identity.Domain.SystemManagers.FarmManagerAssignment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("AssignedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("assigned_at");
+
+                    b.Property<Guid>("AssignedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("assigned_by");
+
+                    b.Property<string>("AssignmentReason")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("assignment_reason");
+
+                    b.Property<string>("EndReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("end_reason");
+
+                    b.Property<DateTimeOffset?>("EndedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("ended_at");
+
+                    b.Property<Guid?>("EndedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ended_by");
+
+                    b.Property<Guid>("FarmId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("farm_id");
+
+                    b.Property<Guid>("SystemManagerProfileId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("system_manager_profile_id");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(1L)
+                        .HasColumnName("version");
+
+                    b.HasKey("Id")
+                        .HasName("pk_farm_manager_assignments");
+
+                    b.HasIndex("AssignedBy");
+
+                    b.HasIndex("EndedBy");
+
+                    b.HasIndex("FarmId")
+                        .IsUnique()
+                        .HasDatabaseName("uq_farm_manager_assignments_active_farm")
+                        .HasFilter("ended_at IS NULL");
+
+                    b.HasIndex("FarmId", "TenantId");
+
+                    b.HasIndex("SystemManagerProfileId", "EndedAt")
+                        .HasDatabaseName("ix_farm_manager_assignments_profile_active");
+
+                    b.HasIndex("TenantId", "FarmId", "AssignedAt")
+                        .HasDatabaseName("ix_farm_manager_assignments_history");
+
+                    b.ToTable("farm_manager_assignments", "identity", t =>
+                        {
+                            t.HasComment("Immutable primary SystemManager assignment history for each Farm.");
+                        });
+                });
+
+            modelBuilder.Entity("AgriDrone.Modules.Identity.Domain.SystemManagers.SystemManagerProfile", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("Availability")
+                        .HasColumnType("system.system_manager_availability_status")
+                        .HasColumnName("availability");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTimeOffset?>("QualificationExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("qualification_expires_at");
+
+                    b.Property<int>("QualificationStatus")
+                        .HasColumnType("system.flight_qualification_status")
+                        .HasColumnName("qualification_status");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("system.system_manager_profile_status")
+                        .HasColumnName("status");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(1L)
+                        .HasColumnName("version");
+
+                    b.HasKey("Id")
+                        .HasName("pk_system_manager_profiles");
+
+                    b.HasIndex("UserId")
+                        .IsUnique()
+                        .HasDatabaseName("uq_system_manager_profiles_user");
+
+                    b.HasIndex("Status", "Availability", "QualificationStatus", "QualificationExpiresAt")
+                        .HasDatabaseName("ix_system_manager_profiles_assignability");
+
+                    b.ToTable("system_manager_profiles", "identity", t =>
+                        {
+                            t.HasComment("Operational profiles for AgriDrone SystemManagers; independent of customer tenant membership.");
+                        });
+                });
+
             modelBuilder.Entity("AgriDrone.Modules.Identity.Domain.TenantInvitations.TenantInvitation", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1768,10 +1906,6 @@ namespace AgriDrone.Database.Migrations
                         .HasColumnName("status")
                         .HasDefaultValueSql("'AVAILABLE'::system.drone_status");
 
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("tenant_id");
-
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
@@ -1786,29 +1920,23 @@ namespace AgriDrone.Database.Migrations
                     b.HasKey("Id")
                         .HasName("pk_drones");
 
-                    b.HasAlternateKey("Id", "TenantId")
-                        .HasName("uq_drones_id_tenant");
-
-                    b.HasIndex("TenantId")
-                        .HasDatabaseName("ix_drones_tenant");
-
-                    b.HasIndex("TenantId", "Code")
+                    b.HasIndex("Code")
                         .IsUnique()
-                        .HasDatabaseName("uq_drones_tenant_code");
+                        .HasDatabaseName("uq_drones_code");
 
-                    b.HasIndex("TenantId", "RegistrationNumber")
+                    b.HasIndex("RegistrationNumber")
                         .IsUnique()
-                        .HasDatabaseName("uq_drones_tenant_registration_number")
+                        .HasDatabaseName("uq_drones_registration_number")
                         .HasFilter("registration_number IS NOT NULL");
 
-                    b.HasIndex("TenantId", "SerialNumber")
+                    b.HasIndex("SerialNumber")
                         .IsUnique()
-                        .HasDatabaseName("uq_drones_tenant_serial_number")
+                        .HasDatabaseName("uq_drones_serial_number")
                         .HasFilter("serial_number IS NOT NULL");
 
                     b.ToTable("drones", "mission", t =>
                         {
-                            t.HasComment("Tenant-owned physical drone inventory reusable across farms in the same tenant.");
+                            t.HasComment("System-owned physical drone inventory managed centrally by AgriDrone.");
 
                             t.HasCheckConstraint("ck_drones_maintenance_dates", "next_maintenance_at IS NULL OR last_maintenance_at IS NULL OR next_maintenance_at >= last_maintenance_at");
 
@@ -2224,8 +2352,6 @@ namespace AgriDrone.Database.Migrations
                         .IsDescending(false, true)
                         .HasDatabaseName("ix_drone_missions_drone_started");
 
-                    b.HasIndex("DroneId", "TenantId");
-
                     b.HasIndex("FarmId", "MissionCode")
                         .IsUnique()
                         .HasDatabaseName("uq_drone_missions_farm_code");
@@ -2241,7 +2367,7 @@ namespace AgriDrone.Database.Migrations
 
                     b.HasIndex("ZoneId", "FarmId");
 
-                    b.HasIndex("TenantId", "DroneId", "ScheduledAt", "ScheduledEndAt")
+                    b.HasIndex("DroneId", "ScheduledAt", "ScheduledEndAt")
                         .HasDatabaseName("ix_drone_missions_drone_schedule");
 
                     b.ToTable("drone_missions", "mission", t =>
@@ -4597,6 +4723,51 @@ namespace AgriDrone.Database.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("AgriDrone.Modules.Identity.Domain.SystemManagers.FarmManagerAssignment", b =>
+                {
+                    b.HasOne("AgriDrone.Modules.Identity.Domain.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("AssignedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_farm_manager_assignments_users_assigned_by");
+
+                    b.HasOne("AgriDrone.Modules.Identity.Domain.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("EndedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_farm_manager_assignments_users_ended_by");
+
+                    b.HasOne("AgriDrone.Modules.Identity.Domain.SystemManagers.SystemManagerProfile", "SystemManagerProfile")
+                        .WithMany("FarmAssignments")
+                        .HasForeignKey("SystemManagerProfileId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_farm_manager_assignments_profiles_profile_id");
+
+                    b.HasOne("AgriDrone.Modules.Farms.Domain.Farms.Farm", null)
+                        .WithMany()
+                        .HasForeignKey("FarmId", "TenantId")
+                        .HasPrincipalKey("Id", "TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_farm_manager_assignments_farms_same_tenant");
+
+                    b.Navigation("SystemManagerProfile");
+                });
+
+            modelBuilder.Entity("AgriDrone.Modules.Identity.Domain.SystemManagers.SystemManagerProfile", b =>
+                {
+                    b.HasOne("AgriDrone.Modules.Identity.Domain.Users.User", "User")
+                        .WithOne()
+                        .HasForeignKey("AgriDrone.Modules.Identity.Domain.SystemManagers.SystemManagerProfile", "UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_system_manager_profiles_users_user_id");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("AgriDrone.Modules.Identity.Domain.TenantInvitations.TenantInvitation", b =>
                 {
                     b.HasOne("AgriDrone.Modules.Identity.Domain.Users.User", "AcceptedByUser")
@@ -4677,16 +4848,6 @@ namespace AgriDrone.Database.Migrations
                     b.Navigation("FarmMembership");
                 });
 
-            modelBuilder.Entity("AgriDrone.Modules.Missions.Domain.Drones.Drone", b =>
-                {
-                    b.HasOne("AgriDrone.Modules.Identity.Domain.Tenants.Tenant", null)
-                        .WithMany()
-                        .HasForeignKey("TenantId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_drones_tenants_tenant_id");
-                });
-
             modelBuilder.Entity("AgriDrone.Modules.Missions.Domain.Media.MediaAsset", b =>
                 {
                     b.HasOne("AgriDrone.Modules.Identity.Domain.Tenants.Tenant", null)
@@ -4740,19 +4901,18 @@ namespace AgriDrone.Database.Migrations
                         .IsRequired()
                         .HasConstraintName("fk_drone_missions_users_created_by");
 
+                    b.HasOne("AgriDrone.Modules.Missions.Domain.Drones.Drone", "Drone")
+                        .WithMany()
+                        .HasForeignKey("DroneId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_drone_missions_drones_drone_id");
+
                     b.HasOne("AgriDrone.Modules.Identity.Domain.Users.User", null)
                         .WithMany()
                         .HasForeignKey("PilotUserId")
                         .OnDelete(DeleteBehavior.SetNull)
                         .HasConstraintName("fk_drone_missions_users_pilot_user_id");
-
-                    b.HasOne("AgriDrone.Modules.Missions.Domain.Drones.Drone", "Drone")
-                        .WithMany()
-                        .HasForeignKey("DroneId", "TenantId")
-                        .HasPrincipalKey("Id", "TenantId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_drone_missions_drones_same_tenant");
 
                     b.HasOne("AgriDrone.Modules.Farms.Domain.Farms.Farm", null)
                         .WithMany()
@@ -5326,6 +5486,11 @@ namespace AgriDrone.Database.Migrations
             modelBuilder.Entity("AgriDrone.Modules.Identity.Domain.Roles.Role", b =>
                 {
                     b.Navigation("UserRoles");
+                });
+
+            modelBuilder.Entity("AgriDrone.Modules.Identity.Domain.SystemManagers.SystemManagerProfile", b =>
+                {
+                    b.Navigation("FarmAssignments");
                 });
 
             modelBuilder.Entity("AgriDrone.Modules.Identity.Domain.Tenants.Tenant", b =>

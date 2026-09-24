@@ -8,9 +8,6 @@ internal sealed class RegisterDroneCommandValidator
 {
     public RegisterDroneCommandValidator()
     {
-        RuleFor(command => command.TenantId)
-            .NotEmpty();
-
         RuleFor(command => command.Code)
             .NotEmpty()
             .MaximumLength(30);

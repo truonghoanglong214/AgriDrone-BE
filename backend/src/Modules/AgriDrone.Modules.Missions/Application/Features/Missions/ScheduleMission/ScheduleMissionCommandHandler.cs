@@ -67,7 +67,6 @@ internal sealed class ScheduleMissionCommandHandler(
 
         var availableDrones =
             await droneQueries.GetAvailableAsync(
-                mission.TenantId,
                 request.ScheduledAt,
                 request.ScheduledEndAt,
                 cancellationToken);

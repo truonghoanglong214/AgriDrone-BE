@@ -5,15 +5,15 @@ namespace AgriDrone.Modules.Missions.Application.Errors;
 
 internal static class DroneError
 {
-    public static AppError CurrentTenantRequired() =>
-        AppError.Unauthorized(
-            "Drone.TenantContextRequired",
-            "A valid tenant context is required.");
-
     public static AppError CurrentUserRequired() =>
         AppError.Unauthorized(
             "Drone.UserContextRequired",
             "A valid user context is required.");
+
+    public static AppError FarmAccessDenied(Guid farmId) =>
+        AppError.Forbidden(
+            "Drone.FarmAccessDenied",
+            $"The current SystemManager cannot prepare missions for Farm '{farmId}'.");
 
     public static AppError NotFound(Guid droneId) =>
         AppError.NotFound(
@@ -48,4 +48,9 @@ internal static class DroneError
         AppError.Validation(
             "Drone.InvalidNextMaintenanceTime",
             "Next maintenance time must be later than maintenance completion time.");
+
+    public static AppError NextMaintenanceOnlyAfterMaintenance() =>
+        AppError.Validation(
+            "Drone.NextMaintenanceNotApplicable",
+            "Next maintenance time can only be supplied when completing maintenance.");
 }

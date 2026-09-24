@@ -32,7 +32,6 @@ internal sealed class ChangeDroneStatusCommandHandler(
 
         var drone = await droneRepository.GetByIdAsync(
             request.DroneId,
-            request.TenantId,
             cancellationToken);
 
         if (drone is null)
@@ -61,6 +60,14 @@ internal sealed class ChangeDroneStatusCommandHandler(
 
         if (request.TargetStatus == DroneStatus.Available &&
             request.NextMaintenanceAt.HasValue &&
+            drone.Status != DroneStatus.Maintenance)
+        {
+            return Result.Failure<ChangeDroneStatusResponse>(
+                DroneError.NextMaintenanceOnlyAfterMaintenance());
+        }
+
+        if (request.TargetStatus == DroneStatus.Available &&
+            request.NextMaintenanceAt.HasValue &&
             request.NextMaintenanceAt.Value <= changedAt)
         {
             return Result.Failure<ChangeDroneStatusResponse>(
@@ -79,26 +86,24 @@ internal sealed class ChangeDroneStatusCommandHandler(
                 Status = previousStatus.ToString()
             });
 
-                using var newData =
-                    JsonSerializer.SerializeToDocument(new
-                    {
-                        Status = drone.Status.ToString(),
-                        drone.LastMaintenanceAt,
-                        drone.NextMaintenanceAt
-                    });
+        using var newData =
+            JsonSerializer.SerializeToDocument(new
+            {
+                Status = drone.Status.ToString(),
+                drone.LastMaintenanceAt,
+                drone.NextMaintenanceAt
+            });
 
-                auditWriter.AddUserAction(
-                    sink: unitOfWork,
-                    tenantId: drone.TenantId,
-                    farmId: null,
-                    actorId: userId,
-                    correlationId: executionContext.CorrelationId,
-                    entityType: nameof(Drone),
-                    entityId: drone.Id,
-                    action: "CHANGE_STATUS",
-                    oldData: oldData,
-                    newData: newData,
-                    createdAt: changedAt);
+        auditWriter.AddSystemAdminAction(
+            sink: unitOfWork,
+            actorId: userId,
+            correlationId: executionContext.CorrelationId,
+            entityType: nameof(Drone),
+            entityId: drone.Id,
+            action: "CHANGE_STATUS",
+            oldData: oldData,
+            newData: newData,
+            createdAt: changedAt);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
@@ -113,8 +118,11 @@ internal sealed class ChangeDroneStatusCommandHandler(
         {
             (DroneStatus.Available, DroneStatus.Maintenance) => true,
             (DroneStatus.Maintenance, DroneStatus.Available) => true,
+            (DroneStatus.Available, DroneStatus.Inactive) => true,
+            (DroneStatus.Inactive, DroneStatus.Available) => true,
             (DroneStatus.Available, DroneStatus.Retired) => true,
             (DroneStatus.Maintenance, DroneStatus.Retired) => true,
+            (DroneStatus.Inactive, DroneStatus.Retired) => true,
             _ => false
         };
     }
@@ -128,13 +136,24 @@ internal sealed class ChangeDroneStatusCommandHandler(
         switch (targetStatus)
         {
             case DroneStatus.Available:
-                drone.CompleteMaintenance(
-                    changedAt,
-                    nextMaintenanceAt);
+                if (drone.Status == DroneStatus.Maintenance)
+                {
+                    drone.CompleteMaintenance(
+                        changedAt,
+                        nextMaintenanceAt);
+                }
+                else
+                {
+                    drone.Reactivate(changedAt);
+                }
                 break;
 
             case DroneStatus.Maintenance:
                 drone.SendToMaintenance(changedAt);
+                break;
+
+            case DroneStatus.Inactive:
+                drone.Deactivate(changedAt);
                 break;
 
             case DroneStatus.Retired:

@@ -8,6 +8,7 @@ using AgriDrone.Modules.Identity.Domain.FarmMemberships;
 using AgriDrone.Modules.Identity.Domain.TenantInvitations;
 using AgriDrone.Modules.Identity.Domain.Tenants;
 using AgriDrone.Modules.Identity.Domain.Users;
+using AgriDrone.Modules.Identity.Domain.SystemManagers;
 using AgriDrone.Modules.Missions.Domain.Drones;
 using AgriDrone.Modules.Missions.Domain.Media;
 using AgriDrone.Modules.Missions.Domain.Missions;
@@ -34,6 +35,9 @@ internal static class PostgreSqlEnumMappings
         var translator = UpperSnakeCaseNameTranslator.Instance;
 
         modelBuilder.HasPostgresEnum<UserStatus>(DbSchemas.System, "user_status", translator);
+        modelBuilder.HasPostgresEnum<SystemManagerProfileStatus>(DbSchemas.System, "system_manager_profile_status", translator);
+        modelBuilder.HasPostgresEnum<SystemManagerAvailabilityStatus>(DbSchemas.System, "system_manager_availability_status", translator);
+        modelBuilder.HasPostgresEnum<FlightQualificationStatus>(DbSchemas.System, "flight_qualification_status", translator);
         modelBuilder.HasPostgresEnum<FarmMemberRole>(DbSchemas.System, "farm_member_role", translator);
         modelBuilder.HasPostgresEnum<FarmAccessScope>(DbSchemas.System, "farm_access_scope", translator);
         modelBuilder.HasPostgresEnum<TenantMemberRole>(DbSchemas.System, "tenant_member_role", translator);
@@ -81,6 +85,9 @@ internal static class PostgreSqlEnumMappings
         var translator = UpperSnakeCaseNameTranslator.Instance;
 
         dataSourceBuilder.MapEnum<UserStatus>("system.user_status", translator);
+        dataSourceBuilder.MapEnum<SystemManagerProfileStatus>("system.system_manager_profile_status", translator);
+        dataSourceBuilder.MapEnum<SystemManagerAvailabilityStatus>("system.system_manager_availability_status", translator);
+        dataSourceBuilder.MapEnum<FlightQualificationStatus>("system.flight_qualification_status", translator);
         dataSourceBuilder.MapEnum<FarmMemberRole>("system.farm_member_role", translator);
         dataSourceBuilder.MapEnum<FarmAccessScope>("system.farm_access_scope", translator);
         dataSourceBuilder.MapEnum<TenantMemberRole>("system.tenant_member_role", translator);

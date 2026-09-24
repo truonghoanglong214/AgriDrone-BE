@@ -26,9 +26,6 @@ public sealed class LegacyEndpointSafetyTests
         { typeof(FarmController), nameof(FarmController.CreateFarm) },
         { typeof(FarmController), nameof(FarmController.AssignFarmMember) },
         { typeof(FarmController), nameof(FarmController.RevokeFarmMemberAssignment) },
-        { typeof(DronesController), nameof(DronesController.RegisterDrone) },
-        { typeof(DronesController), nameof(DronesController.ChangeStatus) },
-        { typeof(DronesController), nameof(DronesController.GetAvailableDrones) },
         { typeof(MissionsController), nameof(MissionsController.CreateMission) },
         { typeof(MissionsController), nameof(MissionsController.ScheduleMission) },
         { typeof(MissionsController), nameof(MissionsController.TransitionMission) },
@@ -95,7 +92,7 @@ public sealed class LegacyEndpointSafetyTests
             .Select(attribute => attribute.RouteName)
             .ToArray();
 
-        Assert.Equal(19, routeNames.Length);
+        Assert.Equal(16, routeNames.Length);
         Assert.Equal(routeNames.Length, routeNames.Distinct().Count());
         Assert.All(routeNames, route => Assert.DoesNotContain('{', route));
     }

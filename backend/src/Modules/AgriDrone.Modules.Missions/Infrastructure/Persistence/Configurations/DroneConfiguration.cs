@@ -14,7 +14,7 @@ public sealed class DroneConfiguration : IEntityTypeConfiguration<Drone>
             tableBuilder =>
             {
                 tableBuilder.HasComment(
-                    "Tenant-owned physical drone inventory reusable across farms in the same tenant.");
+                    "System-owned physical drone inventory managed centrally by AgriDrone.");
                 tableBuilder.HasCheckConstraint(
                     "ck_drones_registration_dates",
                     "registration_expiry_date IS NULL OR registration_date IS NULL OR " +
@@ -29,18 +29,11 @@ public sealed class DroneConfiguration : IEntityTypeConfiguration<Drone>
             });
 
         builder.HasKey(drone => drone.Id).HasName("pk_drones");
-        builder.HasAlternateKey(drone => new { drone.Id, drone.TenantId })
-            .HasName("uq_drones_id_tenant");
-
         builder.Property(drone => drone.Id)
             .HasColumnName("id")
             .HasColumnType("uuid")
             .HasDefaultValueSql("gen_random_uuid()")
             .ValueGeneratedOnAdd();
-
-        builder.Property(drone => drone.TenantId)
-            .HasColumnName("tenant_id")
-            .HasColumnType("uuid");
 
         builder.Property(drone => drone.Code)
             .HasColumnName("code")
@@ -128,21 +121,18 @@ public sealed class DroneConfiguration : IEntityTypeConfiguration<Drone>
             .HasColumnName("deleted_at")
             .HasColumnType("timestamp with time zone");
 
-        builder.HasIndex(drone => new { drone.TenantId, drone.Code })
-            .HasDatabaseName("uq_drones_tenant_code")
+        builder.HasIndex(drone => drone.Code)
+            .HasDatabaseName("uq_drones_code")
             .IsUnique();
 
-        builder.HasIndex(drone => new { drone.TenantId, drone.SerialNumber })
-            .HasDatabaseName("uq_drones_tenant_serial_number")
+        builder.HasIndex(drone => drone.SerialNumber)
+            .HasDatabaseName("uq_drones_serial_number")
             .HasFilter("serial_number IS NOT NULL")
             .IsUnique();
 
-        builder.HasIndex(drone => new { drone.TenantId, drone.RegistrationNumber })
-            .HasDatabaseName("uq_drones_tenant_registration_number")
+        builder.HasIndex(drone => drone.RegistrationNumber)
+            .HasDatabaseName("uq_drones_registration_number")
             .HasFilter("registration_number IS NOT NULL")
             .IsUnique();
-
-        builder.HasIndex(drone => drone.TenantId)
-            .HasDatabaseName("ix_drones_tenant");
     }
 }

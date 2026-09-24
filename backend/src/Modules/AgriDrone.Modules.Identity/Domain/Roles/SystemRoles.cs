@@ -6,12 +6,18 @@ public static class SystemRoles
 {
     public const string SystemAdmin = SystemRoleCodes.SystemAdmin;
 
+    public const string SystemManager = SystemRoleCodes.SystemManager;
+
     public static readonly IReadOnlyCollection<SystemRoleDefinition> All =
     [
         new(
             SystemAdmin,
             "System Administrator",
-            "Administrator with system-wide access.")
+            "Administrator with system-wide access."),
+        new(
+            SystemManager,
+            "System Manager",
+            "AgriDrone operations manager assigned to customer farms.")
     ];
 }
 
