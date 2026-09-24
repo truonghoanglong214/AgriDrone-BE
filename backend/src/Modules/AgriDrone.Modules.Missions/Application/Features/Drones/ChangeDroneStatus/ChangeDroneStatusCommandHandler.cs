@@ -54,6 +54,20 @@ internal sealed class ChangeDroneStatusCommandHandler(
                     drone.Status,
                     request.TargetStatus));
         }
+        var makesDroneUnavailable =
+        request.TargetStatus is
+        DroneStatus.Maintenance or
+        DroneStatus.Inactive or
+        DroneStatus.Retired;
+
+        if (makesDroneUnavailable &&
+            await droneRepository.HasBlockingMissionAsync(
+                drone.Id,
+                cancellationToken))
+        {
+            return Result.Failure<ChangeDroneStatusResponse>(
+                DroneError.HasBlockingMission(drone.Id));
+        }
 
         var previousStatus = drone.Status;
         var changedAt = timeProvider.GetUtcNow();

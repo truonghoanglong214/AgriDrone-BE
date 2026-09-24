@@ -70,56 +70,20 @@ internal sealed class FinalizeMissionUploadCommandHandler(
             now,
             cancellationToken);
 
-        if (readiness.HasActiveUploadSessions)
+        var errors = MissionUploadReadinessPolicy.Evaluate(
+            mission,
+            readiness);
+
+        if (errors.Count > 0)
         {
             return Result.Failure<FinalizeMissionUploadResult>(
-                FinalizeMissionUploadError
-                    .ActiveUploadSessionsExist());
+                errors[0]);
         }
 
-        var acceptedMediaCount = mission.MissionType switch
-        {
-            MissionType.Mapping =>
-                readiness.RawImageCount,
-
-            MissionType.HealthInspection =>
-                readiness.RawImageCount +
-                readiness.RawVideoCount,
-
-            _ => 0
-        };
-
-        if (acceptedMediaCount < 1)
-        {
-            return Result.Failure<FinalizeMissionUploadResult>(
-                FinalizeMissionUploadError
-                    .RequiredMediaMissing(mission.MissionType));
-        }
-
-        if (!readiness.HasTelemetryImport ||
-            readiness.ImportedPointCount < 2)
-        {
-            return Result.Failure<FinalizeMissionUploadResult>(
-                FinalizeMissionUploadError.TelemetryMissing());
-        }
-
-        if (readiness.ImportedPointCount !=
-            readiness.PersistedPointCount)
-        {
-            return Result.Failure<FinalizeMissionUploadResult>(
-                FinalizeMissionUploadError.TelemetryInconsistent(
-                    readiness.ImportedPointCount,
-                    readiness.PersistedPointCount));
-        }
-
-        if (mission.FlightRoute is null ||
-            mission.FlightRoute.IsEmpty ||
-            mission.FlightRoute.NumPoints < 2 ||
-            mission.FlightRoute.SRID != 4326)
-        {
-            return Result.Failure<FinalizeMissionUploadResult>(
-                FinalizeMissionUploadError.FlightRouteMissing());
-        }
+        var acceptedMediaCount =
+        MissionUploadReadinessPolicy.GetAcceptedMediaCount(
+            mission.MissionType,
+            readiness);
 
         var previousStatus = mission.Status;
 

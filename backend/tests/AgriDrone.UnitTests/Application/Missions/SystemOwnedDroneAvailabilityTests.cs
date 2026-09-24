@@ -139,6 +139,11 @@ public sealed class SystemOwnedDroneAvailabilityTests
     {
         public List<Drone> Added { get; } = [];
 
+        public Task<bool> HasBlockingMissionAsync(
+    Guid droneId,
+    CancellationToken cancellationToken = default) =>
+    Task.FromResult(false);
+
         public Task<Drone?> GetByIdAsync(
             Guid droneId,
             CancellationToken cancellationToken = default) =>

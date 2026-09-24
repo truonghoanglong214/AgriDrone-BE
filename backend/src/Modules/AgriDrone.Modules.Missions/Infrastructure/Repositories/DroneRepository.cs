@@ -1,7 +1,7 @@
 ﻿using AgriDrone.Modules.Missions.Domain.Drones;
 using AgriDrone.Modules.Missions.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
-
+using AgriDrone.Modules.Missions.Domain.Missions;
 namespace AgriDrone.Modules.Missions.Infrastructure.Repositories;
 
 internal sealed class DroneRepository(
@@ -45,6 +45,19 @@ internal sealed class DroneRepository(
         return dbContext.Drones.AnyAsync(
             drone =>
                 drone.RegistrationNumber == registrationNumber,
+            cancellationToken);
+    }
+
+    public Task<bool> HasBlockingMissionAsync(
+    Guid droneId,
+    CancellationToken cancellationToken = default)
+    {
+        return dbContext.DroneMissions.AnyAsync(
+            mission =>
+                mission.DroneId == droneId &&
+                (mission.Status == MissionStatus.Draft ||
+                 mission.Status == MissionStatus.Scheduled ||
+                 mission.Status == MissionStatus.InFlight),
             cancellationToken);
     }
 

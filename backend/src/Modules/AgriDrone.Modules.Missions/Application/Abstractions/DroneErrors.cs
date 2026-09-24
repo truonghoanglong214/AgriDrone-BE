@@ -53,4 +53,10 @@ internal static class DroneError
         AppError.Validation(
             "Drone.NextMaintenanceNotApplicable",
             "Next maintenance time can only be supplied when completing maintenance.");
+
+    public static AppError HasBlockingMission(Guid droneId) =>
+    AppError.Conflict(
+        "Drone.HasBlockingMission",
+        $"Drone with ID '{droneId}' is assigned " +
+        "to a draft, scheduled or in-flight mission.");
 }

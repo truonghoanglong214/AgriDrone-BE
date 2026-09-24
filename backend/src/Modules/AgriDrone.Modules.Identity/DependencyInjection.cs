@@ -4,6 +4,7 @@ using AgriDrone.Modules.Identity.Application.Abstractions.Messaging;
 using AgriDrone.Modules.Identity.Application.Abstractions.Persistence;
 using AgriDrone.Modules.Identity.Application.Abstractions.Queries;
 using AgriDrone.Modules.Identity.Application.Abstractions.Services;
+using AgriDrone.Modules.Identity.Application.Features.SystemManagers.EmailDelivery;
 using AgriDrone.Modules.Identity.Application.Invitations.Creation;
 using AgriDrone.Modules.Identity.Application.Invitations.EmailDelivery;
 using AgriDrone.Modules.Identity.Application.Options;
@@ -129,7 +130,7 @@ public static class DependencyInjection
         services.AddSingleton<IInvitationTokenService, InvitationTokenService>();
         services.AddSingleton<IPasswordResetTokenService, PasswordResetTokenService>();
         services.AddIntegrationConsumer<TenantInvitationEmailRequestedProcessor>(IntegrationConsumerNames.EmailTenantInvitationV1);
-
+        services.AddScoped<ISystemManagerInvitationEmailDelivery, SystemManagerInvitationEmailDelivery>();
         var assembly = typeof(DependencyInjection).Assembly;
 
         services.AddMediatR(mediatR =>

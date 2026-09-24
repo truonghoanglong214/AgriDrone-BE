@@ -1,6 +1,7 @@
 ﻿using AgriDrone.Api.Contracts.Missions;
 using AgriDrone.Modules.Missions.Application
     .Features.Media.FinalizeMissionUpload;
+using AgriDrone.Modules.Missions.Application.Features.Media.GetMissionUploadReadiness;
 using AgriDrone.SharedInfrastructure.Authorization;
 using AgriDrone.SharedInfrastructure.Http;
 using AgriDrone.SharedKernel.Application
@@ -72,4 +73,45 @@ public sealed class MissionUploadController(
                     value.TelemetryPointCount,
                     value.MissionVersion)));
     }
+
+    /// <summary>Kiểm tra điều kiện hoàn tất upload của Mission.</summary>
+    [HttpGet("api/missions/{missionId:guid}/farms/{farmId:guid}/upload/readiness")]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    [ProducesResponseType(
+        typeof(MissionUploadReadinessResponse),
+        StatusCodes.Status200OK)]
+    public async Task<IResult> GetUploadReadiness(
+        [FromRoute] Guid farmId,
+        [FromRoute] Guid missionId,
+        CancellationToken cancellationToken)
+    {
+        if (executionContext.TenantId is not Guid tenantId)
+            return Results.Unauthorized();
+
+        var authorization = await authorizationService.AuthorizeAsync(
+            User,
+            new FarmAccessTarget(tenantId, farmId),
+            AccessAuthorizationPolicies.FarmManage);
+
+        if (!authorization.Succeeded)
+            return Results.Forbid();
+
+        var result = await sender.Send(
+            new GetMissionUploadReadinessQuery(farmId, missionId),
+            cancellationToken);
+
+        return result.ToHttpResult(
+            HttpContext,
+            value => Results.Ok(new MissionUploadReadinessResponse(
+                value.MissionId,
+                value.MissionVersion,
+                value.Status.ToString(),
+                value.CanFinalize,
+                value.RawImageCount,
+                value.RawVideoCount,
+                value.TelemetryPointCount,
+                value.HasActiveUploadSessions,
+                value.Blockers.Select(error => error.Code).ToArray())));
+    }
+
 }

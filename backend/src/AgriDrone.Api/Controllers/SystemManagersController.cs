@@ -88,4 +88,21 @@ public sealed class SystemManagersController(ISender sender) : ControllerBase
             cancellationToken);
         return result.ToHttpResult(HttpContext, Results.Ok);
     }
+
+    [HttpPost("invitations")]
+    public async Task<IResult> Invite(
+        [FromBody] InviteSystemManagerRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await sender.Send(
+            new InviteSystemManagerCommand(
+                request.Email),
+            cancellationToken);
+
+        return result.ToHttpResult(
+            HttpContext,
+            response => Results.Json(
+                response,
+                statusCode: StatusCodes.Status201Created));
+    }
 }
