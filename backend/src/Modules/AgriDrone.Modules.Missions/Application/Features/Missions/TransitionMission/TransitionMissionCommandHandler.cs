@@ -71,7 +71,6 @@ internal sealed class TransitionMissionCommandHandler(
 
         var drone = await droneRepository.GetByIdAsync(
             mission.DroneId,
-            mission.TenantId,
             cancellationToken);
 
         if (drone is null)
@@ -246,7 +245,7 @@ internal sealed class TransitionMissionCommandHandler(
 
         auditWriter.AddUserAction(
             sink: unitOfWork,
-            tenantId: drone.TenantId,
+            tenantId: mission.TenantId,
             farmId: mission.FarmId,
             actorId: actorId,
             correlationId:

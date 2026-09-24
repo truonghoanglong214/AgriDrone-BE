@@ -64,7 +64,6 @@ internal sealed class CreateMissionCommandHandler(
 
         var drone = await droneRepository.GetByIdAsync(
             request.DroneId,
-            tenantId,
             cancellationToken);
 
         if (drone is null)

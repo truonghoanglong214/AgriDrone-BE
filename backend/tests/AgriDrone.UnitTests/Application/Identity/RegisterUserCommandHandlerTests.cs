@@ -20,6 +20,7 @@ public sealed class RegisterUserCommandHandlerTests
         new(2026, 9, 12, 3, 0, 0, TimeSpan.Zero);
 
     [Fact]
+    [Trait("Category", "BePlanPhase0Characterization")]
     public async Task HandleCreatesRegistrationAndEmailOutboxAtomically()
     {
         var fixture = CreateFixture();

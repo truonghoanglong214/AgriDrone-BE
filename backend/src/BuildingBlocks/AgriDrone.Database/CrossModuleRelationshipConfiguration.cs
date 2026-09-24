@@ -11,6 +11,7 @@ using AgriDrone.Modules.Harvests.Domain.Quality;
 using AgriDrone.Modules.Harvests.Domain.Seasons;
 using AgriDrone.Modules.Identity.Domain.FarmMemberships;
 using AgriDrone.Modules.Identity.Domain.Tenants;
+using AgriDrone.Modules.Identity.Domain.SystemManagers;
 using AgriDrone.Modules.Identity.Domain.Users;
 using AgriDrone.Modules.Identity.Domain.ZoneAssignments;
 using AgriDrone.Modules.Missions.Domain.Drones;
@@ -62,6 +63,32 @@ internal static class CrossModuleRelationshipConfiguration
             .OnDelete(DeleteBehavior.Cascade)
             .HasConstraintName("fk_farm_memberships_farms_same_tenant");
 
+        modelBuilder.Entity<FarmManagerAssignment>()
+            .HasOne<Farm>()
+            .WithMany()
+            .HasForeignKey(assignment => new
+            {
+                assignment.FarmId,
+                assignment.TenantId
+            })
+            .HasPrincipalKey(farm => new { farm.Id, farm.TenantId })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_farm_manager_assignments_farms_same_tenant");
+
+        modelBuilder.Entity<FarmManagerAssignment>()
+            .HasOne<User>()
+            .WithMany()
+            .HasForeignKey(assignment => assignment.AssignedBy)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_farm_manager_assignments_users_assigned_by");
+
+        modelBuilder.Entity<FarmManagerAssignment>()
+            .HasOne<User>()
+            .WithMany()
+            .HasForeignKey(assignment => assignment.EndedBy)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_farm_manager_assignments_users_ended_by");
+
         modelBuilder.Entity<ZoneAssignment>()
             .HasOne<FarmZone>()
             .WithMany()
@@ -101,13 +128,6 @@ internal static class CrossModuleRelationshipConfiguration
             .HasForeignKey(mapVersion => mapVersion.ConfirmedBy)
             .OnDelete(DeleteBehavior.Restrict)
             .HasConstraintName("fk_zone_map_versions_users_confirmed_by");
-
-        modelBuilder.Entity<Drone>()
-            .HasOne<Tenant>()
-            .WithMany()
-            .HasForeignKey(drone => drone.TenantId)
-            .OnDelete(DeleteBehavior.Restrict)
-            .HasConstraintName("fk_drones_tenants_tenant_id");
 
         modelBuilder.Entity<DroneMission>()
             .HasOne<Farm>()

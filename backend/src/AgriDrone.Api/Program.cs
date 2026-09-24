@@ -1,7 +1,7 @@
 using AgriDrone.Database;
 using AgriDrone.Integrations.Email;
 using AgriDrone.Integrations.Media;
-using AgriDrone.Integrations.Media.Telemetry;
+using AgriDrone.Api.Legacy;
 using AgriDrone.Modules.Farms;
 using AgriDrone.Modules.FieldTasks;
 using AgriDrone.Modules.Harvests;
@@ -19,33 +19,23 @@ using AgriDrone.SharedInfrastructure.Validation;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.OpenApi;
 using System.Reflection;
-using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services
-    .AddControllers()
-    .AddJsonOptions(options =>
-    {
-        options.JsonSerializerOptions.Converters.Add(
-            new JsonStringEnumConverter(
-                namingPolicy: null,
-                allowIntegerValues: false));
-    });
+builder.Services.AddControllers();
 
-builder.Services.ConfigureHttpJsonOptions(options =>
-{
-    options.SerializerOptions.Converters.Add(
-        new JsonStringEnumConverter(
-            namingPolicy: null,
-            allowIntegerValues: false));
-});
+builder.Services
+    .AddOptions<LegacyFeaturesOptions>()
+    .Bind(builder.Configuration.GetSection(
+        LegacyFeaturesOptions.SectionName));
 
 // Swagger
 builder.Services.AddEndpointsApiExplorer();
 
 builder.Services.AddSwaggerGen(options =>
 {
+    options.OperationFilter<LegacyEndpointOperationFilter>();
+
     var xmlFileName =
         $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
     var xmlFilePath = Path.Combine(
@@ -91,7 +81,6 @@ builder.Services.AddCors(options =>
 builder.Services
     .AddEmailIntegration(builder.Configuration)
     .AddMediaIntegration(builder.Configuration)
-    .AddTelemetryNormalization(builder.Configuration)
     .AddAgriDroneDatabase(builder.Configuration)
     .AddFarmsModule(builder.Configuration)
     .AddFieldTasksModule(builder.Configuration)
@@ -108,7 +97,6 @@ builder.Services
     .AddAccessAuthorization()
     .AddValidationPipeline()
     .AddGlobalExceptionHandling();
-
 
 var app = builder.Build();
 
@@ -131,10 +119,13 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
+app.UseRouting();
+
 app.UseCors("Frontend");
 
 app.UseAuthentication();
 app.UseExecutionContext();
+app.UseMiddleware<LegacyEndpointGateMiddleware>();
 app.UseAuthorization();
 
 app.MapControllers();

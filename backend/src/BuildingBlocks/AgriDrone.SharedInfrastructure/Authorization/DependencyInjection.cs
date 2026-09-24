@@ -28,6 +28,12 @@ public static class DependencyInjection
                     .RequireRole(SystemRoleCodes.SystemAdmin));
 
             authorization.AddPolicy(
+                AccessAuthorizationPolicies.SystemManager,
+                policy => policy
+                    .RequireAuthenticatedUser()
+                    .RequireRole(SystemRoleCodes.SystemManager));
+
+            authorization.AddPolicy(
                 AccessAuthorizationPolicies.TenantMember,
                 policy => policy.RequireTenantAccess(
                     TenantAccessLevel.Member));

@@ -8,6 +8,7 @@ using MediatR;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using AgriDrone.SharedInfrastructure.Http;
+using AgriDrone.Api.Legacy;
 using AgriDrone.SharedInfrastructure.Authorization;
 using Microsoft.AspNetCore.Authorization;
 using AgriDrone.Modules.Farms.Application.Features.CreateFarm;
@@ -109,6 +110,9 @@ namespace AgriDrone.Api.Controllers
         /// </remarks>
         [HttpPost]
         [Authorize(Policy = AccessAuthorizationPolicies.TenantAdmin)]
+        [LegacyEndpoint(
+            "farms.create-direct",
+            "Submit an Existing Tenant New Farm Survey Request and wait for SystemAdmin approval.")]
         public async Task<IResult> CreateFarm(
             [FromBody] CreateFarmRequest request,
             CancellationToken cancellationToken)
@@ -327,6 +331,9 @@ namespace AgriDrone.Api.Controllers
         /// </remarks>
         [HttpPut("{farmId:guid}/members/{userId:guid}/assignment")]
         [Authorize(Policy = AccessAuthorizationPolicies.TenantAdmin)]
+        [LegacyEndpoint(
+            "farm-memberships.assign-or-update",
+            "Farm operational ownership is assigned to one qualified SystemManager by SystemAdmin.")]
         public async Task<IResult> AssignFarmMember(
             [FromRoute] Guid farmId,
             [FromRoute] Guid userId,
@@ -417,6 +424,9 @@ namespace AgriDrone.Api.Controllers
         /// </remarks>
         [HttpDelete("{farmId:guid}/members/{userId:guid}/assignment")]
         [Authorize(Policy = AccessAuthorizationPolicies.TenantAdmin)]
+        [LegacyEndpoint(
+            "farm-memberships.revoke",
+            "Use the future SystemAdmin primary SystemManager reassignment workflow.")]
         public async Task<IResult> RevokeFarmMemberAssignment(
             [FromRoute] Guid farmId,
             [FromRoute] Guid userId,

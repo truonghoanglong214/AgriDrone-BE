@@ -6,7 +6,6 @@ namespace AgriDrone.Modules.Missions.Application
     .Features.Drones.RegisterDrone;
 
 public sealed record RegisterDroneCommand(
-    Guid TenantId,
     string Code,
     string Name,
     string? Model,

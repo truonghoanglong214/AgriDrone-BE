@@ -11,6 +11,7 @@ using AgriDrone.Modules.Identity.Application.PasswordReset.EmailDelivery;
 using AgriDrone.Modules.Identity.Domain.FarmMemberships;
 using AgriDrone.Modules.Identity.Domain.PasswordResetTokens;
 using AgriDrone.Modules.Identity.Domain.Roles;
+using AgriDrone.Modules.Identity.Domain.SystemManagers;
 using AgriDrone.Modules.Identity.Domain.TenantInvitations;
 using AgriDrone.Modules.Identity.Domain.Tenants;
 using AgriDrone.Modules.Identity.Domain.Users;
@@ -88,6 +89,9 @@ public static class DependencyInjection
                 connectionString,
                 npgsql => npgsql
                     .MapEnum<UserStatus>("user_status", "system", translator)
+                    .MapEnum<SystemManagerProfileStatus>("system_manager_profile_status", "system", translator)
+                    .MapEnum<SystemManagerAvailabilityStatus>("system_manager_availability_status", "system", translator)
+                    .MapEnum<FlightQualificationStatus>("flight_qualification_status", "system", translator)
                     .MapEnum<FarmMemberRole>("farm_member_role", "system", translator)
                     .MapEnum<FarmAccessScope>("farm_access_scope", "system", translator)
                     .MapEnum<TenantMemberRole>("tenant_member_role", "system", translator)
@@ -104,6 +108,9 @@ public static class DependencyInjection
         services.AddScoped<IFarmMembershipQueries, FarmMembershipQueries>();
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IRoleRepository, RoleRepository>();
+        services.AddScoped<ISystemManagerProfileRepository, SystemManagerProfileRepository>();
+        services.AddScoped<IFarmManagerAssignmentRepository, FarmManagerAssignmentRepository>();
+        services.AddScoped<ISystemManagerAccessService, SystemManagerAccessService>();
         services.AddScoped<ISystemAdminBootstrapLock, SystemAdminBootstrapLock>();
         services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
         services.AddScoped<ITenantSelectionTokenService, TenantSelectionTokenService>();

@@ -4,6 +4,7 @@ using AgriDrone.Modules.Harvests.Application.Features.RetireHarvestQualityGrade;
 using AgriDrone.Modules.Harvests.Application.Features.VersionHarvestQualityGrade;
 using AgriDrone.SharedInfrastructure.Authorization;
 using AgriDrone.SharedInfrastructure.Http;
+using AgriDrone.Api.Legacy;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -18,6 +19,9 @@ namespace AgriDrone.Api.Controllers
         ISender sender) : ControllerBase
     {
         [HttpPost]
+        [LegacyEndpoint(
+            "harvest-quality-grades.create",
+            "Harvest quality grading is outside scope; configure Harvest Readiness criteria in the future Survey workflow.")]
         public async Task<IResult> Create(
             [FromBody] CreateHarvestQualityGradeRequest request,
             CancellationToken cancellationToken)
@@ -38,6 +42,9 @@ namespace AgriDrone.Api.Controllers
 
         /// <summary>Tạo version tiếp theo từ một quality grade đang active.</summary>
         [HttpPost("{gradeId:guid}/versions")]
+        [LegacyEndpoint(
+            "harvest-quality-grades.version",
+            "Harvest quality grading is outside scope; existing records remain read-only history.")]
         public async Task<IResult> CreateVersion(
             [FromRoute] Guid gradeId,
             [FromBody] VersionHarvestQualityGradeRequest request,
@@ -60,6 +67,9 @@ namespace AgriDrone.Api.Controllers
 
         /// <summary>Ngừng sử dụng một quality grade đang active.</summary>
         [HttpPut("{gradeId:guid}/retire")]
+        [LegacyEndpoint(
+            "harvest-quality-grades.retire",
+            "Harvest quality grading is outside scope; existing records remain read-only history.")]
         public async Task<IResult> Retire(
             [FromRoute] Guid gradeId,
             [FromBody] RetireHarvestQualityGradeRequest request,

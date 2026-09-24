@@ -5,7 +5,13 @@ using Microsoft.EntityFrameworkCore;
 
 namespace AgriDrone.Modules.Farms.Infrastructure.Queries;
 
-internal sealed class FarmArchiveDependencyQuery(
+/// <summary>
+/// Phase-1 compatibility adapter. It only reads legacy Mission, Plant and
+/// FieldTask references needed to protect archive operations. It deliberately
+/// exposes no command/repository dependency and never creates FieldTask or
+/// Harvest data.
+/// </summary>
+internal sealed class LegacyReadOnlyFarmArchiveDependencyQuery(
     FarmsDbContext dbContext,
     IMissionArchiveReferenceQuery missionReferenceQuery,
     IFieldTaskArchiveReferenceQuery fieldTaskReferenceQuery,

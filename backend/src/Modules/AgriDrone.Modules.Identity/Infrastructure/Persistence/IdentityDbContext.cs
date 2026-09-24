@@ -1,9 +1,11 @@
 using AgriDrone.Modules.Identity.Application.Invitations.Creation;
 using AgriDrone.Modules.Identity.Application.Features.AssignFarmMember;
+using AgriDrone.Modules.Identity.Application.Features.SystemManagers;
 using AgriDrone.Modules.Identity.Application.Abstractions.Persistence;
 using AgriDrone.Modules.Identity.Domain.FarmMemberships;
 using AgriDrone.Modules.Identity.Domain.PasswordResetTokens;
 using AgriDrone.Modules.Identity.Domain.Roles;
+using AgriDrone.Modules.Identity.Domain.SystemManagers;
 using AgriDrone.Modules.Identity.Domain.TenantInvitations;
 using AgriDrone.Modules.Identity.Domain.Tenants;
 using AgriDrone.Modules.Identity.Domain.Users;
@@ -29,6 +31,8 @@ internal sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> opti
         "uq_tenant_memberships_active_owner";
     private const string FarmMembershipConstraint =
         "uq_farm_memberships_farm_user";
+    private const string ActiveFarmManagerAssignmentConstraint =
+        "uq_farm_manager_assignments_active_farm";
 
     public DbSet<User> Users => Set<User>();
 
@@ -47,6 +51,12 @@ internal sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> opti
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
 
     public DbSet<ZoneAssignment> ZoneAssignments => Set<ZoneAssignment>();
+
+    public DbSet<SystemManagerProfile> SystemManagerProfiles =>
+        Set<SystemManagerProfile>();
+
+    public DbSet<FarmManagerAssignment> FarmManagerAssignments =>
+        Set<FarmManagerAssignment>();
     
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 
@@ -111,6 +121,15 @@ internal sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> opti
             })
         {
             throw new FarmMembershipAssignmentConflictException(exception);
+        }
+        catch (DbUpdateException exception)
+            when (exception.InnerException is PostgresException
+            {
+                SqlState: PostgresErrorCodes.UniqueViolation,
+                ConstraintName: ActiveFarmManagerAssignmentConstraint
+            })
+        {
+            throw new ActiveFarmManagerAssignmentConflictException(exception);
         }
     }
 

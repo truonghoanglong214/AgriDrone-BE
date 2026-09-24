@@ -23,5 +23,8 @@ public sealed class SystemRolesTests
         Assert.Contains(
             roles,
             role => role.Code == SystemRoles.SystemAdmin);
+        Assert.Contains(
+            roles,
+            role => role.Code == SystemRoles.SystemManager);
     }
 }

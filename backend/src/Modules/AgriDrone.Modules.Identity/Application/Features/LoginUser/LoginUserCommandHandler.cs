@@ -32,7 +32,8 @@ namespace AgriDrone.Modules.Identity.Application.Features.LoginUser
                 user.Id,
                 cancellationToken);
 
-            if (systemRoles.Contains(SystemRoles.SystemAdmin))
+            if (systemRoles.Contains(SystemRoles.SystemAdmin) ||
+                systemRoles.Contains(SystemRoles.SystemManager))
             {
                 var systemSession = AuthenticationSessionFactory.CreateSystemSession(
                     jwtTokenGenerator,

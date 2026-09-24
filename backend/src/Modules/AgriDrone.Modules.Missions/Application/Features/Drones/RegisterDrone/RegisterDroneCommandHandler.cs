@@ -23,11 +23,11 @@ internal sealed class RegisterDroneCommandHandler(
         Result<RegisterDroneResponse>>
 {
     private const string DroneCodeConstraint =
-        "uq_drones_tenant_code";
+        "uq_drones_code";
     private const string DroneSerialNumberConstraint =
-        "uq_drones_tenant_serial_number";
+        "uq_drones_serial_number";
     private const string DroneRegistrationNumberConstraint =
-        "uq_drones_tenant_registration_number";
+        "uq_drones_registration_number";
 
     public async Task<Result<RegisterDroneResponse>> Handle(
         RegisterDroneCommand request,
@@ -43,7 +43,6 @@ internal sealed class RegisterDroneCommandHandler(
             request.Code.Trim().ToUpperInvariant();
 
         if (await droneRepository.CodeExistsAsync(
-                request.TenantId,
                 normalizedCode,
                 cancellationToken))
         {
@@ -56,7 +55,6 @@ internal sealed class RegisterDroneCommandHandler(
 
         if (normalizedSerial is not null &&
             await droneRepository.SerialNumberExistsAsync(
-                request.TenantId,
                 normalizedSerial,
                 cancellationToken))
         {
@@ -70,7 +68,6 @@ internal sealed class RegisterDroneCommandHandler(
 
         if (normalizedRegistration is not null &&
             await droneRepository.RegistrationNumberExistsAsync(
-                request.TenantId,
                 normalizedRegistration,
                 cancellationToken))
         {
@@ -82,7 +79,6 @@ internal sealed class RegisterDroneCommandHandler(
         var now = timeProvider.GetUtcNow();
 
         var drone = Drone.Create(
-            request.TenantId,
             request.Code,
             request.Name,
             request.Model,
@@ -104,18 +100,16 @@ internal sealed class RegisterDroneCommandHandler(
                 drone.Name
             });
 
-                auditWriter.AddUserAction(
-                    sink: unitOfWork,
-                    tenantId: drone.TenantId,
-                    farmId: null,
-                    actorId: userId,
-                    correlationId: executionContext.CorrelationId,
-                    entityType: nameof(Drone),
-                    entityId: drone.Id,
-                    action: "REGISTER",
-                    oldData: null,
-                    newData: newData,
-                    createdAt: now);
+        auditWriter.AddSystemAdminAction(
+            sink: unitOfWork,
+            actorId: userId,
+            correlationId: executionContext.CorrelationId,
+            entityType: nameof(Drone),
+            entityId: drone.Id,
+            action: "REGISTER",
+            oldData: null,
+            newData: newData,
+            createdAt: now);
 
         try
         {
@@ -153,7 +147,6 @@ internal sealed class RegisterDroneCommandHandler(
     {
         return new RegisterDroneResponse(
             drone.Id,
-            drone.TenantId,
             drone.Code,
             drone.Name,
             drone.Model,

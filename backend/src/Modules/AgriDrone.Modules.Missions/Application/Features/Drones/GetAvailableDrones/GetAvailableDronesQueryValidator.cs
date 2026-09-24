@@ -8,6 +8,9 @@ internal sealed class GetAvailableDronesQueryValidator
 {
     public GetAvailableDronesQueryValidator()
     {
+        RuleFor(query => query.FarmId)
+            .NotEmpty();
+
         RuleFor(query => query.StartAt)
             .NotEqual(default(DateTimeOffset));
 

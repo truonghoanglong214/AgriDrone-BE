@@ -123,7 +123,6 @@ public sealed class DroneMissionConfiguration : IEntityTypeConfiguration<DroneMi
             .HasColumnType("timestamp with time zone");
         builder.HasIndex(mission => new
         {
-            mission.TenantId,
             mission.DroneId,
             mission.ScheduledAt,
             mission.ScheduledEndAt
@@ -279,9 +278,8 @@ public sealed class DroneMissionConfiguration : IEntityTypeConfiguration<DroneMi
 
         builder.HasOne(mission => mission.Drone)
             .WithMany()
-            .HasForeignKey(mission => new { mission.DroneId, mission.TenantId })
-            .HasPrincipalKey(drone => new { drone.Id, drone.TenantId })
+            .HasForeignKey(mission => mission.DroneId)
             .OnDelete(DeleteBehavior.Restrict)
-            .HasConstraintName("fk_drone_missions_drones_same_tenant");
+            .HasConstraintName("fk_drone_missions_drones_drone_id");
     }
 }

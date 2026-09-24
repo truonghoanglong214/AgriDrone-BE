@@ -1,7 +1,7 @@
 ﻿using AgriDrone.Modules.Missions.Application.Abstractions;
 using AgriDrone.Modules.Missions.Application.Errors;
 using AgriDrone.SharedKernel.Application;
-using AgriDrone.SharedKernel.Application.Abstractions.Execution;
+using AgriDrone.SharedKernel.Application.Abstractions.Authorization;
 using MediatR;
 
 namespace AgriDrone.Modules.Missions.Application
@@ -9,7 +9,7 @@ namespace AgriDrone.Modules.Missions.Application
 
 internal sealed class GetAvailableDronesQueryHandler(
     IDroneQueries droneQueries,
-    IExecutionContext executionContext)
+    ISystemManagerAccessService managerAccessService)
     : IRequestHandler<
         GetAvailableDronesQuery,
         Result<IReadOnlyList<AvailableDroneResponse>>>
@@ -19,15 +19,17 @@ internal sealed class GetAvailableDronesQueryHandler(
         GetAvailableDronesQuery request,
         CancellationToken cancellationToken)
     {
-        if (executionContext.TenantId is not Guid tenantId)
+        var access = await managerAccessService.ResolveFarmAccessAsync(
+            request.FarmId,
+            cancellationToken);
+        if (!access.IsAllowed)
         {
             return Result.Failure<
                 IReadOnlyList<AvailableDroneResponse>>(
-                DroneError.CurrentTenantRequired());
+                DroneError.FarmAccessDenied(request.FarmId));
         }
 
         var drones = await droneQueries.GetAvailableAsync(
-            tenantId,
             request.StartAt,
             request.EndAt,
             cancellationToken);

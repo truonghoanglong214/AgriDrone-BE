@@ -65,6 +65,7 @@ public sealed class MappingIntegrationContractTests
     }
 
     [Fact]
+    [Trait("Category", "BePlanPhase0Characterization")]
     public void ZoneMapPublishedRoundTripsThroughProductionSerializer()
     {
         using var provider = CreateServiceProvider();

@@ -4,6 +4,8 @@ public static class AccessAuthorizationPolicies
 {
     public const string SystemAdmin = "Access.SystemAdmin";
 
+    public const string SystemManager = "Access.SystemManager";
+
     public const string TenantMember = "Access.TenantMember";
 
     public const string TenantAdmin = "Access.TenantAdmin";
