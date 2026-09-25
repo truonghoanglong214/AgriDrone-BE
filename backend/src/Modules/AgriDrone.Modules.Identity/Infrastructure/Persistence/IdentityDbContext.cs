@@ -1,10 +1,11 @@
-using AgriDrone.Modules.Identity.Application.Invitations.Creation;
+using AgriDrone.Modules.Identity.Application.Abstractions.Persistence;
 using AgriDrone.Modules.Identity.Application.Features.AssignFarmMember;
 using AgriDrone.Modules.Identity.Application.Features.SystemManagers;
-using AgriDrone.Modules.Identity.Application.Abstractions.Persistence;
+using AgriDrone.Modules.Identity.Application.Invitations.Creation;
 using AgriDrone.Modules.Identity.Domain.FarmMemberships;
 using AgriDrone.Modules.Identity.Domain.PasswordResetTokens;
 using AgriDrone.Modules.Identity.Domain.Roles;
+using AgriDrone.Modules.Identity.Domain.SystemManagerInvitations;
 using AgriDrone.Modules.Identity.Domain.SystemManagers;
 using AgriDrone.Modules.Identity.Domain.TenantInvitations;
 using AgriDrone.Modules.Identity.Domain.Tenants;
@@ -66,6 +67,9 @@ internal sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> opti
 
     public DbSet<InitializationLock> InitializationLocks =>
         Set<InitializationLock>();
+
+    public DbSet<SystemManagerInvitation> SystemManagerInvitations =>
+        Set<SystemManagerInvitation>();
 
     public async Task<T> ExecuteInTransactionAsync<T>(Func<CancellationToken, Task<T>> operation, CancellationToken cancellationToken = default)
     {

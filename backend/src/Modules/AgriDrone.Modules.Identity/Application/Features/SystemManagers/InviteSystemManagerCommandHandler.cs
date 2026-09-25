@@ -1,15 +1,11 @@
-using System.Security.Cryptography;
-using System.Text.Json;
 using AgriDrone.Modules.Identity.Application.Abstractions.Persistence;
 using AgriDrone.Modules.Identity.Application.Abstractions.Services;
 using AgriDrone.Modules.Identity.Application.Errors;
 using AgriDrone.Modules.Identity.Application.Features.SystemManagers.EmailDelivery;
 using AgriDrone.Modules.Identity.Application.Options;
-using AgriDrone.Modules.Identity.Domain.PasswordResetTokens;
-using AgriDrone.Modules.Identity.Domain.Roles;
+using AgriDrone.Modules.Identity.Domain.SystemManagerInvitations;
 using AgriDrone.Modules.Identity.Domain.SystemManagers;
 using AgriDrone.Modules.Identity.Domain.Users;
-using AgriDrone.SharedInfrastructure.Auditing;
 using AgriDrone.SharedInfrastructure.Persistence;
 using AgriDrone.SharedKernel.Application;
 using AgriDrone.SharedKernel.Application.Abstractions.Execution;
@@ -22,16 +18,12 @@ namespace AgriDrone.Modules.Identity.Application.Features.SystemManagers;
 
 internal sealed partial class InviteSystemManagerCommandHandler(
     IUserRepository userRepository,
-    IRoleRepository roleRepository,
     ISystemManagerProfileRepository profileRepository,
-    IPasswordService passwordService,
-    IPasswordResetTokenService tokenService,
-    IPasswordResetTokenRepository tokenRepository,
+    ISystemManagerInvitationRepository invitationRepository,
+    IInvitationTokenService invitationTokenService,
     ISystemManagerInvitationEmailDelivery emailDelivery,
-    IOptions<PasswordResetOptions> passwordResetOptions,
+    IOptions<SystemManagerInvitationOptions> invitationOptions,
     IIdentityUnitOfWork unitOfWork,
-    IAuditWriter auditWriter,
-    IAuditLogSink auditLogSink,
     IExecutionContext executionContext,
     TimeProvider timeProvider,
     ILogger<InviteSystemManagerCommandHandler> logger)
@@ -39,9 +31,11 @@ internal sealed partial class InviteSystemManagerCommandHandler(
         InviteSystemManagerCommand,
         Result<InviteSystemManagerResponse>>
 {
-    private const string UserEmailUniqueConstraint = "uq_users_email";
+    private const string PendingInvitationConstraint =
+        "uq_system_manager_invitations_pending_email";
 
-    private readonly PasswordResetOptions _options = passwordResetOptions.Value;
+    private readonly SystemManagerInvitationOptions _options =
+        invitationOptions.Value;
 
     public async Task<Result<InviteSystemManagerResponse>> Handle(
         InviteSystemManagerCommand request,
@@ -54,6 +48,7 @@ internal sealed partial class InviteSystemManagerCommandHandler(
         }
 
         var email = request.Email.Trim().ToLowerInvariant();
+
         Result<InvitationCreation> creationResult;
 
         try
@@ -66,10 +61,11 @@ internal sealed partial class InviteSystemManagerCommandHandler(
                 cancellationToken);
         }
         catch (DbUpdateException exception)
-            when (exception.IsUniqueConstraintViolation(UserEmailUniqueConstraint))
+            when (exception.IsUniqueConstraintViolation(
+                PendingInvitationConstraint))
         {
             return Result.Failure<InviteSystemManagerResponse>(
-                UserError.EmailAlreadyExists(email));
+                SystemManagerInvitationError.AlreadyPending());
         }
 
         if (creationResult.IsFailure)
@@ -84,7 +80,7 @@ internal sealed partial class InviteSystemManagerCommandHandler(
         try
         {
             await emailDelivery.DeliverAsync(
-                creation.Email,
+                creation.Response.Email,
                 creation.PlainTextToken,
                 creation.Response.ExpiresAt,
                 cancellationToken);
@@ -93,10 +89,11 @@ internal sealed partial class InviteSystemManagerCommandHandler(
             when (exception is not OperationCanceledException)
         {
             emailSent = false;
+
             LogInvitationEmailFailure(
                 logger,
-                creation.Response.UserId,
-                creation.Email,
+                creation.Response.InvitationId,
+                creation.Response.Email,
                 exception);
         }
 
@@ -109,104 +106,85 @@ internal sealed partial class InviteSystemManagerCommandHandler(
         string email,
         CancellationToken cancellationToken)
     {
-        var existingUser = await userRepository.GetByEmailIncludingDeletedAsync(
+        var existingUser =
+            await userRepository.GetByEmailIncludingDeletedAsync(
             email,
             cancellationToken);
 
         if (existingUser is not null)
         {
-            return Result.Failure<InvitationCreation>(
-                UserError.EmailAlreadyExists(email));
-        }
+            if (existingUser.DeletedAt is not null ||
+                existingUser.Status != UserStatus.Active)
+            {
+                return Result.Failure<InvitationCreation>(
+                    SystemManagerInvitationError.UserInactive());
+            }
 
-        var systemManagerRole = await roleRepository.GetByCodeAsync(
-            SystemRoles.SystemManager,
-            cancellationToken);
+            var existingProfile =
+                await profileRepository.GetByUserIdAsync(
+                    existingUser.Id,
+                    cancellationToken);
 
-        if (systemManagerRole is null)
-        {
-            return Result.Failure<InvitationCreation>(
-                SystemManagerError.RoleMissing());
+            if (existingProfile is not null)
+            {
+                return Result.Failure<InvitationCreation>(
+                    SystemManagerInvitationError.AlreadySystemManager());
+            }
         }
 
         var now = timeProvider.GetUtcNow();
-        var expiresAt = now.AddMinutes(_options.ExpirationMinutes);
-        var randomPassword = Convert.ToHexString(
-            RandomNumberGenerator.GetBytes(64));
 
-        var user = User.Create(
-            email,
-            passwordService.HashPassword(randomPassword),
-            email,
-            phone: null,
-            UserStatus.Active,
-            now);
+        var pendingInvitation =
+            await invitationRepository.GetPendingByEmailAsync(
+                email,
+                cancellationToken);
 
-        user.AssignSystemRole(systemManagerRole.Id, now);
-
-        var profile = SystemManagerProfile.Create(user.Id, now);
-        var generatedToken = tokenService.Generate();
-        var passwordToken = PasswordResetToken.Create(
-            user.Id,
-            generatedToken.TokenHash,
-            expiresAt,
-            now);
-
-        userRepository.Add(user);
-        profileRepository.Add(profile);
-        tokenRepository.Add(passwordToken);
-
-        using var newData = JsonSerializer.SerializeToDocument(new
+        if (pendingInvitation is not null)
         {
-            UserId = user.Id,
-            user.Email,
-            ProfileId = profile.Id,
-            Role = SystemRoles.SystemManager,
-            ProfileStatus = profile.Status.ToString(),
-            Availability = profile.Availability.ToString(),
-            QualificationStatus = profile.QualificationStatus.ToString(),
-            InvitationExpiresAt = expiresAt
-        });
+            if (pendingInvitation.CanBeAccepted(now))
+            {
+                return Result.Failure<InvitationCreation>(
+                    SystemManagerInvitationError.AlreadyPending());
+            }
 
-        auditWriter.AddSystemAdminAction(
-            auditLogSink,
+            pendingInvitation.MarkExpired(now);
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+
+        var generatedToken = invitationTokenService.Generate();
+        var expiresAt = now.AddHours(_options.ExpirationHours);
+
+        var invitation = SystemManagerInvitation.Create(
+            email,
+            generatedToken.TokenHash,
             actorId,
-            executionContext.CorrelationId,
-            "SystemManagerProfile",
-            profile.Id,
-            "INVITE",
-            oldData: null,
-            newData,
+            expiresAt,
             now);
 
+        invitationRepository.Add(invitation);
         await unitOfWork.SaveChangesAsync(cancellationToken);
-
-        var response = new InviteSystemManagerResponse(
-            user.Id,
-            profile.Id,
-            user.Email,
-            expiresAt,
-            EmailSent: false);
 
         return Result.Success(
             new InvitationCreation(
-                response,
-                user.Email,
+                new InviteSystemManagerResponse(
+                    invitation.Id,
+                    invitation.Email,
+                    invitation.ExpiresAt,
+                    EmailSent: false),
                 generatedToken.PlainTextToken));
     }
 
     private sealed record InvitationCreation(
         InviteSystemManagerResponse Response,
-        string Email,
         string PlainTextToken);
 
     [LoggerMessage(
         EventId = 1,
         Level = LogLevel.Error,
-        Message = "SystemManager account {UserId} was created, but the invitation email to {Email} failed.")]
+        Message = "System Manager invitation {InvitationId} email to {Email} failed.")]
     private static partial void LogInvitationEmailFailure(
         ILogger logger,
-        Guid userId,
+        Guid invitationId,
         string email,
         Exception exception);
 }

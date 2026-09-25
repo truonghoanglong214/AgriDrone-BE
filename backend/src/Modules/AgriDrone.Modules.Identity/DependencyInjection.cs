@@ -12,6 +12,7 @@ using AgriDrone.Modules.Identity.Application.PasswordReset.EmailDelivery;
 using AgriDrone.Modules.Identity.Domain.FarmMemberships;
 using AgriDrone.Modules.Identity.Domain.PasswordResetTokens;
 using AgriDrone.Modules.Identity.Domain.Roles;
+using AgriDrone.Modules.Identity.Domain.SystemManagerInvitations;
 using AgriDrone.Modules.Identity.Domain.SystemManagers;
 using AgriDrone.Modules.Identity.Domain.TenantInvitations;
 using AgriDrone.Modules.Identity.Domain.Tenants;
@@ -69,6 +70,12 @@ public static class DependencyInjection
             .Bind(configuration.GetSection(SystemAdminBootstrapOptions.SectionName))
             .ValidateOnStart();
 
+        services
+            .AddOptions<SystemManagerInvitationOptions>()
+            .Bind(configuration.GetSection(
+                SystemManagerInvitationOptions.SectionName))
+            .ValidateOnStart();
+
         services.AddSingleton<
             IValidateOptions<SystemAdminBootstrapOptions>,
             SystemAdminBootstrapOptionsValidator>();
@@ -84,6 +91,10 @@ public static class DependencyInjection
         services.AddSingleton<
             IValidateOptions<PasswordResetOptions>,
             PasswordResetOptionsValidator>();
+
+        services.AddSingleton<
+            IValidateOptions<SystemManagerInvitationOptions>,
+            SystemManagerInvitationOptionsValidator>();
 
         services.AddDbContext<IdentityDbContext>(options =>
             options.UseNpgsql(
@@ -132,7 +143,9 @@ public static class DependencyInjection
         services.AddIntegrationConsumer<TenantInvitationEmailRequestedProcessor>(IntegrationConsumerNames.EmailTenantInvitationV1);
         services.AddScoped<ISystemManagerInvitationEmailDelivery, SystemManagerInvitationEmailDelivery>();
         var assembly = typeof(DependencyInjection).Assembly;
-
+        services.AddScoped<
+            ISystemManagerInvitationRepository,
+            SystemManagerInvitationRepository>();
         services.AddMediatR(mediatR =>
             mediatR.RegisterServicesFromAssembly(assembly));
         services.AddValidatorsFromAssembly(

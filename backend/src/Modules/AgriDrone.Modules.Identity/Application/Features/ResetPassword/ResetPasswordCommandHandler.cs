@@ -20,7 +20,8 @@ internal sealed class ResetPasswordCommandHandler(
         ResetPasswordCommand request,
         CancellationToken cancellationToken)
     {
-        var tokenHash = passwordResetTokenService.Hash(request.Token);
+        var normalizedToken = request.Token.Trim();
+        var tokenHash = passwordResetTokenService.Hash(normalizedToken);
 
         return unitOfWork.ExecuteInTransactionAsync(
             transactionCancellationToken => ResetAsync(
