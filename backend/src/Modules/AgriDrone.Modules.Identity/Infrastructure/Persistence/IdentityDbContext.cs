@@ -1,5 +1,4 @@
 using AgriDrone.Modules.Identity.Application.Abstractions.Persistence;
-using AgriDrone.Modules.Identity.Application.Features.AssignFarmMember;
 using AgriDrone.Modules.Identity.Application.Features.SystemManagers;
 using AgriDrone.Modules.Identity.Application.Invitations.Creation;
 using AgriDrone.Modules.Identity.Domain.FarmMemberships;
@@ -30,8 +29,6 @@ internal sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> opti
         "uq_tenant_invitations_pending_owner_provisioning";
     private const string ActiveTenantOwnerConstraint =
         "uq_tenant_memberships_active_owner";
-    private const string FarmMembershipConstraint =
-        "uq_farm_memberships_farm_user";
     private const string ActiveFarmManagerAssignmentConstraint =
         "uq_farm_manager_assignments_active_farm";
 
@@ -116,15 +113,6 @@ internal sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> opti
             })
         {
             throw new ActiveTenantOwnerConflictException(exception);
-        }
-        catch (DbUpdateException exception)
-            when (exception.InnerException is PostgresException
-            {
-                SqlState: PostgresErrorCodes.UniqueViolation,
-                ConstraintName: FarmMembershipConstraint
-            })
-        {
-            throw new FarmMembershipAssignmentConflictException(exception);
         }
         catch (DbUpdateException exception)
             when (exception.InnerException is PostgresException

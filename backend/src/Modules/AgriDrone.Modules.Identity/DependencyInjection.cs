@@ -9,6 +9,7 @@ using AgriDrone.Modules.Identity.Application.Invitations.Creation;
 using AgriDrone.Modules.Identity.Application.Invitations.EmailDelivery;
 using AgriDrone.Modules.Identity.Application.Options;
 using AgriDrone.Modules.Identity.Application.PasswordReset.EmailDelivery;
+using AgriDrone.Modules.Identity.Application.Provisioning;
 using AgriDrone.Modules.Identity.Domain.FarmMemberships;
 using AgriDrone.Modules.Identity.Domain.PasswordResetTokens;
 using AgriDrone.Modules.Identity.Domain.Roles;
@@ -56,11 +57,6 @@ public static class DependencyInjection
             .ValidateOnStart();
 
         services
-            .AddOptions<TenantRegistrationOptions>()
-            .Bind(configuration.GetSection(TenantRegistrationOptions.SectionName))
-            .ValidateOnStart();
-
-        services
             .AddOptions<PasswordResetOptions>()
             .Bind(configuration.GetSection(PasswordResetOptions.SectionName))
             .ValidateOnStart();
@@ -83,10 +79,6 @@ public static class DependencyInjection
         services.AddSingleton<
             IValidateOptions<TenantInvitationOptions>,
             TenantInvitationOptionsValidator>();
-
-        services.AddSingleton<
-            IValidateOptions<TenantRegistrationOptions>,
-            TenantRegistrationOptionsValidator>();
 
         services.AddSingleton<
             IValidateOptions<PasswordResetOptions>,
@@ -117,7 +109,6 @@ public static class DependencyInjection
         services.AddScoped<IUserQueries, UserQueries>();
         services.AddScoped<ITenantQueries, TenantQueries>();
         services.AddScoped<ITenantMembershipQueries, TenantMembershipQueries>();
-        services.AddScoped<IFarmMembershipQueries, FarmMembershipQueries>();
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IRoleRepository, RoleRepository>();
         services.AddScoped<ISystemManagerProfileRepository, SystemManagerProfileRepository>();
@@ -130,11 +121,12 @@ public static class DependencyInjection
         services.AddScoped<IPasswordService, PasswordService>();
         services.AddScoped<ITenantRepository, TenantRepository>();
         services.AddScoped<ITenantMembershipRepository, TenantMembershipRepository>();
-        services.AddScoped<IFarmMembershipRepository, FarmMembershipRepository>();
         services.AddScoped<ITenantInvitationRepository, TenantInvitationRepository>();
         services.AddScoped<IPasswordResetTokenRepository, PasswordResetTokenRepository>();
         services.AddScoped<IPasswordResetEmailDelivery, PasswordResetEmailDelivery>();
         services.AddScoped<ITenantInvitationService, TenantInvitationService>();
+        services.AddScoped<ITenantProvisioningPort, TenantProvisioningPort>();
+        services.AddScoped<ITenantOwnerInvitationPort, TenantOwnerInvitationPort>();
         services.AddScoped<ITenantInvitationEmailDelivery, TenantInvitationEmailDelivery>();
         services.AddScoped<IIntegrationMessageHandler<TenantInvitationEmailRequestedV1>, TenantInvitationEmailRequestedHandler>();
         services.AddScoped<IIdentityIntegrationOutbox, IdentityIntegrationOutbox>();

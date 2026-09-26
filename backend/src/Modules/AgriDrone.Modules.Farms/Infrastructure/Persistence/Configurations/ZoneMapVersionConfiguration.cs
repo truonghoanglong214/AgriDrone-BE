@@ -64,6 +64,10 @@ public sealed class ZoneMapVersionConfiguration : IEntityTypeConfiguration<ZoneM
             .HasColumnName("zone_id")
             .HasColumnType("uuid");
 
+        builder.Property(mapVersion => mapVersion.FarmBaseMapVersionId)
+            .HasColumnName("farm_base_map_version_id")
+            .HasColumnType("uuid");
+
         builder.Property(mapVersion => mapVersion.SourceMissionId)
             .HasColumnName("source_mission_id")
             .HasColumnType("uuid");
@@ -135,6 +139,9 @@ public sealed class ZoneMapVersionConfiguration : IEntityTypeConfiguration<ZoneM
         builder.HasIndex(mapVersion => mapVersion.SourceMissionId)
             .HasDatabaseName("ix_zone_map_versions_source_mission");
 
+        builder.HasIndex(mapVersion => mapVersion.FarmBaseMapVersionId)
+            .HasDatabaseName("ix_zone_map_versions_farm_base_map");
+
         builder.HasIndex(mapVersion => mapVersion.SourceApprovalId)
             .HasDatabaseName("ux_zone_map_versions_source_approval")
             .HasFilter("source_approval_id IS NOT NULL")
@@ -146,5 +153,16 @@ public sealed class ZoneMapVersionConfiguration : IEntityTypeConfiguration<ZoneM
             .HasPrincipalKey(zone => new { zone.Id, zone.FarmId })
             .OnDelete(DeleteBehavior.Cascade)
             .HasConstraintName("fk_zone_map_versions_zones_same_farm");
+
+        builder.HasOne(mapVersion => mapVersion.FarmBaseMapVersion)
+            .WithMany(map => map.ZoneMapVersions)
+            .HasForeignKey(mapVersion => new
+            {
+                mapVersion.FarmBaseMapVersionId,
+                mapVersion.FarmId
+            })
+            .HasPrincipalKey(map => new { map.Id, map.FarmId })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_zone_map_versions_farm_base_map_same_farm");
     }
 }

@@ -100,6 +100,9 @@ public static class DependencyInjection
                         DbSchemas.System,
                         translator)));
 
+        services.AddScoped<IMappingPublicationUnitOfWork>(serviceProvider =>
+            serviceProvider.GetRequiredService<MappingPublicationDbContext>());
+
         services.AddScoped<
             IIntegrationMessageHandler<MappingCandidatesApprovedV1>,
             MappingCandidatesApprovedHandler>();

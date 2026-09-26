@@ -17,22 +17,11 @@ public sealed class LegacyEndpointSafetyTests
 {
     public static TheoryData<Type, string> DisabledMutationEndpoints => new()
     {
-        { typeof(AuthController), nameof(AuthController.Register) },
-        { typeof(TenantInvitationController), nameof(TenantInvitationController.InviteTenantAdmin) },
-        { typeof(TenantInvitationController), nameof(TenantInvitationController.InviteTenantMember) },
-        { typeof(TenantMembershipController), nameof(TenantMembershipController.UpdateRole) },
-        { typeof(TenantMembershipController), nameof(TenantMembershipController.UpdateStatus) },
         { typeof(TenantOwnershipController), nameof(TenantOwnershipController.TransferOwnership) },
         { typeof(FarmController), nameof(FarmController.CreateFarm) },
-        { typeof(FarmController), nameof(FarmController.AssignFarmMember) },
-        { typeof(FarmController), nameof(FarmController.RevokeFarmMemberAssignment) },
         { typeof(MissionsController), nameof(MissionsController.CreateMission) },
         { typeof(MissionsController), nameof(MissionsController.ScheduleMission) },
-        { typeof(MissionsController), nameof(MissionsController.TransitionMission) },
-        { typeof(HarvestCatalogController), nameof(HarvestCatalogController.GetHarvestQualityGrades) },
-        { typeof(SystemHarvestQualityGradeController), nameof(SystemHarvestQualityGradeController.Create) },
-        { typeof(SystemHarvestQualityGradeController), nameof(SystemHarvestQualityGradeController.CreateVersion) },
-        { typeof(SystemHarvestQualityGradeController), nameof(SystemHarvestQualityGradeController.Retire) }
+        { typeof(MissionsController), nameof(MissionsController.TransitionMission) }
     };
 
     public static TheoryData<Type, string> RetainedEndpoints => new()
@@ -92,7 +81,7 @@ public sealed class LegacyEndpointSafetyTests
             .Select(attribute => attribute.RouteName)
             .ToArray();
 
-        Assert.Equal(16, routeNames.Length);
+        Assert.Equal(6, routeNames.Length);
         Assert.Equal(routeNames.Length, routeNames.Distinct().Count());
         Assert.All(routeNames, route => Assert.DoesNotContain('{', route));
     }
@@ -228,27 +217,23 @@ public sealed class LegacyEndpointSafetyTests
     }
 
     [Fact]
-    public void AnyFutureFieldTaskControllerWriteMustBeLegacyGated()
+    public void OutOfScopeApiAndApplicationTypesAreAbsent()
     {
-        var violations = typeof(AuthController).Assembly
+        var apiTypeNames = typeof(AuthController).Assembly
             .GetTypes()
-            .Where(type => type.Name.Contains(
-                "FieldTask",
-                StringComparison.Ordinal))
-            .SelectMany(type => type.GetMethods())
-            .Where(method => method.GetCustomAttributes(inherit: true)
-                .Any(attribute => attribute.GetType().Name is
-                    "HttpPostAttribute" or
-                    "HttpPutAttribute" or
-                    "HttpPatchAttribute" or
-                    "HttpDeleteAttribute"))
-            .Where(method => method.GetCustomAttributes(
-                    typeof(LegacyEndpointAttribute),
-                    inherit: true)
-                .Length == 0)
-            .ToArray();
+            .Select(type => type.Name)
+            .ToHashSet(StringComparer.Ordinal);
 
-        Assert.Empty(violations);
+        Assert.DoesNotContain("HarvestCatalogController", apiTypeNames);
+        Assert.DoesNotContain("SystemHarvestQualityGradeController", apiTypeNames);
+        Assert.DoesNotContain("TenantMembershipController", apiTypeNames);
+        Assert.DoesNotContain("SystemTenantMembershipController", apiTypeNames);
+        Assert.Null(typeof(AuthController).GetMethod("Register"));
+        Assert.Null(typeof(TenantInvitationController).GetMethod("InviteTenantAdmin"));
+        Assert.Null(typeof(TenantInvitationController).GetMethod("InviteTenantMember"));
+        Assert.Null(typeof(FarmController).GetMethod("AssignFarmMember"));
+        Assert.Null(typeof(FarmController).GetMethod("GetFarmMembers"));
+        Assert.Null(typeof(FarmController).GetMethod("RevokeFarmMemberAssignment"));
     }
 
     [Fact]
@@ -267,9 +252,7 @@ public sealed class LegacyEndpointSafetyTests
         Assert.Equal(
             [
                 "FarmsDbContext",
-                "IMissionArchiveReferenceQuery",
-                "IFieldTaskArchiveReferenceQuery",
-                "IPlantArchiveReferenceQuery"
+                "IMissionArchiveReferenceQuery"
             ],
             dependencyNames);
         Assert.DoesNotContain(

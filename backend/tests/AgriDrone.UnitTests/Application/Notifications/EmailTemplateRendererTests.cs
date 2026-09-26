@@ -76,38 +76,6 @@ public sealed class EmailTemplateRendererTests
     }
 
     [Fact]
-    public void RegistrationTemplateRendersAllVariablesAndMessageId()
-    {
-        var renderer = new EmailTemplateRenderer(
-            [new TenantRegistrationSuccessTemplate()]);
-
-        var message = renderer.Render(
-            EmailTemplateKeys.TenantRegistrationSuccess,
-            [new EmailRecipient("owner@example.com", "Owner")],
-            new Dictionary<string, string>
-            {
-                [EmailTemplateVariableKeys.UserName] = "Owner",
-                [EmailTemplateVariableKeys.TenantName] = "Farm <One>",
-                [EmailTemplateVariableKeys.TenantCode] = "FARM-01",
-                [EmailTemplateVariableKeys.RoleName] = "Tenant Owner",
-                [EmailTemplateVariableKeys.RegisteredAt] =
-                    "2026-09-12T03:00:00.0000000+00:00",
-                [EmailTemplateVariableKeys.LoginUrl] =
-                    "https://app.example.test/login?from=email&ready=true"
-            },
-            "registration@example.test");
-
-        Assert.Contains("Farm &lt;One&gt;", message.HtmlBody);
-        Assert.Contains("from=email&amp;ready=true", message.HtmlBody);
-        Assert.Contains("Farm <One>", message.Subject);
-        Assert.DoesNotContain("&lt;", message.Subject);
-        Assert.Contains("Farm <One>", message.TextBody);
-        Assert.Contains("FARM-01", message.TextBody);
-        Assert.Contains("https://app.example.test/login", message.TextBody);
-        Assert.Equal("registration@example.test", message.MessageId);
-    }
-
-    [Fact]
     public void TemplateSubjectsRemoveLineBreaks()
     {
         var renderer = new EmailTemplateRenderer(

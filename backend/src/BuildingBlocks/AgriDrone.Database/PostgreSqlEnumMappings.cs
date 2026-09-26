@@ -1,9 +1,4 @@
-using AgriDrone.Modules.FieldTasks.Domain.FieldTasks;
-using AgriDrone.Modules.FieldTasks.Domain.Updates;
 using AgriDrone.Modules.Farms.Domain.Maps;
-using AgriDrone.Modules.Harvests.Domain.HarvestBatches;
-using AgriDrone.Modules.Harvests.Domain.PlantHarvests;
-using AgriDrone.Modules.Harvests.Domain.Seasons;
 using AgriDrone.Modules.Identity.Domain.FarmMemberships;
 using AgriDrone.Modules.Identity.Domain.TenantInvitations;
 using AgriDrone.Modules.Identity.Domain.Tenants;
@@ -21,6 +16,7 @@ using AgriDrone.Modules.Plants.Domain.Mapping;
 using AgriDrone.Modules.Plants.Domain.Plants;
 using AgriDrone.Modules.Plants.Domain.Scans;
 using AgriDrone.Modules.Plants.Domain.Verifications;
+using AgriDrone.Modules.Surveys.Domain;
 using AgriDrone.SharedInfrastructure.Auditing;
 using AgriDrone.SharedKernel.Domain;
 using Microsoft.EntityFrameworkCore;
@@ -56,8 +52,6 @@ internal static class PostgreSqlEnumMappings
         modelBuilder.HasPostgresEnum<AltitudeReference>(DbSchemas.System, "altitude_reference", translator);
         modelBuilder.HasPostgresEnum<ThresholdProfileStatus>(DbSchemas.System, "threshold_profile_status", translator);
         modelBuilder.HasPostgresEnum<ConditionType>(DbSchemas.System, "condition_type", translator);
-        modelBuilder.HasPostgresEnum<HarvestBatchStatus>(DbSchemas.System, "harvest_batch_status", translator);
-        modelBuilder.HasPostgresEnum<HarvestRecordSource>(DbSchemas.System, "harvest_record_source", translator);
         modelBuilder.HasPostgresEnum<PlantChangeSource>(DbSchemas.System, "plant_change_source", translator);
         modelBuilder.HasPostgresEnum<AuditActorType>(DbSchemas.System, "audit_actor_type", translator);
         modelBuilder.HasPostgresEnum<MissionMediaRole>(DbSchemas.System, "mission_media_role", translator);
@@ -73,11 +67,21 @@ internal static class PostgreSqlEnumMappings
         modelBuilder.HasPostgresEnum<FindingSource>(DbSchemas.System, "finding_source", translator);
         modelBuilder.HasPostgresEnum<VerificationDecision>(DbSchemas.System, "verification_decision", translator);
         modelBuilder.HasPostgresEnum<ConditionReviewDecision>(DbSchemas.System, "condition_review_decision", translator);
-        modelBuilder.HasPostgresEnum<SeasonStatus>(DbSchemas.System, "season_status", translator);
-        modelBuilder.HasPostgresEnum<FieldTaskType>(DbSchemas.System, "task_type", translator);
-        modelBuilder.HasPostgresEnum<FieldTaskPriority>(DbSchemas.System, "task_priority", translator);
-        modelBuilder.HasPostgresEnum<FieldTaskStatus>(DbSchemas.System, "task_status", translator);
-        modelBuilder.HasPostgresEnum<FieldTaskResult>(DbSchemas.System, "task_result", translator);
+        modelBuilder.HasPostgresEnum<FarmBaseMapStatus>(DbSchemas.System, "farm_base_map_status", translator);
+        modelBuilder.HasPostgresEnum<MissionPurpose>(DbSchemas.System, "mission_purpose", translator);
+        modelBuilder.HasPostgresEnum<PreflightChecklistDefinitionStatus>(DbSchemas.System, "preflight_checklist_definition_status", translator);
+        modelBuilder.HasPostgresEnum<MissionPreflightChecklistStatus>(DbSchemas.System, "mission_preflight_checklist_status", translator);
+        modelBuilder.HasPostgresEnum<SurveyServiceType>(DbSchemas.System, "survey_service_type", translator);
+        modelBuilder.HasPostgresEnum<SurveyServiceStatus>(DbSchemas.System, "survey_service_status", translator);
+        modelBuilder.HasPostgresEnum<SurveyRequestKind>(DbSchemas.System, "survey_request_kind", translator);
+        modelBuilder.HasPostgresEnum<SurveyRequestStatus>(DbSchemas.System, "survey_request_status", translator);
+        modelBuilder.HasPostgresEnum<SurveyReviewDecision>(DbSchemas.System, "survey_review_decision", translator);
+        modelBuilder.HasPostgresEnum<SurveyOrderStatus>(DbSchemas.System, "survey_order_status", translator);
+        modelBuilder.HasPostgresEnum<SurveyAppointmentStatus>(DbSchemas.System, "survey_appointment_status", translator);
+        modelBuilder.HasPostgresEnum<SurveyPaymentStatus>(DbSchemas.System, "survey_payment_status", translator);
+        modelBuilder.HasPostgresEnum<PriceAdjustmentStatus>(DbSchemas.System, "price_adjustment_status", translator);
+        modelBuilder.HasPostgresEnum<SurveyResultStatus>(DbSchemas.System, "survey_result_status", translator);
+        modelBuilder.HasPostgresEnum<HarvestReadinessReviewStatus>(DbSchemas.System, "harvest_readiness_review_status", translator);
     }
 
     public static void ConfigureDataSource(NpgsqlDataSourceBuilder dataSourceBuilder)
@@ -106,8 +110,6 @@ internal static class PostgreSqlEnumMappings
         dataSourceBuilder.MapEnum<AltitudeReference>("system.altitude_reference", translator);
         dataSourceBuilder.MapEnum<ThresholdProfileStatus>("system.threshold_profile_status", translator);
         dataSourceBuilder.MapEnum<ConditionType>("system.condition_type", translator);
-        dataSourceBuilder.MapEnum<HarvestBatchStatus>("system.harvest_batch_status", translator);
-        dataSourceBuilder.MapEnum<HarvestRecordSource>("system.harvest_record_source", translator);
         dataSourceBuilder.MapEnum<PlantChangeSource>("system.plant_change_source", translator);
         dataSourceBuilder.MapEnum<AuditActorType>("system.audit_actor_type", translator);
         dataSourceBuilder.MapEnum<MissionMediaRole>("system.mission_media_role", translator);
@@ -123,10 +125,20 @@ internal static class PostgreSqlEnumMappings
         dataSourceBuilder.MapEnum<FindingSource>("system.finding_source", translator);
         dataSourceBuilder.MapEnum<VerificationDecision>("system.verification_decision", translator);
         dataSourceBuilder.MapEnum<ConditionReviewDecision>("system.condition_review_decision", translator);
-        dataSourceBuilder.MapEnum<SeasonStatus>("system.season_status", translator);
-        dataSourceBuilder.MapEnum<FieldTaskType>("system.task_type", translator);
-        dataSourceBuilder.MapEnum<FieldTaskPriority>("system.task_priority", translator);
-        dataSourceBuilder.MapEnum<FieldTaskStatus>("system.task_status", translator);
-        dataSourceBuilder.MapEnum<FieldTaskResult>("system.task_result", translator);
+        dataSourceBuilder.MapEnum<FarmBaseMapStatus>("system.farm_base_map_status", translator);
+        dataSourceBuilder.MapEnum<MissionPurpose>("system.mission_purpose", translator);
+        dataSourceBuilder.MapEnum<PreflightChecklistDefinitionStatus>("system.preflight_checklist_definition_status", translator);
+        dataSourceBuilder.MapEnum<MissionPreflightChecklistStatus>("system.mission_preflight_checklist_status", translator);
+        dataSourceBuilder.MapEnum<SurveyServiceType>("system.survey_service_type", translator);
+        dataSourceBuilder.MapEnum<SurveyServiceStatus>("system.survey_service_status", translator);
+        dataSourceBuilder.MapEnum<SurveyRequestKind>("system.survey_request_kind", translator);
+        dataSourceBuilder.MapEnum<SurveyRequestStatus>("system.survey_request_status", translator);
+        dataSourceBuilder.MapEnum<SurveyReviewDecision>("system.survey_review_decision", translator);
+        dataSourceBuilder.MapEnum<SurveyOrderStatus>("system.survey_order_status", translator);
+        dataSourceBuilder.MapEnum<SurveyAppointmentStatus>("system.survey_appointment_status", translator);
+        dataSourceBuilder.MapEnum<SurveyPaymentStatus>("system.survey_payment_status", translator);
+        dataSourceBuilder.MapEnum<PriceAdjustmentStatus>("system.price_adjustment_status", translator);
+        dataSourceBuilder.MapEnum<SurveyResultStatus>("system.survey_result_status", translator);
+        dataSourceBuilder.MapEnum<HarvestReadinessReviewStatus>("system.harvest_readiness_review_status", translator);
     }
 }

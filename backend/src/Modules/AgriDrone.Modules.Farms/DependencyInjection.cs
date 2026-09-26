@@ -1,6 +1,8 @@
 using AgriDrone.IntegrationContracts.Farms;
 using AgriDrone.Modules.Farms.Application.Abstractions.Persistence;
 using AgriDrone.Modules.Farms.Application.Abstractions.Queries;
+using AgriDrone.Modules.Farms.Application.Policies;
+using AgriDrone.Modules.Farms.Application.Provisioning;
 using AgriDrone.Modules.Farms.Domain.Farms;
 using AgriDrone.Modules.Farms.Domain.Maps;
 using AgriDrone.Modules.Farms.Domain.Zones;
@@ -46,6 +48,9 @@ public static class DependencyInjection
             LegacyReadOnlyFarmArchiveDependencyQuery>();
         services.AddScoped<IMissionPlanningReferenceQuery, MissionPlanningReferenceQuery>();
         services.AddScoped<IFarmAssignmentReferenceQuery, FarmAssignmentReferenceQuery>();
+        services.AddScoped<IFarmGeometryPolicy, FarmGeometryPolicy>();
+        services.AddScoped<IFarmProvisioningPort, FarmProvisioningPort>();
+        services.AddScoped<IFarmBaseMapPublicationService, FarmBaseMapPublicationService>();
 
         var assembly = typeof(DependencyInjection).Assembly;
 

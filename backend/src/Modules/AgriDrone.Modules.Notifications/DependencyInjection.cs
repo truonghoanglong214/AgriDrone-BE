@@ -26,7 +26,6 @@ public static class DependencyInjection
 
         services.AddScoped<IEmailTemplate, TenantInvitationEmailTemplate>();
         services.AddScoped<IEmailTemplate, TenantWelcomeEmailTemplate>();
-        services.AddScoped<IEmailTemplate, TenantRegistrationSuccessTemplate>();
         services.AddScoped<EmailTemplateRenderer>();
         services.AddScoped<
             IIntegrationMessageHandler<EmailNotificationRequestedV1>,

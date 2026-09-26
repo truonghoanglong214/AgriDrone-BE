@@ -12,7 +12,6 @@ using AgriDrone.Api.Legacy;
 using AgriDrone.SharedInfrastructure.Authorization;
 using Microsoft.AspNetCore.Authorization;
 using AgriDrone.Modules.Farms.Application.Features.CreateFarm;
-using AgriDrone.Modules.Identity.Application.Features.RegisterUser;
 using AgriDrone.Modules.Farms.Application.Features.GetFarmById;
 using AgriDrone.Modules.Farms.Application.Features.UpdateFarmDetail;
 using AgriDrone.Modules.Farms.Application.Features.UpdateZone;
@@ -22,12 +21,6 @@ using AgriDrone.Api.Contracts.Zones;
 using AgriDrone.Modules.Farms.Application.Features.CreateZone;
 using AgriDrone.Modules.Farms.Application.Features.GetZoneById;
 using AgriDrone.Modules.Farms.Application.Features.GetZonesByFarm;
-using AgriDrone.Api.Contracts.FarmMemberships;
-using AgriDrone.Modules.Identity.Application.Features.AssignFarmMember;
-using AgriDrone.Modules.Identity.Application.Features.GetFarmMemberAssignment;
-using AgriDrone.Modules.Identity.Application.Features.GetFarmMembers;
-using AgriDrone.Modules.Identity.Application.Features.RevokeFarmMemberAssignment;
-using AgriDrone.Modules.Identity.Domain.FarmMemberships;
 using AgriDrone.Modules.Farms.Application.Features.RestoreFarm;
 using AgriDrone.Modules.Farms.Application.Features.GetArchivedFarmById;
 using AgriDrone.Modules.Farms.Application.Features.GetArchivedFarms;
@@ -154,12 +147,13 @@ namespace AgriDrone.Api.Controllers
 
         /// <summary>Tạo zone trong farm.</summary>
         /// <remarks>
-        /// Tenant Owner hoặc Farm Manager được assign tạo zone với mã duy nhất
-        /// trong farm. Boundary GeoJSON, nếu có, phải là Polygon SRID 4326 hợp lệ.
+        /// SystemManager đang là primary manager của Farm tạo zone với mã duy nhất
+        /// trong farm. Boundary GeoJSON, nếu có, phải là Polygon SRID 4326 hợp lệ,
+        /// nằm trong Farm và không chồng lấn Zone đang hoạt động.
         /// Zone mới được kích hoạt và bắt đầu ở version 1.
         /// </remarks>
         [HttpPost("{farmId:guid}/zones")]
-        [Authorize(Policy = AccessAuthorizationPolicies.TenantMember)]
+        [Authorize(Policy = AccessAuthorizationPolicies.SystemManager)]
         public async Task<IResult> CreateZone(
             [FromRoute] Guid farmId,
             [FromBody] CreateZoneRequest request,
@@ -225,11 +219,11 @@ namespace AgriDrone.Api.Controllers
 
         /// <summary>Cập nhật thông tin một zone.</summary>
         /// <remarks>
-        /// Owner hoặc Farm Manager có quyền trên đúng zone được phép cập nhật tên,
+        /// SystemManager đang là primary manager của Farm được cập nhật tên,
         /// boundary và diện tích. ExpectedVersion ngăn ghi đè thay đổi đồng thời.
         /// </remarks>
         [HttpPut("{farmId:guid}/zones/{zoneId:guid}")]
-        [Authorize(Policy = AccessAuthorizationPolicies.TenantMember)]
+        [Authorize(Policy = AccessAuthorizationPolicies.SystemManager)]
         public async Task<IResult> UpdateZone(
             [FromRoute] Guid farmId,
             [FromRoute] Guid zoneId,
@@ -253,11 +247,11 @@ namespace AgriDrone.Api.Controllers
 
         /// <summary>Archive một zone và giữ nguyên lịch sử liên quan.</summary>
         /// <remarks>
-        /// Chỉ Tenant Owner được phép thực hiện. Yêu cầu bị từ chối nếu zone còn
-        /// Mission đang hoạt động hoặc Field Task chưa đóng.
+        /// SystemManager đang là primary manager của Farm được phép thực hiện.
+        /// Yêu cầu bị từ chối nếu Zone còn Mission đang hoạt động.
         /// </remarks>
         [HttpPut("{farmId:guid}/zones/{zoneId:guid}/archive")]
-        [Authorize(Policy = AccessAuthorizationPolicies.TenantOwner)]
+        [Authorize(Policy = AccessAuthorizationPolicies.SystemManager)]
         public async Task<IResult> ArchiveZone(
             [FromRoute] Guid farmId,
             [FromRoute] Guid zoneId,
@@ -278,11 +272,11 @@ namespace AgriDrone.Api.Controllers
 
         /// <summary>Archive một farm và giữ nguyên lịch sử liên quan.</summary>
         /// <remarks>
-        /// Chỉ Tenant Owner được phép thực hiện. Farm chỉ được archive khi không
-        /// còn Zone, Mission hoặc Field Task đang hoạt động.
+        /// SystemManager đang là primary manager được phép thực hiện. Farm chỉ
+        /// được archive khi không còn Zone hoặc Mission đang hoạt động.
         /// </remarks>
         [HttpPut("{farmId:guid}/archive")]
-        [Authorize(Policy = AccessAuthorizationPolicies.TenantOwner)]
+        [Authorize(Policy = AccessAuthorizationPolicies.SystemManager)]
         public async Task<IResult> ArchiveFarm(
             [FromRoute] Guid farmId,
             [FromBody] ArchiveFarmRequest request,
@@ -305,6 +299,9 @@ namespace AgriDrone.Api.Controllers
         /// </remarks>
         [HttpPut("{farmId:guid}/restore")]
         [Authorize(Policy = AccessAuthorizationPolicies.TenantOwner)]
+        [LegacyEndpoint(
+            "farms.restore-direct",
+            "Submit the appropriate Survey Request; direct Farm restoration is outside the MVP contract.")]
         public async Task<IResult> RestoreFarm(
             [FromRoute] Guid farmId,
             [FromBody] RestoreFarmRequest request,
@@ -321,160 +318,13 @@ namespace AgriDrone.Api.Controllers
                 () => Results.NoContent());
         }
 
-        /// <summary>Gán hoặc cập nhật vai trò của một thành viên trong farm.</summary>
-        /// <remarks>
-        /// Hỗ trợ MANAGER hoặc WORKER với phạm vi ALL_ZONES hoặc SELECTED_ZONES.
-        /// ALL_ZONES yêu cầu ZoneIds rỗng; SELECTED_ZONES yêu cầu các ZoneIds
-        /// khác nhau, đang active và thuộc đúng farm. Tenant Admin chỉ thay đổi
-        /// assignment của Member; assignment của Tenant Admin chỉ Tenant Owner
-        /// được thay đổi. ExpectedVersion bắt buộc khi cập nhật assignment có sẵn.
-        /// </remarks>
-        [HttpPut("{farmId:guid}/members/{userId:guid}/assignment")]
-        [Authorize(Policy = AccessAuthorizationPolicies.TenantAdmin)]
-        [LegacyEndpoint(
-            "farm-memberships.assign-or-update",
-            "Farm operational ownership is assigned to one qualified SystemManager by SystemAdmin.")]
-        public async Task<IResult> AssignFarmMember(
-            [FromRoute] Guid farmId,
-            [FromRoute] Guid userId,
-            [FromBody] AssignFarmMemberRequest request,
-            CancellationToken cancellationToken)
-        {
-            var role = request.Role switch
-            {
-                FarmMemberRoleValue.Manager => FarmMemberRole.Manager,
-                FarmMemberRoleValue.Worker => FarmMemberRole.Worker,
-                _ => (FarmMemberRole)(-1)
-            };
-
-            var accessScope = request.AccessScope switch
-            {
-                FarmAccessScopeValue.AllZones => FarmAccessScope.AllZones,
-                FarmAccessScopeValue.SelectedZones => FarmAccessScope.SelectedZones,
-                _ => (FarmAccessScope)(-1)
-            };
-
-            var command = new AssignFarmMemberCommand(
-                farmId,
-                userId,
-                role,
-                accessScope,
-                request.ZoneIds ?? [],
-                request.ExpectedVersion,
-                request.Reason);
-
-            var result = await sender.Send(command, cancellationToken);
-
-            return result.ToHttpResult(
-                HttpContext,
-                assignment => Results.Ok(
-                    FarmMembershipResponseMapper.ToResponse(assignment)));
-        }
-
-        /// <summary>Lấy danh sách thành viên được gán vào farm.</summary>
-        /// <remarks>
-        /// Tenant Owner hoặc Tenant Admin lọc assignment theo vai trò Manager hoặc
-        /// Worker. Mặc định chỉ trả assignment đang hoạt động. Với ALL_ZONES,
-        /// ZoneIds rỗng có nghĩa là thành viên có quyền trên toàn bộ zone của farm.
-        /// </remarks>
-        [HttpGet("{farmId:guid}/members")]
-        [Authorize(Policy = AccessAuthorizationPolicies.TenantAdmin)]
-        public async Task<IResult> GetFarmMembers(
-            [FromRoute] Guid farmId,
-            [FromQuery] GetFarmMembersRequest request,
-            CancellationToken cancellationToken)
-        {
-            FarmMemberRole? role = request.Role switch
-            {
-                FarmMemberRoleValue.Manager => FarmMemberRole.Manager,
-                FarmMemberRoleValue.Worker => FarmMemberRole.Worker,
-                null => null,
-                _ => (FarmMemberRole)(-1)
-            };
-            GeneralStatus? status = request.Status switch
-            {
-                FarmMembershipStatusValue.Active => GeneralStatus.Active,
-                FarmMembershipStatusValue.Inactive => GeneralStatus.Inactive,
-                null => GeneralStatus.Active,
-                _ => (GeneralStatus)(-1)
-            };
-
-            var command = new GetFarmMembersQuery(
-                farmId,
-                role,
-                status,
-                request.PageNumber,
-                request.PageSize);
-
-            var result = await sender.Send(
-                command,
-                cancellationToken);
-
-            return result.ToHttpResult(
-                HttpContext,
-                members => Results.Ok(
-                    FarmMembershipResponseMapper.ToResponse(members)));
-        }
-
-        /// <summary>Thu hồi assignment của một thành viên khỏi farm.</summary>
-        /// <remarks>
-        /// Tenant Admin được thu hồi assignment của Member; assignment của một
-        /// Tenant Admin chỉ có thể bị thu hồi bởi Tenant Owner. Dữ liệu không bị
-        /// xóa mà chuyển sang Inactive và có thể được gán lại sau này.
-        /// </remarks>
-        [HttpDelete("{farmId:guid}/members/{userId:guid}/assignment")]
-        [Authorize(Policy = AccessAuthorizationPolicies.TenantAdmin)]
-        [LegacyEndpoint(
-            "farm-memberships.revoke",
-            "Use the future SystemAdmin primary SystemManager reassignment workflow.")]
-        public async Task<IResult> RevokeFarmMemberAssignment(
-            [FromRoute] Guid farmId,
-            [FromRoute] Guid userId,
-            [FromBody] RevokeFarmMemberAssignmentRequest request,
-            CancellationToken cancellationToken)
-        {
-            var result = await sender.Send(
-                new RevokeFarmMemberAssignmentCommand(
-                    farmId,
-                    userId,
-                    request.ExpectedVersion,
-                    request.Reason),
-                cancellationToken);
-
-            return result.ToHttpResult(
-                HttpContext,
-                () => Results.NoContent());
-        }
-
-        /// <summary>Lấy assignment của một thành viên trong farm.</summary>
-        /// <remarks>
-        /// Tenant Owner hoặc Tenant Admin lấy vai trò, phạm vi zone, trạng thái
-        /// và version hiện tại của assignment để hiển thị hoặc cập nhật an toàn.
-        /// Chỉ trả assignment thuộc farm và tenant hiện tại.
-        /// </remarks>
-        [HttpGet("{farmId:guid}/members/{userId:guid}/assignment")]
-        [Authorize(Policy = AccessAuthorizationPolicies.TenantAdmin)]
-        public async Task<IResult> GetFarmMemberAssignment(
-            [FromRoute] Guid farmId,
-            [FromRoute] Guid userId,
-            CancellationToken cancellationToken)
-        {
-            var query = new GetFarmMemberAssignmentQuery(farmId, userId);
-            var result = await sender.Send(query, cancellationToken);
-
-            return result.ToHttpResult(
-                HttpContext,
-                assignment => Results.Ok(
-                    FarmMembershipResponseMapper.ToResponse(assignment)));
-        }
-
         /// <summary>Cập nhật thông tin farm.</summary>
         /// <remarks>
-        /// Tenant Admin hoặc Owner cập nhật tên, địa chỉ, vị trí, boundary và
-        /// diện tích farm. ExpectedVersion được dùng để ngăn ghi đè cập nhật đồng thời.
+        /// SystemManager đang là primary manager cập nhật tên, địa chỉ, vị trí,
+        /// boundary và diện tích Farm. ExpectedVersion ngăn ghi đè đồng thời.
         /// </remarks>
         [HttpPut("{farmId:guid}")]
-        [Authorize(Policy = AccessAuthorizationPolicies.TenantAdmin)]
+        [Authorize(Policy = AccessAuthorizationPolicies.SystemManager)]
         public async Task<IResult> UpdateFarmDetail(
             [FromRoute] Guid farmId,
             [FromBody] UpdateFarmDetailRequest request,

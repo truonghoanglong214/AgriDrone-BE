@@ -17,6 +17,8 @@ internal sealed class FarmsDbContext(DbContextOptions<FarmsDbContext> options)
 
     public DbSet<ZoneMapVersion> ZoneMapVersions => Set<ZoneMapVersion>();
 
+    public DbSet<FarmBaseMapVersion> FarmBaseMapVersions => Set<FarmBaseMapVersion>();
+
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 
     public void AddAuditLog(AuditLog auditLog)

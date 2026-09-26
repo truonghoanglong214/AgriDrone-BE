@@ -1,11 +1,10 @@
 using AgriDrone.Modules.Farms.Domain.Farms;
-using AgriDrone.Modules.FieldTasks.Domain.FieldTasks;
-using AgriDrone.Modules.Harvests.Domain.Seasons;
 using AgriDrone.Modules.Identity.Domain.Users;
 using AgriDrone.Modules.Identity.Domain.SystemManagers;
 using AgriDrone.Modules.Missions.Domain.Missions;
 using AgriDrone.Modules.Notifications.Domain.Notifications;
 using AgriDrone.Modules.Plants.Domain.Plants;
+using AgriDrone.Modules.Surveys.Domain;
 using AgriDrone.SharedInfrastructure.Auditing;
 using Microsoft.EntityFrameworkCore;
 
@@ -26,9 +25,8 @@ public sealed class AgriDroneSchemaDbContext(DbContextOptions<AgriDroneSchemaDbC
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(Farm).Assembly);
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(DroneMission).Assembly);
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(Plant).Assembly);
-        modelBuilder.ApplyConfigurationsFromAssembly(typeof(Season).Assembly);
-        modelBuilder.ApplyConfigurationsFromAssembly(typeof(FieldTask).Assembly);
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(Notification).Assembly);
+        modelBuilder.ApplyConfigurationsFromAssembly(typeof(SurveyService).Assembly);
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AuditLog).Assembly);
 
         CrossModuleRelationshipConfiguration.Configure(modelBuilder);

@@ -27,6 +27,8 @@ public sealed class MissionPlantObservation : Entity
 
     public Guid? MapVersionId { get; private set; }
 
+    public Guid? FarmBaseMapVersionId { get; private set; }
+
     public int? DetectedRowIndex { get; private set; }
 
     public int? DetectedColumnIndex { get; private set; }

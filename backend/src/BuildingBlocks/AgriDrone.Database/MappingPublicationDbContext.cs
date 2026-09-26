@@ -17,7 +17,7 @@ namespace AgriDrone.Database;
 
 public sealed class MappingPublicationDbContext(
     DbContextOptions<MappingPublicationDbContext> options)
-    : DbContext(options), IAuditLogSink
+    : DbContext(options), IAuditLogSink, IMappingPublicationUnitOfWork
 {
     public DbSet<Farm> Farms => Set<Farm>();
 
@@ -44,6 +44,19 @@ public sealed class MappingPublicationDbContext(
     {
         ArgumentNullException.ThrowIfNull(auditLog);
         AuditLogs.Add(auditLog);
+    }
+
+    public async Task<T> ExecuteInTransactionAsync<T>(
+        Func<CancellationToken, Task<T>> operation,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(operation);
+
+        await using var transaction =
+            await Database.BeginTransactionAsync(cancellationToken);
+        var result = await operation(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return result;
     }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)

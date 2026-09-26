@@ -46,16 +46,20 @@ public sealed class PlantScanConfiguration : IEntityTypeConfiguration<PlantScan>
             .HasColumnName("mission_id")
             .HasColumnType("uuid");
 
+        builder.Property(scan => scan.SurveyOrderId)
+            .HasColumnName("survey_order_id")
+            .HasColumnType("uuid");
+
+        builder.Property(scan => scan.SurveyResultId)
+            .HasColumnName("survey_result_id")
+            .HasColumnType("uuid");
+
         builder.Property(scan => scan.AiJobId)
             .HasColumnName("ai_job_id")
             .HasColumnType("uuid");
 
         builder.Property(scan => scan.VerificationOfScanId)
             .HasColumnName("verification_of_scan_id")
-            .HasColumnType("uuid");
-
-        builder.Property(scan => scan.SourceTaskId)
-            .HasColumnName("source_task_id")
             .HasColumnType("uuid");
 
         builder.Property(scan => scan.ClientOperationId)
@@ -112,6 +116,9 @@ public sealed class PlantScanConfiguration : IEntityTypeConfiguration<PlantScan>
 
         builder.HasIndex(scan => scan.MissionId)
             .HasDatabaseName("ix_plant_scans_mission");
+
+        builder.HasIndex(scan => new { scan.SurveyOrderId, scan.SurveyResultId })
+            .HasDatabaseName("ix_plant_scans_survey_result");
 
         builder.HasIndex(scan => scan.ClientOperationId)
             .HasDatabaseName("uq_plant_scans_client_operation")

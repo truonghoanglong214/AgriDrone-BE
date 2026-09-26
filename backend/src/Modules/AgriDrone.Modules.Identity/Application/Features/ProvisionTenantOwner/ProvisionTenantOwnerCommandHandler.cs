@@ -1,7 +1,5 @@
 using AgriDrone.Modules.Identity.Application.Errors;
-using AgriDrone.Modules.Identity.Application.Invitations.Creation;
-using AgriDrone.Modules.Identity.Domain.TenantInvitations;
-using AgriDrone.Modules.Identity.Domain.Tenants;
+using AgriDrone.Modules.Identity.Application.Provisioning;
 using AgriDrone.SharedKernel.Application;
 using AgriDrone.SharedKernel.Application.Abstractions.Execution;
 using MediatR;
@@ -10,7 +8,7 @@ namespace AgriDrone.Modules.Identity.Application.Features.ProvisionTenantOwner;
 
 internal sealed class ProvisionTenantOwnerCommandHandler(
     IExecutionContext executionContext,
-    ITenantInvitationService invitationService)
+    ITenantOwnerInvitationPort invitationPort)
     : IRequestHandler<
         ProvisionTenantOwnerCommand,
         Result<ProvisionTenantOwnerResponse>>
@@ -25,13 +23,11 @@ internal sealed class ProvisionTenantOwnerCommandHandler(
                 AuthenticationError.CurrentUserRequired());
         }
 
-        var result = await invitationService.InviteAsync(
-            new CreateTenantInvitationRequest(
+        var result = await invitationPort.InviteAsync(
+            new InviteTenantOwnerRequest(
                 request.TenantId,
                 requestedByUserId,
-                request.Email,
-                TenantMemberRole.Owner,
-                TenantInvitationPurpose.OwnerProvisioning),
+                request.Email),
             cancellationToken);
 
         if (result.IsFailure)

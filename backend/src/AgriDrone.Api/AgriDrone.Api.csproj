@@ -13,8 +13,6 @@
     <ProjectReference Include="..\Modules\AgriDrone.Modules.Farms\AgriDrone.Modules.Farms.csproj" />
     <ProjectReference Include="..\Modules\AgriDrone.Modules.Plants\AgriDrone.Modules.Plants.csproj" />
     <ProjectReference Include="..\Modules\AgriDrone.Modules.Missions\AgriDrone.Modules.Missions.csproj" />
-    <ProjectReference Include="..\Modules\AgriDrone.Modules.Harvests\AgriDrone.Modules.Harvests.csproj" />
-    <ProjectReference Include="..\Modules\AgriDrone.Modules.FieldTasks\AgriDrone.Modules.FieldTasks.csproj" />
     <ProjectReference Include="..\Modules\AgriDrone.Modules.Notifications\AgriDrone.Modules.Notifications.csproj" />
   </ItemGroup>
   <ItemGroup>

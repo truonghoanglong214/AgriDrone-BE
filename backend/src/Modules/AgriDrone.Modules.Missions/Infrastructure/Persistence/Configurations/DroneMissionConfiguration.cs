@@ -82,6 +82,14 @@ public sealed class DroneMissionConfiguration : IEntityTypeConfiguration<DroneMi
             .HasColumnType("uuid")
             .IsRequired();
 
+        builder.Property(mission => mission.SurveyOrderId)
+            .HasColumnName("survey_order_id")
+            .HasColumnType("uuid");
+
+        builder.Property(mission => mission.MissionPurpose)
+            .HasColumnName("mission_purpose")
+            .HasColumnType("system.mission_purpose");
+
         builder.Property(mission => mission.DroneId)
             .HasColumnName("drone_id")
             .HasColumnType("uuid");
@@ -264,6 +272,9 @@ public sealed class DroneMissionConfiguration : IEntityTypeConfiguration<DroneMi
         builder.HasIndex(mission => new { mission.FarmId, mission.StartedAt })
             .HasDatabaseName("ix_drone_missions_farm_started")
             .IsDescending(false, true);
+
+        builder.HasIndex(mission => new { mission.SurveyOrderId, mission.MissionPurpose })
+            .HasDatabaseName("ix_drone_missions_order_purpose");
 
         builder.HasIndex(mission => new { mission.DroneId, mission.StartedAt })
             .HasDatabaseName("ix_drone_missions_drone_started")

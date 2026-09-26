@@ -22,6 +22,22 @@ namespace AgriDrone.Modules.Farms.Application.Errors
                 "Farm.AccessDenied",
                 "The user does not have the required access to the selected farm.");
 
+        public static AppError InvalidBoundary() => AppError.Validation(
+            "Farm.InvalidBoundary",
+            "The farm boundary must be a non-empty valid polygon using SRID 4326.");
+
+        public static AppError InvalidCenterPoint() => AppError.Validation(
+            "Farm.InvalidCenterPoint",
+            "The farm center point must use SRID 4326 and valid coordinates.");
+
+        public static AppError CenterPointOutsideBoundary() => AppError.Validation(
+            "Farm.CenterPointOutsideBoundary",
+            "The farm center point must be covered by the farm boundary.");
+
+        public static AppError InvalidArea() => AppError.Validation(
+            "Farm.InvalidArea",
+            "The farm area must be greater than or equal to zero.");
+
         public static AppError FarmNotFound(Guid farmId) =>
             AppError.Validation(
                 "Farm.FarmNotFound",
@@ -34,12 +50,10 @@ namespace AgriDrone.Modules.Farms.Application.Errors
 
         public static AppError ActiveDependenciesExist(
             int activeZoneCount,
-            int activeMissionCount,
-            int openFieldTaskCount) =>
+            int activeMissionCount) =>
             AppError.Conflict(
                 "Farm.ActiveDependenciesExist",
                 "The farm cannot be archived while active dependencies remain. " +
-                $"Active zones: {activeZoneCount}; active missions: {activeMissionCount}; " +
-                $"open field tasks: {openFieldTaskCount}.");
+                $"Active zones: {activeZoneCount}; active missions: {activeMissionCount}.");
     }
 }

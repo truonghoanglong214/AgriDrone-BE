@@ -4,6 +4,8 @@ public sealed class BlackboxDecoderOptions
 {
     public const string SectionName = "Telemetry:BlackboxDecoder";
 
+    public bool Enabled { get; set; }
+
     public string ExecutablePath { get; set; } = string.Empty;
 
     public int TimeoutSeconds { get; set; } = 60;

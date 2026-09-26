@@ -1,6 +1,7 @@
 using System.Text.Json;
 using AgriDrone.Modules.Farms.Application.Abstractions.Persistence;
 using AgriDrone.Modules.Farms.Application.Errors;
+using AgriDrone.Modules.Farms.Application.Policies;
 using AgriDrone.Modules.Farms.Domain.Farms;
 using AgriDrone.Modules.Farms.Domain.Zones;
 using AgriDrone.SharedInfrastructure.Auditing;
@@ -19,7 +20,8 @@ internal sealed class UpdateZoneHandler(
     IFarmUnitOfWork unitOfWork,
     IAuditWriter auditWriter,
     IExecutionContext executionContext,
-    IEffectiveAccessService effectiveAccessService,
+    ISystemManagerAccessService managerAccessService,
+    IFarmGeometryPolicy geometryPolicy,
     TimeProvider timeProvider)
     : IRequestHandler<UpdateZoneCommand, Result<UpdateZoneResponse>>
 {
@@ -33,21 +35,11 @@ internal sealed class UpdateZoneHandler(
                 AuthenticationError.CurrentUserRequired());
         }
 
-        if (executionContext.TenantId is not Guid tenantId)
-        {
-            return Result.Failure<UpdateZoneResponse>(
-                AuthenticationError.CurrentTenantRequired());
-        }
-
-        var accessDecision = await effectiveAccessService.CheckZoneAsync(
-            actorId,
-            tenantId,
+        var accessDecision = await managerAccessService.ResolveFarmAccessAsync(
             request.FarmId,
-            request.ZoneId,
-            FarmAccessLevel.Manager,
             cancellationToken);
 
-        if (!accessDecision.IsAllowed)
+        if (!accessDecision.IsAllowed || accessDecision.TenantId is not Guid tenantId)
         {
             return Result.Failure<UpdateZoneResponse>(
                 FarmZoneError.AccessDenied());
@@ -84,24 +76,17 @@ internal sealed class UpdateZoneHandler(
 
         var name = request.Name.Trim();
 
-        if (request.Boundary is not null &&
-            farm.Boundary is not null &&
-            !farm.Boundary.Covers(request.Boundary))
+        var geometryDecision = await geometryPolicy.ValidateZoneAsync(
+            tenantId,
+            farm,
+            request.Boundary,
+            request.AreaHectares,
+            request.ZoneId,
+            cancellationToken);
+        if (geometryDecision.IsFailure)
         {
             return Result.Failure<UpdateZoneResponse>(
-                FarmZoneError.BoundaryOutsideFarm());
-        }
-
-        if (request.Boundary is not null &&
-            await farmZoneRepository.ActiveBoundaryOverlapsAsync(
-                tenantId,
-                request.FarmId,
-                request.Boundary,
-                request.ZoneId,
-                cancellationToken))
-        {
-            return Result.Failure<UpdateZoneResponse>(
-                FarmZoneError.BoundaryOverlaps());
+                geometryDecision.Error);
         }
 
         if (HasSameDetails(

@@ -1,6 +1,8 @@
 using AgriDrone.IntegrationContracts.Mapping;
 using AgriDrone.IntegrationContracts.Notifications;
 using AgriDrone.IntegrationContracts.Health;
+using AgriDrone.IntegrationContracts.HarvestReadiness;
+using AgriDrone.IntegrationContracts.Surveys;
 
 namespace AgriDrone.IntegrationContracts.Messaging;
 
@@ -48,5 +50,40 @@ public static class IntegrationEventDescriptors
         new(
             IntegrationEventTypes.HealthReviewStateChangedV1,
             IntegrationSchemaVersions.V1,
+            RequiresActorId: false);
+
+    public static IntegrationEventDescriptor<BaselineMappingCandidatesApprovedV2>
+        BaselineMappingCandidatesApprovedV2 { get; } =
+        new(
+            IntegrationEventTypes.BaselineMappingCandidatesApprovedV2,
+            IntegrationSchemaVersions.V2,
+            RequiresActorId: true);
+
+    public static IntegrationEventDescriptor<FarmBaseMapPublishedV2>
+        FarmBaseMapPublishedV2 { get; } =
+        new(
+            IntegrationEventTypes.FarmBaseMapPublishedV2,
+            IntegrationSchemaVersions.V2,
+            RequiresActorId: true);
+
+    public static IntegrationEventDescriptor<HealthObservationsReadyV2>
+        HealthObservationsReadyV2 { get; } =
+        new(
+            IntegrationEventTypes.HealthObservationsReadyV2,
+            IntegrationSchemaVersions.V2,
+            RequiresActorId: false);
+
+    public static IntegrationEventDescriptor<HarvestReadinessAssessmentsReadyV2>
+        HarvestReadinessAssessmentsReadyV2 { get; } =
+        new(
+            IntegrationEventTypes.HarvestReadinessAssessmentsReadyV2,
+            IntegrationSchemaVersions.V2,
+            RequiresActorId: false);
+
+    public static IntegrationEventDescriptor<SurveyResultReviewStateChangedV2>
+        SurveyResultReviewStateChangedV2 { get; } =
+        new(
+            IntegrationEventTypes.SurveyResultReviewStateChangedV2,
+            IntegrationSchemaVersions.V2,
             RequiresActorId: false);
 }

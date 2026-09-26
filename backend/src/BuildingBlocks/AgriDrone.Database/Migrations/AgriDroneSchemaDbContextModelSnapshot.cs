@@ -31,17 +31,19 @@ namespace AgriDrone.Database.Migrations
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "condition_type", new[] { "DISEASE", "ABIOTIC_DAMAGE", "MECHANICAL_DAMAGE", "OTHER" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "drone_status", new[] { "AVAILABLE", "IN_MISSION", "MAINTENANCE", "INACTIVE", "RETIRED" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "farm_access_scope", new[] { "ALL_ZONES", "SELECTED_ZONES" });
+            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "farm_base_map_status", new[] { "DRAFT", "PUBLISHED", "SUPERSEDED" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "farm_member_role", new[] { "MANAGER", "WORKER" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "finding_source", new[] { "AI", "MANUAL" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "flight_qualification_status", new[] { "PENDING", "QUALIFIED", "SUSPENDED", "REVOKED" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "general_status", new[] { "ACTIVE", "INACTIVE" });
-            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "harvest_batch_status", new[] { "DRAFT", "OPEN", "COMPLETED", "CANCELLED" });
-            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "harvest_record_source", new[] { "WEB", "MOBILE", "IMPORT" });
+            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "harvest_readiness_review_status", new[] { "PENDING", "REVIEWED", "REJECTED" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "map_version_status", new[] { "DRAFT", "CONFIRMED", "SUPERSEDED", "REJECTED" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "match_strategy", new[] { "GPS_ONLY", "GRID_ASSISTED", "MANUAL" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "media_storage_status", new[] { "ACTIVE", "ARCHIVED", "DELETE_PENDING", "DELETED", "DELETE_FAILED" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "media_type", new[] { "IMAGE", "VIDEO" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "mission_media_role", new[] { "RAW_VIDEO", "RAW_IMAGE", "PROCESSED_IMAGE", "THUMBNAIL", "OTHER" });
+            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "mission_preflight_checklist_status", new[] { "DRAFT", "COMPLETED", "SUPERSEDED" });
+            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "mission_purpose", new[] { "BASELINE_MAPPING", "PLANT_HEALTH", "HARVEST_READINESS" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "mission_status", new[] { "DRAFT", "SCHEDULED", "IN_FLIGHT", "FLIGHT_COMPLETED", "UPLOADING", "READY_FOR_PROCESSING", "PROCESSING", "AWAITING_REVIEW", "COMPLETED", "CANCELLED", "FLIGHT_FAILED", "UPLOAD_FAILED", "PROCESSING_FAILED" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "mission_type", new[] { "MAPPING", "HEALTH_INSPECTION" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "observation_review_status", new[] { "PENDING", "MATCHED", "CONFIRMED", "REJECTED", "NEW_PLANT", "DUPLICATE" });
@@ -49,17 +51,23 @@ namespace AgriDrone.Database.Migrations
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "plant_change_type", new[] { "NEW_PLANT", "MISSING_PLANT", "REMOVED_PLANT", "DEAD_PLANT", "DETECTION_ERROR", "MAPPING_DIFFERENCE" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "plant_lifecycle_status", new[] { "ACTIVE", "MISSING", "REMOVED", "DEAD", "INACTIVE" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "position_source", new[] { "MAPPING_AI", "MANUAL", "IMPORT" });
+            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "preflight_checklist_definition_status", new[] { "DRAFT", "ACTIVE", "RETIRED" });
+            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "price_adjustment_status", new[] { "PENDING", "APPROVED", "REJECTED", "APPLIED" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "processing_status", new[] { "NOT_UPLOADED", "UPLOADED", "QUEUED", "PROCESSING", "COMPLETED", "FAILED", "REVIEW_REQUIRED" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "review_status", new[] { "PENDING", "CONFIRMED", "REJECTED" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "scan_media_role", new[] { "PRIMARY", "CONTEXT", "DETECTION_RESULT" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "scan_source", new[] { "DRONE_AI", "FIELD_MANUAL", "MANAGER" });
-            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "season_status", new[] { "PLANNED", "ACTIVE", "COMPLETED", "CANCELLED" });
+            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "survey_appointment_status", new[] { "PROPOSED", "CONFIRMED", "RESCHEDULE_REQUESTED", "CANCELLED" });
+            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "survey_order_status", new[] { "PENDING_SCOPE_CONFIRMATION", "AWAITING_APPOINTMENT", "AWAITING_PAYMENT", "READY_FOR_OPERATIONS", "IN_PROGRESS", "PENDING_REVIEW", "COMPLETED", "CANCELLED" });
+            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "survey_payment_status", new[] { "PENDING", "PROCESSING", "CONFIRMED", "FAILED", "REFUNDED", "ADJUSTMENT_REQUIRED" });
+            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "survey_request_kind", new[] { "NEW_CUSTOMER", "EXISTING_TENANT_NEW_FARM", "EXISTING_FARM_SURVEY" });
+            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "survey_request_status", new[] { "SUBMITTED", "UNDER_REVIEW", "APPROVED", "REJECTED", "WITHDRAWN" });
+            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "survey_result_status", new[] { "PENDING_REVIEW", "APPROVED", "PUBLISHED" });
+            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "survey_review_decision", new[] { "APPROVED", "REJECTED" });
+            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "survey_service_status", new[] { "EXPERIMENTAL", "ACTIVE", "RETIRED" });
+            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "survey_service_type", new[] { "PLANT_HEALTH", "HARVEST_READINESS" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "system_manager_availability_status", new[] { "AVAILABLE", "UNAVAILABLE" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "system_manager_profile_status", new[] { "ACTIVE", "SUSPENDED" });
-            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "task_priority", new[] { "LOW", "MEDIUM", "HIGH", "URGENT" });
-            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "task_result", new[] { "CONFIRMED_DISEASE", "INCORRECT_AI_DETECTION", "PLANT_RECOVERED", "NEED_FURTHER_INSPECTION", "COMPLETED_OTHER" });
-            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "task_status", new[] { "OPEN", "ASSIGNED", "IN_PROGRESS", "COMPLETED", "CANCELLED" });
-            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "task_type", new[] { "FIELD_INSPECTION", "RECHECK_PLANT", "VERIFY_AI_RESULT", "GENERAL" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "tenant_invitation_purpose", new[] { "MEMBERSHIP", "OWNER_PROVISIONING" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "tenant_invitation_status", new[] { "PENDING", "ACCEPTED", "REVOKED", "EXPIRED" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "tenant_member_role", new[] { "OWNER", "TENANT_ADMIN", "MEMBER" });
@@ -182,6 +190,102 @@ namespace AgriDrone.Database.Migrations
                         });
                 });
 
+            modelBuilder.Entity("AgriDrone.Modules.Farms.Domain.Maps.FarmBaseMapVersion", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<Guid>("FarmId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("farm_id");
+
+                    b.Property<DateTimeOffset?>("PublishedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("published_at");
+
+                    b.Property<Guid?>("PublishedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("published_by");
+
+                    b.Property<Guid?>("SourceMissionGroupId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("source_mission_group_id");
+
+                    b.Property<Guid>("SourceSurveyOrderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("source_survey_order_id");
+
+                    b.Property<int>("Status")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("system.farm_base_map_status")
+                        .HasColumnName("status")
+                        .HasDefaultValueSql("'DRAFT'::system.farm_base_map_status");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.Property<int>("VersionNumber")
+                        .HasColumnType("integer")
+                        .HasColumnName("version_number");
+
+                    b.HasKey("Id")
+                        .HasName("pk_farm_base_map_versions");
+
+                    b.HasAlternateKey("Id", "FarmId")
+                        .HasName("uq_farm_base_map_versions_id_farm");
+
+                    b.HasAlternateKey("Id", "TenantId", "FarmId")
+                        .HasName("uq_farm_base_map_versions_id_tenant_farm");
+
+                    b.HasIndex("FarmId")
+                        .IsUnique()
+                        .HasDatabaseName("uq_farm_base_map_versions_one_published")
+                        .HasFilter("status = 'PUBLISHED'::system.farm_base_map_status");
+
+                    b.HasIndex("PublishedBy");
+
+                    b.HasIndex("SourceSurveyOrderId")
+                        .IsUnique()
+                        .HasDatabaseName("uq_farm_base_map_versions_source_order");
+
+                    b.HasIndex("FarmId", "TenantId");
+
+                    b.HasIndex("FarmId", "VersionNumber")
+                        .IsUnique()
+                        .HasDatabaseName("uq_farm_base_map_versions_farm_version");
+
+                    b.HasIndex("SourceSurveyOrderId", "TenantId", "FarmId");
+
+                    b.ToTable("farm_base_map_versions", "farm", t =>
+                        {
+                            t.HasCheckConstraint("ck_farm_base_map_versions_publication", "(status = 'DRAFT'::system.farm_base_map_status AND published_by IS NULL AND published_at IS NULL) OR (status IN ('PUBLISHED'::system.farm_base_map_status, 'SUPERSEDED'::system.farm_base_map_status) AND published_by IS NOT NULL AND published_at IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_farm_base_map_versions_version_positive", "version_number >= 1");
+                        });
+                });
+
             modelBuilder.Entity("AgriDrone.Modules.Farms.Domain.Maps.ZoneMapVersion", b =>
                 {
                     b.Property<Guid>("Id")
@@ -208,6 +312,10 @@ namespace AgriDrone.Database.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("NOW()");
+
+                    b.Property<Guid?>("FarmBaseMapVersionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("farm_base_map_version_id");
 
                     b.Property<Guid>("FarmId")
                         .HasColumnType("uuid")
@@ -268,6 +376,9 @@ namespace AgriDrone.Database.Migrations
 
                     b.HasIndex("ConfirmedBy");
 
+                    b.HasIndex("FarmBaseMapVersionId")
+                        .HasDatabaseName("ix_zone_map_versions_farm_base_map");
+
                     b.HasIndex("SourceApprovalId")
                         .IsUnique()
                         .HasDatabaseName("ux_zone_map_versions_source_approval")
@@ -280,6 +391,8 @@ namespace AgriDrone.Database.Migrations
                         .IsUnique()
                         .HasDatabaseName("ux_zone_map_versions_one_confirmed")
                         .HasFilter("status = 'CONFIRMED'::system.map_version_status");
+
+                    b.HasIndex("FarmBaseMapVersionId", "FarmId");
 
                     b.HasIndex("SourceMissionId", "FarmId");
 
@@ -397,707 +510,6 @@ namespace AgriDrone.Database.Migrations
                             t.HasCheckConstraint("ck_farm_zones_area_nonnegative", "area_hectares IS NULL OR area_hectares >= 0");
 
                             t.HasCheckConstraint("ck_farm_zones_boundary_valid", "boundary IS NULL OR ST_IsValid(boundary)");
-                        });
-                });
-
-            modelBuilder.Entity("AgriDrone.Modules.FieldTasks.Domain.Assignments.TaskAssignment", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id")
-                        .HasDefaultValueSql("gen_random_uuid()");
-
-                    b.Property<DateTimeOffset>("AssignedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("assigned_at")
-                        .HasDefaultValueSql("NOW()");
-
-                    b.Property<Guid>("AssignedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("assigned_by");
-
-                    b.Property<Guid>("TaskId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("task_id");
-
-                    b.Property<DateTimeOffset?>("UnassignedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("unassigned_at");
-
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("user_id");
-
-                    b.HasKey("Id")
-                        .HasName("pk_task_assignments");
-
-                    b.HasIndex("AssignedBy");
-
-                    b.HasIndex("TaskId", "UserId")
-                        .IsUnique()
-                        .HasDatabaseName("ux_task_active_assignment_per_user")
-                        .HasFilter("unassigned_at IS NULL");
-
-                    b.HasIndex("UserId", "AssignedAt")
-                        .IsDescending(false, true)
-                        .HasDatabaseName("ix_task_assignments_user_active")
-                        .HasFilter("unassigned_at IS NULL");
-
-                    b.ToTable("task_assignments", "field_task", t =>
-                        {
-                            t.HasComment("Assignment history for tasks; supports reassignment and multiple workers if needed.");
-
-                            t.HasCheckConstraint("ck_assignment_time", "unassigned_at IS NULL OR unassigned_at >= assigned_at");
-                        });
-                });
-
-            modelBuilder.Entity("AgriDrone.Modules.FieldTasks.Domain.FieldTasks.FieldTask", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id")
-                        .HasDefaultValueSql("gen_random_uuid()");
-
-                    b.Property<DateTimeOffset?>("CompletedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("completed_at");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at")
-                        .HasDefaultValueSql("NOW()");
-
-                    b.Property<Guid>("CreatedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("created_by");
-
-                    b.Property<string>("Description")
-                        .HasColumnType("text")
-                        .HasColumnName("description");
-
-                    b.Property<DateTimeOffset?>("DueAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("due_at");
-
-                    b.Property<Guid>("FarmId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("farm_id");
-
-                    b.Property<Guid?>("PlantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("plant_id");
-
-                    b.Property<int>("Priority")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("system.task_priority")
-                        .HasColumnName("priority")
-                        .HasDefaultValueSql("'MEDIUM'::system.task_priority");
-
-                    b.Property<Guid?>("SourceScanId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("source_scan_id");
-
-                    b.Property<int>("Status")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("system.task_status")
-                        .HasColumnName("status")
-                        .HasDefaultValueSql("'OPEN'::system.task_status");
-
-                    b.Property<int>("TaskType")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("system.task_type")
-                        .HasColumnName("task_type")
-                        .HasDefaultValueSql("'GENERAL'::system.task_type");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)")
-                        .HasColumnName("title");
-
-                    b.Property<DateTimeOffset>("UpdatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at")
-                        .HasDefaultValueSql("NOW()");
-
-                    b.Property<uint>("Version")
-                        .IsConcurrencyToken()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("xid")
-                        .HasColumnName("xmin");
-
-                    b.HasKey("Id")
-                        .HasName("pk_field_tasks");
-
-                    b.HasAlternateKey("Id", "FarmId")
-                        .HasName("uq_field_tasks_id_farm");
-
-                    b.HasIndex("CreatedBy");
-
-                    b.HasIndex("PlantId")
-                        .HasDatabaseName("ix_tasks_plant");
-
-                    b.HasIndex("PlantId", "FarmId");
-
-                    b.HasIndex("SourceScanId", "FarmId");
-
-                    b.HasIndex("FarmId", "Status", "DueAt")
-                        .HasDatabaseName("ix_tasks_farm_status");
-
-                    b.ToTable("field_tasks", "field_task", t =>
-                        {
-                            t.HasComment("Field work created by managers, often originating from an AI scan that needs human verification.");
-                        });
-                });
-
-            modelBuilder.Entity("AgriDrone.Modules.FieldTasks.Domain.Media.TaskMedia", b =>
-                {
-                    b.Property<Guid>("TaskId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("task_id");
-
-                    b.Property<Guid>("MediaId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("media_id");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at")
-                        .HasDefaultValueSql("NOW()");
-
-                    b.Property<Guid?>("UploadedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("uploaded_by");
-
-                    b.HasKey("TaskId", "MediaId")
-                        .HasName("pk_task_media");
-
-                    b.HasIndex("MediaId");
-
-                    b.HasIndex("UploadedBy");
-
-                    b.ToTable("task_media", "field_task", t =>
-                        {
-                            t.HasComment("Field photos or other evidence uploaded during task execution.");
-                        });
-                });
-
-            modelBuilder.Entity("AgriDrone.Modules.FieldTasks.Domain.Updates.TaskUpdate", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id")
-                        .HasDefaultValueSql("gen_random_uuid()");
-
-                    b.Property<Guid?>("ClientOperationId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("client_operation_id");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at")
-                        .HasDefaultValueSql("NOW()");
-
-                    b.Property<Guid?>("CreatedScanId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("created_scan_id");
-
-                    b.Property<DateTimeOffset?>("DeviceCreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("device_created_at");
-
-                    b.Property<Guid>("FarmId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("farm_id");
-
-                    b.Property<string>("Note")
-                        .HasColumnType("text")
-                        .HasColumnName("note");
-
-                    b.Property<int?>("Result")
-                        .HasColumnType("system.task_result")
-                        .HasColumnName("result");
-
-                    b.Property<DateTimeOffset>("ServerReceivedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("server_received_at")
-                        .HasDefaultValueSql("NOW()");
-
-                    b.Property<Guid>("TaskId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("task_id");
-
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("user_id");
-
-                    b.HasKey("Id")
-                        .HasName("pk_task_updates");
-
-                    b.HasIndex("ClientOperationId")
-                        .IsUnique()
-                        .HasDatabaseName("uq_task_updates_client_operation")
-                        .HasFilter("client_operation_id IS NOT NULL");
-
-                    b.HasIndex("UserId");
-
-                    b.HasIndex("CreatedScanId", "FarmId");
-
-                    b.HasIndex("TaskId", "CreatedAt")
-                        .IsDescending(false, true)
-                        .HasDatabaseName("ix_task_updates_task");
-
-                    b.HasIndex("TaskId", "FarmId");
-
-                    b.ToTable("task_updates", "field_task", t =>
-                        {
-                            t.HasComment("Worker/manager progress and field result history for a task.");
-                        });
-                });
-
-            modelBuilder.Entity("AgriDrone.Modules.Harvests.Domain.HarvestBatches.HarvestBatch", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id")
-                        .HasDefaultValueSql("gen_random_uuid()");
-
-                    b.Property<string>("BatchCode")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasColumnName("batch_code");
-
-                    b.Property<DateTimeOffset?>("CompletedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("completed_at");
-
-                    b.Property<Guid?>("CompletedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("completed_by");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at")
-                        .HasDefaultValueSql("NOW()");
-
-                    b.Property<Guid>("CreatedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("created_by");
-
-                    b.Property<Guid>("FarmId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("farm_id");
-
-                    b.Property<DateTimeOffset>("HarvestedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("harvested_at");
-
-                    b.Property<string>("Notes")
-                        .HasColumnType("text")
-                        .HasColumnName("notes");
-
-                    b.Property<int?>("ReportedFruitCount")
-                        .HasColumnType("integer")
-                        .HasColumnName("reported_fruit_count");
-
-                    b.Property<decimal?>("ReportedWeightKg")
-                        .HasPrecision(12, 3)
-                        .HasColumnType("numeric(12,3)")
-                        .HasColumnName("reported_weight_kg");
-
-                    b.Property<Guid>("SeasonId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("season_id");
-
-                    b.Property<int>("Status")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("system.harvest_batch_status")
-                        .HasColumnName("status")
-                        .HasDefaultValueSql("'DRAFT'::system.harvest_batch_status");
-
-                    b.Property<DateTimeOffset>("UpdatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at")
-                        .HasDefaultValueSql("NOW()");
-
-                    b.Property<uint>("Version")
-                        .IsConcurrencyToken()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("xid")
-                        .HasColumnName("xmin");
-
-                    b.Property<Guid?>("ZoneId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("zone_id");
-
-                    b.HasKey("Id")
-                        .HasName("pk_harvest_batches");
-
-                    b.HasAlternateKey("Id", "FarmId")
-                        .HasName("uq_harvest_batches_id_farm");
-
-                    b.HasIndex("CompletedBy");
-
-                    b.HasIndex("CreatedBy");
-
-                    b.HasIndex("FarmId", "BatchCode")
-                        .IsUnique()
-                        .HasDatabaseName("uq_harvest_batches_farm_code");
-
-                    b.HasIndex("SeasonId", "FarmId");
-
-                    b.HasIndex("SeasonId", "HarvestedAt")
-                        .IsDescending(false, true)
-                        .HasDatabaseName("ix_harvest_batches_season");
-
-                    b.HasIndex("ZoneId", "FarmId");
-
-                    b.HasIndex("ZoneId", "HarvestedAt")
-                        .IsDescending(false, true)
-                        .HasDatabaseName("ix_harvest_batches_zone");
-
-                    b.ToTable("harvest_batches", "harvest", t =>
-                        {
-                            t.HasComment("One harvesting event; common data is entered once for the batch.");
-
-                            t.HasCheckConstraint("ck_harvest_batch_completion", "(status = 'COMPLETED'::system.harvest_batch_status AND completed_by IS NOT NULL AND completed_at IS NOT NULL) OR (status <> 'COMPLETED'::system.harvest_batch_status AND completed_by IS NULL AND completed_at IS NULL)");
-
-                            t.HasCheckConstraint("ck_harvest_batch_fruit_count", "reported_fruit_count IS NULL OR reported_fruit_count >= 0");
-
-                            t.HasCheckConstraint("ck_harvest_batch_weight", "reported_weight_kg IS NULL OR reported_weight_kg >= 0");
-                        });
-                });
-
-            modelBuilder.Entity("AgriDrone.Modules.Harvests.Domain.PlantHarvests.PlantHarvestQualityDetail", b =>
-                {
-                    b.Property<Guid>("PlantHarvestRecordId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("plant_harvest_record_id");
-
-                    b.Property<Guid>("QualityGradeId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("quality_grade_id");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at")
-                        .HasDefaultValueSql("NOW()");
-
-                    b.Property<Guid>("FarmId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("farm_id");
-
-                    b.Property<int>("FruitCount")
-                        .HasColumnType("integer")
-                        .HasColumnName("fruit_count");
-
-                    b.Property<decimal?>("WeightKg")
-                        .HasPrecision(10, 3)
-                        .HasColumnType("numeric(10,3)")
-                        .HasColumnName("weight_kg");
-
-                    b.HasKey("PlantHarvestRecordId", "QualityGradeId")
-                        .HasName("pk_plant_harvest_quality_details");
-
-                    b.HasIndex("QualityGradeId");
-
-                    b.HasIndex("PlantHarvestRecordId", "FarmId");
-
-                    b.ToTable("plant_harvest_quality_details", "harvest", t =>
-                        {
-                            t.HasComment("Breakdown of one plant harvest record by configurable quality grade.");
-
-                            t.HasCheckConstraint("ck_quality_detail_fruit_count", "fruit_count >= 0");
-
-                            t.HasCheckConstraint("ck_quality_detail_weight", "weight_kg IS NULL OR weight_kg >= 0");
-                        });
-                });
-
-            modelBuilder.Entity("AgriDrone.Modules.Harvests.Domain.PlantHarvests.PlantHarvestRecord", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id")
-                        .HasDefaultValueSql("gen_random_uuid()");
-
-                    b.Property<Guid?>("ClientOperationId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("client_operation_id");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at")
-                        .HasDefaultValueSql("NOW()");
-
-                    b.Property<DateTimeOffset?>("DeviceCreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("device_created_at");
-
-                    b.Property<Guid>("FarmId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("farm_id");
-
-                    b.Property<int>("FruitCount")
-                        .HasColumnType("integer")
-                        .HasColumnName("fruit_count");
-
-                    b.Property<Guid>("HarvestBatchId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("harvest_batch_id");
-
-                    b.Property<string>("Notes")
-                        .HasColumnType("text")
-                        .HasColumnName("notes");
-
-                    b.Property<Guid>("PlantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("plant_id");
-
-                    b.Property<DateTimeOffset>("RecordedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("recorded_at")
-                        .HasDefaultValueSql("NOW()");
-
-                    b.Property<Guid>("RecordedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("recorded_by");
-
-                    b.Property<DateTimeOffset>("ServerReceivedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("server_received_at")
-                        .HasDefaultValueSql("NOW()");
-
-                    b.Property<int>("Source")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("system.harvest_record_source")
-                        .HasColumnName("source")
-                        .HasDefaultValueSql("'WEB'::system.harvest_record_source");
-
-                    b.Property<DateTimeOffset>("UpdatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at")
-                        .HasDefaultValueSql("NOW()");
-
-                    b.Property<decimal>("WeightKg")
-                        .HasPrecision(10, 3)
-                        .HasColumnType("numeric(10,3)")
-                        .HasColumnName("weight_kg");
-
-                    b.HasKey("Id")
-                        .HasName("pk_plant_harvest_records");
-
-                    b.HasAlternateKey("Id", "FarmId")
-                        .HasName("uq_plant_harvest_records_id_farm");
-
-                    b.HasIndex("ClientOperationId")
-                        .IsUnique()
-                        .HasDatabaseName("uq_plant_harvest_records_client_operation")
-                        .HasFilter("client_operation_id IS NOT NULL");
-
-                    b.HasIndex("HarvestBatchId")
-                        .HasDatabaseName("ix_plant_harvest_records_batch");
-
-                    b.HasIndex("PlantId")
-                        .HasDatabaseName("ix_plant_harvest_records_plant");
-
-                    b.HasIndex("RecordedBy");
-
-                    b.HasIndex("HarvestBatchId", "FarmId");
-
-                    b.HasIndex("HarvestBatchId", "PlantId")
-                        .IsUnique()
-                        .HasDatabaseName("uq_plant_harvest_batch_plant");
-
-                    b.HasIndex("PlantId", "FarmId");
-
-                    b.ToTable("plant_harvest_records", "harvest", t =>
-                        {
-                            t.HasComment("Per-plant yield record within a harvest batch.");
-
-                            t.HasCheckConstraint("ck_plant_harvest_fruit_count", "fruit_count >= 0");
-
-                            t.HasCheckConstraint("ck_plant_harvest_weight", "weight_kg >= 0");
-                        });
-                });
-
-            modelBuilder.Entity("AgriDrone.Modules.Harvests.Domain.Quality.HarvestQualityGrade", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id")
-                        .HasDefaultValueSql("gen_random_uuid()");
-
-                    b.Property<string>("Code")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)")
-                        .HasColumnName("code");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at")
-                        .HasDefaultValueSql("NOW()");
-
-                    b.Property<int>("DisplayOrder")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(0)
-                        .HasColumnName("display_order");
-
-                    b.Property<bool>("IsActive")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(true)
-                        .HasColumnName("is_active");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("name");
-
-                    b.Property<DateTimeOffset?>("RetiredAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("retired_at");
-
-                    b.Property<int>("RevisionNumber")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(1)
-                        .HasColumnName("revision_number");
-
-                    b.Property<Guid?>("SupersedesId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("supersedes_id");
-
-                    b.Property<DateTimeOffset>("UpdatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at")
-                        .HasDefaultValueSql("NOW()");
-
-                    b.Property<long>("Version")
-                        .IsConcurrencyToken()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint")
-                        .HasDefaultValue(1L)
-                        .HasColumnName("version");
-
-                    b.HasKey("Id")
-                        .HasName("pk_harvest_quality_grades");
-
-                    b.HasIndex("Code")
-                        .IsUnique()
-                        .HasDatabaseName("uq_quality_grades_active_code")
-                        .HasFilter("is_active = TRUE");
-
-                    b.HasIndex("SupersedesId")
-                        .IsUnique()
-                        .HasDatabaseName("uq_quality_grades_supersedes")
-                        .HasFilter("supersedes_id IS NOT NULL");
-
-                    b.HasIndex("Code", "RevisionNumber")
-                        .IsUnique()
-                        .HasDatabaseName("uq_quality_grades_code_revision");
-
-                    b.ToTable("harvest_quality_grades", "harvest", t =>
-                        {
-                            t.HasComment("Global System Admin-managed quality grades such as A/B/C/Rejected.");
-
-                            t.HasCheckConstraint("ck_quality_display_order", "display_order >= 0");
-                        });
-                });
-
-            modelBuilder.Entity("AgriDrone.Modules.Harvests.Domain.Seasons.Season", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id")
-                        .HasDefaultValueSql("gen_random_uuid()");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at")
-                        .HasDefaultValueSql("NOW()");
-
-                    b.Property<DateOnly?>("EndDate")
-                        .HasColumnType("date")
-                        .HasColumnName("end_date");
-
-                    b.Property<Guid>("FarmId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("farm_id");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("name");
-
-                    b.Property<DateOnly>("StartDate")
-                        .HasColumnType("date")
-                        .HasColumnName("start_date");
-
-                    b.Property<int>("Status")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("system.season_status")
-                        .HasColumnName("status")
-                        .HasDefaultValueSql("'PLANNED'::system.season_status");
-
-                    b.Property<DateTimeOffset>("UpdatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at")
-                        .HasDefaultValueSql("NOW()");
-
-                    b.Property<short>("Year")
-                        .HasColumnType("smallint")
-                        .HasColumnName("year");
-
-                    b.HasKey("Id")
-                        .HasName("pk_seasons");
-
-                    b.HasAlternateKey("Id", "FarmId")
-                        .HasName("uq_seasons_id_farm");
-
-                    b.HasIndex("FarmId", "StartDate")
-                        .IsDescending(false, true)
-                        .HasDatabaseName("ix_seasons_farm");
-
-                    b.HasIndex("FarmId", "Name", "StartDate")
-                        .IsUnique()
-                        .HasDatabaseName("uq_seasons_farm_name_start");
-
-                    b.ToTable("seasons", "harvest", t =>
-                        {
-                            t.HasComment("A farm harvest/growing season used to aggregate productivity over time.");
-
-                            t.HasCheckConstraint("ck_season_dates", "end_date IS NULL OR end_date >= start_date");
-
-                            t.HasCheckConstraint("ck_season_year", "year BETWEEN 2000 AND 2200");
                         });
                 });
 
@@ -2444,6 +1856,10 @@ namespace AgriDrone.Database.Migrations
                         .HasColumnType("character varying(50)")
                         .HasColumnName("mission_code");
 
+                    b.Property<int?>("MissionPurpose")
+                        .HasColumnType("system.mission_purpose")
+                        .HasColumnName("mission_purpose");
+
                     b.Property<int>("MissionType")
                         .HasColumnType("system.mission_type")
                         .HasColumnName("mission_type");
@@ -2495,6 +1911,10 @@ namespace AgriDrone.Database.Migrations
                         .HasColumnType("system.mission_status")
                         .HasColumnName("status")
                         .HasDefaultValueSql("'DRAFT'::system.mission_status");
+
+                    b.Property<Guid?>("SurveyOrderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("survey_order_id");
 
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uuid")
@@ -2564,10 +1984,15 @@ namespace AgriDrone.Database.Migrations
                     b.HasIndex("Status", "ProcessingStatus")
                         .HasDatabaseName("ix_drone_missions_status");
 
+                    b.HasIndex("SurveyOrderId", "MissionPurpose")
+                        .HasDatabaseName("ix_drone_missions_order_purpose");
+
                     b.HasIndex("ZoneId", "FarmId");
 
                     b.HasIndex("DroneId", "ScheduledAt", "ScheduledEndAt")
                         .HasDatabaseName("ix_drone_missions_drone_schedule");
+
+                    b.HasIndex("SurveyOrderId", "TenantId", "FarmId");
 
                     b.ToTable("drone_missions", "mission", t =>
                         {
@@ -2584,6 +2009,171 @@ namespace AgriDrone.Database.Migrations
                             t.HasCheckConstraint("ck_drone_missions_source_map", "(mission_type = 'MAPPING'::system.mission_type AND source_map_version_id IS NULL) OR (mission_type = 'HEALTH_INSPECTION'::system.mission_type AND source_map_version_id IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_drone_missions_time", "ended_at IS NULL OR started_at IS NULL OR ended_at >= started_at");
+                        });
+                });
+
+            modelBuilder.Entity("AgriDrone.Modules.Missions.Domain.Missions.MissionPreflightChecklist", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<Guid>("ChecklistDefinitionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("checklist_definition_id");
+
+                    b.Property<Guid>("ClientOperationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("client_operation_id");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at");
+
+                    b.Property<Guid?>("CompletedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("completed_by");
+
+                    b.Property<JsonDocument>("DefinitionSnapshot")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("definition_snapshot");
+
+                    b.Property<DateTimeOffset?>("DeviceCompletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("device_completed_at");
+
+                    b.Property<string>("FailsafeNotes")
+                        .HasColumnType("text")
+                        .HasColumnName("failsafe_notes");
+
+                    b.Property<Guid>("MissionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("mission_id");
+
+                    b.Property<JsonDocument>("Responses")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("responses");
+
+                    b.Property<DateTimeOffset>("ServerReceivedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("server_received_at")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("system.mission_preflight_checklist_status")
+                        .HasColumnName("status");
+
+                    b.Property<string>("UnsuitableConditionNotes")
+                        .HasColumnType("text")
+                        .HasColumnName("unsuitable_condition_notes");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id")
+                        .HasName("pk_mission_preflight_checklists");
+
+                    b.HasIndex("ChecklistDefinitionId");
+
+                    b.HasIndex("ClientOperationId")
+                        .IsUnique()
+                        .HasDatabaseName("uq_mission_preflight_client_operation");
+
+                    b.HasIndex("CompletedBy");
+
+                    b.HasIndex("MissionId")
+                        .IsUnique()
+                        .HasDatabaseName("uq_mission_preflight_one_completed")
+                        .HasFilter("status = 'COMPLETED'::system.mission_preflight_checklist_status");
+
+                    b.HasIndex("MissionId", "ChecklistDefinitionId")
+                        .IsUnique()
+                        .HasDatabaseName("uq_mission_preflight_definition");
+
+                    b.ToTable("mission_preflight_checklists", "mission", t =>
+                        {
+                            t.HasCheckConstraint("ck_mission_preflight_completion", "(status = 'COMPLETED'::system.mission_preflight_checklist_status AND completed_by IS NOT NULL AND completed_at IS NOT NULL) OR (status <> 'COMPLETED'::system.mission_preflight_checklist_status)");
+
+                            t.HasCheckConstraint("ck_mission_preflight_responses_object", "jsonb_typeof(responses) = 'object'");
+
+                            t.HasCheckConstraint("ck_mission_preflight_snapshot_object", "jsonb_typeof(definition_snapshot) = 'object'");
+                        });
+                });
+
+            modelBuilder.Entity("AgriDrone.Modules.Missions.Domain.Missions.PreflightChecklistDefinition", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("code");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateTimeOffset>("EffectiveFrom")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("effective_from");
+
+                    b.Property<JsonDocument>("Items")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("items");
+
+                    b.Property<DateTimeOffset?>("RetiredAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("retired_at");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("system.preflight_checklist_definition_status")
+                        .HasColumnName("status");
+
+                    b.Property<int>("VersionNumber")
+                        .HasColumnType("integer")
+                        .HasColumnName("version_number");
+
+                    b.HasKey("Id")
+                        .HasName("pk_preflight_checklist_definitions");
+
+                    b.HasIndex("Code")
+                        .IsUnique()
+                        .HasDatabaseName("uq_preflight_definitions_one_active")
+                        .HasFilter("status = 'ACTIVE'::system.preflight_checklist_definition_status");
+
+                    b.HasIndex("CreatedBy");
+
+                    b.HasIndex("Code", "VersionNumber")
+                        .IsUnique()
+                        .HasDatabaseName("uq_preflight_definitions_code_version");
+
+                    b.ToTable("preflight_checklist_definitions", "mission", t =>
+                        {
+                            t.HasCheckConstraint("ck_preflight_definitions_items_array", "jsonb_typeof(items) = 'array'");
+
+                            t.HasCheckConstraint("ck_preflight_definitions_retirement", "(status = 'RETIRED'::system.preflight_checklist_definition_status AND retired_at IS NOT NULL) OR (status <> 'RETIRED'::system.preflight_checklist_definition_status AND retired_at IS NULL)");
+
+                            t.HasCheckConstraint("ck_preflight_definitions_version_positive", "version_number >= 1");
                         });
                 });
 
@@ -2630,6 +2220,10 @@ namespace AgriDrone.Database.Migrations
                     b.Property<Guid?>("EvidenceMediaId")
                         .HasColumnType("uuid")
                         .HasColumnName("evidence_media_id");
+
+                    b.Property<Guid?>("FarmBaseMapVersionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("farm_base_map_version_id");
 
                     b.Property<Guid>("FarmId")
                         .HasColumnType("uuid")
@@ -2720,6 +2314,9 @@ namespace AgriDrone.Database.Migrations
 
                     b.HasIndex("EvidenceMediaId");
 
+                    b.HasIndex("FarmBaseMapVersionId")
+                        .HasDatabaseName("ix_observations_farm_base_map_version");
+
                     b.HasIndex("MapVersionId")
                         .HasDatabaseName("ix_observations_map_version");
 
@@ -2732,6 +2329,8 @@ namespace AgriDrone.Database.Migrations
                         .HasDatabaseName("ix_observation_resolved_plant");
 
                     b.HasIndex("ReviewedBy");
+
+                    b.HasIndex("FarmBaseMapVersionId", "FarmId");
 
                     b.HasIndex("MapVersionId", "FarmId");
 
@@ -4114,9 +3713,13 @@ namespace AgriDrone.Database.Migrations
                         .HasColumnType("system.scan_source")
                         .HasColumnName("source");
 
-                    b.Property<Guid?>("SourceTaskId")
+                    b.Property<Guid?>("SurveyOrderId")
                         .HasColumnType("uuid")
-                        .HasColumnName("source_task_id");
+                        .HasColumnName("survey_order_id");
+
+                    b.Property<Guid?>("SurveyResultId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("survey_result_id");
 
                     b.Property<Guid?>("VerificationOfScanId")
                         .HasColumnType("uuid")
@@ -4153,11 +3756,16 @@ namespace AgriDrone.Database.Migrations
                         .IsDescending(false, true)
                         .HasDatabaseName("ix_plant_scans_plant_date");
 
-                    b.HasIndex("SourceTaskId", "FarmId");
+                    b.HasIndex("SurveyOrderId", "FarmId");
+
+                    b.HasIndex("SurveyOrderId", "SurveyResultId")
+                        .HasDatabaseName("ix_plant_scans_survey_result");
 
                     b.HasIndex("FarmId", "OverallHealthLevelId", "ObservedAt")
                         .IsDescending(false, false, true)
                         .HasDatabaseName("ix_plant_scans_farm_health_level");
+
+                    b.HasIndex("SurveyResultId", "SurveyOrderId", "FarmId");
 
                     b.HasIndex("VerificationOfScanId", "PlantId", "FarmId");
 
@@ -4344,6 +3952,1047 @@ namespace AgriDrone.Database.Migrations
                             t.HasCheckConstraint("ck_scan_verification_revision_positive", "revision_number >= 1");
 
                             t.HasCheckConstraint("ck_scan_verification_target_decision", "decision IN ('CONFIRMED'::system.verification_decision, 'CORRECTED'::system.verification_decision, 'REJECTED'::system.verification_decision, 'FIELD_INSPECTION_REQUIRED'::system.verification_decision)");
+                        });
+                });
+
+            modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.HarvestReadinessAssessment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<string>("AiAssessment")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("ai_assessment");
+
+                    b.Property<decimal?>("AiConfidence")
+                        .HasPrecision(5, 4)
+                        .HasColumnType("numeric(5,4)")
+                        .HasColumnName("ai_confidence");
+
+                    b.Property<string>("AssessmentGranularity")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("assessment_granularity");
+
+                    b.Property<string>("CorrectedAssessment")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("corrected_assessment");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<string>("CriteriaVersion")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("criteria_version");
+
+                    b.Property<JsonDocument>("Evidence")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("evidence")
+                        .HasDefaultValueSql("'{}'::jsonb");
+
+                    b.Property<Guid>("FarmId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("farm_id");
+
+                    b.Property<Guid?>("MissionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("mission_id");
+
+                    b.Property<Guid?>("PlantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("plant_id");
+
+                    b.Property<DateTimeOffset?>("ReviewedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("reviewed_at");
+
+                    b.Property<Guid?>("ReviewedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("reviewed_by");
+
+                    b.Property<int>("Status")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("system.harvest_readiness_review_status")
+                        .HasColumnName("status")
+                        .HasDefaultValueSql("'PENDING'::system.harvest_readiness_review_status");
+
+                    b.Property<Guid>("SurveyOrderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("survey_order_id");
+
+                    b.Property<Guid>("SurveyResultId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("survey_result_id");
+
+                    b.Property<JsonDocument>("VisibleIndicators")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("visible_indicators");
+
+                    b.HasKey("Id")
+                        .HasName("pk_harvest_readiness_assessments");
+
+                    b.HasIndex("ReviewedBy");
+
+                    b.HasIndex("MissionId", "FarmId");
+
+                    b.HasIndex("PlantId", "FarmId");
+
+                    b.HasIndex("SurveyResultId", "PlantId")
+                        .HasDatabaseName("ix_harvest_readiness_result_plant");
+
+                    b.HasIndex("FarmId", "PlantId", "CreatedAt")
+                        .IsDescending(false, false, true)
+                        .HasDatabaseName("ix_harvest_readiness_profile_timeline");
+
+                    b.HasIndex("SurveyResultId", "SurveyOrderId", "FarmId");
+
+                    b.ToTable("harvest_readiness_assessments", "survey", t =>
+                        {
+                            t.HasCheckConstraint("ck_harvest_readiness_confidence", "ai_confidence IS NULL OR ai_confidence BETWEEN 0 AND 1");
+
+                            t.HasCheckConstraint("ck_harvest_readiness_review", "(status = 'PENDING'::system.harvest_readiness_review_status AND reviewed_by IS NULL AND reviewed_at IS NULL) OR (status <> 'PENDING'::system.harvest_readiness_review_status AND reviewed_by IS NOT NULL AND reviewed_at IS NOT NULL)");
+                        });
+                });
+
+            modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.PaymentEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<string>("DeduplicationKey")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("deduplication_key");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("event_type");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("occurred_at");
+
+                    b.Property<JsonDocument>("Payload")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("payload");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("provider");
+
+                    b.Property<DateTimeOffset>("ReceivedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("received_at")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<Guid>("SurveyPaymentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("survey_payment_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_payment_events");
+
+                    b.HasIndex("Provider", "DeduplicationKey")
+                        .IsUnique()
+                        .HasDatabaseName("uq_payment_events_provider_dedup");
+
+                    b.HasIndex("SurveyPaymentId", "OccurredAt")
+                        .HasDatabaseName("ix_payment_events_timeline");
+
+                    b.ToTable("payment_events", "survey");
+                });
+
+            modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.PriceAdjustment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<DateTimeOffset?>("ApprovedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("approved_at");
+
+                    b.Property<Guid?>("ApprovedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("approved_by");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<decimal>("NewAreaHa")
+                        .HasPrecision(12, 4)
+                        .HasColumnType("numeric(12,4)")
+                        .HasColumnName("new_area_ha");
+
+                    b.Property<decimal>("NewPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("new_price");
+
+                    b.Property<decimal>("OldAreaHa")
+                        .HasPrecision(12, 4)
+                        .HasColumnType("numeric(12,4)")
+                        .HasColumnName("old_area_ha");
+
+                    b.Property<decimal>("OldPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("old_price");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("reason");
+
+                    b.Property<Guid>("RequestedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("requested_by");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("system.price_adjustment_status")
+                        .HasColumnName("status");
+
+                    b.Property<Guid>("SurveyOrderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("survey_order_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_price_adjustments");
+
+                    b.HasIndex("ApprovedBy");
+
+                    b.HasIndex("RequestedBy");
+
+                    b.HasIndex("SurveyOrderId")
+                        .IsUnique()
+                        .HasDatabaseName("uq_price_adjustments_one_pending_per_order")
+                        .HasFilter("status = 'PENDING'::system.price_adjustment_status");
+
+                    b.HasIndex("SurveyOrderId", "CreatedAt")
+                        .HasDatabaseName("ix_price_adjustments_order_timeline");
+
+                    b.ToTable("price_adjustments", "survey", t =>
+                        {
+                            t.HasCheckConstraint("ck_price_adjustments_approval", "(status IN ('APPROVED'::system.price_adjustment_status, 'APPLIED'::system.price_adjustment_status) AND approved_by IS NOT NULL AND approved_at IS NOT NULL) OR status IN ('PENDING'::system.price_adjustment_status, 'REJECTED'::system.price_adjustment_status)");
+
+                            t.HasCheckConstraint("ck_price_adjustments_area_positive", "old_area_ha > 0 AND new_area_ha > 0");
+
+                            t.HasCheckConstraint("ck_price_adjustments_changed", "old_area_ha <> new_area_ha OR old_price <> new_price");
+
+                            t.HasCheckConstraint("ck_price_adjustments_price_nonnegative", "old_price >= 0 AND new_price >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.SurveyAppointment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<DateTimeOffset?>("ConfirmedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("confirmed_at");
+
+                    b.Property<Guid?>("ConfirmedByTenantOwnerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("confirmed_by_tenant_owner_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<DateTimeOffset>("ProposedEndAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("proposed_end_at");
+
+                    b.Property<DateTimeOffset>("ProposedStartAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("proposed_start_at");
+
+                    b.Property<string>("RescheduleReason")
+                        .HasColumnType("text")
+                        .HasColumnName("reschedule_reason");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("system.survey_appointment_status")
+                        .HasColumnName("status");
+
+                    b.Property<Guid>("SurveyOrderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("survey_order_id");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id")
+                        .HasName("pk_survey_appointments");
+
+                    b.HasIndex("ConfirmedByTenantOwnerId");
+
+                    b.HasIndex("SurveyOrderId")
+                        .IsUnique()
+                        .HasDatabaseName("uq_survey_appointments_one_active_per_order")
+                        .HasFilter("status IN ('PROPOSED'::system.survey_appointment_status, 'CONFIRMED'::system.survey_appointment_status, 'RESCHEDULE_REQUESTED'::system.survey_appointment_status)");
+
+                    b.HasIndex("Status", "ProposedStartAt")
+                        .HasDatabaseName("ix_survey_appointments_schedule");
+
+                    b.ToTable("survey_appointments", "survey", t =>
+                        {
+                            t.HasCheckConstraint("ck_survey_appointments_confirmation", "(status = 'CONFIRMED'::system.survey_appointment_status AND confirmed_by_tenant_owner_id IS NOT NULL AND confirmed_at IS NOT NULL) OR (status <> 'CONFIRMED'::system.survey_appointment_status AND confirmed_at IS NULL)");
+
+                            t.HasCheckConstraint("ck_survey_appointments_window", "proposed_end_at > proposed_start_at");
+                        });
+                });
+
+            modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.SurveyOrder", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<decimal?>("ConfirmedSurveyAreaHa")
+                        .HasPrecision(12, 4)
+                        .HasColumnType("numeric(12,4)")
+                        .HasColumnName("confirmed_survey_area_ha");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<string>("Currency")
+                        .HasMaxLength(3)
+                        .HasColumnType("character(3)")
+                        .HasColumnName("currency")
+                        .IsFixedLength();
+
+                    b.Property<Guid>("FarmId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("farm_id");
+
+                    b.Property<decimal?>("FinalPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("final_price");
+
+                    b.Property<string>("OrderNumber")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("order_number");
+
+                    b.Property<Guid?>("PreviousCompatibleOrderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("previous_compatible_order_id");
+
+                    b.Property<decimal?>("PricePerHaSnapshot")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("price_per_ha_snapshot");
+
+                    b.Property<bool>("RequiresBaselineMapping")
+                        .HasColumnType("boolean")
+                        .HasColumnName("requires_baseline_mapping");
+
+                    b.Property<DateTimeOffset?>("ScopeConfirmedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("scope_confirmed_at");
+
+                    b.Property<Guid?>("ScopeConfirmedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("scope_confirmed_by");
+
+                    b.Property<int>("Status")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("system.survey_order_status")
+                        .HasColumnName("status")
+                        .HasDefaultValueSql("'PENDING_SCOPE_CONFIRMATION'::system.survey_order_status");
+
+                    b.Property<Guid>("SurveyRequestId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("survey_request_id");
+
+                    b.Property<Guid>("SurveyServiceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("survey_service_id");
+
+                    b.Property<Guid?>("SurveyServicePriceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("survey_service_price_id");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id")
+                        .HasName("pk_survey_orders");
+
+                    b.HasAlternateKey("Id", "FarmId")
+                        .HasName("uq_survey_orders_id_farm");
+
+                    b.HasAlternateKey("Id", "FarmId", "SurveyServiceId")
+                        .HasName("uq_survey_orders_id_farm_service");
+
+                    b.HasAlternateKey("Id", "TenantId", "FarmId")
+                        .HasName("uq_survey_orders_id_tenant_farm");
+
+                    b.HasIndex("OrderNumber")
+                        .IsUnique()
+                        .HasDatabaseName("uq_survey_orders_number");
+
+                    b.HasIndex("ScopeConfirmedBy");
+
+                    b.HasIndex("SurveyRequestId")
+                        .IsUnique()
+                        .HasDatabaseName("uq_survey_orders_request");
+
+                    b.HasIndex("SurveyServiceId");
+
+                    b.HasIndex("FarmId", "TenantId");
+
+                    b.HasIndex("SurveyServicePriceId", "SurveyServiceId");
+
+                    b.HasIndex("FarmId", "SurveyServiceId", "CreatedAt")
+                        .IsDescending(false, false, true)
+                        .HasDatabaseName("ix_survey_orders_farm_service_history");
+
+                    b.HasIndex("PreviousCompatibleOrderId", "FarmId", "SurveyServiceId");
+
+                    b.HasIndex("TenantId", "FarmId", "Status")
+                        .HasDatabaseName("ix_survey_orders_manager_work_queue");
+
+                    b.ToTable("survey_orders", "survey", t =>
+                        {
+                            t.HasCheckConstraint("ck_survey_orders_area_positive", "confirmed_survey_area_ha IS NULL OR confirmed_survey_area_ha > 0");
+
+                            t.HasCheckConstraint("ck_survey_orders_currency", "currency IS NULL OR currency ~ '^[A-Z]{3}$'");
+
+                            t.HasCheckConstraint("ck_survey_orders_final_price", "final_price IS NULL OR final_price = round(confirmed_survey_area_ha * price_per_ha_snapshot, 2)");
+
+                            t.HasCheckConstraint("ck_survey_orders_previous_not_self", "previous_compatible_order_id IS NULL OR previous_compatible_order_id <> id");
+
+                            t.HasCheckConstraint("ck_survey_orders_price_nonnegative", "(price_per_ha_snapshot IS NULL OR price_per_ha_snapshot > 0) AND (final_price IS NULL OR final_price >= 0)");
+
+                            t.HasCheckConstraint("ck_survey_orders_pricing_snapshot_complete", "(confirmed_survey_area_ha IS NULL AND price_per_ha_snapshot IS NULL AND currency IS NULL AND final_price IS NULL AND scope_confirmed_by IS NULL AND scope_confirmed_at IS NULL) OR (confirmed_survey_area_ha IS NOT NULL AND price_per_ha_snapshot IS NOT NULL AND currency IS NOT NULL AND final_price IS NOT NULL AND scope_confirmed_by IS NOT NULL AND scope_confirmed_at IS NOT NULL)");
+                        });
+                });
+
+            modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.SurveyPayment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("amount");
+
+                    b.Property<DateTimeOffset?>("ConfirmedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("confirmed_at");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character(3)")
+                        .HasColumnName("currency")
+                        .IsFixedLength();
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("provider");
+
+                    b.Property<string>("ProviderReference")
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)")
+                        .HasColumnName("provider_reference");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("system.survey_payment_status")
+                        .HasColumnName("status");
+
+                    b.Property<Guid>("SurveyOrderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("survey_order_id");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id")
+                        .HasName("pk_survey_payments");
+
+                    b.HasIndex("SurveyOrderId")
+                        .IsUnique()
+                        .HasDatabaseName("uq_survey_payments_one_active_per_order")
+                        .HasFilter("status IN ('PENDING'::system.survey_payment_status, 'PROCESSING'::system.survey_payment_status, 'CONFIRMED'::system.survey_payment_status, 'ADJUSTMENT_REQUIRED'::system.survey_payment_status)");
+
+                    b.HasIndex("Provider", "ProviderReference")
+                        .IsUnique()
+                        .HasDatabaseName("uq_survey_payments_provider_reference")
+                        .HasFilter("provider_reference IS NOT NULL");
+
+                    b.HasIndex("Status", "UpdatedAt")
+                        .HasDatabaseName("ix_survey_payments_reconciliation");
+
+                    b.ToTable("survey_payments", "survey", t =>
+                        {
+                            t.HasCheckConstraint("ck_survey_payments_amount_positive", "amount > 0");
+
+                            t.HasCheckConstraint("ck_survey_payments_confirmation", "(status = 'CONFIRMED'::system.survey_payment_status AND confirmed_at IS NOT NULL AND provider_reference IS NOT NULL) OR (status <> 'CONFIRMED'::system.survey_payment_status)");
+
+                            t.HasCheckConstraint("ck_survey_payments_currency", "currency ~ '^[A-Z]{3}$'");
+                        });
+                });
+
+            modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.SurveyRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<string>("ApplicantEmail")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .HasColumnName("applicant_email");
+
+                    b.Property<string>("ApplicantName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)")
+                        .HasColumnName("applicant_name");
+
+                    b.Property<string>("ApplicantPhone")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("applicant_phone");
+
+                    b.Property<decimal>("ApproximateAreaHa")
+                        .HasPrecision(12, 4)
+                        .HasColumnType("numeric(12,4)")
+                        .HasColumnName("approximate_area_ha");
+
+                    b.Property<string>("CallerScope")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("caller_scope");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<int?>("EstimatedPoleCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("estimated_pole_count");
+
+                    b.Property<string>("FarmAddress")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("farm_address");
+
+                    b.Property<Guid>("FarmId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("farm_id");
+
+                    b.Property<string>("FarmName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("farm_name");
+
+                    b.Property<string>("IdempotencyKey")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("idempotency_key");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("system.survey_request_kind")
+                        .HasColumnName("kind");
+
+                    b.Property<Point>("MapLocation")
+                        .IsRequired()
+                        .HasColumnType("geometry(Point,4326)")
+                        .HasColumnName("map_location");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("text")
+                        .HasColumnName("notes");
+
+                    b.Property<DateTimeOffset?>("PreferredEndAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("preferred_end_at");
+
+                    b.Property<DateTimeOffset?>("PreferredStartAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("preferred_start_at");
+
+                    b.Property<string>("RequestNumber")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("request_number");
+
+                    b.Property<Guid?>("RequestedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("requested_by_user_id");
+
+                    b.Property<int>("Status")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("system.survey_request_status")
+                        .HasColumnName("status")
+                        .HasDefaultValueSql("'SUBMITTED'::system.survey_request_status");
+
+                    b.Property<Guid>("SurveyServiceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("survey_service_id");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id")
+                        .HasName("pk_survey_requests");
+
+                    b.HasAlternateKey("Id", "TenantId", "FarmId")
+                        .HasName("uq_survey_requests_id_tenant_farm");
+
+                    b.HasIndex("MapLocation")
+                        .HasDatabaseName("ix_survey_requests_map_location_gist");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("MapLocation"), "gist");
+
+                    b.HasIndex("RequestNumber")
+                        .IsUnique()
+                        .HasDatabaseName("uq_survey_requests_number");
+
+                    b.HasIndex("RequestedByUserId");
+
+                    b.HasIndex("SurveyServiceId");
+
+                    b.HasIndex("CallerScope", "IdempotencyKey")
+                        .IsUnique()
+                        .HasDatabaseName("uq_survey_requests_caller_idempotency");
+
+                    b.HasIndex("FarmId", "TenantId");
+
+                    b.HasIndex("Status", "CreatedAt")
+                        .HasDatabaseName("ix_survey_requests_inbox");
+
+                    b.HasIndex("TenantId", "CreatedAt")
+                        .IsDescending(false, true)
+                        .HasDatabaseName("ix_survey_requests_tenant_history");
+
+                    b.ToTable("survey_requests", "survey", t =>
+                        {
+                            t.HasCheckConstraint("ck_survey_requests_area_positive", "approximate_area_ha > 0");
+
+                            t.HasCheckConstraint("ck_survey_requests_kind_context", "(kind = 'NEW_CUSTOMER'::system.survey_request_kind AND tenant_id IS NULL AND farm_id IS NULL AND requested_by_user_id IS NULL) OR (kind = 'EXISTING_TENANT_NEW_FARM'::system.survey_request_kind AND tenant_id IS NOT NULL AND farm_id IS NULL AND requested_by_user_id IS NOT NULL) OR (kind = 'EXISTING_FARM_SURVEY'::system.survey_request_kind AND tenant_id IS NOT NULL AND farm_id IS NOT NULL AND requested_by_user_id IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_survey_requests_pole_count", "estimated_pole_count IS NULL OR estimated_pole_count >= 0");
+
+                            t.HasCheckConstraint("ck_survey_requests_preferred_window", "preferred_end_at IS NULL OR (preferred_start_at IS NOT NULL AND preferred_end_at > preferred_start_at)");
+                        });
+                });
+
+            modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.SurveyRequestReview", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<JsonDocument>("ChecklistSnapshot")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("checklist_snapshot");
+
+                    b.Property<int>("Decision")
+                        .HasColumnType("system.survey_review_decision")
+                        .HasColumnName("decision");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("reason");
+
+                    b.Property<DateTimeOffset>("ReviewedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("reviewed_at");
+
+                    b.Property<Guid>("ReviewedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("reviewed_by");
+
+                    b.Property<Guid>("SurveyRequestId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("survey_request_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_survey_request_reviews");
+
+                    b.HasIndex("ReviewedBy");
+
+                    b.HasIndex("SurveyRequestId", "ReviewedAt")
+                        .HasDatabaseName("ix_survey_request_reviews_timeline");
+
+                    b.ToTable("survey_request_reviews", "survey", t =>
+                        {
+                            t.HasCheckConstraint("ck_survey_request_reviews_reason", "length(btrim(reason)) > 0");
+                        });
+                });
+
+            modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.SurveyResult", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<Guid>("FarmId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("farm_id");
+
+                    b.Property<JsonDocument>("Provenance")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("provenance")
+                        .HasDefaultValueSql("'{}'::jsonb");
+
+                    b.Property<DateTimeOffset?>("PublishedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("published_at");
+
+                    b.Property<Guid?>("PublishedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("published_by");
+
+                    b.Property<DateTimeOffset?>("ReviewedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("reviewed_at");
+
+                    b.Property<Guid?>("ReviewedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("reviewed_by");
+
+                    b.Property<int>("ServiceType")
+                        .HasColumnType("system.survey_service_type")
+                        .HasColumnName("service_type");
+
+                    b.Property<int>("Status")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("system.survey_result_status")
+                        .HasColumnName("status")
+                        .HasDefaultValueSql("'PENDING_REVIEW'::system.survey_result_status");
+
+                    b.Property<Guid>("SurveyOrderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("survey_order_id");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id")
+                        .HasName("pk_survey_results");
+
+                    b.HasAlternateKey("Id", "FarmId")
+                        .HasName("uq_survey_results_id_farm");
+
+                    b.HasAlternateKey("Id", "SurveyOrderId", "FarmId")
+                        .HasName("uq_survey_results_id_order_farm");
+
+                    b.HasIndex("PublishedBy");
+
+                    b.HasIndex("ReviewedBy");
+
+                    b.HasIndex("SurveyOrderId")
+                        .IsUnique()
+                        .HasDatabaseName("uq_survey_results_order");
+
+                    b.HasIndex("FarmId", "ServiceType", "PublishedAt")
+                        .IsDescending(false, false, true)
+                        .HasDatabaseName("ix_survey_results_profile_timeline");
+
+                    b.HasIndex("SurveyOrderId", "TenantId", "FarmId")
+                        .IsUnique();
+
+                    b.HasIndex("TenantId", "FarmId", "Status")
+                        .HasDatabaseName("ix_survey_results_farm_status");
+
+                    b.ToTable("survey_results", "survey", t =>
+                        {
+                            t.HasCheckConstraint("ck_survey_results_review_publication", "(status = 'PENDING_REVIEW'::system.survey_result_status AND reviewed_by IS NULL AND reviewed_at IS NULL AND published_by IS NULL AND published_at IS NULL) OR (status = 'APPROVED'::system.survey_result_status AND reviewed_by IS NOT NULL AND reviewed_at IS NOT NULL AND published_by IS NULL AND published_at IS NULL) OR (status = 'PUBLISHED'::system.survey_result_status AND reviewed_by IS NOT NULL AND reviewed_at IS NOT NULL AND published_by IS NOT NULL AND published_at IS NOT NULL)");
+                        });
+                });
+
+            modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.SurveyService", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("code");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("description");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)")
+                        .HasColumnName("name");
+
+                    b.Property<int>("ServiceType")
+                        .HasColumnType("system.survey_service_type")
+                        .HasColumnName("service_type");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("system.survey_service_status")
+                        .HasColumnName("status");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id")
+                        .HasName("pk_survey_services");
+
+                    b.HasIndex("Code")
+                        .IsUnique()
+                        .HasDatabaseName("uq_survey_services_code");
+
+                    b.HasIndex("Status", "ServiceType")
+                        .HasDatabaseName("ix_survey_services_catalogue");
+
+                    b.ToTable("survey_services", "survey");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = new Guid("10000000-0000-0000-0000-000000000001"),
+                            Code = "PLANT_HEALTH",
+                            CreatedAt = new DateTimeOffset(new DateTime(2026, 9, 25, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Description = "Drone imagery survey for human-verified plant health findings.",
+                            Name = "Plant Health Survey",
+                            ServiceType = 0,
+                            Status = 1,
+                            UpdatedAt = new DateTimeOffset(new DateTime(2026, 9, 25, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0))
+                        },
+                        new
+                        {
+                            Id = new Guid("10000000-0000-0000-0000-000000000002"),
+                            Code = "HARVEST_READINESS",
+                            CreatedAt = new DateTimeOffset(new DateTime(2026, 9, 25, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Description = "Experimental visible-indicator assessment of harvest readiness.",
+                            Name = "Harvest Readiness Survey",
+                            ServiceType = 1,
+                            Status = 0,
+                            UpdatedAt = new DateTimeOffset(new DateTime(2026, 9, 25, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0))
+                        });
+                });
+
+            modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.SurveyServicePrice", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character(3)")
+                        .HasColumnName("currency")
+                        .IsFixedLength();
+
+                    b.Property<DateTimeOffset>("EffectiveFrom")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("effective_from");
+
+                    b.Property<DateTimeOffset?>("EffectiveTo")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("effective_to");
+
+                    b.Property<decimal>("PricePerHa")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("price_per_ha");
+
+                    b.Property<Guid>("SurveyServiceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("survey_service_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_survey_service_prices");
+
+                    b.HasAlternateKey("Id", "SurveyServiceId")
+                        .HasName("uq_survey_service_prices_id_service");
+
+                    b.HasIndex("CreatedBy");
+
+                    b.HasIndex("SurveyServiceId", "EffectiveFrom")
+                        .IsDescending(false, true)
+                        .HasDatabaseName("ix_survey_service_prices_effective");
+
+                    b.ToTable("survey_service_prices", "survey", t =>
+                        {
+                            t.HasCheckConstraint("ck_survey_service_prices_amount_positive", "price_per_ha > 0");
+
+                            t.HasCheckConstraint("ck_survey_service_prices_currency", "currency ~ '^[A-Z]{3}$'");
+
+                            t.HasCheckConstraint("ck_survey_service_prices_window", "effective_to IS NULL OR effective_to > effective_from");
                         });
                 });
 
@@ -4685,6 +5334,31 @@ namespace AgriDrone.Database.Migrations
                         .HasConstraintName("fk_farms_tenants_tenant_id");
                 });
 
+            modelBuilder.Entity("AgriDrone.Modules.Farms.Domain.Maps.FarmBaseMapVersion", b =>
+                {
+                    b.HasOne("AgriDrone.Modules.Identity.Domain.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("PublishedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_farm_base_map_versions_users_published_by");
+
+                    b.HasOne("AgriDrone.Modules.Farms.Domain.Farms.Farm", null)
+                        .WithMany()
+                        .HasForeignKey("FarmId", "TenantId")
+                        .HasPrincipalKey("Id", "TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_farm_base_map_versions_farms_same_tenant");
+
+                    b.HasOne("AgriDrone.Modules.Surveys.Domain.SurveyOrder", null)
+                        .WithMany()
+                        .HasForeignKey("SourceSurveyOrderId", "TenantId", "FarmId")
+                        .HasPrincipalKey("Id", "TenantId", "FarmId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_farm_base_map_versions_orders_same_tenant_farm");
+                });
+
             modelBuilder.Entity("AgriDrone.Modules.Farms.Domain.Maps.ZoneMapVersion", b =>
                 {
                     b.HasOne("AgriDrone.Modules.Identity.Domain.Users.User", null)
@@ -4692,6 +5366,13 @@ namespace AgriDrone.Database.Migrations
                         .HasForeignKey("ConfirmedBy")
                         .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("fk_zone_map_versions_users_confirmed_by");
+
+                    b.HasOne("AgriDrone.Modules.Farms.Domain.Maps.FarmBaseMapVersion", "FarmBaseMapVersion")
+                        .WithMany("ZoneMapVersions")
+                        .HasForeignKey("FarmBaseMapVersionId", "FarmId")
+                        .HasPrincipalKey("Id", "FarmId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_zone_map_versions_farm_base_map_same_farm");
 
                     b.HasOne("AgriDrone.Modules.Missions.Domain.Missions.DroneMission", null)
                         .WithMany()
@@ -4707,6 +5388,8 @@ namespace AgriDrone.Database.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_zone_map_versions_zones_same_farm");
+
+                    b.Navigation("FarmBaseMapVersion");
 
                     b.Navigation("Zone");
                 });
@@ -4728,217 +5411,6 @@ namespace AgriDrone.Database.Migrations
                         .HasConstraintName("fk_farm_zones_farms_farm_id");
 
                     b.Navigation("Farm");
-                });
-
-            modelBuilder.Entity("AgriDrone.Modules.FieldTasks.Domain.Assignments.TaskAssignment", b =>
-                {
-                    b.HasOne("AgriDrone.Modules.Identity.Domain.Users.User", null)
-                        .WithMany()
-                        .HasForeignKey("AssignedBy")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_task_assignments_users_assigned_by");
-
-                    b.HasOne("AgriDrone.Modules.FieldTasks.Domain.FieldTasks.FieldTask", "Task")
-                        .WithMany("Assignments")
-                        .HasForeignKey("TaskId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_task_assignments_field_tasks_task_id");
-
-                    b.HasOne("AgriDrone.Modules.Identity.Domain.Users.User", null)
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_task_assignments_users_user_id");
-
-                    b.Navigation("Task");
-                });
-
-            modelBuilder.Entity("AgriDrone.Modules.FieldTasks.Domain.FieldTasks.FieldTask", b =>
-                {
-                    b.HasOne("AgriDrone.Modules.Identity.Domain.Users.User", null)
-                        .WithMany()
-                        .HasForeignKey("CreatedBy")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_field_tasks_users_created_by");
-
-                    b.HasOne("AgriDrone.Modules.Farms.Domain.Farms.Farm", null)
-                        .WithMany()
-                        .HasForeignKey("FarmId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_field_tasks_farms_farm_id");
-
-                    b.HasOne("AgriDrone.Modules.Plants.Domain.Plants.Plant", null)
-                        .WithMany()
-                        .HasForeignKey("PlantId", "FarmId")
-                        .HasPrincipalKey("Id", "FarmId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .HasConstraintName("fk_task_plant_same_farm");
-
-                    b.HasOne("AgriDrone.Modules.Plants.Domain.Scans.PlantScan", null)
-                        .WithMany()
-                        .HasForeignKey("SourceScanId", "FarmId")
-                        .HasPrincipalKey("Id", "FarmId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .HasConstraintName("fk_task_scan_same_farm");
-                });
-
-            modelBuilder.Entity("AgriDrone.Modules.FieldTasks.Domain.Media.TaskMedia", b =>
-                {
-                    b.HasOne("AgriDrone.Modules.Missions.Domain.Media.MediaAsset", null)
-                        .WithMany()
-                        .HasForeignKey("MediaId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_task_media_media_assets_media_id");
-
-                    b.HasOne("AgriDrone.Modules.FieldTasks.Domain.FieldTasks.FieldTask", "Task")
-                        .WithMany("Media")
-                        .HasForeignKey("TaskId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_task_media_field_tasks_task_id");
-
-                    b.HasOne("AgriDrone.Modules.Identity.Domain.Users.User", null)
-                        .WithMany()
-                        .HasForeignKey("UploadedBy")
-                        .OnDelete(DeleteBehavior.SetNull)
-                        .HasConstraintName("fk_task_media_users_uploaded_by");
-
-                    b.Navigation("Task");
-                });
-
-            modelBuilder.Entity("AgriDrone.Modules.FieldTasks.Domain.Updates.TaskUpdate", b =>
-                {
-                    b.HasOne("AgriDrone.Modules.Identity.Domain.Users.User", null)
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_task_updates_users_user_id");
-
-                    b.HasOne("AgriDrone.Modules.Plants.Domain.Scans.PlantScan", null)
-                        .WithMany()
-                        .HasForeignKey("CreatedScanId", "FarmId")
-                        .HasPrincipalKey("Id", "FarmId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .HasConstraintName("fk_task_updates_created_scan_same_farm");
-
-                    b.HasOne("AgriDrone.Modules.FieldTasks.Domain.FieldTasks.FieldTask", "Task")
-                        .WithMany("Updates")
-                        .HasForeignKey("TaskId", "FarmId")
-                        .HasPrincipalKey("Id", "FarmId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_task_updates_field_tasks_same_farm");
-
-                    b.Navigation("Task");
-                });
-
-            modelBuilder.Entity("AgriDrone.Modules.Harvests.Domain.HarvestBatches.HarvestBatch", b =>
-                {
-                    b.HasOne("AgriDrone.Modules.Identity.Domain.Users.User", null)
-                        .WithMany()
-                        .HasForeignKey("CompletedBy")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .HasConstraintName("fk_harvest_batches_users_completed_by");
-
-                    b.HasOne("AgriDrone.Modules.Identity.Domain.Users.User", null)
-                        .WithMany()
-                        .HasForeignKey("CreatedBy")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_harvest_batches_users_created_by");
-
-                    b.HasOne("AgriDrone.Modules.Harvests.Domain.Seasons.Season", "Season")
-                        .WithMany("HarvestBatches")
-                        .HasForeignKey("SeasonId", "FarmId")
-                        .HasPrincipalKey("Id", "FarmId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_harvest_batch_season_same_farm");
-
-                    b.HasOne("AgriDrone.Modules.Farms.Domain.Zones.FarmZone", null)
-                        .WithMany()
-                        .HasForeignKey("ZoneId", "FarmId")
-                        .HasPrincipalKey("Id", "FarmId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .HasConstraintName("fk_harvest_batch_zone_same_farm");
-
-                    b.Navigation("Season");
-                });
-
-            modelBuilder.Entity("AgriDrone.Modules.Harvests.Domain.PlantHarvests.PlantHarvestQualityDetail", b =>
-                {
-                    b.HasOne("AgriDrone.Modules.Harvests.Domain.Quality.HarvestQualityGrade", "QualityGrade")
-                        .WithMany("PlantHarvestQualityDetails")
-                        .HasForeignKey("QualityGradeId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_quality_detail_grade_global");
-
-                    b.HasOne("AgriDrone.Modules.Harvests.Domain.PlantHarvests.PlantHarvestRecord", "PlantHarvestRecord")
-                        .WithMany("QualityDetails")
-                        .HasForeignKey("PlantHarvestRecordId", "FarmId")
-                        .HasPrincipalKey("Id", "FarmId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_quality_detail_record_same_farm");
-
-                    b.Navigation("PlantHarvestRecord");
-
-                    b.Navigation("QualityGrade");
-                });
-
-            modelBuilder.Entity("AgriDrone.Modules.Harvests.Domain.PlantHarvests.PlantHarvestRecord", b =>
-                {
-                    b.HasOne("AgriDrone.Modules.Identity.Domain.Users.User", null)
-                        .WithMany()
-                        .HasForeignKey("RecordedBy")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_plant_harvest_records_users_recorded_by");
-
-                    b.HasOne("AgriDrone.Modules.Harvests.Domain.HarvestBatches.HarvestBatch", "HarvestBatch")
-                        .WithMany("PlantHarvestRecords")
-                        .HasForeignKey("HarvestBatchId", "FarmId")
-                        .HasPrincipalKey("Id", "FarmId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_plant_harvest_batch_same_farm");
-
-                    b.HasOne("AgriDrone.Modules.Plants.Domain.Plants.Plant", null)
-                        .WithMany()
-                        .HasForeignKey("PlantId", "FarmId")
-                        .HasPrincipalKey("Id", "FarmId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_plant_harvest_plant_same_farm");
-
-                    b.Navigation("HarvestBatch");
-                });
-
-            modelBuilder.Entity("AgriDrone.Modules.Harvests.Domain.Quality.HarvestQualityGrade", b =>
-                {
-                    b.HasOne("AgriDrone.Modules.Harvests.Domain.Quality.HarvestQualityGrade", null)
-                        .WithMany()
-                        .HasForeignKey("SupersedesId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .HasConstraintName("fk_quality_grades_superseded_grade_id");
-                });
-
-            modelBuilder.Entity("AgriDrone.Modules.Harvests.Domain.Seasons.Season", b =>
-                {
-                    b.HasOne("AgriDrone.Modules.Farms.Domain.Farms.Farm", null)
-                        .WithMany()
-                        .HasForeignKey("FarmId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_seasons_farms_farm_id");
                 });
 
             modelBuilder.Entity("AgriDrone.Modules.Identity.Domain.FarmMemberships.FarmMembership", b =>
@@ -5250,7 +5722,51 @@ namespace AgriDrone.Database.Migrations
                         .IsRequired()
                         .HasConstraintName("fk_drone_missions_zone_same_farm");
 
+                    b.HasOne("AgriDrone.Modules.Surveys.Domain.SurveyOrder", null)
+                        .WithMany()
+                        .HasForeignKey("SurveyOrderId", "TenantId", "FarmId")
+                        .HasPrincipalKey("Id", "TenantId", "FarmId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_drone_missions_orders_same_tenant_farm");
+
                     b.Navigation("Drone");
+                });
+
+            modelBuilder.Entity("AgriDrone.Modules.Missions.Domain.Missions.MissionPreflightChecklist", b =>
+                {
+                    b.HasOne("AgriDrone.Modules.Missions.Domain.Missions.PreflightChecklistDefinition", "ChecklistDefinition")
+                        .WithMany("MissionChecklists")
+                        .HasForeignKey("ChecklistDefinitionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_mission_preflight_checklists_definitions_definition_id");
+
+                    b.HasOne("AgriDrone.Modules.Identity.Domain.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("CompletedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_mission_preflight_checklists_users_completed_by");
+
+                    b.HasOne("AgriDrone.Modules.Missions.Domain.Missions.DroneMission", "Mission")
+                        .WithMany("PreflightChecklists")
+                        .HasForeignKey("MissionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_mission_preflight_checklists_missions_mission_id");
+
+                    b.Navigation("ChecklistDefinition");
+
+                    b.Navigation("Mission");
+                });
+
+            modelBuilder.Entity("AgriDrone.Modules.Missions.Domain.Missions.PreflightChecklistDefinition", b =>
+                {
+                    b.HasOne("AgriDrone.Modules.Identity.Domain.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_preflight_definitions_users_created_by");
                 });
 
             modelBuilder.Entity("AgriDrone.Modules.Missions.Domain.Observations.MissionPlantObservation", b =>
@@ -5278,6 +5794,13 @@ namespace AgriDrone.Database.Migrations
                         .HasForeignKey("ReviewedBy")
                         .OnDelete(DeleteBehavior.SetNull)
                         .HasConstraintName("fk_observations_users_reviewed_by");
+
+                    b.HasOne("AgriDrone.Modules.Farms.Domain.Maps.FarmBaseMapVersion", null)
+                        .WithMany()
+                        .HasForeignKey("FarmBaseMapVersionId", "FarmId")
+                        .HasPrincipalKey("Id", "FarmId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_observations_farm_base_map_same_farm");
 
                     b.HasOne("AgriDrone.Modules.Farms.Domain.Maps.ZoneMapVersion", null)
                         .WithMany()
@@ -5635,12 +6158,19 @@ namespace AgriDrone.Database.Migrations
                         .IsRequired()
                         .HasConstraintName("fk_scan_plant_same_farm");
 
-                    b.HasOne("AgriDrone.Modules.FieldTasks.Domain.FieldTasks.FieldTask", null)
+                    b.HasOne("AgriDrone.Modules.Surveys.Domain.SurveyOrder", null)
                         .WithMany()
-                        .HasForeignKey("SourceTaskId", "FarmId")
+                        .HasForeignKey("SurveyOrderId", "FarmId")
                         .HasPrincipalKey("Id", "FarmId")
                         .OnDelete(DeleteBehavior.Restrict)
-                        .HasConstraintName("fk_plant_scans_source_task_same_farm");
+                        .HasConstraintName("fk_plant_scans_orders_same_farm");
+
+                    b.HasOne("AgriDrone.Modules.Surveys.Domain.SurveyResult", null)
+                        .WithMany()
+                        .HasForeignKey("SurveyResultId", "SurveyOrderId", "FarmId")
+                        .HasPrincipalKey("Id", "SurveyOrderId", "FarmId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_plant_scans_results_same_order_farm");
 
                     b.HasOne("AgriDrone.Modules.Plants.Domain.Scans.PlantScan", "VerificationOfScan")
                         .WithMany("VerificationScans")
@@ -5750,6 +6280,262 @@ namespace AgriDrone.Database.Migrations
                     b.Navigation("SupersedesVerification");
                 });
 
+            modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.HarvestReadinessAssessment", b =>
+                {
+                    b.HasOne("AgriDrone.Modules.Identity.Domain.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("ReviewedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_harvest_readiness_users_reviewed_by");
+
+                    b.HasOne("AgriDrone.Modules.Missions.Domain.Missions.DroneMission", null)
+                        .WithMany()
+                        .HasForeignKey("MissionId", "FarmId")
+                        .HasPrincipalKey("Id", "FarmId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_harvest_readiness_missions_same_farm");
+
+                    b.HasOne("AgriDrone.Modules.Plants.Domain.Plants.Plant", null)
+                        .WithMany()
+                        .HasForeignKey("PlantId", "FarmId")
+                        .HasPrincipalKey("Id", "FarmId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_harvest_readiness_plants_same_farm");
+
+                    b.HasOne("AgriDrone.Modules.Surveys.Domain.SurveyResult", "SurveyResult")
+                        .WithMany("HarvestReadinessAssessments")
+                        .HasForeignKey("SurveyResultId", "SurveyOrderId", "FarmId")
+                        .HasPrincipalKey("Id", "SurveyOrderId", "FarmId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_harvest_readiness_results_same_order_farm");
+
+                    b.Navigation("SurveyResult");
+                });
+
+            modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.PaymentEvent", b =>
+                {
+                    b.HasOne("AgriDrone.Modules.Surveys.Domain.SurveyPayment", "SurveyPayment")
+                        .WithMany("Events")
+                        .HasForeignKey("SurveyPaymentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_payment_events_payments_payment_id");
+
+                    b.Navigation("SurveyPayment");
+                });
+
+            modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.PriceAdjustment", b =>
+                {
+                    b.HasOne("AgriDrone.Modules.Identity.Domain.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("ApprovedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_price_adjustments_users_approved_by");
+
+                    b.HasOne("AgriDrone.Modules.Identity.Domain.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("RequestedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_price_adjustments_users_requested_by");
+
+                    b.HasOne("AgriDrone.Modules.Surveys.Domain.SurveyOrder", "SurveyOrder")
+                        .WithMany()
+                        .HasForeignKey("SurveyOrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_price_adjustments_orders_order_id");
+
+                    b.Navigation("SurveyOrder");
+                });
+
+            modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.SurveyAppointment", b =>
+                {
+                    b.HasOne("AgriDrone.Modules.Identity.Domain.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("ConfirmedByTenantOwnerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_survey_appointments_users_confirmed_by");
+
+                    b.HasOne("AgriDrone.Modules.Surveys.Domain.SurveyOrder", "SurveyOrder")
+                        .WithMany("Appointments")
+                        .HasForeignKey("SurveyOrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_survey_appointments_orders_order_id");
+
+                    b.Navigation("SurveyOrder");
+                });
+
+            modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.SurveyOrder", b =>
+                {
+                    b.HasOne("AgriDrone.Modules.Identity.Domain.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("ScopeConfirmedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_survey_orders_users_scope_confirmed_by");
+
+                    b.HasOne("AgriDrone.Modules.Surveys.Domain.SurveyRequest", "SurveyRequest")
+                        .WithOne()
+                        .HasForeignKey("AgriDrone.Modules.Surveys.Domain.SurveyOrder", "SurveyRequestId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_survey_orders_requests_request_id");
+
+                    b.HasOne("AgriDrone.Modules.Surveys.Domain.SurveyService", "SurveyService")
+                        .WithMany()
+                        .HasForeignKey("SurveyServiceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_survey_orders_services_service_id");
+
+                    b.HasOne("AgriDrone.Modules.Identity.Domain.Tenants.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_survey_orders_tenants_tenant_id");
+
+                    b.HasOne("AgriDrone.Modules.Farms.Domain.Farms.Farm", null)
+                        .WithMany()
+                        .HasForeignKey("FarmId", "TenantId")
+                        .HasPrincipalKey("Id", "TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_survey_orders_farms_same_tenant");
+
+                    b.HasOne("AgriDrone.Modules.Surveys.Domain.SurveyServicePrice", "SurveyServicePrice")
+                        .WithMany()
+                        .HasForeignKey("SurveyServicePriceId", "SurveyServiceId")
+                        .HasPrincipalKey("Id", "SurveyServiceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_survey_orders_price_same_service");
+
+                    b.HasOne("AgriDrone.Modules.Surveys.Domain.SurveyOrder", "PreviousCompatibleOrder")
+                        .WithMany()
+                        .HasForeignKey("PreviousCompatibleOrderId", "FarmId", "SurveyServiceId")
+                        .HasPrincipalKey("Id", "FarmId", "SurveyServiceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_survey_orders_previous_same_farm_service");
+
+                    b.Navigation("PreviousCompatibleOrder");
+
+                    b.Navigation("SurveyRequest");
+
+                    b.Navigation("SurveyService");
+
+                    b.Navigation("SurveyServicePrice");
+                });
+
+            modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.SurveyPayment", b =>
+                {
+                    b.HasOne("AgriDrone.Modules.Surveys.Domain.SurveyOrder", "SurveyOrder")
+                        .WithMany("Payments")
+                        .HasForeignKey("SurveyOrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_survey_payments_orders_order_id");
+
+                    b.Navigation("SurveyOrder");
+                });
+
+            modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.SurveyRequest", b =>
+                {
+                    b.HasOne("AgriDrone.Modules.Identity.Domain.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("RequestedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_survey_requests_users_requested_by");
+
+                    b.HasOne("AgriDrone.Modules.Surveys.Domain.SurveyService", "SurveyService")
+                        .WithMany()
+                        .HasForeignKey("SurveyServiceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_survey_requests_services_service_id");
+
+                    b.HasOne("AgriDrone.Modules.Identity.Domain.Tenants.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_survey_requests_tenants_tenant_id");
+
+                    b.HasOne("AgriDrone.Modules.Farms.Domain.Farms.Farm", null)
+                        .WithMany()
+                        .HasForeignKey("FarmId", "TenantId")
+                        .HasPrincipalKey("Id", "TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_survey_requests_farms_same_tenant");
+
+                    b.Navigation("SurveyService");
+                });
+
+            modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.SurveyRequestReview", b =>
+                {
+                    b.HasOne("AgriDrone.Modules.Identity.Domain.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("ReviewedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_survey_request_reviews_users_reviewed_by");
+
+                    b.HasOne("AgriDrone.Modules.Surveys.Domain.SurveyRequest", "SurveyRequest")
+                        .WithMany("Reviews")
+                        .HasForeignKey("SurveyRequestId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_survey_request_reviews_requests_request_id");
+
+                    b.Navigation("SurveyRequest");
+                });
+
+            modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.SurveyResult", b =>
+                {
+                    b.HasOne("AgriDrone.Modules.Identity.Domain.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("PublishedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_survey_results_users_published_by");
+
+                    b.HasOne("AgriDrone.Modules.Identity.Domain.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("ReviewedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_survey_results_users_reviewed_by");
+
+                    b.HasOne("AgriDrone.Modules.Surveys.Domain.SurveyOrder", "SurveyOrder")
+                        .WithOne()
+                        .HasForeignKey("AgriDrone.Modules.Surveys.Domain.SurveyResult", "SurveyOrderId", "TenantId", "FarmId")
+                        .HasPrincipalKey("AgriDrone.Modules.Surveys.Domain.SurveyOrder", "Id", "TenantId", "FarmId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_survey_results_orders_same_tenant_farm");
+
+                    b.Navigation("SurveyOrder");
+                });
+
+            modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.SurveyServicePrice", b =>
+                {
+                    b.HasOne("AgriDrone.Modules.Identity.Domain.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_survey_service_prices_users_created_by");
+
+                    b.HasOne("AgriDrone.Modules.Surveys.Domain.SurveyService", "SurveyService")
+                        .WithMany("Prices")
+                        .HasForeignKey("SurveyServiceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_survey_service_prices_services_service_id");
+
+                    b.Navigation("SurveyService");
+                });
+
             modelBuilder.Entity("AgriDrone.SharedInfrastructure.Auditing.AuditLog", b =>
                 {
                     b.HasOne("AgriDrone.Modules.Missions.Domain.Processing.AiProcessingJob", null)
@@ -5783,38 +6569,14 @@ namespace AgriDrone.Database.Migrations
                     b.Navigation("Zones");
                 });
 
+            modelBuilder.Entity("AgriDrone.Modules.Farms.Domain.Maps.FarmBaseMapVersion", b =>
+                {
+                    b.Navigation("ZoneMapVersions");
+                });
+
             modelBuilder.Entity("AgriDrone.Modules.Farms.Domain.Zones.FarmZone", b =>
                 {
                     b.Navigation("MapVersions");
-                });
-
-            modelBuilder.Entity("AgriDrone.Modules.FieldTasks.Domain.FieldTasks.FieldTask", b =>
-                {
-                    b.Navigation("Assignments");
-
-                    b.Navigation("Media");
-
-                    b.Navigation("Updates");
-                });
-
-            modelBuilder.Entity("AgriDrone.Modules.Harvests.Domain.HarvestBatches.HarvestBatch", b =>
-                {
-                    b.Navigation("PlantHarvestRecords");
-                });
-
-            modelBuilder.Entity("AgriDrone.Modules.Harvests.Domain.PlantHarvests.PlantHarvestRecord", b =>
-                {
-                    b.Navigation("QualityDetails");
-                });
-
-            modelBuilder.Entity("AgriDrone.Modules.Harvests.Domain.Quality.HarvestQualityGrade", b =>
-                {
-                    b.Navigation("PlantHarvestQualityDetails");
-                });
-
-            modelBuilder.Entity("AgriDrone.Modules.Harvests.Domain.Seasons.Season", b =>
-                {
-                    b.Navigation("HarvestBatches");
                 });
 
             modelBuilder.Entity("AgriDrone.Modules.Identity.Domain.FarmMemberships.FarmMembership", b =>
@@ -5868,7 +6630,14 @@ namespace AgriDrone.Database.Migrations
 
                     b.Navigation("PlantObservations");
 
+                    b.Navigation("PreflightChecklists");
+
                     b.Navigation("TelemetryPoints");
+                });
+
+            modelBuilder.Entity("AgriDrone.Modules.Missions.Domain.Missions.PreflightChecklistDefinition", b =>
+                {
+                    b.Navigation("MissionChecklists");
                 });
 
             modelBuilder.Entity("AgriDrone.Modules.Missions.Domain.Observations.MissionPlantObservation", b =>
@@ -5947,6 +6716,33 @@ namespace AgriDrone.Database.Migrations
                     b.Navigation("ConditionReviews");
 
                     b.Navigation("SupersededByVerifications");
+                });
+
+            modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.SurveyOrder", b =>
+                {
+                    b.Navigation("Appointments");
+
+                    b.Navigation("Payments");
+                });
+
+            modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.SurveyPayment", b =>
+                {
+                    b.Navigation("Events");
+                });
+
+            modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.SurveyRequest", b =>
+                {
+                    b.Navigation("Reviews");
+                });
+
+            modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.SurveyResult", b =>
+                {
+                    b.Navigation("HarvestReadinessAssessments");
+                });
+
+            modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.SurveyService", b =>
+                {
+                    b.Navigation("Prices");
                 });
 #pragma warning restore 612, 618
         }

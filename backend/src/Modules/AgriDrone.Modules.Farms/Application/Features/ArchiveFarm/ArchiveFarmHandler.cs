@@ -18,7 +18,7 @@ internal sealed class ArchiveFarmHandler(
     IFarmArchiveDependencyQuery dependencyQuery,
     IAuditWriter auditWriter,
     IExecutionContext executionContext,
-    IEffectiveAccessService effectiveAccessService,
+    ISystemManagerAccessService managerAccessService,
     TimeProvider timeProvider)
     : IRequestHandler<ArchiveFarmCommand, Result>
 {
@@ -32,19 +32,11 @@ internal sealed class ArchiveFarmHandler(
                 AuthenticationError.CurrentUserRequired());
         }
 
-        if (executionContext.TenantId is not Guid tenantId)
-        {
-            return Result.Failure(
-                AuthenticationError.CurrentTenantRequired());
-        }
-
-        var accessDecision = await effectiveAccessService.CheckTenantAsync(
-            actorId,
-            tenantId,
-            TenantAccessLevel.Owner,
+        var accessDecision = await managerAccessService.ResolveFarmAccessAsync(
+            request.FarmId,
             cancellationToken);
 
-        if (!accessDecision.IsAllowed)
+        if (!accessDecision.IsAllowed || accessDecision.TenantId is not Guid tenantId)
         {
             return Result.Failure(FarmError.AccessDenied());
         }
@@ -74,8 +66,7 @@ internal sealed class ArchiveFarmHandler(
             return Result.Failure(
                 FarmError.ActiveDependenciesExist(
                     dependencies.ActiveZoneCount,
-                    dependencies.ActiveMissionCount,
-                    dependencies.OpenFieldTaskCount));
+                    dependencies.ActiveMissionCount));
         }
 
         using var oldData = CreateAuditData(farm);

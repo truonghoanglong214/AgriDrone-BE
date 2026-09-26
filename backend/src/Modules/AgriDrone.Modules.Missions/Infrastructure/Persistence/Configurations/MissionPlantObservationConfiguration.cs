@@ -85,6 +85,10 @@ public sealed class MissionPlantObservationConfiguration
             .HasColumnName("map_version_id")
             .HasColumnType("uuid");
 
+        builder.Property(observation => observation.FarmBaseMapVersionId)
+            .HasColumnName("farm_base_map_version_id")
+            .HasColumnType("uuid");
+
         builder.Property(observation => observation.DetectedRowIndex)
             .HasColumnName("detected_row_index")
             .HasColumnType("integer");
@@ -179,6 +183,9 @@ public sealed class MissionPlantObservationConfiguration
 
         builder.HasIndex(observation => observation.MapVersionId)
             .HasDatabaseName("ix_observations_map_version");
+
+        builder.HasIndex(observation => observation.FarmBaseMapVersionId)
+            .HasDatabaseName("ix_observations_farm_base_map_version");
 
         builder.HasIndex(observation => new
         {

@@ -1,11 +1,9 @@
 ﻿using AgriDrone.Api.Contracts.Users;
 using AgriDrone.Modules.Identity.Application.Features.LoginUser;
 using AgriDrone.Modules.Identity.Application.Features.ForgotPassword;
-using AgriDrone.Modules.Identity.Application.Features.RegisterUser;
 using AgriDrone.Modules.Identity.Application.Features.ResetPassword;
 using AgriDrone.Modules.Identity.Application.Features.SelectTenant;
 using AgriDrone.SharedInfrastructure.Http;
-using AgriDrone.Api.Legacy;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -17,39 +15,6 @@ namespace AgriDrone.Api.Controllers
     [ApiController]
     public class AuthController(ISender sender) : ControllerBase
     {
-        /// <summary>Đăng ký tài khoản và tenant mới.</summary>
-        /// <remarks>
-        /// Tạo đồng thời người dùng, tenant đang hoạt động và tenant membership
-        /// với vai trò Owner cho người đăng ký.
-        /// </remarks>
-        [AllowAnonymous]
-        [HttpPost("register")]
-        [LegacyEndpoint(
-            "auth.register",
-            "Submit a public Survey Request; customer onboarding starts only after SystemAdmin approval.")]
-        public async Task<IResult> Register(
-        [FromBody] RegisterUserRequest request,
-        CancellationToken cancellationToken)
-        {
-            var command = new RegisterUserCommand(
-                request.Email,
-                request.Password,
-                request.FullName,
-                request.Phone,
-                request.TenantCode,
-                request.TenantName);
-
-            var result = await sender.Send(
-                command,
-                cancellationToken);
-
-            return result.ToHttpResult(
-                HttpContext,
-                response => Results.Json(
-                    response,
-                    statusCode: StatusCodes.Status201Created));
-        }
-
         /// <summary>Đăng nhập hệ thống.</summary>
         /// <remarks>
         /// Xác thực email và mật khẩu. Nếu người dùng chỉ thuộc một tenant thì

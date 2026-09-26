@@ -15,6 +15,7 @@ public static class TelemetryIntegrationExtensions
                 BlackboxDecoderOptions.SectionName))
             .Validate(
                 options =>
+                    !options.Enabled ||
                     Path.IsPathFullyQualified(options.ExecutablePath) &&
                     File.Exists(options.ExecutablePath),
                 "Configure an existing absolute Blackbox decoder path.")
@@ -27,6 +28,19 @@ public static class TelemetryIntegrationExtensions
                     options.MaximumFileBytes <= 20L * 1024 * 1024,
                 "Maximum log size must be between 1 byte and 20 MiB.")
             .ValidateOnStart();
+
+        var configuredOptions = configuration
+            .GetSection(BlackboxDecoderOptions.SectionName)
+            .Get<BlackboxDecoderOptions>()
+            ?? new BlackboxDecoderOptions();
+
+        if (!configuredOptions.Enabled)
+        {
+            services.AddSingleton<
+                ITelemetryLogNormalizer,
+                DisabledTelemetryLogNormalizer>();
+            return services;
+        }
 
         // One decoder process at a time per application instance.
         services.AddSingleton<

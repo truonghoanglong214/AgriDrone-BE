@@ -79,7 +79,6 @@ public static class DependencyInjection
             assembly,
             includeInternalTypes: true);
 
-        services.AddScoped<IPlantArchiveReferenceQuery, PlantArchiveReferenceQuery>();
         services.AddScoped<IHealthLevelReferenceQuery, HealthLevelReferenceQuery>();
         services.AddScoped<IPlantReferenceSource, PlantReferenceSource>();
         services.AddScoped<IHealthLevelQueries, HealthLevelQuery>();

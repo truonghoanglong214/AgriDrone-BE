@@ -9,7 +9,6 @@ public sealed class CoreMasterDataAuthorizationTests
 {
     [Theory]
     [InlineData(typeof(SystemPlantConditionsController))]
-    [InlineData(typeof(SystemHarvestQualityGradeController))]
     public void MutationControllersRequireSystemAdministrator(Type controllerType)
     {
         var authorize = Assert.Single(

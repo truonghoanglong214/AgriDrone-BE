@@ -1,5 +1,6 @@
 ﻿using AgriDrone.Modules.Farms.Application.Abstractions.Persistence;
 using AgriDrone.Modules.Farms.Application.Errors;
+using AgriDrone.Modules.Farms.Application.Provisioning;
 using AgriDrone.Modules.Farms.Domain.Farms;
 using AgriDrone.SharedInfrastructure.Persistence;
 using AgriDrone.SharedKernel.Application;
@@ -12,15 +13,10 @@ using Microsoft.EntityFrameworkCore;
 namespace AgriDrone.Modules.Farms.Application.Features.CreateFarm
 {
     internal sealed class CreateFarmHandler(
-        IFarmRepository farmRepository,
         IExecutionContext executionContext,
-        IFarmUnitOfWork unitOfWork,
         IEffectiveAccessService effectiveAccessService,
-        TimeProvider timeProvider) : IRequestHandler<CreateFarmCommand, Result<CreateFarmResponse>>
+        IFarmProvisioningPort provisioningPort) : IRequestHandler<CreateFarmCommand, Result<CreateFarmResponse>>
     {
-        private const string ActiveFarmCodeConstraint =
-            "ux_farms_tenant_code_active";
-
         public async Task<Result<CreateFarmResponse>> Handle(CreateFarmCommand request, CancellationToken cancellationToken)
         {
             if (executionContext.TenantId is not Guid tenantId)
@@ -41,52 +37,35 @@ namespace AgriDrone.Modules.Farms.Application.Features.CreateFarm
                     FarmError.AccessDenied());
             }
 
-            var now = timeProvider.GetUtcNow();
-            var normalizedCode = request.code.Trim().ToUpperInvariant();
-            var existingCode = await farmRepository.GetByCodeAsync(tenantId, normalizedCode, cancellationToken);
-
-            if (existingCode is not null)
-                return Result.Failure <CreateFarmResponse>(FarmError.CodeAlreadyExists(existingCode.Code));
-
-            var newFarm = Farm.Create(
-                tenantId,
-                normalizedCode,
-                request.name,
-                request.address,
-                request.boundary,
-                request.centerPoint,
-                request.areaHectares,
-                GeneralStatus.Active,
-                userId,
-                now);
-
-            farmRepository.Add(newFarm);
-
-            try
+            var result = await provisioningPort.ProvisionAsync(
+                new ProvisionFarmRequest(
+                    tenantId,
+                    userId,
+                    request.code,
+                    request.name,
+                    request.address,
+                    request.boundary,
+                    request.centerPoint,
+                    request.areaHectares),
+                cancellationToken);
+            if (result.IsFailure)
             {
-                await unitOfWork.SaveChangesAsync(cancellationToken);
-            }
-            catch (DbUpdateException exception)
-                when (exception.IsUniqueConstraintViolation(
-                    ActiveFarmCodeConstraint))
-            {
-                return Result.Failure<CreateFarmResponse>(
-                    FarmError.CodeAlreadyExists(normalizedCode));
+                return Result.Failure<CreateFarmResponse>(result.Error);
             }
 
             return Result.Success(
                 new CreateFarmResponse(
-                    newFarm.Id,
-                    newFarm.TenantId,
-                    newFarm.Code,
-                    newFarm.Name,
-                    newFarm.Address,
-                    newFarm.Boundary,
-                    newFarm.CenterPoint,
-                    newFarm.AreaHectares,
-                    newFarm.Status,
-                    newFarm.CreatedBy,
-                    newFarm.CreatedAt));
+                    result.Value.FarmId,
+                    result.Value.TenantId,
+                    result.Value.Code,
+                    result.Value.Name,
+                    result.Value.Address,
+                    result.Value.Boundary,
+                    result.Value.CenterPoint,
+                    result.Value.AreaHectares,
+                    result.Value.Status,
+                    result.Value.CreatedBy,
+                    result.Value.CreatedAt));
         }
     }
 }

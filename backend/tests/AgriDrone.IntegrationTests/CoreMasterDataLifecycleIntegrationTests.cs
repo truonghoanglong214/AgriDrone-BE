@@ -1,9 +1,4 @@
 using AgriDrone.Database;
-using AgriDrone.Modules.Harvests;
-using AgriDrone.Modules.Harvests.Application.Features.CreateHarvestQualityGrade;
-using AgriDrone.Modules.Harvests.Application.Features.GetActiveHarvestQualityGrades;
-using AgriDrone.Modules.Harvests.Application.Features.RetireHarvestQualityGrade;
-using AgriDrone.Modules.Harvests.Application.Features.VersionHarvestQualityGrade;
 using AgriDrone.Modules.Plants;
 using AgriDrone.Modules.Plants.Application.Features.CreatePlantCondition;
 using AgriDrone.Modules.Plants.Application.Features.GetActivePlantConditions;
@@ -61,40 +56,14 @@ public sealed class CoreMasterDataLifecycleIntegrationTests
             retireCondition.IsSuccess,
             $"{retireCondition.Error.Code}: {retireCondition.Error.Description}");
 
-        var grade = await SendAsync(
-            provider,
-            new CreateHarvestQualityGradeCommand(
-                "UC04_RETIRED_GRADE",
-                "UC04 retired grade",
-                50));
-        Assert.True(
-            grade.IsSuccess,
-            $"{grade.Error.Code}: {grade.Error.Description}");
-
-        var retireGrade = await SendAsync(
-            provider,
-            new RetireHarvestQualityGradeCommand(
-                grade.Value.Id,
-                grade.Value.Version));
-        Assert.True(
-            retireGrade.IsSuccess,
-            $"{retireGrade.Error.Code}: {retireGrade.Error.Description}");
-
         var activeConditions = await SendAsync(
             provider,
             new GetActivePlantConditionsQuery());
-        var activeGrades = await SendAsync(
-            provider,
-            new GetActiveHarvestQualityGradesQuery());
 
         Assert.True(activeConditions.IsSuccess);
-        Assert.True(activeGrades.IsSuccess);
         Assert.DoesNotContain(
             activeConditions.Value,
             item => item.Id == condition.Value.Id);
-        Assert.DoesNotContain(
-            activeGrades.Value,
-            item => item.Id == grade.Value.Id);
 
         await AssertDatabaseWriteRejectedAsync(
             connectionString,
@@ -107,16 +76,6 @@ public sealed class CoreMasterDataLifecycleIntegrationTests
             """,
             condition.Value.Id,
             "ck_condition_detection_active_condition");
-
-        await AssertDatabaseWriteRejectedAsync(
-            connectionString,
-            """
-            INSERT INTO harvest.plant_harvest_quality_details
-                (plant_harvest_record_id, quality_grade_id, farm_id, fruit_count)
-            VALUES (gen_random_uuid(), @definition_id, gen_random_uuid(), 0);
-            """,
-            grade.Value.Id,
-            "ck_quality_detail_active_grade");
 
         var activeDisease = await SendAsync(
             provider,
@@ -171,25 +130,6 @@ public sealed class CoreMasterDataLifecycleIntegrationTests
             nextCondition.IsSuccess,
             $"{nextCondition.Error.Code}: {nextCondition.Error.Description}");
 
-        var grade = await SendAsync(
-            provider,
-            new CreateHarvestQualityGradeCommand(
-                "UC04_HISTORY_GRADE",
-                "Original grade label",
-                60));
-        Assert.True(grade.IsSuccess);
-
-        var nextGrade = await SendAsync(
-            provider,
-            new VersionHarvestQualityGradeCommand(
-                grade.Value.Id,
-                "Updated grade label",
-                61,
-                grade.Value.Version));
-        Assert.True(
-            nextGrade.IsSuccess,
-            $"{nextGrade.Error.Code}: {nextGrade.Error.Description}");
-
         var conditionHistory = await ReadHistoryAsync(
             connectionString,
             "plant.plant_conditions",
@@ -217,33 +157,8 @@ public sealed class CoreMasterDataLifecycleIntegrationTests
 
         var auditActions = await ReadAuditActionsAsync(connectionString);
         Assert.Equal(
-            ["CREATE", "VERSION", "CREATE", "VERSION"],
+            ["CREATE", "VERSION"],
             auditActions);
-
-        var gradeHistory = await ReadHistoryAsync(
-            connectionString,
-            "harvest.harvest_quality_grades",
-            "UC04_HISTORY_GRADE");
-        Assert.Collection(
-            gradeHistory,
-            original =>
-            {
-                Assert.Equal(grade.Value.Id, original.Id);
-                Assert.Equal("Original grade label", original.Name);
-                Assert.Equal(1, original.RevisionNumber);
-                Assert.Null(original.SupersedesId);
-                Assert.False(original.IsActive);
-                Assert.True(original.HasRetiredAt);
-            },
-            current =>
-            {
-                Assert.Equal(nextGrade.Value.Id, current.Id);
-                Assert.Equal("Updated grade label", current.Name);
-                Assert.Equal(2, current.RevisionNumber);
-                Assert.Equal(grade.Value.Id, current.SupersedesId);
-                Assert.True(current.IsActive);
-                Assert.False(current.HasRetiredAt);
-            });
     }
 
     [Fact]
@@ -326,7 +241,6 @@ public sealed class CoreMasterDataLifecycleIntegrationTests
         services.AddSingleton<IAuditWriter, TestAuditWriter>();
         services.AddExecutionContext();
         services.AddPlantsModule(configuration);
-        services.AddHarvestsModule(configuration);
         return services.BuildServiceProvider();
     }
 
@@ -481,7 +395,7 @@ public sealed class CoreMasterDataLifecycleIntegrationTests
         command.CommandText = """
             SELECT action
             FROM system.audit_logs
-            WHERE entity_type IN ('PlantCondition', 'HarvestQualityGrade')
+            WHERE entity_type = 'PlantCondition'
             ORDER BY id;
             """;
 

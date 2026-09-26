@@ -21,6 +21,10 @@ public sealed class DroneMission : AggregateRoot
 
     public Guid ZoneId { get; private set; }
 
+    public Guid? SurveyOrderId { get; private set; }
+
+    public MissionPurpose? MissionPurpose { get; private set; }
+
     public Guid? SourceMapVersionId { get; private set; }
 
     public Guid? PreflightConfirmedBy { get; private set; }
@@ -94,6 +98,8 @@ public sealed class DroneMission : AggregateRoot
     public ICollection<AiProcessingJob> AiProcessingJobs { get; private set; } = [];
 
     public ICollection<MissionPlantObservation> PlantObservations { get; private set; } = [];
+
+    public ICollection<MissionPreflightChecklist> PreflightChecklists { get; private set; } = [];
 
     public static DroneMission Create(
     Guid tenantId,
@@ -183,6 +189,45 @@ public sealed class DroneMission : AggregateRoot
             CreatedAt = createdAt,
             UpdatedAt = createdAt
         };
+    }
+
+    public static DroneMission CreateForSurvey(
+        SurveyMissionContext surveyContext,
+        Guid zoneId,
+        Guid droneId,
+        Guid? pilotUserId,
+        string missionCode,
+        Guid? sourceMapVersionId,
+        JsonDocument flightParameters,
+        string? notes,
+        Guid createdBy,
+        DateTimeOffset createdAt)
+    {
+        ArgumentNullException.ThrowIfNull(surveyContext);
+        DomainGuard.NotEmpty(surveyContext.SurveyOrderId);
+
+        var missionType = surveyContext.Purpose ==
+            global::AgriDrone.Modules.Missions.Domain.Missions.MissionPurpose.BaselineMapping
+            ? MissionType.Mapping
+            : MissionType.HealthInspection;
+
+        var mission = Create(
+            surveyContext.TenantId,
+            surveyContext.FarmId,
+            zoneId,
+            droneId,
+            pilotUserId,
+            missionCode,
+            missionType,
+            sourceMapVersionId,
+            flightParameters,
+            notes,
+            createdBy,
+            createdAt);
+
+        mission.SurveyOrderId = surveyContext.SurveyOrderId;
+        mission.MissionPurpose = surveyContext.Purpose;
+        return mission;
     }
     public void Schedule(
     DateTimeOffset scheduledAt,

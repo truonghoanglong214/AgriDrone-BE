@@ -12,9 +12,9 @@
     <ProjectReference Include="..\..\src\Modules\AgriDrone.Modules.Farms\AgriDrone.Modules.Farms.csproj" />
     <ProjectReference Include="..\..\src\Modules\AgriDrone.Modules.Plants\AgriDrone.Modules.Plants.csproj" />
     <ProjectReference Include="..\..\src\Modules\AgriDrone.Modules.Missions\AgriDrone.Modules.Missions.csproj" />
-    <ProjectReference Include="..\..\src\Modules\AgriDrone.Modules.Harvests\AgriDrone.Modules.Harvests.csproj" />
-    <ProjectReference Include="..\..\src\Modules\AgriDrone.Modules.FieldTasks\AgriDrone.Modules.FieldTasks.csproj" />
     <ProjectReference Include="..\..\src\Modules\AgriDrone.Modules.Notifications\AgriDrone.Modules.Notifications.csproj" />
+    <ProjectReference Include="..\..\src\Modules\AgriDrone.Modules.Surveys\AgriDrone.Modules.Surveys.csproj" />
+    <ProjectReference Include="..\..\src\Integrations\AgriDrone.Integrations.Media\AgriDrone.Integrations.Media.csproj" />
   </ItemGroup>
 
   <ItemGroup>

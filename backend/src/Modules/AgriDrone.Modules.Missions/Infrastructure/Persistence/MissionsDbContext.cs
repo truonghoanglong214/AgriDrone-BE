@@ -44,6 +44,12 @@ internal sealed class MissionsDbContext(
     public DbSet<DroneMission> DroneMissions =>
         Set<DroneMission>();
 
+    public DbSet<PreflightChecklistDefinition> PreflightChecklistDefinitions =>
+        Set<PreflightChecklistDefinition>();
+
+    public DbSet<MissionPreflightChecklist> MissionPreflightChecklists =>
+        Set<MissionPreflightChecklist>();
+
     public DbSet<MediaAsset> MediaAssets =>
         Set<MediaAsset>();
 

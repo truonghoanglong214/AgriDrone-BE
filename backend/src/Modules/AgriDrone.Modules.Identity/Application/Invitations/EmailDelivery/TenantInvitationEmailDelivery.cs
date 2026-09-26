@@ -52,6 +52,16 @@ namespace AgriDrone.Modules.Identity.Application.Invitations.EmailDelivery
                         "Invitation does not belong to the message tenant."));
             }
 
+            if (invitation.Purpose != TenantInvitationPurpose.OwnerProvisioning ||
+                invitation.Role != TenantMemberRole.Owner)
+            {
+                return Result.Success(
+                    TenantInvitationEmailDeliveryResult.Skipped(
+                        invitation.Id,
+                        invitation.Email,
+                        "Legacy staff invitations are retired."));
+            }
+
             var expectedTokenHash =
                 invitationTokenService.Hash(plainTextToken);
 
@@ -180,17 +190,12 @@ namespace AgriDrone.Modules.Identity.Application.Invitations.EmailDelivery
             await emailSender.SendAsync(message, cancellationToken);
         }
 
-        private static string GetRoleDisplayName(
-            TenantMemberRole role) =>
-            role switch
-            {
-                TenantMemberRole.Owner => "Tenant Owner",
-                TenantMemberRole.TenantAdmin => "Tenant Admin",
-                TenantMemberRole.Member => "Tenant Member",
-                _ => throw new ArgumentOutOfRangeException(
+        private static string GetRoleDisplayName(TenantMemberRole role) =>
+            role == TenantMemberRole.Owner
+                ? "Tenant Owner"
+                : throw new ArgumentOutOfRangeException(
                     nameof(role),
                     role,
-                    "Unsupported tenant role.")
-            };
+                    "Only TenantOwner invitations are delivered.");
     }
 }

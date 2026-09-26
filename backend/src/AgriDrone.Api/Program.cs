@@ -4,8 +4,6 @@ using AgriDrone.Integrations.Email;
 using AgriDrone.Integrations.Media;
 using AgriDrone.Integrations.Media.Telemetry;
 using AgriDrone.Modules.Farms;
-using AgriDrone.Modules.FieldTasks;
-using AgriDrone.Modules.Harvests;
 using AgriDrone.Modules.Identity;
 using AgriDrone.Modules.Missions;
 using AgriDrone.Modules.Notifications;
@@ -85,8 +83,6 @@ builder.Services
     .AddTelemetryNormalization(builder.Configuration)
     .AddAgriDroneDatabase(builder.Configuration)
     .AddFarmsModule(builder.Configuration)
-    .AddFieldTasksModule(builder.Configuration)
-    .AddHarvestsModule(builder.Configuration)
     .AddIdentityModule(builder.Configuration)
     .AddMissionsModule(builder.Configuration)
     .AddNotificationsModule(builder.Configuration)

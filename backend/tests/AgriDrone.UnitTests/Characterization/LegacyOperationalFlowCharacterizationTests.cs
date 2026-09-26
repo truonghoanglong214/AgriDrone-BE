@@ -100,7 +100,8 @@ public sealed class LegacyOperationalFlowCharacterizationTests
             Now.AddMinutes(1));
         mission.StartFlight(actorId, Now.AddHours(1));
 
-        Assert.Null(typeof(DroneMission).GetProperty("SurveyOrderId"));
+        Assert.Null(mission.SurveyOrderId);
+        Assert.Null(mission.MissionPurpose);
         Assert.Equal(MissionStatus.InFlight, mission.Status);
         Assert.Equal(actorId, mission.PreflightConfirmedBy);
         Assert.Equal(Now.AddHours(1), mission.StartedAt);

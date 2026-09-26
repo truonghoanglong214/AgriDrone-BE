@@ -23,5 +23,20 @@ namespace AgriDrone.IntegrationContracts.Messaging
 
         public const string HealthReviewStateChangedV1 =
             "health.review-state-changed.v1";
+
+        public const string BaselineMappingCandidatesApprovedV2 =
+            "mapping.baseline-candidates-approved.v2";
+
+        public const string FarmBaseMapPublishedV2 =
+            "mapping.farm-base-map-published.v2";
+
+        public const string HealthObservationsReadyV2 =
+            "health.observations-ready.v2";
+
+        public const string HarvestReadinessAssessmentsReadyV2 =
+            "harvest-readiness.assessments-ready.v2";
+
+        public const string SurveyResultReviewStateChangedV2 =
+            "survey.result-review-state-changed.v2";
     }
 }

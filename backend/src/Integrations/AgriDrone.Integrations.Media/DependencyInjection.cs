@@ -37,6 +37,11 @@ public static class DependencyInjection
 
         if (!configuredOptions.Enabled)
         {
+            services.AddSingleton<DisabledObjectStorage>();
+            services.AddSingleton<IObjectStorage>(serviceProvider =>
+                serviceProvider.GetRequiredService<DisabledObjectStorage>());
+            services.AddSingleton<IObjectStorageWriter>(serviceProvider =>
+                serviceProvider.GetRequiredService<DisabledObjectStorage>());
             return services;
         }
 

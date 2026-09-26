@@ -1,5 +1,6 @@
 ﻿using AgriDrone.Modules.Farms.Application.Abstractions.Persistence;
 using AgriDrone.Modules.Farms.Application.Errors;
+using AgriDrone.Modules.Farms.Application.Policies;
 using AgriDrone.Modules.Farms.Domain.Farms;
 using AgriDrone.Modules.Farms.Domain.Zones;
 using AgriDrone.SharedInfrastructure.Persistence;
@@ -17,7 +18,8 @@ namespace AgriDrone.Modules.Farms.Application.Features.CreateZone
         IFarmRepository farmRepository,
         IFarmUnitOfWork unitOfWork,
         IExecutionContext executionContext,
-        IEffectiveAccessService effectiveAccessService,
+        ISystemManagerAccessService managerAccessService,
+        IFarmGeometryPolicy geometryPolicy,
         TimeProvider timeProvider) : IRequestHandler<CreateZoneCommand, Result<CreateZoneResponse>>
     {
         private const string ActiveZoneCodeConstraint =
@@ -28,17 +30,11 @@ namespace AgriDrone.Modules.Farms.Application.Features.CreateZone
             if (executionContext.ActorId is not Guid userId)
                 return Result.Failure<CreateZoneResponse>(AuthenticationError.CurrentUserRequired());
 
-            if (executionContext.TenantId is not Guid tenantId)
-                return Result.Failure<CreateZoneResponse>(AuthenticationError.CurrentTenantRequired());
-
-            var access = await effectiveAccessService.CheckFarmAsync(
-                userId, 
-                tenantId, 
-                request.FarmId, 
-                FarmAccessLevel.Manager, 
+            var access = await managerAccessService.ResolveFarmAccessAsync(
+                request.FarmId,
                 cancellationToken);
 
-            if (!access.IsAllowed)
+            if (!access.IsAllowed || access.TenantId is not Guid tenantId)
                 return Result.Failure<CreateZoneResponse>(FarmError.AccessDenied());
 
             var farm = await farmRepository.GetByIdAsync(
@@ -48,6 +44,17 @@ namespace AgriDrone.Modules.Farms.Application.Features.CreateZone
 
             if (farm is null)
                 return Result.Failure<CreateZoneResponse>(FarmError.NotFound());
+
+            var geometryDecision = await geometryPolicy.ValidateZoneAsync(
+                tenantId,
+                farm,
+                request.Boundary,
+                request.AreaHectares,
+                cancellationToken: cancellationToken);
+            if (geometryDecision.IsFailure)
+            {
+                return Result.Failure<CreateZoneResponse>(geometryDecision.Error);
+            }
 
             var now = timeProvider.GetUtcNow();
             var normalizedCode = request.Code.Trim().ToUpperInvariant();
