@@ -14,6 +14,7 @@
     <ProjectReference Include="..\Modules\AgriDrone.Modules.Plants\AgriDrone.Modules.Plants.csproj" />
     <ProjectReference Include="..\Modules\AgriDrone.Modules.Missions\AgriDrone.Modules.Missions.csproj" />
     <ProjectReference Include="..\Modules\AgriDrone.Modules.Notifications\AgriDrone.Modules.Notifications.csproj" />
+    <ProjectReference Include="..\Modules\AgriDrone.Modules.Surveys\AgriDrone.Modules.Surveys.csproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />

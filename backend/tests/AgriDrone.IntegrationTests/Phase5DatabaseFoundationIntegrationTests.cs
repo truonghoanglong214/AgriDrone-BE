@@ -8,7 +8,7 @@ namespace AgriDrone.IntegrationTests;
 public sealed class Phase5DatabaseFoundationIntegrationTests
 {
     private const string AdminConnection =
-        "Host=127.0.0.1;Port=55432;Database=postgres;Username=agridrone_test;Password=agridrone_test";
+        "Host=127.0.0.1;Port=56432;Database=postgres;Username=agridrone_test;Password=agridrone_test";
 
     private const string Phase4Migration =
         "20260925053119_Phase4ArchiveHarvestRuntimeModel";
@@ -331,5 +331,5 @@ public sealed class Phase5DatabaseFoundationIntegrationTests
         $"agridrone_phase5_{suffix}_{Guid.NewGuid():N}"[..45];
 
     private static string BuildConnectionString(string databaseName) =>
-        $"Host=127.0.0.1;Port=55432;Database={databaseName};Username=agridrone_test;Password=agridrone_test";
+        $"Host=127.0.0.1;Port=56432;Database={databaseName};Username=agridrone_test;Password=agridrone_test";
 }

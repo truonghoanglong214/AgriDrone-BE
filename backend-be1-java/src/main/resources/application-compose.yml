@@ -1,0 +1,9 @@
+spring:
+  config:
+    activate:
+      on-profile: compose
+
+management:
+  endpoint:
+    health:
+      show-details: never

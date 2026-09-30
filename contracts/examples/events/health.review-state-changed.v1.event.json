@@ -1,0 +1,22 @@
+{
+  "messageId": "11111111-1111-1111-1111-111111111116",
+  "correlationId": "22222222-2222-2222-2222-222222222222",
+  "tenantId": "33333333-3333-3333-3333-333333333333",
+  "actorId": null,
+  "occurredAt": "2026-09-27T01:02:03+00:00",
+  "schemaVersion": 1,
+  "eventType": "health.review-state-changed.v1",
+  "payload": {
+    "handoffId": "55555555-5555-5555-5555-555555555555",
+    "missionId": "66666666-6666-6666-6666-666666666666",
+    "farmId": "77777777-7777-7777-7777-777777777777",
+    "zoneId": "88888888-8888-8888-8888-888888888888",
+    "reviewVersion": 2,
+    "state": "PUBLISHED",
+    "totalObservations": 10,
+    "pendingReviews": 0,
+    "awaitingFieldVerification": 0,
+    "resolvedReviews": 10,
+    "changedAt": "2026-09-27T01:02:03+00:00"
+  }
+}

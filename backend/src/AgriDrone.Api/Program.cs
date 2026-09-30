@@ -8,6 +8,7 @@ using AgriDrone.Modules.Identity;
 using AgriDrone.Modules.Missions;
 using AgriDrone.Modules.Notifications;
 using AgriDrone.Modules.Plants;
+using AgriDrone.Modules.Surveys;
 using AgriDrone.SharedInfrastructure.Authentication;
 using AgriDrone.SharedInfrastructure.Authorization;
 using AgriDrone.SharedInfrastructure.ExceptionHandling;
@@ -87,6 +88,7 @@ builder.Services
     .AddMissionsModule(builder.Configuration)
     .AddNotificationsModule(builder.Configuration)
     .AddPlantsModule(builder.Configuration)
+    .AddSurveysModule(builder.Configuration)
     .AddIntegrationMessagingFoundation(builder.Configuration)
     .AddMappingPublicationPersistence(builder.Configuration)
     .AddAgriDroneHealthChecks()

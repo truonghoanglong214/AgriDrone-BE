@@ -1,0 +1,26 @@
+{
+  "messageId": "11111111-1111-1111-1111-111111111112",
+  "correlationId": "22222222-2222-2222-2222-222222222222",
+  "tenantId": "33333333-3333-3333-3333-333333333333",
+  "actorId": "44444444-4444-4444-4444-444444444444",
+  "occurredAt": "2026-09-27T01:02:03+00:00",
+  "schemaVersion": 1,
+  "eventType": "mapping.zone-map-published.v1",
+  "payload": {
+    "sourceMessageId": "11111111-1111-1111-1111-111111111111",
+    "approvalId": "55555555-5555-5555-5555-555555555555",
+    "missionId": "66666666-6666-6666-6666-666666666666",
+    "farmId": "77777777-7777-7777-7777-777777777777",
+    "zoneId": "88888888-8888-8888-8888-888888888888",
+    "mapVersionId": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    "versionNumber": 3,
+    "publishedAt": "2026-09-27T01:02:03+00:00",
+    "plantMappings": [
+      {
+        "observationId": "99999999-9999-9999-9999-999999999999",
+        "plantId": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+        "wasCreated": true
+      }
+    ]
+  }
+}

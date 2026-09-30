@@ -18,10 +18,10 @@ namespace AgriDrone.IntegrationTests;
 public sealed class Step1InfrastructureIntegrationTests
 {
     private const string AdminConnection =
-        "Host=127.0.0.1;Port=55432;Database=postgres;Username=agridrone_test;Password=agridrone_test";
+        "Host=127.0.0.1;Port=56432;Database=postgres;Username=agridrone_test;Password=agridrone_test";
     private const string InboxDatabase = "agridrone_step1_inbox";
     private const string InboxConnection =
-        "Host=127.0.0.1;Port=55432;Database=" + InboxDatabase +
+        "Host=127.0.0.1;Port=56432;Database=" + InboxDatabase +
         ";Username=agridrone_test;Password=agridrone_test";
 
     [Fact]

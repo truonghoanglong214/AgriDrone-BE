@@ -241,7 +241,7 @@ public sealed class RabbitMqDeliveryIntegrationTests
             var values = new Dictionary<string, string?>
             {
                 ["ConnectionStrings:AgriDrone"] =
-                    "Host=127.0.0.1;Port=55432;Database=agridrone_step1_inbox;Username=agridrone_test;Password=agridrone_test",
+                    "Host=127.0.0.1;Port=56432;Database=agridrone_step1_inbox;Username=agridrone_test;Password=agridrone_test",
                 ["RabbitMq:Enabled"] = "true",
                 ["RabbitMq:HostName"] = "127.0.0.1",
                 ["RabbitMq:Port"] = "55672",

@@ -1,4 +1,5 @@
-name: agridrone-local
+# Docker Desktop groups every service in this file under one Compose project.
+name: agridrone
 
 services:
   postgres:
@@ -8,11 +9,18 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-agridrone}
       POSTGRES_USER: ${POSTGRES_USER:-agridrone}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-agridrone_dev}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      BE1_DB_NAME: ${BE1_DB_NAME:-agridrone_be1}
+      BE1_DB_USERNAME: ${BE1_DB_USERNAME:-agridrone_be1}
+      BE1_DB_PASSWORD: ${BE1_DB_PASSWORD:?Set BE1_DB_PASSWORD in .env}
+      BE2_DB_NAME: ${BE2_DB_NAME:-agridrone_be2}
+      BE2_DB_USERNAME: ${BE2_DB_USERNAME:-agridrone_be2}
+      BE2_DB_PASSWORD: ${BE2_DB_PASSWORD:?Set BE2_DB_PASSWORD in .env}
     ports:
       - "127.0.0.1:${POSTGRES_PORT:-5433}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./infrastructure/postgres/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test:
         - CMD-SHELL
@@ -27,7 +35,7 @@ services:
     restart: unless-stopped
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-agridrone}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-agridrone_dev}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD in .env}
       RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_VHOST:-agridrone}
     ports:
       - "127.0.0.1:${RABBITMQ_PORT:-5672}:5672"
@@ -49,7 +57,7 @@ services:
     image: redis:8.8.1-alpine
     restart: unless-stopped
     environment:
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-agridrone_dev}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
     command:
       - /bin/sh
       - -c
@@ -67,7 +75,114 @@ services:
       retries: 10
       start_period: 10s
 
+  be1-java:
+    build:
+      context: ./backend-be1-java
+    restart: unless-stopped
+    stop_grace_period: 35s
+    environment:
+      SPRING_PROFILES_ACTIVE: compose
+      BE1_DB_URL: jdbc:postgresql://postgres:5432/${BE1_DB_NAME:-agridrone_be1}
+      BE1_DB_USERNAME: ${BE1_DB_USERNAME:-agridrone_be1}
+      BE1_DB_PASSWORD: ${BE1_DB_PASSWORD:?Set BE1_DB_PASSWORD in .env}
+      BE1_RABBITMQ_HOST: rabbitmq
+      BE1_RABBITMQ_PORT: 5672
+      BE1_RABBITMQ_VHOST: ${RABBITMQ_VHOST:-agridrone}
+      BE1_RABBITMQ_USERNAME: ${RABBITMQ_USER:-agridrone}
+      BE1_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD in .env}
+      BE1_REDIS_HOST: redis
+      BE1_REDIS_PORT: 6379
+      BE1_REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
+      BE1_CACHE_PREFIX: ${BE1_CACHE_PREFIX:-agridrone:be1}
+      BE1_CACHE_ENABLED: ${BE1_CACHE_ENABLED:-true}
+      BE1_CACHE_DEFAULT_TTL: ${BE1_CACHE_DEFAULT_TTL:-5m}
+      BE1_CACHE_TIMEOUT: ${BE1_CACHE_TIMEOUT:-2s}
+      BE1_MESSAGING_ENABLED: ${BE1_MESSAGING_ENABLED:-false}
+      BE1_OUTBOX_MAX_ATTEMPTS: ${BE1_OUTBOX_MAX_ATTEMPTS:-8}
+      BE1_OUTBOX_CONFIRM_TIMEOUT: ${BE1_OUTBOX_CONFIRM_TIMEOUT:-5s}
+      BE1_JWT_ENABLED: "false"
+      BE1_SYSTEM_ADMIN_BOOTSTRAP_ENABLED: ${BE1_SYSTEM_ADMIN_BOOTSTRAP_ENABLED:-false}
+      BE1_SYSTEM_ADMIN_EMAIL: ${BE1_SYSTEM_ADMIN_EMAIL:-}
+      BE1_SYSTEM_ADMIN_FULL_NAME: ${BE1_SYSTEM_ADMIN_FULL_NAME:-System Administrator}
+    ports:
+      - "127.0.0.1:${BE1_HTTP_PORT:-8081}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - wget -q --spider http://localhost:8080/actuator/health/readiness
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  be2-dotnet:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    stop_grace_period: 35s
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__AgriDrone: Host=postgres;Port=5432;Database=${BE2_DB_NAME:-agridrone_be2};Username=${BE2_DB_USERNAME:-agridrone_be2};Password=${BE2_DB_PASSWORD:?Set BE2_DB_PASSWORD in .env}
+      Jwt__Secret: ${BE2_JWT_SECRET:?Set BE2_JWT_SECRET in .env}
+      DatabaseInitialization__ApplyMigrationsOnStartup: "true"
+      Identity__SystemAdminBootstrap__Enabled: "false"
+      Identity__TenantInvitations__AcceptUrl: ${TENANT_INVITATION_ACCEPT_URL:-http://localhost:5173/accept-invitation}
+      Identity__SystemManagerInvitations__AcceptUrl: ${SYSTEM_MANAGER_INVITATION_ACCEPT_URL:-http://localhost:5173/accept-system-manager-invitation}
+      Identity__PasswordReset__ResetUrl: ${PASSWORD_RESET_URL:-http://localhost:5173/reset-password}
+      Email__Smtp__Enabled: ${SMTP_ENABLED:-false}
+      Email__Smtp__Host: ${SMTP_HOST:-}
+      Email__Smtp__Port: ${SMTP_PORT:-587}
+      Email__Smtp__SecurityMode: ${SMTP_SECURITY_MODE:-StartTls}
+      Email__Smtp__Username: ${SMTP_USERNAME:-}
+      Email__Smtp__Password: ${SMTP_PASSWORD:-}
+      Email__Smtp__FromAddress: ${SMTP_FROM_ADDRESS:-}
+      Email__Smtp__FromName: ${SMTP_FROM_NAME:-AgriDrone}
+      Email__Smtp__TimeoutSeconds: ${SMTP_TIMEOUT_SECONDS:-30}
+      ObjectStorage__Enabled: "false"
+      Telemetry__BlackboxDecoder__Enabled: "false"
+      RabbitMq__Enabled: "true"
+      RabbitMq__HostName: rabbitmq
+      RabbitMq__Port: 5672
+      RabbitMq__VirtualHost: ${RABBITMQ_VHOST:-agridrone}
+      RabbitMq__UserName: ${RABBITMQ_USER:-agridrone}
+      RabbitMq__Password: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD in .env}
+      Redis__Enabled: "true"
+      Redis__ConnectionString: redis:6379,password=${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env},abortConnect=false
+      Redis__InstancePrefix: ${BE2_CACHE_PREFIX:-agridrone:be2}
+    ports:
+      - "127.0.0.1:${BE2_HTTP_PORT:-8080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - wget -q --spider http://localhost:8080/health/ready
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 45s
+
 volumes:
+  # Keep the existing physical volume names when moving the containers from
+  # the former `agridrone-local` project to `agridrone`. This preserves local
+  # PostgreSQL, RabbitMQ and Redis data instead of silently creating empty
+  # replacement volumes.
   postgres_data:
+    name: agridrone-local_postgres_data
   rabbitmq_data:
+    name: agridrone-local_rabbitmq_data
   redis_data:
+    name: agridrone-local_redis_data

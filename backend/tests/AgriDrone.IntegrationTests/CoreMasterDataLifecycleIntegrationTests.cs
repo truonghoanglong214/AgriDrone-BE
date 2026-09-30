@@ -21,7 +21,7 @@ namespace AgriDrone.IntegrationTests;
 public sealed class CoreMasterDataLifecycleIntegrationTests
 {
     private const string AdminConnection =
-        "Host=127.0.0.1;Port=55432;Database=postgres;" +
+        "Host=127.0.0.1;Port=56432;Database=postgres;" +
         "Username=agridrone_test;Password=agridrone_test";
 
     private static readonly Guid TestActorId =
@@ -410,7 +410,7 @@ public sealed class CoreMasterDataLifecycleIntegrationTests
     }
 
     private static string GetConnectionString(string databaseName) =>
-        "Host=127.0.0.1;Port=55432;Database=" + databaseName +
+        "Host=127.0.0.1;Port=56432;Database=" + databaseName +
         ";Username=agridrone_test;Password=agridrone_test;Pooling=false";
 
     private static void AssertHealthLevel(

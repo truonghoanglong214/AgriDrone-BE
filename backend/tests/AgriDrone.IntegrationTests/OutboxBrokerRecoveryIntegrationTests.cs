@@ -16,9 +16,9 @@ public sealed class OutboxBrokerRecoveryIntegrationTests
 {
     private const string DatabaseName = "agridrone_step1_outbox";
     private const string AdminConnection =
-        "Host=127.0.0.1;Port=55432;Database=postgres;Username=agridrone_test;Password=agridrone_test";
+        "Host=127.0.0.1;Port=56432;Database=postgres;Username=agridrone_test;Password=agridrone_test";
     private const string ConnectionString =
-        "Host=127.0.0.1;Port=55432;Database=" + DatabaseName +
+        "Host=127.0.0.1;Port=56432;Database=" + DatabaseName +
         ";Username=agridrone_test;Password=agridrone_test";
 
     [Fact]
