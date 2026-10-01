@@ -4,9 +4,9 @@ Spring Boot modular-monolith target for BE1. Migration Phase 3 provides the
 shared execution, audit, idempotency, Inbox/Outbox, RabbitMQ and Redis runtime
 on top of the Flyway-owned `agridrone_be1` database. Phase 4A adds the Identity
 domain, repository output ports under `application.port.out`, and JPA
-persistence split into `entity`, `repository` and `adapter`. No Identity
-business endpoint is exposed yet; API and authentication flows start in the
-later Phase 4 slices.
+persistence split into `entity`, `repository` and `adapter`. Phase 4B.6 now
+exposes the Identity login and password-reset routes; tenant and manager
+workflows remain deferred to later Phase 4 slices.
 
 ## Local verification
 
@@ -36,7 +36,20 @@ and are removed automatically after the test JVM exits.
 
 ## Runtime configuration
 
-All credentials come from environment variables. Required Compose variables are documented in the repository `.env.example`. JWT verification is disabled until an explicit `BE1_JWT_ENABLED=true` and `BE1_JWT_JWK_SET_URI` are supplied.
+All credentials come from environment variables. Required Compose variables are documented in the repository `.env.example`. JWT verification is disabled until an explicit `BE1_JWT_ENABLED=true`, `BE1_JWT_JWK_SET_URI`, `BE1_JWT_ISSUER`, and `BE1_JWT_AUDIENCE` are supplied. Tokens must use RS256 and include a `kid` header. The Java issuer/JWKS endpoint is separately enabled with `BE1_JWT_ISSUER_ENABLED=true` and requires PEM RSA key locations, a key id, and a positive access-token TTL. The public JWKS endpoint is `/.well-known/jwks.json`.
+
+Issuer key locations should use Spring resource locations such as
+`file:C:/Users/ASUS/.agridrone/jwt-private.pem` and
+`file:C:/Users/ASUS/.agridrone/jwt-public.pem`. The private key must be
+PKCS#8 PEM (`BEGIN PRIVATE KEY`) and the public key must be X.509 PEM
+(`BEGIN PUBLIC KEY`). Local PEM files are ignored by Git.
+
+Login is exposed at `POST /api/auth/login` when the Java issuer is enabled.
+Password reset uses `POST /api/auth/forgot-password` and
+`POST /api/auth/reset-password`; forgot-password requires SMTP to be enabled
+and sends a link using the configured reset URL. All authentication and reset
+routes are anonymous endpoints; protected business routes still require a
+Bearer token.
 
 Initial System Admin creation is disabled by default. To run it during startup,
 set `BE1_SYSTEM_ADMIN_BOOTSTRAP_ENABLED=true`,
@@ -78,10 +91,10 @@ Health probes:
 Run the full stack from the repository root with `docker compose up --build` after providing the required secrets.
 
 During migration, BE1 Java listens on `http://localhost:8081` and the existing
-.NET runtime listens on `http://localhost:8080`. This is deployment coexistence
-only: Java has no business endpoints or message consumers yet, so no traffic or
-queue ownership has moved.
+.NET runtime listens on `http://localhost:8080`. This is deployment coexistence;
+only the explicitly enabled Java Identity routes are available and no business
+traffic or queue ownership has moved.
 
 Implementation and verification evidence is recorded in the repository-level
 `docs/operations` directory, including
-`be1-java-migration-phase4b4-report.md` for the System Admin bootstrap slice.
+`be1-java-migration-phase4b6-report.md` for the login/password-reset slice.

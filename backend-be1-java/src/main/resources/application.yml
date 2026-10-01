@@ -91,6 +91,15 @@ agridrone:
       enabled: ${BE1_JWT_ENABLED:false}
       jwk-set-uri: ${BE1_JWT_JWK_SET_URI:}
       issuer: ${BE1_JWT_ISSUER:}
+      audience: ${BE1_JWT_AUDIENCE:}
+      issuer-service:
+        enabled: ${BE1_JWT_ISSUER_ENABLED:false}
+        issuer: ${BE1_JWT_ISSUER:}
+        audience: ${BE1_JWT_AUDIENCE:}
+        private-key-location: ${BE1_JWT_PRIVATE_KEY_LOCATION:}
+        public-key-location: ${BE1_JWT_PUBLIC_KEY_LOCATION:}
+        key-id: ${BE1_JWT_KEY_ID:}
+        access-token-ttl: ${BE1_JWT_ACCESS_TOKEN_TTL:15m}
   web:
     correlation-header: X-Correlation-ID
   messaging:
@@ -114,7 +123,21 @@ agridrone:
     default-ttl: ${BE1_CACHE_DEFAULT_TTL:5m}
     timeout: ${BE1_CACHE_TIMEOUT:2s}
   identity:
+    password-reset:
+      reset-url: ${BE1_PASSWORD_RESET_URL:http://localhost:5173/reset-password}
+      expiration: ${BE1_PASSWORD_RESET_EXPIRATION:30m}
     system-admin-bootstrap:
       enabled: ${BE1_SYSTEM_ADMIN_BOOTSTRAP_ENABLED:false}
       email: ${BE1_SYSTEM_ADMIN_EMAIL:}
       full-name: ${BE1_SYSTEM_ADMIN_FULL_NAME:System Administrator}
+  notification:
+    smtp:
+      enabled: ${BE1_SMTP_ENABLED:false}
+      host: ${BE1_SMTP_HOST:}
+      port: ${BE1_SMTP_PORT:587}
+      security-mode: ${BE1_SMTP_SECURITY_MODE:STARTTLS}
+      username: ${BE1_SMTP_USERNAME:}
+      password: ${BE1_SMTP_PASSWORD:}
+      from-address: ${BE1_SMTP_FROM_ADDRESS:}
+      from-name: ${BE1_SMTP_FROM_NAME:AgriDrone}
+      timeout-seconds: ${BE1_SMTP_TIMEOUT_SECONDS:30}
