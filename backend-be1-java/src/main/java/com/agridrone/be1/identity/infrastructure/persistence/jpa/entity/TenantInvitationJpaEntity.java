@@ -23,6 +23,12 @@ public class TenantInvitationJpaEntity {
     @Column(nullable = false)
     private String email;
 
+    @Column(nullable = false)
+    private String role;
+
+    @Column(nullable = false)
+    private String purpose;
+
     @Column(name = "token_hash", nullable = false)
     private String tokenHash;
 
@@ -49,14 +55,20 @@ public class TenantInvitationJpaEntity {
 
     public TenantInvitationJpaEntity(TenantInvitation invitation) {
         id = invitation.id();
+        createdAt = invitation.createdAt();
+        updateFrom(invitation);
+    }
+
+    public void updateFrom(TenantInvitation invitation) {
         tenantId = invitation.tenantId();
         email = invitation.email();
+        role = invitation.role();
+        purpose = invitation.purpose();
         tokenHash = invitation.tokenHash();
         status = invitation.status();
         invitedBy = invitation.invitedBy();
         acceptedBy = invitation.acceptedBy();
         expiresAt = invitation.expiresAt();
-        createdAt = invitation.createdAt();
         acceptedAt = invitation.acceptedAt();
     }
 
@@ -75,6 +87,8 @@ public class TenantInvitationJpaEntity {
                 id,
                 tenantId,
                 email,
+                role,
+                purpose,
                 tokenHash,
                 status,
                 invitedBy,

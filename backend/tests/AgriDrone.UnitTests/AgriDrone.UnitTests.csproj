@@ -31,5 +31,8 @@
     <Content Include="..\..\..\contracts\examples\events\*.event.json"
              Link="contracts\events\%(Filename)%(Extension)"
              CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\..\contracts\examples\auth\*.json"
+             Link="contracts\auth\%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

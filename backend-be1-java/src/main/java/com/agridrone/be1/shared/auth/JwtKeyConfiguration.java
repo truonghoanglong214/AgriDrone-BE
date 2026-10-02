@@ -17,6 +17,7 @@ import java.security.interfaces.RSAPublicKey;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
+import java.util.UUID;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -61,6 +62,11 @@ public class JwtKeyConfiguration {
         return new NimbusJwtEncoder(source);
     }
 
+    @Bean
+    TokenIdGenerator jwtTokenIdGenerator() {
+        return UUID::randomUUID;
+    }
+
     private static void validate(JwtIssuerProperties properties) {
         require(properties.issuer(), "BE1_JWT_ISSUER");
         require(properties.audience(), "BE1_JWT_AUDIENCE");
@@ -70,6 +76,12 @@ public class JwtKeyConfiguration {
         if (properties.accessTokenTtl() == null || properties.accessTokenTtl().isZero()
                 || properties.accessTokenTtl().isNegative()) {
             throw new IllegalStateException("BE1_JWT_ACCESS_TOKEN_TTL must be positive.");
+        }
+        if (properties.tenantSelectionTokenTtl() == null
+                || properties.tenantSelectionTokenTtl().isZero()
+                || properties.tenantSelectionTokenTtl().isNegative()) {
+            throw new IllegalStateException(
+                    "BE1_JWT_TENANT_SELECTION_TOKEN_TTL must be positive.");
         }
     }
 

@@ -7,6 +7,7 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm;
 import org.springframework.security.oauth2.jwt.JwtClaimsSet;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
@@ -28,15 +29,22 @@ public final class JwtTokenIssuer {
     private final JwtEncoder encoder;
     private final JwtIssuerProperties properties;
     private final Clock clock;
+    private final TokenIdGenerator tokenIds;
 
-    public JwtTokenIssuer(JwtEncoder encoder, JwtIssuerProperties properties) {
-        this(encoder, properties, Clock.systemUTC());
+    @Autowired
+    JwtTokenIssuer(JwtEncoder encoder, JwtIssuerProperties properties, Clock clock) {
+        this(encoder, properties, clock, UUID::randomUUID);
     }
 
-    JwtTokenIssuer(JwtEncoder encoder, JwtIssuerProperties properties, Clock clock) {
+    public JwtTokenIssuer(
+            JwtEncoder encoder,
+            JwtIssuerProperties properties,
+            Clock clock,
+            TokenIdGenerator tokenIds) {
         this.encoder = encoder;
         this.properties = properties;
         this.clock = clock;
+        this.tokenIds = tokenIds;
     }
 
     public IssuedJwt issue(TokenRequest request) {
@@ -49,7 +57,7 @@ public final class JwtTokenIssuer {
                 .issuedAt(issuedAt)
                 .notBefore(issuedAt)
                 .expiresAt(expiresAt)
-                .id(UUID.randomUUID().toString())
+                .id(tokenIds.next().toString())
                 .claim(SYSTEM_ROLE_CLAIM, request.systemRoles());
         if (request.tenantId() != null) {
             claims.claim(TENANT_ID_CLAIM, request.tenantId().toString());

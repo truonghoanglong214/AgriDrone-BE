@@ -23,6 +23,7 @@ import com.agridrone.be1.identity.domain.SystemRoleCodes;
 import com.agridrone.be1.identity.domain.Tenant;
 import com.agridrone.be1.identity.domain.TenantInvitation;
 import com.agridrone.be1.identity.domain.TenantMembership;
+import com.agridrone.be1.identity.domain.TenantStatus;
 import com.agridrone.be1.identity.domain.User;
 import com.agridrone.be1.identity.domain.UserStatus;
 import com.agridrone.be1.identity.infrastructure.persistence.jpa.adapter.FarmManagerAssignmentPersistenceAdapter;
@@ -36,6 +37,12 @@ import com.agridrone.be1.identity.infrastructure.persistence.jpa.adapter.TenantP
 import com.agridrone.be1.identity.infrastructure.persistence.jpa.adapter.UserPersistenceAdapter;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -45,6 +52,8 @@ import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.annotation.Propagation;
@@ -114,6 +123,9 @@ class IdentityRepositoryIT {
 
     @Autowired
     RoleRepository roles;
+
+    @Autowired
+    PlatformTransactionManager transactionManager;
 
     @BeforeEach
     void cleanDatabase() {
@@ -235,22 +247,166 @@ class IdentityRepositoryIT {
         assertThat(roles.existsActiveUserWithRole(SystemRoleCodes.SYSTEM_MANAGER)).isFalse();
     }
 
-    private void verifyTenantInvitation(User admin, User target, Tenant tenant) {
-        TenantInvitation invitation = new TenantInvitation(
-                UUID.randomUUID(),
-                tenant.id(),
-                target.email(),
-                "a".repeat(64),
-                InvitationStatus.PENDING,
-                admin.id(),
-                null,
-                NOW.plus(1, ChronoUnit.DAYS),
+    @Test
+    void tenantPageIncludesInactiveRowsAndUsesDeterministicOneBasedPaging() {
+        Tenant older = new Tenant(
+                UUID.fromString("00000000-0000-0000-0000-000000000010"),
+                "OLDER",
+                "Older tenant",
+                TenantStatus.ACTIVE,
+                NOW.minus(2, ChronoUnit.DAYS),
+                NOW.minus(2, ChronoUnit.DAYS),
+                null);
+        Tenant newerInactive = new Tenant(
+                UUID.fromString("00000000-0000-0000-0000-000000000020"),
+                "NEWER",
+                "Newer tenant",
+                TenantStatus.INACTIVE,
+                NOW.minus(1, ChronoUnit.DAYS),
                 NOW,
                 null);
+        Tenant deleted = new Tenant(
+                UUID.fromString("00000000-0000-0000-0000-000000000030"),
+                "DELETED",
+                "Deleted tenant",
+                TenantStatus.INACTIVE,
+                NOW,
+                NOW,
+                NOW);
+
+        tenants.save(older);
+        tenants.save(newerInactive);
+        tenants.save(deleted);
+
+        var firstPage = tenants.findPage(new com.agridrone.be1.shared.api.PageRequest(1, 1));
+        var secondPage = tenants.findPage(new com.agridrone.be1.shared.api.PageRequest(2, 1));
+
+        assertThat(firstPage.items()).extracting(item -> item.id())
+                .containsExactly(newerInactive.id());
+        assertThat(firstPage.totalCount()).isEqualTo(2);
+        assertThat(firstPage.totalPages()).isEqualTo(2);
+        assertThat(firstPage.hasPreviousPage()).isFalse();
+        assertThat(firstPage.hasNextPage()).isTrue();
+        assertThat(secondPage.items()).extracting(item -> item.id())
+                .containsExactly(older.id());
+        assertThat(secondPage.hasPreviousPage()).isTrue();
+        assertThat(secondPage.hasNextPage()).isFalse();
+        assertThat(tenants.findByIdIncludingInactive(newerInactive.id()))
+                .get()
+                .satisfies(found -> {
+                    assertThat(found.id()).isEqualTo(newerInactive.id());
+                    assertThat(found.status()).isEqualTo(TenantStatus.INACTIVE);
+                });
+        assertThat(tenants.findByIdIncludingInactive(deleted.id())).isEmpty();
+        assertThat(tenants.existsByNormalizedCode(" newer ")).isTrue();
+    }
+
+    @Test
+    void userTenantPageUsesProjectionAndExcludesInactiveMemberships() {
+        User owner = User.create("owner@example.com", "hash", "Owner", null, NOW);
+        Tenant older = tenantAt("MEMBERSHIP-OLDER", NOW.minus(2, ChronoUnit.DAYS));
+        Tenant newer = tenantAt("MEMBERSHIP-NEWER", NOW.minus(1, ChronoUnit.DAYS));
+        Tenant inactiveMembershipTenant = tenantAt("MEMBERSHIP-INACTIVE", NOW);
+        users.save(owner);
+        tenants.save(older);
+        tenants.save(newer);
+        tenants.save(inactiveMembershipTenant);
+
+        TenantMembership olderMembership = membershipAt(
+                owner.id(), older.id(), "ACTIVE", NOW.minus(2, ChronoUnit.DAYS));
+        TenantMembership newerMembership = membershipAt(
+                owner.id(), newer.id(), "ACTIVE", NOW.minus(1, ChronoUnit.DAYS));
+        TenantMembership inactiveMembership = membershipAt(
+                owner.id(), inactiveMembershipTenant.id(), "INACTIVE", NOW);
+        memberships.add(olderMembership);
+        memberships.add(newerMembership);
+        memberships.add(inactiveMembership);
+
+        var page = memberships.findPageByUserId(
+                owner.id(),
+                new com.agridrone.be1.shared.api.PageRequest(1, 20));
+
+        assertThat(page.items()).extracting(item -> item.id())
+                .containsExactly(newerMembership.id(), olderMembership.id());
+        assertThat(page.totalCount()).isEqualTo(2);
+        assertThat(memberships.find(owner.id(), inactiveMembershipTenant.id()))
+                .contains(inactiveMembership);
+        assertThat(memberships.findActive(owner.id(), inactiveMembershipTenant.id()))
+                .isEmpty();
+    }
+
+    @Test
+    void databaseAllowsOnlyOnePendingOwnerProvisioningPerTenant() {
+        User admin = User.create("admin@example.com", "hash", "Admin", null, NOW);
+        Tenant tenant = Tenant.create("OWNER-PENDING", "Tenant", NOW);
+        users.save(admin);
+        tenants.save(tenant);
+
+        tenantInvitations.add(invitation(
+                tenant.id(), admin.id(), "first@example.com", "d".repeat(64)));
+
+        assertThatThrownBy(() -> tenantInvitations.add(invitation(
+                        tenant.id(), admin.id(), "second@example.com", "e".repeat(64))))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void invitationLookupHoldsPessimisticLockUntilOuterTransactionCompletes()
+            throws Exception {
+        User admin = User.create("admin@example.com", "hash", "Admin", null, NOW);
+        Tenant tenant = Tenant.create("LOCK", "Tenant", NOW);
+        TenantInvitation invitation = invitation(
+                tenant.id(), admin.id(), "owner@example.com", "f".repeat(64));
+        users.save(admin);
+        tenants.save(tenant);
+        tenantInvitations.add(invitation);
+
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        CountDownLatch firstHasLock = new CountDownLatch(1);
+        CountDownLatch releaseFirst = new CountDownLatch(1);
+        CountDownLatch secondStarted = new CountDownLatch(1);
+        TransactionTemplate transactions = new TransactionTemplate(transactionManager);
+
+        try {
+            Future<?> first = executor.submit(() -> transactions.executeWithoutResult(status -> {
+                tenantInvitations.findByTokenHashForUpdate(invitation.tokenHash())
+                        .orElseThrow();
+                firstHasLock.countDown();
+                await(releaseFirst);
+            }));
+            assertThat(firstHasLock.await(5, TimeUnit.SECONDS)).isTrue();
+
+            Future<TenantInvitation> second = executor.submit(() -> {
+                secondStarted.countDown();
+                return transactions.execute(status -> tenantInvitations
+                        .findByTokenHashForUpdate(invitation.tokenHash())
+                        .orElseThrow());
+            });
+            assertThat(secondStarted.await(5, TimeUnit.SECONDS)).isTrue();
+            assertThatThrownBy(() -> second.get(250, TimeUnit.MILLISECONDS))
+                    .isInstanceOf(TimeoutException.class);
+
+            releaseFirst.countDown();
+            first.get(5, TimeUnit.SECONDS);
+            assertThat(second.get(5, TimeUnit.SECONDS)).isEqualTo(invitation);
+        } finally {
+            releaseFirst.countDown();
+            executor.shutdownNow();
+            assertThat(executor.awaitTermination(5, TimeUnit.SECONDS)).isTrue();
+        }
+    }
+
+    private void verifyTenantInvitation(User admin, User target, Tenant tenant) {
+        TenantInvitation invitation = invitation(
+                tenant.id(), admin.id(), target.email(), "a".repeat(64));
 
         tenantInvitations.add(invitation);
 
+        assertThat(tenantInvitations.findByTokenHash(invitation.tokenHash()))
+                .contains(invitation);
         assertThat(tenantInvitations.findByTokenHashForUpdate(invitation.tokenHash()))
+                .contains(invitation);
+        assertThat(tenantInvitations.findPendingOwnerProvisioning(tenant.id()))
                 .contains(invitation);
         assertThat(tenantInvitations.markAccepted(
                         invitation.id(), target.id(), NOW.plus(1, ChronoUnit.HOURS)))
@@ -258,6 +414,17 @@ class IdentityRepositoryIT {
         assertThat(tenantInvitations.markAccepted(
                         invitation.id(), target.id(), NOW.plus(2, ChronoUnit.HOURS)))
                 .isFalse();
+
+        TenantInvitation expired = invitation(
+                tenant.id(), admin.id(), "expired@example.com", "9".repeat(64));
+        tenantInvitations.add(expired);
+        TenantInvitation transitioned = expired.expire(NOW.plus(2, ChronoUnit.DAYS));
+        tenantInvitations.save(transitioned);
+
+        assertThat(tenantInvitations.findByTokenHash(expired.tokenHash()))
+                .contains(transitioned);
+        assertThat(tenantInvitations.findPendingOwnerProvisioning(tenant.id()))
+                .isEmpty();
     }
 
     private void verifySystemManagerInvitation(User admin, User target) {
@@ -321,5 +488,63 @@ class IdentityRepositoryIT {
         profiles.save(profile);
 
         return profile;
+    }
+
+    private static Tenant tenantAt(String code, Instant createdAt) {
+        return new Tenant(
+                UUID.randomUUID(),
+                code,
+                code,
+                TenantStatus.ACTIVE,
+                createdAt,
+                createdAt,
+                null);
+    }
+
+    private static TenantMembership membershipAt(
+            UUID userId,
+            UUID tenantId,
+            String status,
+            Instant joinedAt) {
+        return new TenantMembership(
+                UUID.randomUUID(),
+                tenantId,
+                userId,
+                TenantInvitation.OWNER_ROLE,
+                status,
+                joinedAt,
+                joinedAt,
+                1);
+    }
+
+    private static TenantInvitation invitation(
+            UUID tenantId,
+            UUID invitedBy,
+            String email,
+            String tokenHash) {
+        return new TenantInvitation(
+                UUID.randomUUID(),
+                tenantId,
+                email,
+                TenantInvitation.OWNER_ROLE,
+                TenantInvitation.OWNER_PROVISIONING_PURPOSE,
+                tokenHash,
+                InvitationStatus.PENDING,
+                invitedBy,
+                null,
+                NOW.plus(1, ChronoUnit.DAYS),
+                NOW,
+                null);
+    }
+
+    private static void await(CountDownLatch latch) {
+        try {
+            if (!latch.await(5, TimeUnit.SECONDS)) {
+                throw new IllegalStateException("Timed out waiting for concurrent repository test");
+            }
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Concurrent repository test was interrupted", exception);
+        }
     }
 }

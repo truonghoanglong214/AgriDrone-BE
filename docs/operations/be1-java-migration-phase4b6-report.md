@@ -17,12 +17,17 @@ the stable tenant-selection error until the 4C selection flow is implemented.
 
 - `mvn -q test` passes, including service, security/execution-context and API
   contract tests.
+- Swagger UI is available at `/swagger-ui/index.html`; the raw OpenAPI document
+  is available at `/v3/api-docs`. Both routes are public documentation routes,
+  including when JWT resource-server security is enabled.
 - `mvn -q verify` completes without test failures. Testcontainers integration
   tests are skipped when Docker Desktop is unavailable.
 
 ## Remaining Phase 4 work
 
-- BE2 must verify a Java-issued token through the cross-process contract test.
 - 4C TenantOwner invitation, tenant selection and tenant lifecycle/read models.
 - 4D SystemManager invitation/profile/qualification/availability and primary Farm
   assignment/access flow.
+
+The cross-runtime JWT gate was completed on 2026-10-02 and is recorded in
+`be1-java-migration-phase4b5-report.md`.

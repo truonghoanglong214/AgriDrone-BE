@@ -41,7 +41,8 @@ class JwtIssuerTest {
                 privateKey.toUri().toString(),
                 publicKey.toUri().toString(),
                 "test-key",
-                Duration.ofMinutes(15));
+                Duration.ofMinutes(15),
+                Duration.ofMinutes(5));
 
         JwtKeyConfiguration configuration = new JwtKeyConfiguration();
         RSAKey rsaKey = configuration.jwtRsaKey(properties, new DefaultResourceLoader());

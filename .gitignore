@@ -69,6 +69,9 @@ artifacts-obj/
 *.pfx
 *.p12
 *.pem
+# Deterministic, non-production key pair used only by the cross-runtime JWT test.
+!backend-be1-java/src/test/resources/contracts/auth/java-rs256-contract-private.pem
+!backend-be1-java/src/test/resources/contracts/auth/java-rs256-contract-public.pem
 
 # Logs and local databases
 *.log

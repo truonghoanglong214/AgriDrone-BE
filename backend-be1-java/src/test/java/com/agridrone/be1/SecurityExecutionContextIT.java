@@ -72,6 +72,13 @@ class SecurityExecutionContextIT {
                 .andExpect(jsonPath("$.roles[0]").value("SYSTEM_ADMIN"));
     }
 
+    @Test
+    void openApiRemainsPublicWhenJwtSecurityIsEnabled() throws Exception {
+        mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.info.title").value("AgriDrone BE1 API"));
+    }
+
     @RestController
     static class ProbeController {
         @GetMapping("/test/execution-context")

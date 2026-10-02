@@ -112,7 +112,8 @@ await app.Services.BootstrapSystemAdminAsync();
 
 app.UseExceptionHandler();
 
-if (app.Environment.IsDevelopment())
+if (app.Environment.IsDevelopment() ||
+    app.Configuration.GetValue<bool>("OpenApi:Enabled"))
 {
     app.UseSwagger();
     app.UseSwaggerUI();

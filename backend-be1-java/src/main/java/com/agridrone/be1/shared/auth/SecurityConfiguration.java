@@ -10,6 +10,7 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.beans.factory.ObjectProvider;
 import com.agridrone.be1.shared.execution.ExecutionContextFilter;
 
 @Configuration(proxyBeanMethods = false)
@@ -20,9 +21,17 @@ public class SecurityConfiguration {
         "/actuator/health",
         "/actuator/health/**",
         "/.well-known/jwks.json",
+        "/v3/api-docs",
+        "/v3/api-docs/**",
+        "/swagger-ui.html",
+        "/swagger-ui/**",
+        "/webjars/**",
         "/api/auth/login",
+        "/api/auth/select-tenant",
+        "/api/auth/invitations/preview",
         "/api/auth/forgot-password",
         "/api/auth/reset-password",
+        "/invitations/accept",
         "/error"
     };
 
@@ -30,7 +39,8 @@ public class SecurityConfiguration {
     @ConditionalOnProperty(prefix = "agridrone.security.jwt", name = "enabled", havingValue = "true")
     SecurityFilterChain jwtSecurityFilterChain(
             HttpSecurity http,
-            SecurityErrorWriter errorWriter) throws Exception {
+            SecurityErrorWriter errorWriter,
+            ObjectProvider<EffectiveTenantAccessGuard> tenantAccessGuard) throws Exception {
         configureCommon(http, errorWriter)
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers(PUBLIC_PLATFORM_ENDPOINTS).permitAll()
@@ -42,6 +52,12 @@ public class SecurityConfiguration {
                 }));
         http.addFilterAfter(new ExecutionContextFilter(),
                 BearerTokenAuthenticationFilter.class);
+        EffectiveTenantAccessGuard guard = tenantAccessGuard.getIfAvailable();
+        if (guard != null) {
+            http.addFilterAfter(
+                    new EffectiveTenantAccessFilter(guard, errorWriter),
+                    BearerTokenAuthenticationFilter.class);
+        }
         return http.build();
     }
 

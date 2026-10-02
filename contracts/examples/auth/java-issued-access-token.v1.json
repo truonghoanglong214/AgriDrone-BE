@@ -1,0 +1,26 @@
+{
+  "issuer": "https://auth.agridrone.test",
+  "audience": "agridrone-api",
+  "token": "eyJraWQiOiJqYXZhLWNvbnRyYWN0LTIwMjYtMDEiLCJhbGciOiJSUzI1NiJ9.eyJ0ZW5hbnRfaWQiOiIyMjIyMjIyMi0yMjIyLTIyMjItMjIyMi0yMjIyMjIyMjIyMjIiLCJzdWIiOiIxMTExMTExMS0xMTExLTExMTEtMTExMS0xMTExMTExMTExMTEiLCJhdWQiOiJhZ3JpZHJvbmUtYXBpIiwibmJmIjoxNzkwODk5MjAwLCJpc3MiOiJodHRwczovL2F1dGguYWdyaWRyb25lLnRlc3QiLCJzeXN0ZW1fcm9sZSI6WyJTWVNURU1fQURNSU4iXSwidGVuYW50X21lbWJlcnNoaXBfaWQiOiIzMzMzMzMzMy0zMzMzLTMzMzMtMzMzMy0zMzMzMzMzMzMzMzMiLCJleHAiOjQ5NDQ0OTkyMDAsImlhdCI6MTc5MDg5OTIwMCwianRpIjoiNDQ0NDQ0NDQtNDQ0NC00NDQ0LTQ0NDQtNDQ0NDQ0NDQ0NDQ0IiwidGVuYW50X3JvbGUiOiJPV05FUiJ9.H-6_tVqf-4_ztY9hwH3MdZQQwsFpP6PX0Yvjfy_jjgENY8NX6YzAiK1iY45XYVaw8Le_eSVSFlb-IalL449eGY2Z9VIGYjPVPr_Z93QnKa7BGNGUNPkwqee7mxJk0ycNnug_vMucdCcF1aIkIJVKkciU-Su_trCkxx1mUJogjs0eInrfViHcbCw5iwGB70nsOmFPQw4xASZkUTYNrwVRnnBkAFP--O9cu46yNyiApqOiEw-K140o84whARYMEc_bFbVL3ETOFA1llCCpc_Uqb9EfIW36OPS6r6tFhemmycoEUKyw9PPR5RoiDqxjR6IM3E7S9tF0Jl5Wjn_lToBW4Q",
+  "jwks": {
+    "keys": [
+      {
+        "kty": "RSA",
+        "e": "AQAB",
+        "use": "sig",
+        "kid": "java-contract-2026-01",
+        "alg": "RS256",
+        "n": "t3K1Mb6qQdjHSdncM3aMt95GJ2Skx1iuhzVArbhf7lgTwEamIiN_wuL3HufFDGq0wYsSB-PEYVAm0iDlD7JTqx8Dh6ONSKgCQZ-uu3AkEJ4PrQFBOULBZK1gg_H2ivjsp-gG71ZsC5YXuNXJjOzhIAZ3TxkVmQnCXP_oRKUB2otQsZX9gCWoJHXmgBGLdaYgaCMWWXFeB6Ax39a6MaOgguX-CwbVziYWgrwUuUmBRBRg-Fkbq4n_To81X1I0nZgJCFtfmQarvJk98CFNp4PtaMoiegvHm9bl1HMsfHzmDloRVJODW2Vscx9VOfRvxwWukzsvNpWIhmCO-LBkd1hpHw"
+      }
+    ]
+  },
+  "expectedClaims": {
+    "sub": "11111111-1111-1111-1111-111111111111",
+    "tenant_id": "22222222-2222-2222-2222-222222222222",
+    "tenant_membership_id": "33333333-3333-3333-3333-333333333333",
+    "tenant_role": "OWNER",
+    "system_role": [
+      "SYSTEM_ADMIN"
+    ]
+  }
+}

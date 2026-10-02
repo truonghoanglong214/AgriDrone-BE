@@ -1,13 +1,15 @@
 package com.agridrone.be1.identity.application.port.in.loginuser;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 public record LoginUserResult(
         String email,
         String fullName,
         String phone,
-        Session session) {
+        Session session,
+        TenantSelection tenantSelection) {
 
     public record Session(
             String accessToken,
@@ -20,5 +22,14 @@ public record LoginUserResult(
             String code,
             String name,
             String role) {
+    }
+
+    public record TenantSelection(
+            String selectionToken,
+            Instant expiresAt,
+            List<Tenant> tenants) {
+        public TenantSelection {
+            tenants = List.copyOf(tenants);
+        }
     }
 }

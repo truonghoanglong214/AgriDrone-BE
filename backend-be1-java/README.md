@@ -36,7 +36,13 @@ and are removed automatically after the test JVM exits.
 
 ## Runtime configuration
 
-All credentials come from environment variables. Required Compose variables are documented in the repository `.env.example`. JWT verification is disabled until an explicit `BE1_JWT_ENABLED=true`, `BE1_JWT_JWK_SET_URI`, `BE1_JWT_ISSUER`, and `BE1_JWT_AUDIENCE` are supplied. Tokens must use RS256 and include a `kid` header. The Java issuer/JWKS endpoint is separately enabled with `BE1_JWT_ISSUER_ENABLED=true` and requires PEM RSA key locations, a key id, and a positive access-token TTL. The public JWKS endpoint is `/.well-known/jwks.json`.
+All credentials come from environment variables. Required Compose variables are documented in the repository `.env.example`. JWT verification is disabled until an explicit `BE1_JWT_ENABLED=true`, `BE1_JWT_JWK_SET_URI`, `BE1_JWT_ISSUER`, and `BE1_JWT_AUDIENCE` are supplied. Tokens must use RS256 and include a `kid` header. The Java issuer/JWKS endpoint is separately enabled with `BE1_JWT_ISSUER_ENABLED=true` and requires PEM RSA key locations, a key id, a positive access-token TTL, and a positive tenant-selection-token TTL. The public JWKS endpoint is `/.well-known/jwks.json`.
+
+During coexistence, BE2 can validate Java-issued tokens directly from that
+endpoint. Configure BE2 with `BE2_JWT_JWKS_URI`, the same issuer and audience as
+BE1, and leave `BE2_JWT_SECRET` empty. For the local Compose network, use
+`http://be1-java:8080/.well-known/jwks.json` and set
+`BE2_JWT_REQUIRE_HTTPS_METADATA=false`; production must use HTTPS.
 
 Issuer key locations should use Spring resource locations such as
 `file:C:/Users/ASUS/.agridrone/jwt-private.pem` and
@@ -50,6 +56,12 @@ Password reset uses `POST /api/auth/forgot-password` and
 and sends a link using the configured reset URL. All authentication and reset
 routes are anonymous endpoints; protected business routes still require a
 Bearer token.
+
+OpenAPI and Swagger UI are enabled for local verification by default. Use
+`http://localhost:8081/swagger-ui/index.html` with Compose, or the configured
+BE1 port when running the application directly. The raw specification is at
+`/v3/api-docs`. Set `BE1_OPENAPI_ENABLED=false` in a production environment if
+the documentation endpoints should not be exposed.
 
 Initial System Admin creation is disabled by default. To run it during startup,
 set `BE1_SYSTEM_ADMIN_BOOTSTRAP_ENABLED=true`,
@@ -97,4 +109,5 @@ traffic or queue ownership has moved.
 
 Implementation and verification evidence is recorded in the repository-level
 `docs/operations` directory, including
+`be1-java-migration-phase4b5-report.md` for the cross-runtime JWT contract and
 `be1-java-migration-phase4b6-report.md` for the login/password-reset slice.

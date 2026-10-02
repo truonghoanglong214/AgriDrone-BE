@@ -11,5 +11,6 @@ public record JwtIssuerProperties(
         String privateKeyLocation,
         String publicKeyLocation,
         String keyId,
-        Duration accessTokenTtl) {
+        Duration accessTokenTtl,
+        Duration tenantSelectionTokenTtl) {
 }

@@ -17,6 +17,10 @@ import org.springframework.transaction.annotation.Transactional;
         havingValue = "true",
         matchIfMissing = true)
 public class TenantInvitationPersistenceAdapter implements TenantInvitationRepository {
+    private static final String OWNER = TenantInvitation.OWNER_ROLE;
+    private static final String OWNER_PROVISIONING =
+            TenantInvitation.OWNER_PROVISIONING_PURPOSE;
+
     private final TenantInvitationJpaRepository invitations;
 
     public TenantInvitationPersistenceAdapter(TenantInvitationJpaRepository invitations) {
@@ -24,15 +28,43 @@ public class TenantInvitationPersistenceAdapter implements TenantInvitationRepos
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public Optional<TenantInvitation> findByTokenHash(String tokenHash) {
+        return invitations.findByTokenHash(tokenHash).map(TenantInvitationJpaEntity::toDomain);
+    }
+
+    @Override
     @Transactional
     public Optional<TenantInvitation> findByTokenHashForUpdate(String tokenHash) {
-        return invitations.findByTokenHash(tokenHash).map(TenantInvitationJpaEntity::toDomain);
+        return invitations.findByTokenHashForUpdate(tokenHash)
+                .map(TenantInvitationJpaEntity::toDomain);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<TenantInvitation> findPendingOwnerProvisioning(UUID tenantId) {
+        return invitations
+                .findFirstByTenantIdAndRoleAndPurposeAndStatusOrderByCreatedAtDesc(
+                        tenantId,
+                        OWNER,
+                        OWNER_PROVISIONING,
+                        com.agridrone.be1.identity.domain.InvitationStatus.PENDING)
+                .map(TenantInvitationJpaEntity::toDomain);
     }
 
     @Override
     @Transactional
     public void add(TenantInvitation invitation) {
         invitations.saveAndFlush(new TenantInvitationJpaEntity(invitation));
+    }
+
+    @Override
+    @Transactional
+    public void save(TenantInvitation invitation) {
+        TenantInvitationJpaEntity entity = invitations.findById(invitation.id())
+                .orElseGet(() -> new TenantInvitationJpaEntity(invitation));
+        entity.updateFrom(invitation);
+        invitations.saveAndFlush(entity);
     }
 
     @Override

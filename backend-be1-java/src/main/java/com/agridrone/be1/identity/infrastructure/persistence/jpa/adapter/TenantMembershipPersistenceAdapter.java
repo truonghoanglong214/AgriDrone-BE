@@ -1,9 +1,12 @@
 package com.agridrone.be1.identity.infrastructure.persistence.jpa.adapter;
 
 import com.agridrone.be1.identity.application.port.out.persistence.TenantMembershipRepository;
+import com.agridrone.be1.identity.application.readmodel.UserTenantListItem;
 import com.agridrone.be1.identity.domain.TenantMembership;
 import com.agridrone.be1.identity.infrastructure.persistence.jpa.entity.TenantMembershipJpaEntity;
 import com.agridrone.be1.identity.infrastructure.persistence.jpa.repository.TenantMembershipJpaRepository;
+import com.agridrone.be1.shared.api.PageRequest;
+import com.agridrone.be1.shared.api.PageResponse;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -43,8 +46,28 @@ public class TenantMembershipPersistenceAdapter implements TenantMembershipRepos
 
     @Override
     @Transactional(readOnly = true)
+    public Optional<TenantMembership> find(UUID userId, UUID tenantId) {
+        return memberships.findByUserIdAndTenantId(userId, tenantId)
+                .map(TenantMembershipJpaEntity::toDomain);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public boolean hasActiveOwner(UUID tenantId) {
         return memberships.existsByTenantIdAndRoleAndStatus(tenantId, OWNER, ACTIVE);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<UserTenantListItem> findPageByUserId(
+            UUID userId,
+            PageRequest pageRequest) {
+        var page = memberships.findActivePageByUserId(
+                userId,
+                org.springframework.data.domain.PageRequest.of(
+                        pageRequest.zeroBasedPageIndex(),
+                        pageRequest.pageSize()));
+        return PageResponse.of(page.getContent(), pageRequest, page.getTotalElements());
     }
 
     @Override

@@ -2,6 +2,7 @@ package com.agridrone.be1;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -43,5 +44,23 @@ class PlatformContextTest {
         mockMvc.perform(get("/actuator/health/readiness"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("UP"));
+    }
+
+    @Test
+    void openApiAndSwaggerUiArePublic() throws Exception {
+        mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.info.title").value("AgriDrone BE1 API"));
+
+        mockMvc.perform(get("/swagger-ui/index.html"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void retiredPublicRegistrationIsStableGoneInsteadOfFallingThrough() throws Exception {
+        mockMvc.perform(post("/api/auth/register"))
+                .andExpect(status().isGone())
+                .andExpect(jsonPath("$.code").value("LegacyFlow.Disabled"))
+                .andExpect(jsonPath("$.path").value("/api/auth/register"));
     }
 }

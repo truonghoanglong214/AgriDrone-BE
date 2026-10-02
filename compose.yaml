@@ -109,6 +109,8 @@ services:
       BE1_JWT_PUBLIC_KEY_LOCATION: ${BE1_JWT_PUBLIC_KEY_LOCATION:-}
       BE1_JWT_KEY_ID: ${BE1_JWT_KEY_ID:-dev-2026-01}
       BE1_JWT_ACCESS_TOKEN_TTL: ${BE1_JWT_ACCESS_TOKEN_TTL:-15m}
+      BE1_JWT_TENANT_SELECTION_TOKEN_TTL: ${BE1_JWT_TENANT_SELECTION_TOKEN_TTL:-5m}
+      BE1_TENANT_INVITATION_EXPIRATION: ${BE1_TENANT_INVITATION_EXPIRATION:-72h}
       BE1_PASSWORD_RESET_URL: ${BE1_PASSWORD_RESET_URL:-http://localhost:5173/reset-password}
       BE1_PASSWORD_RESET_EXPIRATION: ${BE1_PASSWORD_RESET_EXPIRATION:-30m}
       BE1_SMTP_ENABLED: ${BE1_SMTP_ENABLED:-false}
@@ -120,6 +122,7 @@ services:
       BE1_SMTP_FROM_ADDRESS: ${BE1_SMTP_FROM_ADDRESS:-}
       BE1_SMTP_FROM_NAME: ${BE1_SMTP_FROM_NAME:-AgriDrone}
       BE1_SMTP_TIMEOUT_SECONDS: ${BE1_SMTP_TIMEOUT_SECONDS:-30}
+      BE1_OPENAPI_ENABLED: ${BE1_OPENAPI_ENABLED:-true}
       BE1_SYSTEM_ADMIN_BOOTSTRAP_ENABLED: ${BE1_SYSTEM_ADMIN_BOOTSTRAP_ENABLED:-false}
       BE1_SYSTEM_ADMIN_EMAIL: ${BE1_SYSTEM_ADMIN_EMAIL:-}
       BE1_SYSTEM_ADMIN_FULL_NAME: ${BE1_SYSTEM_ADMIN_FULL_NAME:-System Administrator}
@@ -149,8 +152,13 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_URLS: http://+:8080
+      OpenApi__Enabled: ${BE2_OPENAPI_ENABLED:-true}
       ConnectionStrings__AgriDrone: Host=postgres;Port=5432;Database=${BE2_DB_NAME:-agridrone_be2};Username=${BE2_DB_USERNAME:-agridrone_be2};Password=${BE2_DB_PASSWORD:?Set BE2_DB_PASSWORD in .env}
-      Jwt__Secret: ${BE2_JWT_SECRET:?Set BE2_JWT_SECRET in .env}
+      Jwt__Issuer: ${BE2_JWT_ISSUER:-AgriDrone.Api}
+      Jwt__Audience: ${BE2_JWT_AUDIENCE:-AgriDrone.Clients}
+      Jwt__Secret: ${BE2_JWT_SECRET:-}
+      Jwt__JwksUri: ${BE2_JWT_JWKS_URI:-}
+      Jwt__RequireHttpsMetadata: ${BE2_JWT_REQUIRE_HTTPS_METADATA:-true}
       DatabaseInitialization__ApplyMigrationsOnStartup: "true"
       Identity__SystemAdminBootstrap__Enabled: "false"
       Identity__TenantInvitations__AcceptUrl: ${TENANT_INVITATION_ACCEPT_URL:-http://localhost:5173/accept-invitation}
@@ -193,6 +201,33 @@ services:
       timeout: 5s
       retries: 12
       start_period: 45s
+
+  gateway:
+    build:
+      context: ./gateway
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+      Gateway__DocsEnabled: ${GATEWAY_DOCS_ENABLED:-true}
+      Gateway__IdentityUpstream: ${GATEWAY_IDENTITY_UPSTREAM:-be2}
+      Gateway__AllowedOrigins__0: ${GATEWAY_ALLOWED_ORIGIN:-http://localhost:5173}
+      ReverseProxy__Clusters__be1__Destinations__primary__Address: http://be1-java:8080/
+      ReverseProxy__Clusters__be2__Destinations__primary__Address: http://be2-dotnet:8080/
+    ports:
+      - "127.0.0.1:${GATEWAY_HTTP_PORT:-8088}:8080"
+    depends_on:
+      be1-java:
+        condition: service_healthy
+      be2-dotnet:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - wget -q --spider http://localhost:8080/health/ready
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
 
 volumes:
   # Keep the existing physical volume names when moving the containers from

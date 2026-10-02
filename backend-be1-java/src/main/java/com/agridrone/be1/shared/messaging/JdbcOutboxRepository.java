@@ -30,7 +30,8 @@ public class JdbcOutboxRepository implements OutboxRepository {
                         message_id, tenant_id, correlation_id, actor_id, event_type, schema_version,
                         routing_key, body, content_type, partition_key, status, next_attempt_at,
                         occurred_at, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'application/json', ?, 'PENDING', now(), ?, now())
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'application/json', ?, 'PENDING',
+                            clock_timestamp(), ?, clock_timestamp())
                     """);
             statement.setObject(1, event.messageId(), Types.OTHER);
             statement.setObject(2, event.tenantId(), Types.OTHER);

@@ -8,6 +8,7 @@ import com.agridrone.be1.identity.application.port.out.persistence.TenantMembers
 import com.agridrone.be1.identity.application.port.out.persistence.TenantRepository;
 import com.agridrone.be1.identity.application.port.out.persistence.UserRepository;
 import com.agridrone.be1.identity.application.port.out.security.AccessTokenIssuer;
+import com.agridrone.be1.identity.application.port.out.security.TenantSelectionTokenService;
 import com.agridrone.be1.identity.application.security.IssuedAccessToken;
 import com.agridrone.be1.identity.application.port.out.security.PasswordHasher;
 import com.agridrone.be1.identity.domain.Tenant;
@@ -16,6 +17,7 @@ import com.agridrone.be1.identity.domain.User;
 import com.agridrone.be1.identity.domain.SystemRoleCodes;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -36,6 +38,7 @@ public class LoginUserService implements LoginUserUseCase {
     private final TenantRepository tenants;
     private final PasswordHasher passwordHasher;
     private final AccessTokenIssuer tokenIssuer;
+    private final TenantSelectionTokenService tenantSelectionTokens;
     private final Clock clock;
 
     public LoginUserService(
@@ -44,12 +47,14 @@ public class LoginUserService implements LoginUserUseCase {
             TenantRepository tenants,
             PasswordHasher passwordHasher,
             AccessTokenIssuer tokenIssuer,
+            TenantSelectionTokenService tenantSelectionTokens,
             Clock clock) {
         this.users = users;
         this.memberships = memberships;
         this.tenants = tenants;
         this.passwordHasher = passwordHasher;
         this.tokenIssuer = tokenIssuer;
+        this.tenantSelectionTokens = tenantSelectionTokens;
         this.clock = clock;
     }
 
@@ -69,28 +74,45 @@ public class LoginUserService implements LoginUserUseCase {
             return issueSession(user, roles, null, now);
         }
 
-        List<TenantMembership> activeMemberships = memberships.findActiveByUserId(user.id());
-        if (activeMemberships.isEmpty()) {
+        List<TenantSession> activeTenantSessions = memberships.findActiveByUserId(user.id()).stream()
+                .map(membership -> tenants.findById(membership.tenantId())
+                        .filter(Tenant::isActive)
+                        .map(tenant -> new TenantSession(membership, tenant))
+                        .orElse(null))
+                .filter(java.util.Objects::nonNull)
+                .sorted(Comparator
+                        .comparing(
+                                (TenantSession session) -> session.tenant().name(),
+                                String.CASE_INSENSITIVE_ORDER)
+                        .thenComparing(session -> session.tenant().id()))
+                .toList();
+        if (activeTenantSessions.isEmpty()) {
             throw new StableApiException(
                     HttpStatus.FORBIDDEN,
                     AuthenticationErrorCodes.NO_TENANT_MEMBERSHIP,
                     "The user does not belong to an active tenant.");
         }
-        if (activeMemberships.size() > 1) {
-            throw new StableApiException(
-                    HttpStatus.CONFLICT,
-                    AuthenticationErrorCodes.TENANT_SELECTION_REQUIRED,
-                    "Tenant selection is required before creating a session.");
+        if (activeTenantSessions.size() > 1) {
+            return issueTenantSelection(user, activeTenantSessions, now);
         }
 
-        TenantMembership membership = activeMemberships.getFirst();
-        Tenant tenant = tenants.findById(membership.tenantId())
-                .filter(Tenant::isActive)
-                .orElseThrow(() -> new StableApiException(
-                        HttpStatus.FORBIDDEN,
-                        AuthenticationErrorCodes.NO_TENANT_MEMBERSHIP,
-                        "The user does not belong to an active tenant."));
-        return issueSession(user, roles, new TenantSession(membership, tenant), now);
+        return issueSession(user, roles, activeTenantSessions.getFirst(), now);
+    }
+
+    private LoginUserResult issueTenantSelection(
+            User user,
+            List<TenantSession> tenantSessions,
+            Instant now) {
+        var token = tenantSelectionTokens.issue(user.id());
+        List<LoginUserResult.Tenant> tenantOptions = tenantSessions.stream()
+                .map(LoginUserService::toTenantOption)
+                .toList();
+        recordSuccessfulLogin(user, now);
+        return new LoginUserResult(
+                user.email(), user.fullName(), user.phone(),
+                null,
+                new LoginUserResult.TenantSelection(
+                        token.value(), token.expiresAt(), tenantOptions));
     }
 
     private LoginUserResult issueSession(
@@ -107,18 +129,25 @@ public class LoginUserService implements LoginUserUseCase {
         IssuedAccessToken token = tokenIssuer.issue(
                 user.id(), context.tenantId(), context.membershipId(), context.tenantRole(),
                 roles.stream().sorted().toList());
-        user.recordLogin(now);
-        users.save(user);
-        LoginUserResult.Tenant tenant = tenantSession == null
-                ? null
-                : new LoginUserResult.Tenant(
-                        tenantSession.tenant().id(),
-                        tenantSession.tenant().code(),
-                        tenantSession.tenant().name(),
-                        tenantSession.membership().role());
+        recordSuccessfulLogin(user, now);
+        LoginUserResult.Tenant tenant = tenantSession == null ? null : toTenantOption(tenantSession);
         return new LoginUserResult(
                 user.email(), user.fullName(), user.phone(),
-                new LoginUserResult.Session(token.value(), token.expiresAt(), tenant));
+                new LoginUserResult.Session(token.value(), token.expiresAt(), tenant),
+                null);
+    }
+
+    private void recordSuccessfulLogin(User user, Instant now) {
+        user.recordLogin(now);
+        users.save(user);
+    }
+
+    private static LoginUserResult.Tenant toTenantOption(TenantSession tenantSession) {
+        return new LoginUserResult.Tenant(
+                tenantSession.tenant().id(),
+                tenantSession.tenant().code(),
+                tenantSession.tenant().name(),
+                tenantSession.membership().role());
     }
 
     private StableApiException invalidCredentials() {
