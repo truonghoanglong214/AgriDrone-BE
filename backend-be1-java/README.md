@@ -4,9 +4,10 @@ Spring Boot modular-monolith target for BE1. Migration Phase 3 provides the
 shared execution, audit, idempotency, Inbox/Outbox, RabbitMQ and Redis runtime
 on top of the Flyway-owned `agridrone_be1` database. Phase 4A adds the Identity
 domain, repository output ports under `application.port.out`, and JPA
-persistence split into `entity`, `repository` and `adapter`. Phase 4B.6 now
-exposes the Identity login and password-reset routes; tenant and manager
-workflows remain deferred to later Phase 4 slices.
+persistence split into `entity`, `repository` and `adapter`. Phase 4 is now
+complete: Java owns login/password reset, TenantOwner onboarding and selection,
+tenant lifecycle/read models, SystemManager invitation/profile lifecycle,
+primary Farm assignment and assigned-Farm access decisions.
 
 ## Local verification
 
@@ -33,6 +34,17 @@ commands from the repository root and use Compose rather than starting the
 services with separate `docker run` commands. Maven integration tests use
 short-lived Testcontainers containers; those are independent test resources
 and are removed automatically after the test JVM exits.
+
+For active BE1 development, start the stack in Compose Watch mode:
+
+```powershell
+docker compose up --watch
+```
+
+Changes under `backend-be1-java/src`, or to its `pom.xml` or `Dockerfile`,
+automatically rebuild and recreate the BE1 container. After the container is
+healthy, reload the BE1 document in the gateway Swagger UI to see newly added
+controller routes.
 
 ## Runtime configuration
 

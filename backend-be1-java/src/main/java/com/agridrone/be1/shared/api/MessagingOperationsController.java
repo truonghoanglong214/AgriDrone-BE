@@ -1,6 +1,7 @@
 package com.agridrone.be1.shared.api;
 
 import com.agridrone.be1.shared.messaging.MessagingRecoveryService;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -12,6 +13,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
+@Tag(name = OpenApiTags.MESSAGING_OPERATIONS,
+        description = OpenApiTags.MESSAGING_OPERATIONS_DESCRIPTION)
 @ConditionalOnProperty(name = "agridrone.messaging.enabled", havingValue = "true")
 @RequestMapping("/api/system/messaging")
 @PreAuthorize("hasAuthority('SYSTEM_ADMIN')")

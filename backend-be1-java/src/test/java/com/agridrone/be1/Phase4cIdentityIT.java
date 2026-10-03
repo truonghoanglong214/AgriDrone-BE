@@ -409,8 +409,9 @@ class Phase4cIdentityIT {
 
         @Override
         public GeneratedInvitationToken generate() {
-            latest = "phase4c-invitation-" + sequence.incrementAndGet();
-            return new GeneratedInvitationToken(latest, hash(latest));
+            String token = "phase4c-invitation-" + sequence.incrementAndGet();
+            latest = token;
+            return new GeneratedInvitationToken(token, hash(token));
         }
 
         @Override

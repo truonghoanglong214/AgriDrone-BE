@@ -66,6 +66,19 @@ public class SystemManagerInvitationJpaEntity {
         return true;
     }
 
+    public void updateFrom(SystemManagerInvitation invitation) {
+        if (!id.equals(invitation.id())) {
+            throw new IllegalArgumentException("Invitation identity cannot change");
+        }
+        email = invitation.email();
+        tokenHash = invitation.tokenHash();
+        status = invitation.status();
+        invitedBy = invitation.invitedBy();
+        acceptedBy = invitation.acceptedBy();
+        expiresAt = invitation.expiresAt();
+        acceptedAt = invitation.acceptedAt();
+    }
+
     public SystemManagerInvitation toDomain() {
         return new SystemManagerInvitation(
                 id,

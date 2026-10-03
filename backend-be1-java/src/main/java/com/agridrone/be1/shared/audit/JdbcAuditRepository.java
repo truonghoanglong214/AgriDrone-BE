@@ -25,7 +25,10 @@ public class JdbcAuditRepository implements AuditRepository {
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?::jsonb, ?)
                     """);
             statement.setObject(1, context.actorId(), Types.OTHER);
-            statement.setObject(2, context.tenantId(), Types.OTHER);
+            statement.setObject(
+                    2,
+                    entry.tenantId() == null ? context.tenantId() : entry.tenantId(),
+                    Types.OTHER);
             statement.setObject(3, entry.farmId(), Types.OTHER);
             statement.setString(4, context.actorType().name());
             statement.setObject(5, context.actorId(), Types.OTHER);

@@ -4,8 +4,10 @@ import static com.agridrone.be1.identity.api.IdentityWireValues.membershipStatus
 import static com.agridrone.be1.identity.api.IdentityWireValues.role;
 
 import com.agridrone.be1.identity.application.port.in.tenantquery.TenantQueryUseCase;
+import com.agridrone.be1.shared.api.OpenApiTags;
 import com.agridrone.be1.shared.api.PageRequest;
 import com.agridrone.be1.shared.api.PageResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import java.util.UUID;
@@ -21,6 +23,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 @Validated
 @RestController
+@Tag(name = OpenApiTags.TENANT_ADMINISTRATION,
+        description = OpenApiTags.TENANT_ADMINISTRATION_DESCRIPTION)
 @ConditionalOnProperty(
         name = "agridrone.runtime.enabled",
         havingValue = "true",

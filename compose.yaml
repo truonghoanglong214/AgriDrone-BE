@@ -78,10 +78,19 @@ services:
   be1-java:
     build:
       context: ./backend-be1-java
+    develop:
+      watch:
+        - action: rebuild
+          path: ./backend-be1-java/src
+        - action: rebuild
+          path: ./backend-be1-java/pom.xml
+        - action: rebuild
+          path: ./backend-be1-java/Dockerfile
     restart: unless-stopped
     stop_grace_period: 35s
     environment:
       SPRING_PROFILES_ACTIVE: compose
+      BE1_RUNTIME_ENABLED: ${BE1_RUNTIME_ENABLED:-true}
       BE1_DB_URL: jdbc:postgresql://postgres:5432/${BE1_DB_NAME:-agridrone_be1}
       BE1_DB_USERNAME: ${BE1_DB_USERNAME:-agridrone_be1}
       BE1_DB_PASSWORD: ${BE1_DB_PASSWORD:?Set BE1_DB_PASSWORD in .env}
@@ -111,6 +120,8 @@ services:
       BE1_JWT_ACCESS_TOKEN_TTL: ${BE1_JWT_ACCESS_TOKEN_TTL:-15m}
       BE1_JWT_TENANT_SELECTION_TOKEN_TTL: ${BE1_JWT_TENANT_SELECTION_TOKEN_TTL:-5m}
       BE1_TENANT_INVITATION_EXPIRATION: ${BE1_TENANT_INVITATION_EXPIRATION:-72h}
+      BE1_SYSTEM_MANAGER_INVITATION_URL: ${BE1_SYSTEM_MANAGER_INVITATION_URL:-http://localhost:5173/system-manager-invitations/accept}
+      BE1_SYSTEM_MANAGER_INVITATION_EXPIRATION: ${BE1_SYSTEM_MANAGER_INVITATION_EXPIRATION:-24h}
       BE1_PASSWORD_RESET_URL: ${BE1_PASSWORD_RESET_URL:-http://localhost:5173/reset-password}
       BE1_PASSWORD_RESET_EXPIRATION: ${BE1_PASSWORD_RESET_EXPIRATION:-30m}
       BE1_SMTP_ENABLED: ${BE1_SMTP_ENABLED:-false}
@@ -118,7 +129,7 @@ services:
       BE1_SMTP_PORT: ${BE1_SMTP_PORT:-587}
       BE1_SMTP_SECURITY_MODE: ${BE1_SMTP_SECURITY_MODE:-STARTTLS}
       BE1_SMTP_USERNAME: ${BE1_SMTP_USERNAME:-}
-      BE1_SMTP_PASSWORD: ${BE1_SMTP_PASSWORD:-}
+      BE1_SMTP_PASSWORD: ${BE1_SMTP_PASSWORD:-${SMTP_PASSWORD:-}}
       BE1_SMTP_FROM_ADDRESS: ${BE1_SMTP_FROM_ADDRESS:-}
       BE1_SMTP_FROM_NAME: ${BE1_SMTP_FROM_NAME:-AgriDrone}
       BE1_SMTP_TIMEOUT_SECONDS: ${BE1_SMTP_TIMEOUT_SECONDS:-30}
@@ -128,6 +139,11 @@ services:
       BE1_SYSTEM_ADMIN_FULL_NAME: ${BE1_SYSTEM_ADMIN_FULL_NAME:-System Administrator}
     ports:
       - "127.0.0.1:${BE1_HTTP_PORT:-8081}:8080"
+    volumes:
+      - type: bind
+        source: ${BE1_JWT_KEYS_DIR:-./infrastructure/local-secrets/jwt}
+        target: /run/secrets/agridrone-jwt
+        read_only: true
     depends_on:
       postgres:
         condition: service_healthy

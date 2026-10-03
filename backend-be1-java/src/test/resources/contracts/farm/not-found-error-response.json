@@ -1,0 +1,9 @@
+{
+  "timestamp": "2026-10-03T00:00:00Z",
+  "status": 404,
+  "code": "Farm.NotFound",
+  "message": "Farm was not found.",
+  "correlationId": "40000000-0000-0000-0000-000000000001",
+  "path": "/api/farms/20000000-0000-0000-0000-000000000001",
+  "violations": []
+}

@@ -2,6 +2,8 @@ package com.agridrone.be1.identity.api.auth.login;
 
 import com.agridrone.be1.identity.application.port.in.loginuser.LoginUserCommand;
 import com.agridrone.be1.identity.application.port.in.loginuser.LoginUserUseCase;
+import com.agridrone.be1.shared.api.OpenApiTags;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.ResponseEntity;
@@ -12,6 +14,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/auth")
+@Tag(name = OpenApiTags.AUTHENTICATION,
+        description = OpenApiTags.AUTHENTICATION_DESCRIPTION)
 @ConditionalOnProperty(
         prefix = "agridrone.security.jwt.issuer-service",
         name = "enabled",

@@ -5,8 +5,11 @@ import static com.agridrone.be1.identity.api.IdentityWireValues.tenantStatus;
 import com.agridrone.be1.identity.application.port.in.tenantadmin.TenantAdministrationUseCase;
 import com.agridrone.be1.identity.application.port.in.tenantinvitation.TenantInvitationUseCase;
 import com.agridrone.be1.identity.application.port.in.tenantquery.TenantQueryUseCase;
+import com.agridrone.be1.shared.api.OpenApiTags;
 import com.agridrone.be1.shared.api.PageRequest;
 import com.agridrone.be1.shared.api.PageResponse;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -26,6 +29,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 @Validated
 @RestController
+@Tag(name = OpenApiTags.TENANT_ADMINISTRATION,
+        description = OpenApiTags.TENANT_ADMINISTRATION_DESCRIPTION)
 @ConditionalOnProperty(
         name = "agridrone.runtime.enabled",
         havingValue = "true",
@@ -72,6 +77,7 @@ public class SystemTenantsController {
     }
 
     @PostMapping("/{tenantId}/owner-provisionings")
+    @Operation(tags = OpenApiTags.INVITATIONS)
     public ResponseEntity<ProvisionTenantOwnerResponse> provisionOwner(
             @PathVariable UUID tenantId,
             @Valid @RequestBody ProvisionTenantOwnerRequest request) {

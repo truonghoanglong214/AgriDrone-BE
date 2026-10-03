@@ -1,0 +1,26 @@
+{
+  "items": [
+    {
+      "id": "20000000-0000-0000-0000-000000000001",
+      "tenantId": "10000000-0000-0000-0000-000000000001",
+      "code": "FARM_A",
+      "name": "Farm A",
+      "address": "Long An",
+      "boundary": {
+        "type": "Polygon",
+        "coordinates": [[[106.0, 10.0], [106.2, 10.0], [106.2, 10.2], [106.0, 10.2], [106.0, 10.0]]]
+      },
+      "centerPoint": {"type": "Point", "coordinates": [106.1, 10.1]},
+      "areaHectares": 12.5000,
+      "status": 0,
+      "createdAt": "2026-10-03T00:00:00Z",
+      "createdBy": "50000000-0000-0000-0000-000000000001"
+    }
+  ],
+  "pageNumber": 1,
+  "pageSize": 20,
+  "totalCount": 1,
+  "totalPages": 1,
+  "hasPreviousPage": false,
+  "hasNextPage": false
+}

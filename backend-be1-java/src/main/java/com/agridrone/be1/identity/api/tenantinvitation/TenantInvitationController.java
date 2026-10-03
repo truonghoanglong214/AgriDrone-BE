@@ -3,6 +3,8 @@ package com.agridrone.be1.identity.api.tenantinvitation;
 import static com.agridrone.be1.identity.api.IdentityWireValues.role;
 
 import com.agridrone.be1.identity.application.port.in.tenantinvitation.TenantInvitationUseCase;
+import com.agridrone.be1.shared.api.OpenApiTags;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.ResponseEntity;
@@ -11,6 +13,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
+@Tag(name = OpenApiTags.INVITATIONS,
+        description = OpenApiTags.INVITATIONS_DESCRIPTION)
 @ConditionalOnProperty(
         name = "agridrone.runtime.enabled",
         havingValue = "true",

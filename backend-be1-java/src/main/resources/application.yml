@@ -69,7 +69,7 @@ springdoc:
   swagger-ui:
     enabled: ${BE1_OPENAPI_ENABLED:true}
     persist-authorization: true
-  paths-to-match: /api/**,/.well-known/**
+  paths-to-match: /api/**,/.well-known/**,/invitations/**,/current/**
 
 management:
   endpoints:
@@ -135,6 +135,9 @@ agridrone:
   identity:
     tenant-invitation:
       expiration: ${BE1_TENANT_INVITATION_EXPIRATION:72h}
+    system-manager-invitation:
+      accept-url: ${BE1_SYSTEM_MANAGER_INVITATION_URL:http://localhost:5173/system-manager-invitations/accept}
+      expiration: ${BE1_SYSTEM_MANAGER_INVITATION_EXPIRATION:24h}
     password-reset:
       reset-url: ${BE1_PASSWORD_RESET_URL:http://localhost:5173/reset-password}
       expiration: ${BE1_PASSWORD_RESET_EXPIRATION:30m}

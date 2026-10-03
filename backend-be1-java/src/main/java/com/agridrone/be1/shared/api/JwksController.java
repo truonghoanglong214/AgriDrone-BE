@@ -2,6 +2,7 @@ package com.agridrone.be1.shared.api;
 
 import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.RSAKey;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.Map;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.CacheControl;
@@ -12,6 +13,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/.well-known")
+@Tag(name = OpenApiTags.AUTHENTICATION,
+        description = OpenApiTags.AUTHENTICATION_DESCRIPTION)
 @ConditionalOnProperty(
         prefix = "agridrone.security.jwt.issuer-service",
         name = "enabled",

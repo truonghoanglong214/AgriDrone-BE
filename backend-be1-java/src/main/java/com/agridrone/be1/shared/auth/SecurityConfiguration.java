@@ -29,6 +29,8 @@ public class SecurityConfiguration {
         "/api/auth/login",
         "/api/auth/select-tenant",
         "/api/auth/invitations/preview",
+        "/api/auth/system-manager-invitations/preview",
+        "/api/auth/system-manager-invitations/accept",
         "/api/auth/forgot-password",
         "/api/auth/reset-password",
         "/invitations/accept",

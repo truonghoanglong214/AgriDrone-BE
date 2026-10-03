@@ -1,0 +1,16 @@
+{
+  "id": "20000000-0000-0000-0000-000000000001",
+  "tenantId": "10000000-0000-0000-0000-000000000001",
+  "code": "FARM_A",
+  "name": "Farm A Updated",
+  "address": "Tien Giang",
+  "boundary": {
+    "type": "Polygon",
+    "coordinates": [[[106.0, 10.0], [106.2, 10.0], [106.2, 10.2], [106.0, 10.2], [106.0, 10.0]]]
+  },
+  "centerPoint": {"type": "Point", "coordinates": [106.1, 10.1]},
+  "areaHectares": 13.2500,
+  "status": 0,
+  "updatedAt": "2026-10-03T01:00:00Z",
+  "version": 4
+}

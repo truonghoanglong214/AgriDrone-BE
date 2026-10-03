@@ -2,6 +2,8 @@ package com.agridrone.be1.identity.api;
 
 import com.agridrone.be1.identity.application.error.TenantErrorCodes;
 import com.agridrone.be1.identity.application.error.TenantInvitationErrorCodes;
+import com.agridrone.be1.identity.application.error.SystemManagerErrorCodes;
+import com.agridrone.be1.identity.application.error.SystemManagerInvitationErrorCodes;
 import com.agridrone.be1.shared.error.ApiErrorResponse;
 import com.agridrone.be1.shared.execution.CorrelationIds;
 import jakarta.servlet.http.HttpServletRequest;
@@ -55,6 +57,27 @@ public class IdentityConstraintExceptionHandler {
                     HttpStatus.CONFLICT,
                     TenantErrorCodes.CODE_ALREADY_EXISTS,
                     "A tenant with this code already exists.",
+                    request);
+        }
+        if (details.contains("uq_system_manager_invitations_pending_email")) {
+            return response(
+                    HttpStatus.CONFLICT,
+                    SystemManagerInvitationErrorCodes.ALREADY_PENDING,
+                    "An active System Manager invitation already exists for this email.",
+                    request);
+        }
+        if (details.contains("uq_system_manager_profiles_user")) {
+            return response(
+                    HttpStatus.CONFLICT,
+                    SystemManagerErrorCodes.PROFILE_ALREADY_EXISTS,
+                    "The user already has a SystemManager profile.",
+                    request);
+        }
+        if (details.contains("uq_farm_manager_assignments_active_farm")) {
+            return response(
+                    HttpStatus.CONFLICT,
+                    SystemManagerErrorCodes.ACTIVE_ASSIGNMENT_CONFLICT,
+                    "The Farm already has another active primary SystemManager assignment.",
                     request);
         }
         return response(
