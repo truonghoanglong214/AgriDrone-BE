@@ -86,4 +86,25 @@ public static class IntegrationEventDescriptors
             IntegrationEventTypes.SurveyResultReviewStateChangedV2,
             IntegrationSchemaVersions.V2,
             RequiresActorId: false);
+
+    public static IntegrationEventDescriptor<BaselineMappingCandidatesReadyV3>
+        BaselineMappingCandidatesReadyV3 { get; } =
+        new(
+            IntegrationEventTypes.BaselineMappingCandidatesReadyV3,
+            IntegrationSchemaVersions.V3,
+            RequiresActorId: false);
+
+    public static IntegrationEventDescriptor<FarmBaseMapPublishedV3>
+        FarmBaseMapPublishedV3 { get; } =
+        new(
+            IntegrationEventTypes.FarmBaseMapPublishedV3,
+            IntegrationSchemaVersions.V3,
+            RequiresActorId: true);
+
+    public static IntegrationEventDescriptor<PlantHealthAnalysisReadyV3>
+        PlantHealthAnalysisReadyV3 { get; } =
+        new(
+            IntegrationEventTypes.PlantHealthAnalysisReadyV3,
+            IntegrationSchemaVersions.V3,
+            RequiresActorId: false);
 }

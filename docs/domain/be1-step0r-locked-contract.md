@@ -11,8 +11,11 @@
   proposals/membership review and the expert-validated TreatmentRecommendation
   catalogue with guarded persistence. PR 0R-5 implements the owner-reported
   `PlantInventoryChangeReport` lifecycle, idempotency/open-report constraints,
-  later-survey evidence gate and guarded persistence. Runtime feature/API wiring
-  and the remaining Step 0R slices are not claimed complete.
+  later-survey evidence gate and guarded persistence. PR 0R-6 adds the independent
+  V3 mapping/health
+  contracts, validators, descriptors/routing identities, and the mapping/result
+  publication transaction contexts. Feature consumers/processors remain owned by
+  Steps 6 and 7; golden JSON remains owned by the Final Test Phase.
 
 ## 1. Canonical business primitives
 

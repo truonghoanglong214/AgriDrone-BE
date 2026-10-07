@@ -89,6 +89,7 @@ builder.Services
     .AddPlantsModule(builder.Configuration)
     .AddIntegrationMessagingFoundation(builder.Configuration)
     .AddMappingPublicationPersistence(builder.Configuration)
+    .AddSurveyResultPublicationPersistence(builder.Configuration)
     .AddAgriDroneHealthChecks()
     .AddExecutionContext()
     .AddJwtAuthentication(builder.Configuration)

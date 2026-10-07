@@ -1,11 +1,15 @@
 using AgriDrone.Modules.Farms.Domain.Farms;
+using AgriDrone.Modules.Farms.Domain.Boundaries;
 using AgriDrone.Modules.Farms.Domain.Maps;
 using AgriDrone.Modules.Farms.Domain.Zones;
 using AgriDrone.Modules.Farms.Infrastructure.Persistence.Configurations;
 using AgriDrone.Modules.Plants.Domain.Conditions;
+using AgriDrone.Modules.Plants.Domain.Changes;
 using AgriDrone.Modules.Plants.Domain.Mapping;
 using AgriDrone.Modules.Plants.Domain.Plants;
 using AgriDrone.Modules.Plants.Infrastructure.Persistence.Configurations;
+using AgriDrone.Modules.Surveys.Domain;
+using AgriDrone.Modules.Surveys.Infrastructure.Persistence.Configurations;
 using AgriDrone.Database.Mapping;
 using AgriDrone.SharedInfrastructure.Auditing;
 using AgriDrone.SharedInfrastructure.Messaging.Persistence;
@@ -23,6 +27,13 @@ public sealed class MappingPublicationDbContext(
 
     public DbSet<FarmZone> FarmZones => Set<FarmZone>();
 
+    public DbSet<FarmBoundary> FarmBoundaries => Set<FarmBoundary>();
+
+    public DbSet<BoundaryException> BoundaryExceptions => Set<BoundaryException>();
+
+    public DbSet<FarmBaseMapVersion> FarmBaseMapVersions =>
+        Set<FarmBaseMapVersion>();
+
     public DbSet<ZoneMapVersion> ZoneMapVersions => Set<ZoneMapVersion>();
 
     public DbSet<HealthLevel> HealthLevels => Set<HealthLevel>();
@@ -30,6 +41,11 @@ public sealed class MappingPublicationDbContext(
     public DbSet<Plant> Plants => Set<Plant>();
 
     public DbSet<PlantChangeEvent> PlantChangeEvents => Set<PlantChangeEvent>();
+
+    public DbSet<PlantInventoryChangeReport> PlantInventoryChangeReports =>
+        Set<PlantInventoryChangeReport>();
+
+    public DbSet<SurveyOrder> SurveyOrders => Set<SurveyOrder>();
 
     public DbSet<InboxMessage> InboxMessages => Set<InboxMessage>();
 
@@ -65,10 +81,16 @@ public sealed class MappingPublicationDbContext(
 
         modelBuilder.ApplyConfiguration(new FarmConfiguration());
         modelBuilder.ApplyConfiguration(new FarmZoneConfiguration());
+        modelBuilder.ApplyConfiguration(new FarmBoundaryConfiguration());
+        modelBuilder.ApplyConfiguration(new BoundaryExceptionConfiguration());
+        modelBuilder.ApplyConfiguration(new FarmBaseMapVersionConfiguration());
         modelBuilder.ApplyConfiguration(new ZoneMapVersionConfiguration());
         modelBuilder.ApplyConfiguration(new HealthLevelConfiguration());
         modelBuilder.ApplyConfiguration(new PlantConfiguration());
         modelBuilder.ApplyConfiguration(new PlantChangeEventConfiguration());
+        modelBuilder.ApplyConfiguration(
+            new PlantInventoryChangeReportConfiguration());
+        modelBuilder.ApplyConfiguration(new SurveyOrderConfiguration());
         modelBuilder.ApplyConfiguration(new InboxMessageConfiguration());
         modelBuilder.ApplyConfiguration(new OutboxMessageConfiguration());
         modelBuilder.ApplyConfiguration(new AuditLogConfiguration());
@@ -76,6 +98,17 @@ public sealed class MappingPublicationDbContext(
             new MissionPublicationStateConfiguration());
 
         ConfigurePublicationRelationships(modelBuilder);
+        RemoveSurveyOrderDependencies(modelBuilder);
+    }
+
+    private static void RemoveSurveyOrderDependencies(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<SurveyOrder>()
+            .Ignore(order => order.Appointments)
+            .Ignore(order => order.Payments);
+        modelBuilder.Ignore<SurveyRequest>();
+        modelBuilder.Ignore<SurveyService>();
+        modelBuilder.Ignore<SurveyServicePrice>();
     }
 
     private static void IgnoreUnrelatedPlantNavigations(
@@ -138,5 +171,32 @@ public sealed class MappingPublicationDbContext(
             .HasPrincipalKey(farm => new { farm.Id, farm.TenantId })
             .OnDelete(DeleteBehavior.Restrict)
             .HasConstraintName("fk_audit_logs_farms_same_tenant");
+
+        modelBuilder.Entity<SurveyOrder>()
+            .HasOne<Farm>()
+            .WithMany()
+            .HasForeignKey(order => new { order.FarmId, order.TenantId })
+            .HasPrincipalKey(farm => new { farm.Id, farm.TenantId })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_survey_orders_farms_same_tenant");
+
+        modelBuilder.Entity<FarmBaseMapVersion>()
+            .HasOne<SurveyOrder>()
+            .WithMany()
+            .HasForeignKey(map => new
+            {
+                map.SourceSurveyOrderId,
+                map.TenantId,
+                map.FarmId
+            })
+            .HasPrincipalKey(order => new
+            {
+                order.Id,
+                order.TenantId,
+                order.FarmId
+            })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName(
+                "fk_farm_base_map_versions_orders_same_tenant_farm");
     }
 }

@@ -34,4 +34,13 @@ public static class IntegrationConsumerNames
 
     public const string Be2SurveyResultReviewStateChangedV2 =
         "be2-survey-result-review-state-changed-v2";
+
+    public const string Be1BaselineMappingCandidatesReadyV3 =
+        "be1-baseline-mapping-candidates-ready-v3";
+
+    public const string Be2FarmBaseMapPublishedV3 =
+        "be2-farm-base-map-published-v3";
+
+    public const string Be1PlantHealthAnalysisReadyV3 =
+        "be1-plant-health-analysis-ready-v3";
 }
