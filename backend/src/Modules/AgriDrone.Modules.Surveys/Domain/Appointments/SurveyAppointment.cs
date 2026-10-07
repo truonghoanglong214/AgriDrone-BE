@@ -28,6 +28,7 @@ public sealed class SurveyAppointment : Entity
     private SurveyAppointment() { }
 
     public Guid SurveyOrderId { get; private set; }
+    public SurveyAppointmentPurpose Purpose { get; private set; }
     public DateTimeOffset ProposedStartAt { get; private set; }
     public DateTimeOffset ProposedEndAt { get; private set; }
     public SurveyAppointmentStatus Status { get; private set; }
@@ -38,6 +39,35 @@ public sealed class SurveyAppointment : Entity
     public DateTimeOffset CreatedAt { get; private set; }
     public DateTimeOffset UpdatedAt { get; private set; }
     public SurveyOrder SurveyOrder { get; private set; } = null!;
+
+    public static SurveyAppointment Create(
+        Guid surveyOrderId,
+        SurveyAppointmentPurpose purpose,
+        DateTimeOffset proposedStartAt,
+        DateTimeOffset proposedEndAt,
+        DateTimeOffset createdAt)
+    {
+        DomainGuard.NotEmpty(surveyOrderId);
+        DomainGuard.Utc(createdAt);
+        EnsureWindow(proposedStartAt, proposedEndAt);
+
+        if (!Enum.IsDefined(purpose))
+        {
+            throw new ArgumentOutOfRangeException(nameof(purpose));
+        }
+
+        return new SurveyAppointment
+        {
+            Id = Guid.NewGuid(),
+            SurveyOrderId = surveyOrderId,
+            Purpose = purpose,
+            ProposedStartAt = proposedStartAt,
+            ProposedEndAt = proposedEndAt,
+            Status = SurveyAppointmentStatus.Proposed,
+            CreatedAt = createdAt,
+            UpdatedAt = createdAt
+        };
+    }
 
     public static bool CanTransition(
         SurveyAppointmentStatus from,

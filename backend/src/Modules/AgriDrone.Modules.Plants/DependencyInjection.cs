@@ -4,9 +4,11 @@ using AgriDrone.Modules.Plants.Application.Abstractions.Persistence;
 using AgriDrone.Modules.Plants.Application.Abstractions.Queries;
 using AgriDrone.Modules.Plants.Domain.Conditions;
 using AgriDrone.Modules.Plants.Domain.Diseases;
+using AgriDrone.Modules.Plants.Domain.DiseaseZones;
 using AgriDrone.Modules.Plants.Domain.Mapping;
 using AgriDrone.Modules.Plants.Domain.Plants;
 using AgriDrone.Modules.Plants.Domain.Scans;
+using AgriDrone.Modules.Plants.Domain.Recommendations;
 using AgriDrone.Modules.Plants.Domain.Verifications;
 using AgriDrone.Modules.Plants.Infrastructure.Health;
 using AgriDrone.Modules.Plants.Infrastructure.Initialization;
@@ -49,6 +51,9 @@ public static class DependencyInjection
                     .MapEnum<ScanSource>("scan_source", "system", translator)
                     .MapEnum<ScanMediaRole>("scan_media_role", "system", translator)
                     .MapEnum<FindingSource>("finding_source", "system", translator)
+                    .MapEnum<DiseaseZoneStatus>("disease_zone_status", "system", translator)
+                    .MapEnum<DiseaseZoneMembershipKind>("disease_zone_membership_kind", "system", translator)
+                    .MapEnum<TreatmentRecommendationStatus>("treatment_recommendation_status", "system", translator)
                     .MapEnum<VerificationDecision>(
                         "verification_decision",
                         "system",
@@ -85,6 +90,8 @@ public static class DependencyInjection
         services.AddScoped<IPlantConditionQueries, PlantConditionQueries>();
         services.AddScoped<IPlantConditionRepository, PlantConditionRepository>();
         services.AddScoped<IPlantRepository, PlantRepository>();
+        services.AddScoped<IDiseaseZoneRepository, DiseaseZoneRepository>();
+        services.AddScoped<ITreatmentRecommendationRepository, TreatmentRecommendationRepository>();
 
         return services;
     }

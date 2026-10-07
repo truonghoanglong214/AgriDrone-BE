@@ -6,35 +6,132 @@ namespace AgriDrone.UnitTests.Domain.Surveys;
 public sealed class SurveyPoliciesTests
 {
     [Fact]
-    public void ReadinessRequiresServerOwnedOperationalPrerequisites()
+    public void PaidReadinessRequiresCommercialAndOperationalPrerequisites()
     {
         var decision = SurveyOrderReadinessPolicy.Evaluate(new(
-            SurveyOrderStatus.AwaitingPayment,
+            OrderStatus: SurveyOrderStatus.AwaitingPayment,
+            Purpose: SurveyOperationPurpose.PlantHealth,
+            RequiresBaselineMapping: false,
+            HasApprovedFarmBoundary: true,
             IsScopeConfirmed: true,
-            SurveyAppointmentStatus.Confirmed,
-            SurveyPaymentStatus.Pending,
+            HasPublishedFarmBaseMap: false,
+            HasConfirmedPoleCount: false,
+            HasPriceSnapshot: false,
+            AppointmentPurpose: SurveyAppointmentPurpose.PaidService,
+            AppointmentStatus: SurveyAppointmentStatus.Confirmed,
+            PaymentStatus: SurveyPaymentStatus.Pending,
             HasActiveQualifiedPrimaryManager: false,
-            HasPendingPriceAdjustment: true));
+            HasPendingPriceAdjustment: true,
+            SafetyChecksSatisfied: false));
 
         Assert.False(decision.IsReady);
+        Assert.Contains(SurveyOrderReadinessFailure.OrderNotEligible, decision.Failures);
+        Assert.Contains(SurveyOrderReadinessFailure.FarmBaseMapNotPublished, decision.Failures);
+        Assert.Contains(SurveyOrderReadinessFailure.PoleCountNotConfirmed, decision.Failures);
+        Assert.Contains(SurveyOrderReadinessFailure.PriceNotConfirmed, decision.Failures);
         Assert.Contains(SurveyOrderReadinessFailure.PaymentNotConfirmed, decision.Failures);
         Assert.Contains(SurveyOrderReadinessFailure.PrimaryManagerNotReady, decision.Failures);
         Assert.Contains(SurveyOrderReadinessFailure.PriceAdjustmentPending, decision.Failures);
+        Assert.Contains(SurveyOrderReadinessFailure.SafetyChecksNotSatisfied, decision.Failures);
     }
 
     [Fact]
-    public void ReadinessAllowsOrderWhenEveryPrerequisiteIsSatisfied()
+    public void BaselineReadinessDoesNotRequirePriceOrPayment()
     {
         var decision = SurveyOrderReadinessPolicy.Evaluate(new(
-            SurveyOrderStatus.ReadyForOperations,
+            OrderStatus: SurveyOrderStatus.BaselineReady,
+            Purpose: SurveyOperationPurpose.BaselineMapping,
+            RequiresBaselineMapping: true,
+            HasApprovedFarmBoundary: true,
             IsScopeConfirmed: true,
-            SurveyAppointmentStatus.Confirmed,
-            SurveyPaymentStatus.Confirmed,
+            HasPublishedFarmBaseMap: false,
+            HasConfirmedPoleCount: false,
+            HasPriceSnapshot: false,
+            AppointmentPurpose: SurveyAppointmentPurpose.BaselineMapping,
+            AppointmentStatus: SurveyAppointmentStatus.Confirmed,
+            PaymentStatus: null,
             HasActiveQualifiedPrimaryManager: true,
-            HasPendingPriceAdjustment: false));
+            HasPendingPriceAdjustment: false,
+            SafetyChecksSatisfied: true));
 
         Assert.True(decision.IsReady);
         Assert.Empty(decision.Failures);
+    }
+
+    [Theory]
+    [InlineData(SurveyOperationPurpose.PlantHealth)]
+    [InlineData(SurveyOperationPurpose.HarvestReadiness)]
+    public void PaidReadinessAllowsOrderWhenEveryPrerequisiteIsSatisfied(
+        SurveyOperationPurpose purpose)
+    {
+        var decision = SurveyOrderReadinessPolicy.Evaluate(new(
+            OrderStatus: SurveyOrderStatus.ReadyForPaidService,
+            Purpose: purpose,
+            RequiresBaselineMapping: false,
+            HasApprovedFarmBoundary: true,
+            IsScopeConfirmed: true,
+            HasPublishedFarmBaseMap: true,
+            HasConfirmedPoleCount: true,
+            HasPriceSnapshot: true,
+            AppointmentPurpose: SurveyAppointmentPurpose.PaidService,
+            AppointmentStatus: SurveyAppointmentStatus.Confirmed,
+            PaymentStatus: SurveyPaymentStatus.Confirmed,
+            HasActiveQualifiedPrimaryManager: true,
+            HasPendingPriceAdjustment: false,
+            SafetyChecksSatisfied: true));
+
+        Assert.True(decision.IsReady);
+        Assert.Empty(decision.Failures);
+    }
+
+    [Fact]
+    public void BaselineReadinessRejectsMappedFarm()
+    {
+        var decision = SurveyOrderReadinessPolicy.Evaluate(new(
+            OrderStatus: SurveyOrderStatus.BaselineReady,
+            Purpose: SurveyOperationPurpose.BaselineMapping,
+            RequiresBaselineMapping: false,
+            HasApprovedFarmBoundary: true,
+            IsScopeConfirmed: true,
+            HasPublishedFarmBaseMap: false,
+            HasConfirmedPoleCount: false,
+            HasPriceSnapshot: false,
+            AppointmentPurpose: SurveyAppointmentPurpose.BaselineMapping,
+            AppointmentStatus: SurveyAppointmentStatus.Confirmed,
+            PaymentStatus: null,
+            HasActiveQualifiedPrimaryManager: true,
+            HasPendingPriceAdjustment: false,
+            SafetyChecksSatisfied: true));
+
+        Assert.False(decision.IsReady);
+        Assert.Contains(
+            SurveyOrderReadinessFailure.BaselineMappingNotRequired,
+            decision.Failures);
+    }
+
+    [Fact]
+    public void ReadinessRejectsAppointmentForAnotherPurpose()
+    {
+        var decision = SurveyOrderReadinessPolicy.Evaluate(new(
+            OrderStatus: SurveyOrderStatus.ReadyForPaidService,
+            Purpose: SurveyOperationPurpose.PlantHealth,
+            RequiresBaselineMapping: false,
+            HasApprovedFarmBoundary: true,
+            IsScopeConfirmed: true,
+            HasPublishedFarmBaseMap: true,
+            HasConfirmedPoleCount: true,
+            HasPriceSnapshot: true,
+            AppointmentPurpose: SurveyAppointmentPurpose.BaselineMapping,
+            AppointmentStatus: SurveyAppointmentStatus.Confirmed,
+            PaymentStatus: SurveyPaymentStatus.Confirmed,
+            HasActiveQualifiedPrimaryManager: true,
+            HasPendingPriceAdjustment: false,
+            SafetyChecksSatisfied: true));
+
+        Assert.False(decision.IsReady);
+        Assert.Contains(
+            SurveyOrderReadinessFailure.AppointmentPurposeMismatch,
+            decision.Failures);
     }
 
     [Theory]
@@ -48,11 +145,15 @@ public sealed class SurveyPoliciesTests
     [Fact]
     public void SurveyPriceUsesAdrRoundingRule()
     {
-        var unitPrice = Money.Create(10.005m, CurrencyCode.Vnd);
-        var total = Money.CalculateSurveyPrice(1.5m, unitPrice);
+        var unitPrice = PricePerPole.Create(10.005m);
+        var poleCount = ConfirmedSurveyPoleCount.Create(3);
+        var total = Money.CalculateSurveyPrice(
+            poleCount,
+            unitPrice,
+            CurrencyCode.Vnd);
 
         Assert.Equal(10.01m, unitPrice.Amount);
-        Assert.Equal(15.02m, total.Amount);
+        Assert.Equal(30.03m, total.Amount);
         Assert.Equal(CurrencyCode.Vnd, total.Currency);
     }
 

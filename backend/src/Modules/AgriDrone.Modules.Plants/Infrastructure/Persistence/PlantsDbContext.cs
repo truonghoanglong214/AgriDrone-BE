@@ -1,8 +1,10 @@
 using AgriDrone.Modules.Plants.Application.Abstractions.Persistence;
 using AgriDrone.Modules.Plants.Domain.Conditions;
+using AgriDrone.Modules.Plants.Domain.DiseaseZones;
 using AgriDrone.Modules.Plants.Domain.Mapping;
 using AgriDrone.Modules.Plants.Domain.Plants;
 using AgriDrone.Modules.Plants.Domain.Scans;
+using AgriDrone.Modules.Plants.Domain.Recommendations;
 using AgriDrone.Modules.Plants.Domain.Verifications;
 using AgriDrone.SharedInfrastructure.Auditing;
 using AgriDrone.SharedInfrastructure.Persistence.Configurations;
@@ -20,6 +22,14 @@ internal sealed class PlantsDbContext(DbContextOptions<PlantsDbContext> options)
     public DbSet<PlantCondition> PlantConditions => Set<PlantCondition>();
 
     public DbSet<HealthLevel> HealthLevels => Set<HealthLevel>();
+
+    public DbSet<DiseaseZone> DiseaseZones => Set<DiseaseZone>();
+
+    public DbSet<DiseaseZonePlantMembership> DiseaseZoneMemberships =>
+        Set<DiseaseZonePlantMembership>();
+
+    public DbSet<TreatmentRecommendation> TreatmentRecommendations =>
+        Set<TreatmentRecommendation>();
 
     public DbSet<PlantScan> PlantScans => Set<PlantScan>();
 

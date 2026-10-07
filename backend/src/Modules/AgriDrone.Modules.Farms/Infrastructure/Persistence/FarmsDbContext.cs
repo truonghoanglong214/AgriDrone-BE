@@ -1,5 +1,6 @@
 using AgriDrone.Modules.Farms.Application.Abstractions.Persistence;
 using AgriDrone.Modules.Farms.Domain.Farms;
+using AgriDrone.Modules.Farms.Domain.Boundaries;
 using AgriDrone.Modules.Farms.Domain.Maps;
 using AgriDrone.Modules.Farms.Domain.Zones;
 using AgriDrone.SharedInfrastructure.Auditing;
@@ -12,6 +13,10 @@ internal sealed class FarmsDbContext(DbContextOptions<FarmsDbContext> options)
     : DbContext(options), IFarmUnitOfWork
 {
     public DbSet<Farm> Farms => Set<Farm>();
+
+    public DbSet<FarmBoundary> FarmBoundaries => Set<FarmBoundary>();
+
+    public DbSet<BoundaryException> BoundaryExceptions => Set<BoundaryException>();
 
     public DbSet<FarmZone> FarmZones => Set<FarmZone>();
 

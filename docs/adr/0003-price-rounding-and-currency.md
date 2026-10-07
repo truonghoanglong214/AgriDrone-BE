@@ -1,6 +1,6 @@
 # ADR-0003: Currency và quy tắc làm tròn giá
 
-- Status: Accepted
+- Status: Superseded by ADR-0007
 - Date: 2026-09-22
 - Decision owners: Backend 1, Product
 
@@ -21,3 +21,7 @@ SurveyOrder cần snapshot giá để catalogue price thay đổi không làm th
 ## Consequences
 
 VND thực tế không dùng đơn vị lẻ nhưng schema vẫn giữ scale 2 để tương thích provider/audit. Mọi implementation và test phải dùng cùng rounding rule ở application và database boundary.
+
+## Supersession
+
+ADR-0007 thay đơn vị tính giá từ diện tích sang số trụ đã xác nhận. Các quyết định về VND, precision `(18,2)`, `decimal` và `MidpointRounding.AwayFromZero` tiếp tục được giữ; `ConfirmedSurveyAreaHa`, `PricePerHaSnapshot` và công thức theo hectare chỉ còn là legacy compatibility và không được dùng trong target flow.

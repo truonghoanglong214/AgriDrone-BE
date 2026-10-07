@@ -2,10 +2,15 @@ namespace AgriDrone.Modules.Surveys.Domain;
 
 public enum SurveyOrderStatus
 {
-    PendingScopeConfirmation,
-    AwaitingAppointment,
+    PendingBoundaryVerification,
+    AwaitingBaselineAppointment,
+    BaselineReady,
+    BaselineInProgress,
+    AwaitingBaselineReview,
+    AwaitingPricing,
+    AwaitingPaidAppointment,
     AwaitingPayment,
-    ReadyForOperations,
+    ReadyForPaidService,
     InProgress,
     PendingReview,
     Completed,

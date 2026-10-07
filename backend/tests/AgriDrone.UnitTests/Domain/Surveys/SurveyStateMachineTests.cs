@@ -23,12 +23,19 @@ public sealed class SurveyStateMachineTests
         Assert.Equal(expected, SurveyRequest.CanTransition(from, to));
 
     [Theory]
-    [InlineData(SurveyOrderStatus.PendingScopeConfirmation, SurveyOrderStatus.AwaitingAppointment, true)]
-    [InlineData(SurveyOrderStatus.AwaitingAppointment, SurveyOrderStatus.AwaitingPayment, true)]
-    [InlineData(SurveyOrderStatus.AwaitingPayment, SurveyOrderStatus.ReadyForOperations, true)]
-    [InlineData(SurveyOrderStatus.ReadyForOperations, SurveyOrderStatus.InProgress, true)]
+    [InlineData(SurveyOrderStatus.PendingBoundaryVerification, SurveyOrderStatus.AwaitingBaselineAppointment, true)]
+    [InlineData(SurveyOrderStatus.PendingBoundaryVerification, SurveyOrderStatus.AwaitingPricing, true)]
+    [InlineData(SurveyOrderStatus.AwaitingBaselineAppointment, SurveyOrderStatus.BaselineReady, true)]
+    [InlineData(SurveyOrderStatus.BaselineReady, SurveyOrderStatus.BaselineInProgress, true)]
+    [InlineData(SurveyOrderStatus.BaselineInProgress, SurveyOrderStatus.AwaitingBaselineReview, true)]
+    [InlineData(SurveyOrderStatus.AwaitingBaselineReview, SurveyOrderStatus.AwaitingPricing, true)]
+    [InlineData(SurveyOrderStatus.AwaitingPricing, SurveyOrderStatus.AwaitingPaidAppointment, true)]
+    [InlineData(SurveyOrderStatus.AwaitingPaidAppointment, SurveyOrderStatus.AwaitingPayment, true)]
+    [InlineData(SurveyOrderStatus.AwaitingPayment, SurveyOrderStatus.ReadyForPaidService, true)]
+    [InlineData(SurveyOrderStatus.ReadyForPaidService, SurveyOrderStatus.InProgress, true)]
     [InlineData(SurveyOrderStatus.InProgress, SurveyOrderStatus.PendingReview, true)]
     [InlineData(SurveyOrderStatus.PendingReview, SurveyOrderStatus.Completed, true)]
+    [InlineData(SurveyOrderStatus.BaselineInProgress, SurveyOrderStatus.Cancelled, false)]
     [InlineData(SurveyOrderStatus.InProgress, SurveyOrderStatus.Cancelled, false)]
     [InlineData(SurveyOrderStatus.Completed, SurveyOrderStatus.Cancelled, false)]
     public void OrderTransitionTableIsExplicit(
@@ -101,22 +108,30 @@ public sealed class SurveyStateMachineTests
     }
 
     [Fact]
-    public void OrderUsesNamedLinearTransitionsAndRejectsLateCancellation()
+    public void OrderRejectsCancellationAfterBaselineHasStarted()
     {
-        var order = Create<SurveyOrder>(
-            (nameof(SurveyOrder.Status), SurveyOrderStatus.PendingScopeConfirmation),
-            (nameof(SurveyOrder.UpdatedAt), Now));
+        var order = SurveyOrder.Create(
+            "SO-001",
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            requiresBaselineMapping: true,
+            previousCompatibleOrderId: null,
+            createdAt: Now);
 
-        order.MarkAwaitingAppointment(Now.AddMinutes(1));
-        order.MarkAwaitingPayment(Now.AddMinutes(2));
-        order.MarkReadyForOperations(Now.AddMinutes(3));
-        order.StartOperations(Now.AddMinutes(4));
+        order.VerifyBoundaryAndScopeForUnmappedFarm(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            Now.AddMinutes(1));
+        order.MarkBaselineAppointmentConfirmed(Now.AddMinutes(2));
+        order.StartBaselineMapping(Now.AddMinutes(3));
 
         var exception = Assert.Throws<SurveyDomainException>(() =>
-            order.Cancel(Now.AddMinutes(5)));
+            order.Cancel(Now.AddMinutes(4)));
 
         Assert.Equal(SurveyOrderDomainErrorCodes.InvalidTransition, exception.Code);
-        Assert.Equal(SurveyOrderStatus.InProgress, order.Status);
+        Assert.Equal(SurveyOrderStatus.BaselineInProgress, order.Status);
     }
 
     [Fact]
@@ -205,14 +220,26 @@ public sealed class SurveyStateMachineTests
     [Fact]
     public void DomainRejectsNonUtcAndBackdatedTransitions()
     {
-        var order = Create<SurveyOrder>(
-            (nameof(SurveyOrder.Status), SurveyOrderStatus.PendingScopeConfirmation),
-            (nameof(SurveyOrder.UpdatedAt), Now));
+        var order = SurveyOrder.Create(
+            "SO-002",
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            requiresBaselineMapping: true,
+            previousCompatibleOrderId: null,
+            createdAt: Now);
 
         Assert.Throws<ArgumentException>(() =>
-            order.MarkAwaitingAppointment(Now.ToOffset(TimeSpan.FromHours(7))));
+            order.VerifyBoundaryAndScopeForUnmappedFarm(
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                Now.ToOffset(TimeSpan.FromHours(7))));
         Assert.Throws<ArgumentException>(() =>
-            order.MarkAwaitingAppointment(Now.AddTicks(-1)));
+            order.VerifyBoundaryAndScopeForUnmappedFarm(
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                Now.AddTicks(-1)));
     }
 
     private static T Create<T>(params (string Property, object Value)[] values)

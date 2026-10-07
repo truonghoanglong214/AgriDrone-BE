@@ -27,7 +27,7 @@ public sealed class Phase5DatabaseFoundationIntegrationTests
             await RecreateDatabaseAsync(freshDatabase);
             await using (var freshContext = CreateContext(freshDatabase))
             {
-                await freshContext.Database.MigrateAsync();
+                await freshContext.Database.MigrateAsync(Phase5Migration);
                 await AssertPhase5SchemaAsync(freshDatabase);
             }
 
@@ -35,7 +35,7 @@ public sealed class Phase5DatabaseFoundationIntegrationTests
             await using (var upgradeContext = CreateContext(upgradeDatabase))
             {
                 await upgradeContext.Database.MigrateAsync(Phase4Migration);
-                await upgradeContext.Database.MigrateAsync();
+                await upgradeContext.Database.MigrateAsync(Phase5Migration);
                 await AssertPhase5SchemaAsync(upgradeDatabase);
 
                 await upgradeContext.Database.MigrateAsync(Phase4Migration);
@@ -43,7 +43,7 @@ public sealed class Phase5DatabaseFoundationIntegrationTests
                     0,
                     await CountSurveyTablesAsync(upgradeDatabase));
 
-                await upgradeContext.Database.MigrateAsync();
+                await upgradeContext.Database.MigrateAsync(Phase5Migration);
                 await AssertPhase5SchemaAsync(upgradeDatabase);
             }
         }

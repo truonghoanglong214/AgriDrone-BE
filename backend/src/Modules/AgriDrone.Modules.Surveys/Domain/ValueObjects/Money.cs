@@ -17,10 +17,18 @@ public readonly record struct Money
         return new Money(Round(amount), currency);
     }
 
-    public static Money CalculateSurveyPrice(decimal confirmedAreaHa, Money pricePerHa)
+    public static Money CalculateSurveyPrice(
+        ConfirmedSurveyPoleCount confirmedPoleCount,
+        PricePerPole pricePerPole,
+        CurrencyCode currency)
     {
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(confirmedAreaHa);
-        return Create(confirmedAreaHa * pricePerHa.Amount, pricePerHa.Currency);
+        var validatedCount = ConfirmedSurveyPoleCount.Create(
+            confirmedPoleCount.Value);
+        var validatedPrice = PricePerPole.Create(pricePerPole.Amount);
+
+        return Create(
+            validatedCount.Value * validatedPrice.Amount,
+            currency);
     }
 
     public static decimal Round(decimal amount) =>

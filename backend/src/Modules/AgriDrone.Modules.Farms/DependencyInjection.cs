@@ -4,6 +4,7 @@ using AgriDrone.Modules.Farms.Application.Abstractions.Queries;
 using AgriDrone.Modules.Farms.Application.Policies;
 using AgriDrone.Modules.Farms.Application.Provisioning;
 using AgriDrone.Modules.Farms.Domain.Farms;
+using AgriDrone.Modules.Farms.Domain.Boundaries;
 using AgriDrone.Modules.Farms.Domain.Maps;
 using AgriDrone.Modules.Farms.Domain.Zones;
 using AgriDrone.Modules.Farms.Infrastructure.Persistence;
@@ -40,6 +41,8 @@ public static class DependencyInjection
         services.AddScoped<IFarmUnitOfWork>(serviceProvider =>
             serviceProvider.GetRequiredService<FarmsDbContext>());
         services.AddScoped<IFarmRepository, FarmRepository>();
+        services.AddScoped<IFarmBoundaryRepository, FarmBoundaryRepository>();
+        services.AddScoped<IBoundaryExceptionRepository, BoundaryExceptionRepository>();
         services.AddScoped<IFarmQueries, FarmQueries>();
         services.AddScoped<IFarmZoneRepository, FarmZoneRepository>();
         services.AddScoped<IFarmZoneQueries, FarmZoneQueries>();

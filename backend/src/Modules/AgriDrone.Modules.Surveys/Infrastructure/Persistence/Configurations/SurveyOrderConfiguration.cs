@@ -14,13 +14,35 @@ public sealed class SurveyOrderConfiguration : IEntityTypeConfiguration<SurveyOr
             table =>
             {
                 table.HasCheckConstraint("ck_survey_orders_area_positive", "confirmed_survey_area_ha IS NULL OR confirmed_survey_area_ha > 0");
-                table.HasCheckConstraint("ck_survey_orders_price_nonnegative", "(price_per_ha_snapshot IS NULL OR price_per_ha_snapshot > 0) AND (final_price IS NULL OR final_price >= 0)");
+                table.HasCheckConstraint(
+                    "ck_survey_orders_price_nonnegative",
+                    "(price_per_pole_snapshot IS NULL OR price_per_pole_snapshot > 0) AND " +
+                    "(price_per_ha_snapshot IS NULL OR price_per_ha_snapshot > 0) AND " +
+                    "(final_price IS NULL OR final_price >= 0)");
+                table.HasCheckConstraint(
+                    "ck_survey_orders_pole_count_positive",
+                    "confirmed_survey_pole_count IS NULL OR confirmed_survey_pole_count > 0");
                 table.HasCheckConstraint("ck_survey_orders_currency", "currency IS NULL OR currency ~ '^[A-Z]{3}$'");
                 table.HasCheckConstraint(
-                    "ck_survey_orders_pricing_snapshot_complete",
-                    "(confirmed_survey_area_ha IS NULL AND price_per_ha_snapshot IS NULL AND currency IS NULL AND final_price IS NULL AND scope_confirmed_by IS NULL AND scope_confirmed_at IS NULL) OR " +
+                    "ck_survey_orders_legacy_pricing_snapshot_complete",
+                    "(confirmed_survey_area_ha IS NULL AND price_per_ha_snapshot IS NULL) OR " +
                     "(confirmed_survey_area_ha IS NOT NULL AND price_per_ha_snapshot IS NOT NULL AND currency IS NOT NULL AND final_price IS NOT NULL AND scope_confirmed_by IS NOT NULL AND scope_confirmed_at IS NOT NULL)");
-                table.HasCheckConstraint("ck_survey_orders_final_price", "final_price IS NULL OR final_price = round(confirmed_survey_area_ha * price_per_ha_snapshot, 2)");
+                table.HasCheckConstraint(
+                    "ck_survey_orders_pole_count_snapshot_complete",
+                    "(confirmed_survey_pole_count IS NULL AND pole_count_confirmed_by IS NULL AND pole_count_confirmed_at IS NULL) OR " +
+                    "(confirmed_survey_pole_count IS NOT NULL AND farm_boundary_version_id IS NOT NULL AND farm_base_map_version_id IS NOT NULL AND pole_count_confirmed_by IS NOT NULL AND pole_count_confirmed_at IS NOT NULL)");
+                table.HasCheckConstraint(
+                    "ck_survey_orders_per_pole_pricing_snapshot_complete",
+                    "(price_per_pole_snapshot IS NULL AND pricing_confirmed_by IS NULL AND pricing_confirmed_at IS NULL) OR " +
+                    "(price_per_pole_snapshot IS NOT NULL AND survey_service_price_id IS NOT NULL AND confirmed_survey_pole_count IS NOT NULL AND farm_boundary_version_id IS NOT NULL AND farm_base_map_version_id IS NOT NULL AND pricing_confirmed_by IS NOT NULL AND pricing_confirmed_at IS NOT NULL AND currency IS NOT NULL AND final_price IS NOT NULL)");
+                table.HasCheckConstraint(
+                    "ck_survey_orders_pricing_mode",
+                    "NOT (price_per_pole_snapshot IS NOT NULL AND price_per_ha_snapshot IS NOT NULL)");
+                table.HasCheckConstraint(
+                    "ck_survey_orders_final_price",
+                    "final_price IS NULL OR " +
+                    "(price_per_pole_snapshot IS NOT NULL AND final_price = round(confirmed_survey_pole_count * price_per_pole_snapshot, 2)) OR " +
+                    "(price_per_ha_snapshot IS NOT NULL AND final_price = round(confirmed_survey_area_ha * price_per_ha_snapshot, 2))");
                 table.HasCheckConstraint("ck_survey_orders_previous_not_self", "previous_compatible_order_id IS NULL OR previous_compatible_order_id <> id");
             });
         builder.HasKey(order => order.Id).HasName("pk_survey_orders");
@@ -34,6 +56,29 @@ public sealed class SurveyOrderConfiguration : IEntityTypeConfiguration<SurveyOr
         builder.Property(order => order.SurveyRequestId).HasColumnName("survey_request_id").HasColumnType("uuid");
         builder.Property(order => order.SurveyServiceId).HasColumnName("survey_service_id").HasColumnType("uuid");
         builder.Property(order => order.SurveyServicePriceId).HasColumnName("survey_service_price_id").HasColumnType("uuid");
+        builder.Property(order => order.ConfirmedSurveyPoleCount)
+            .HasConversion(
+                value => value.HasValue ? value.Value.Value : (int?)null,
+                value => value.HasValue
+                    ? ConfirmedSurveyPoleCount.Create(value.Value)
+                    : (ConfirmedSurveyPoleCount?)null)
+            .HasColumnName("confirmed_survey_pole_count")
+            .HasColumnType("integer");
+        builder.Property(order => order.PricePerPoleSnapshot)
+            .HasConversion(
+                value => value.HasValue ? value.Value.Amount : (decimal?)null,
+                value => value.HasValue
+                    ? PricePerPole.Create(value.Value)
+                    : (PricePerPole?)null)
+            .HasColumnName("price_per_pole_snapshot")
+            .HasColumnType("numeric(18,2)")
+            .HasPrecision(18, 2);
+        builder.Property(order => order.FarmBoundaryVersionId).HasColumnName("farm_boundary_version_id").HasColumnType("uuid");
+        builder.Property(order => order.FarmBaseMapVersionId).HasColumnName("farm_base_map_version_id").HasColumnType("uuid");
+        builder.Property(order => order.PoleCountConfirmedBy).HasColumnName("pole_count_confirmed_by").HasColumnType("uuid");
+        builder.Property(order => order.PoleCountConfirmedAt).HasColumnName("pole_count_confirmed_at").HasColumnType("timestamp with time zone");
+        builder.Property(order => order.PricingConfirmedBy).HasColumnName("pricing_confirmed_by").HasColumnType("uuid");
+        builder.Property(order => order.PricingConfirmedAt).HasColumnName("pricing_confirmed_at").HasColumnType("timestamp with time zone");
         builder.Property(order => order.ConfirmedSurveyAreaHa).HasColumnName("confirmed_survey_area_ha").HasColumnType("numeric(12,4)").HasPrecision(12, 4);
         builder.Property(order => order.PricePerHaSnapshot).HasColumnName("price_per_ha_snapshot").HasColumnType("numeric(18,2)").HasPrecision(18, 2);
         builder.Property(order => order.Currency).HasColumnName("currency").HasColumnType("character(3)").HasMaxLength(3).IsFixedLength();
@@ -46,7 +91,7 @@ public sealed class SurveyOrderConfiguration : IEntityTypeConfiguration<SurveyOr
             .HasColumnName("status")
             .HasColumnType("system.survey_order_status")
             .HasSentinel((SurveyOrderStatus)(-1))
-            .HasDefaultValueSql("'PENDING_SCOPE_CONFIRMATION'::system.survey_order_status")
+            .HasDefaultValueSql("'PENDING_BOUNDARY_VERIFICATION'::system.survey_order_status")
             .IsRequired();
         builder.Property(order => order.Version).IsRowVersion();
         builder.Property(order => order.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp with time zone").HasDefaultValueSql("NOW()").IsRequired();

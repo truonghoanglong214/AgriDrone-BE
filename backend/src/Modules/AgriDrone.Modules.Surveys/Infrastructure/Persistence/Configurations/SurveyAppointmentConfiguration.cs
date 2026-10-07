@@ -22,6 +22,11 @@ public sealed class SurveyAppointmentConfiguration : IEntityTypeConfiguration<Su
         builder.HasKey(appointment => appointment.Id).HasName("pk_survey_appointments");
         builder.Property(appointment => appointment.Id).HasColumnName("id").HasColumnType("uuid").HasDefaultValueSql("gen_random_uuid()").ValueGeneratedOnAdd();
         builder.Property(appointment => appointment.SurveyOrderId).HasColumnName("survey_order_id").HasColumnType("uuid");
+        builder.Property(appointment => appointment.Purpose)
+            .HasColumnName("purpose")
+            .HasColumnType("system.survey_appointment_purpose")
+            .HasDefaultValueSql("'PAID_SERVICE'::system.survey_appointment_purpose")
+            .IsRequired();
         builder.Property(appointment => appointment.ProposedStartAt).HasColumnName("proposed_start_at").HasColumnType("timestamp with time zone");
         builder.Property(appointment => appointment.ProposedEndAt).HasColumnName("proposed_end_at").HasColumnType("timestamp with time zone");
         builder.Property(appointment => appointment.Status).HasColumnName("status").HasColumnType("system.survey_appointment_status").IsRequired();
@@ -31,7 +36,7 @@ public sealed class SurveyAppointmentConfiguration : IEntityTypeConfiguration<Su
         builder.Property(appointment => appointment.Version).IsRowVersion();
         builder.Property(appointment => appointment.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp with time zone").HasDefaultValueSql("NOW()").IsRequired();
         builder.Property(appointment => appointment.UpdatedAt).HasColumnName("updated_at").HasColumnType("timestamp with time zone").HasDefaultValueSql("NOW()").IsRequired();
-        builder.HasIndex(appointment => appointment.SurveyOrderId).HasDatabaseName("uq_survey_appointments_one_active_per_order").HasFilter("status IN ('PROPOSED'::system.survey_appointment_status, 'CONFIRMED'::system.survey_appointment_status, 'RESCHEDULE_REQUESTED'::system.survey_appointment_status)").IsUnique();
+        builder.HasIndex(appointment => new { appointment.SurveyOrderId, appointment.Purpose }).HasDatabaseName("uq_survey_appointments_one_active_per_order_purpose").HasFilter("status IN ('PROPOSED'::system.survey_appointment_status, 'CONFIRMED'::system.survey_appointment_status, 'RESCHEDULE_REQUESTED'::system.survey_appointment_status)").IsUnique();
         builder.HasIndex(appointment => new { appointment.Status, appointment.ProposedStartAt }).HasDatabaseName("ix_survey_appointments_schedule");
         builder.HasOne(appointment => appointment.SurveyOrder).WithMany(order => order.Appointments).HasForeignKey(appointment => appointment.SurveyOrderId).OnDelete(DeleteBehavior.Restrict).HasConstraintName("fk_survey_appointments_orders_order_id");
     }

@@ -4,6 +4,8 @@
 - Date: 2026-09-26
 - Decision owners: Backend 1, Architecture
 
+> Extended by ADR-0011. The same local transaction boundaries apply to V3 Inbox/Outbox records and payload semantics.
+
 ## Context
 
 Approval, mapping publication and result publication each change data owned by more than one aggregate/module. Chaining independent `SaveChanges` calls would allow partial onboarding, maps without their Plant history, or published results without a matching order/outbox state.

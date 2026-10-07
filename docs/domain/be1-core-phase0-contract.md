@@ -1,5 +1,7 @@
 # BE1 Core Phase 0 — locked business conventions
 
+> Historical Step 0 baseline. ADR-0007 và `be1-step0r-locked-contract.md` supersede phần SurveyOrder pricing/readiness/state machine; ADR-0008 đến ADR-0011 bổ sung boundary, result, plant-change và V3 semantics. Các convention time, concurrency, HTTP errors, authorization và transaction boundary không bị thay đổi.
+
 This document is the reviewed contract for Step 0 of `BE1-Core-Business-Implementation-Plan.md`. Domain code is authoritative for allowed transitions; the tables below make the policy reviewable.
 
 ## Time and concurrency

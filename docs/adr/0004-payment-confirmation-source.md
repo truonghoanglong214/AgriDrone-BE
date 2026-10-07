@@ -4,6 +4,8 @@
 - Date: 2026-09-22
 - Decision owners: Backend 1, Operations
 
+> Amended by ADR-0007: payment remains a hard gate for the selected paid service Mission, but is not required for prerequisite Baseline Mapping.
+
 ## Context
 
 Payment là hard gate trước khi bay. Cho phép TenantOwner hoặc client tùy ý đặt `Confirmed` sẽ phá vỡ integrity; callback có thể retry, đến sai thứ tự hoặc cần đối soát thủ công.

@@ -4,6 +4,8 @@
 - Date: 2026-09-22
 - Decision owners: Backend 1, Backend 2, GIS
 
+> Amended by ADR-0008 for versioned FarmBoundary semantics and ADR-0011 for V3 integration contracts. The Farm-level base-map decision remains in force.
+
 ## Context
 
 Contract V1 hiện có thể publish một `ZoneMapVersion` cho từng Mapping Mission. `Be-Plan` yêu cầu một approved base map bền vững cho Farm, được tái sử dụng qua mọi Survey Service và survey lặp lại.

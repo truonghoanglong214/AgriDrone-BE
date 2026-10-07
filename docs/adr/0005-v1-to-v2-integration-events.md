@@ -4,6 +4,8 @@
 - Date: 2026-09-22
 - Decision owners: Backend 1, Backend 2
 
+> Extended by ADR-0011. V1/V2 remain immutable; the rebaseline capabilities use independent V3 contracts.
+
 ## Context
 
 Mapping V1 đã phát hành nhưng thiếu SurveyOrder, service và Farm base-map semantics. Sửa payload V1 tại chỗ có thể làm consumer cũ deserialize sai hoặc thay đổi ý nghĩa của event đã lưu trong Outbox/Inbox/DLQ.
