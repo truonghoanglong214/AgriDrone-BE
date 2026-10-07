@@ -14,6 +14,7 @@ using AgriDrone.Modules.Missions.Domain.Observations;
 using AgriDrone.Modules.Missions.Domain.Processing;
 using AgriDrone.Modules.Notifications.Domain.Notifications;
 using AgriDrone.Modules.Plants.Domain.Conditions;
+using AgriDrone.Modules.Plants.Domain.Changes;
 using AgriDrone.Modules.Plants.Domain.DiseaseZones;
 using AgriDrone.Modules.Plants.Domain.Mapping;
 using AgriDrone.Modules.Plants.Domain.Plants;
@@ -324,6 +325,8 @@ internal static class CrossModuleRelationshipConfiguration
             .OnDelete(DeleteBehavior.SetNull)
             .HasConstraintName("fk_plant_change_events_users_reviewed_by");
 
+        ConfigurePlantInventoryChangeReports(modelBuilder);
+
         modelBuilder.Entity<PlantScan>()
             .HasOne<DroneMission>()
             .WithMany()
@@ -380,6 +383,132 @@ internal static class CrossModuleRelationshipConfiguration
             .HasForeignKey(verification => verification.UserId)
             .OnDelete(DeleteBehavior.Restrict)
             .HasConstraintName("fk_scan_verifications_users_user_id");
+    }
+
+    private static void ConfigurePlantInventoryChangeReports(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<PlantInventoryChangeReport>()
+            .HasOne<Farm>()
+            .WithMany()
+            .HasForeignKey(report => new { report.FarmId, report.TenantId })
+            .HasPrincipalKey(farm => new { farm.Id, farm.TenantId })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_plant_inventory_change_reports_farms_same_tenant");
+
+        ConfigurePlantInventoryChangeActor(
+            modelBuilder,
+            nameof(PlantInventoryChangeReport.ReportedByUserId),
+            "fk_plant_inventory_change_reports_users_reported_by");
+        ConfigurePlantInventoryChangeActor(
+            modelBuilder,
+            nameof(PlantInventoryChangeReport.ReviewStartedBy),
+            "fk_plant_inventory_change_reports_users_review_started_by");
+        ConfigurePlantInventoryChangeActor(
+            modelBuilder,
+            nameof(PlantInventoryChangeReport.EvidenceRequestedBy),
+            "fk_plant_inventory_change_reports_users_evidence_requested_by");
+        ConfigurePlantInventoryChangeActor(
+            modelBuilder,
+            nameof(PlantInventoryChangeReport.VerifiedBy),
+            "fk_plant_inventory_change_reports_users_verified_by");
+        ConfigurePlantInventoryChangeActor(
+            modelBuilder,
+            nameof(PlantInventoryChangeReport.RejectedBy),
+            "fk_plant_inventory_change_reports_users_rejected_by");
+        ConfigurePlantInventoryChangeActor(
+            modelBuilder,
+            nameof(PlantInventoryChangeReport.WithdrawnBy),
+            "fk_plant_inventory_change_reports_users_withdrawn_by");
+        ConfigurePlantInventoryChangeActor(
+            modelBuilder,
+            nameof(PlantInventoryChangeReport.AppliedBy),
+            "fk_plant_inventory_change_reports_users_applied_by");
+
+        modelBuilder.Entity<PlantInventoryChangeReport>()
+            .HasOne<SurveyOrder>()
+            .WithMany()
+            .HasForeignKey(report => new
+            {
+                report.EvidenceSurveyOrderId,
+                report.TenantId,
+                report.FarmId
+            })
+            .HasPrincipalKey(order => new { order.Id, order.TenantId, order.FarmId })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_plant_inventory_change_reports_evidence_order_same_tenant_farm");
+
+        modelBuilder.Entity<PlantInventoryChangeReport>()
+            .HasOne<DroneMission>()
+            .WithMany()
+            .HasForeignKey(report => new { report.EvidenceMissionId, report.FarmId })
+            .HasPrincipalKey(mission => new { mission.Id, mission.FarmId })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_plant_inventory_change_reports_evidence_mission_same_farm");
+
+        modelBuilder.Entity<PlantInventoryChangeReport>()
+            .HasOne<FarmBoundary>()
+            .WithMany()
+            .HasForeignKey(report => new
+            {
+                report.EvidenceFarmBoundaryVersionId,
+                report.TenantId,
+                report.FarmId
+            })
+            .HasPrincipalKey(boundary => new { boundary.Id, boundary.TenantId, boundary.FarmId })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_plant_inventory_change_reports_evidence_boundary_same_tenant_farm");
+
+        modelBuilder.Entity<PlantInventoryChangeReport>()
+            .HasOne<FarmBaseMapVersion>()
+            .WithMany()
+            .HasForeignKey(report => new
+            {
+                report.EvidenceFarmBaseMapVersionId,
+                report.TenantId,
+                report.FarmId
+            })
+            .HasPrincipalKey(map => new { map.Id, map.TenantId, map.FarmId })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_plant_inventory_change_reports_evidence_map_same_tenant_farm");
+
+        modelBuilder.Entity<PlantInventoryChangeReport>()
+            .HasOne<FarmBoundary>()
+            .WithMany()
+            .HasForeignKey(report => new
+            {
+                report.AppliedFarmBoundaryVersionId,
+                report.TenantId,
+                report.FarmId
+            })
+            .HasPrincipalKey(boundary => new { boundary.Id, boundary.TenantId, boundary.FarmId })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_plant_inventory_change_reports_applied_boundary_same_tenant_farm");
+
+        modelBuilder.Entity<PlantInventoryChangeReport>()
+            .HasOne<FarmBaseMapVersion>()
+            .WithMany()
+            .HasForeignKey(report => new
+            {
+                report.AppliedFarmBaseMapVersionId,
+                report.TenantId,
+                report.FarmId
+            })
+            .HasPrincipalKey(map => new { map.Id, map.TenantId, map.FarmId })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_plant_inventory_change_reports_applied_map_same_tenant_farm");
+    }
+
+    private static void ConfigurePlantInventoryChangeActor(
+        ModelBuilder modelBuilder,
+        string foreignKeyProperty,
+        string constraintName)
+    {
+        modelBuilder.Entity<PlantInventoryChangeReport>()
+            .HasOne<User>()
+            .WithMany()
+            .HasForeignKey(foreignKeyProperty)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName(constraintName);
     }
 
     private static void ConfigureNotificationsAndAudit(ModelBuilder modelBuilder)

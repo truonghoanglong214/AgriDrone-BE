@@ -12,6 +12,7 @@ using AgriDrone.Modules.Missions.Domain.Observations;
 using AgriDrone.Modules.Missions.Domain.Processing;
 using AgriDrone.Modules.Missions.Domain.Telemetry;
 using AgriDrone.Modules.Plants.Domain.Conditions;
+using AgriDrone.Modules.Plants.Domain.Changes;
 using AgriDrone.Modules.Plants.Domain.Diseases;
 using AgriDrone.Modules.Plants.Domain.DiseaseZones;
 using AgriDrone.Modules.Plants.Domain.Mapping;
@@ -65,6 +66,8 @@ internal static class PostgreSqlEnumMappings
         modelBuilder.HasPostgresEnum<MatchStrategy>(DbSchemas.System, "match_strategy", translator);
         modelBuilder.HasPostgresEnum<PlantChangeType>(DbSchemas.System, "plant_change_type", translator);
         modelBuilder.HasPostgresEnum<ReviewStatus>(DbSchemas.System, "review_status", translator);
+        modelBuilder.HasPostgresEnum<PlantInventoryChangeKind>(DbSchemas.System, "plant_inventory_change_kind", translator);
+        modelBuilder.HasPostgresEnum<PlantInventoryChangeStatus>(DbSchemas.System, "plant_inventory_change_status", translator);
         modelBuilder.HasPostgresEnum<ScanSource>(DbSchemas.System, "scan_source", translator);
         modelBuilder.HasPostgresEnum<ScanMediaRole>(DbSchemas.System, "scan_media_role", translator);
         modelBuilder.HasPostgresEnum<FindingSource>(DbSchemas.System, "finding_source", translator);
@@ -132,6 +135,8 @@ internal static class PostgreSqlEnumMappings
         dataSourceBuilder.MapEnum<MatchStrategy>("system.match_strategy", translator);
         dataSourceBuilder.MapEnum<PlantChangeType>("system.plant_change_type", translator);
         dataSourceBuilder.MapEnum<ReviewStatus>("system.review_status", translator);
+        dataSourceBuilder.MapEnum<PlantInventoryChangeKind>("system.plant_inventory_change_kind", translator);
+        dataSourceBuilder.MapEnum<PlantInventoryChangeStatus>("system.plant_inventory_change_status", translator);
         dataSourceBuilder.MapEnum<ScanSource>("system.scan_source", translator);
         dataSourceBuilder.MapEnum<ScanMediaRole>("system.scan_media_role", translator);
         dataSourceBuilder.MapEnum<FindingSource>("system.finding_source", translator);

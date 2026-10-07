@@ -2,6 +2,7 @@ using AgriDrone.IntegrationContracts.Farms;
 using AgriDrone.IntegrationContracts.Plants;
 using AgriDrone.Modules.Plants.Application.Abstractions.Persistence;
 using AgriDrone.Modules.Plants.Application.Abstractions.Queries;
+using AgriDrone.Modules.Plants.Domain.Changes;
 using AgriDrone.Modules.Plants.Domain.Conditions;
 using AgriDrone.Modules.Plants.Domain.Diseases;
 using AgriDrone.Modules.Plants.Domain.DiseaseZones;
@@ -48,6 +49,14 @@ public static class DependencyInjection
                     .MapEnum<PlantChangeType>("plant_change_type", "system", translator)
                     .MapEnum<PlantChangeSource>("plant_change_source", "system", translator)
                     .MapEnum<ReviewStatus>("review_status", "system", translator)
+                    .MapEnum<PlantInventoryChangeKind>(
+                        "plant_inventory_change_kind",
+                        "system",
+                        translator)
+                    .MapEnum<PlantInventoryChangeStatus>(
+                        "plant_inventory_change_status",
+                        "system",
+                        translator)
                     .MapEnum<ScanSource>("scan_source", "system", translator)
                     .MapEnum<ScanMediaRole>("scan_media_role", "system", translator)
                     .MapEnum<FindingSource>("finding_source", "system", translator)
@@ -90,6 +99,9 @@ public static class DependencyInjection
         services.AddScoped<IPlantConditionQueries, PlantConditionQueries>();
         services.AddScoped<IPlantConditionRepository, PlantConditionRepository>();
         services.AddScoped<IPlantRepository, PlantRepository>();
+        services.AddScoped<
+            IPlantInventoryChangeReportRepository,
+            PlantInventoryChangeReportRepository>();
         services.AddScoped<IDiseaseZoneRepository, DiseaseZoneRepository>();
         services.AddScoped<ITreatmentRecommendationRepository, TreatmentRecommendationRepository>();
 

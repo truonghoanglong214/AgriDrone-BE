@@ -9,8 +9,10 @@
   implements versioned FarmBoundary, BoundaryException review, PostGIS Zone
   invariants and its guarded migration. PR 0R-4 implements versioned DiseaseZone
   proposals/membership review and the expert-validated TreatmentRecommendation
-  catalogue with guarded persistence. Runtime feature/API wiring and the remaining
-  Step 0R slices are not claimed complete.
+  catalogue with guarded persistence. PR 0R-5 implements the owner-reported
+  `PlantInventoryChangeReport` lifecycle, idempotency/open-report constraints,
+  later-survey evidence gate and guarded persistence. Runtime feature/API wiring
+  and the remaining Step 0R slices are not claimed complete.
 
 ## 1. Canonical business primitives
 

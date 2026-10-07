@@ -1,4 +1,5 @@
 using AgriDrone.Modules.Plants.Application.Abstractions.Persistence;
+using AgriDrone.Modules.Plants.Domain.Changes;
 using AgriDrone.Modules.Plants.Domain.Conditions;
 using AgriDrone.Modules.Plants.Domain.DiseaseZones;
 using AgriDrone.Modules.Plants.Domain.Mapping;
@@ -18,6 +19,9 @@ internal sealed class PlantsDbContext(DbContextOptions<PlantsDbContext> options)
     public DbSet<Plant> Plants => Set<Plant>();
 
     public DbSet<PlantChangeEvent> PlantChangeEvents => Set<PlantChangeEvent>();
+
+    public DbSet<PlantInventoryChangeReport> PlantInventoryChangeReports =>
+        Set<PlantInventoryChangeReport>();
 
     public DbSet<PlantCondition> PlantConditions => Set<PlantCondition>();
 
