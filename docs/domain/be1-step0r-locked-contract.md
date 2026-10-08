@@ -3,7 +3,8 @@
 - Status: Approved design baseline
 - Date: 2026-10-07
 - Implements: ADR-0007 through ADR-0011
-- Implementation status: InProgress; PR 0R-1 implements the per-pole value objects,
+- Implementation status: `CodeComplete — AwaitingFinalTest` as of 2026-10-08.
+  PR 0R-1 implements the per-pole value objects,
   two-stage SurveyOrder model, appointment purpose and purpose-aware readiness.
   PR 0R-2 adds the fresh/upgrade/guarded-rollback persistence migration. PR 0R-3
   implements versioned FarmBoundary, BoundaryException review, PostGIS Zone
@@ -12,10 +13,12 @@
   catalogue with guarded persistence. PR 0R-5 implements the owner-reported
   `PlantInventoryChangeReport` lifecycle, idempotency/open-report constraints,
   later-survey evidence gate and guarded persistence. PR 0R-6 adds the independent
-  V3 mapping/health
-  contracts, validators, descriptors/routing identities, and the mapping/result
-  publication transaction contexts. Feature consumers/processors remain owned by
-  Steps 6 and 7; golden JSON remains owned by the Final Test Phase.
+  V3 mapping/health contracts, validators, descriptors/routing identities, and
+  the mapping/result publication transaction contexts. Feature
+  consumers/processors remain owned by
+  Steps 6 and 7. OpenAPI intent, glossary and completion evidence are now
+  recorded; golden JSON and the remaining Step 0R test backlog remain owned by
+  the Final Test Phase. This status is not `Done`.
 
 ## 1. Canonical business primitives
 

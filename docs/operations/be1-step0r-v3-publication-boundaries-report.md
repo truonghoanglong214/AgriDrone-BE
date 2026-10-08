@@ -2,6 +2,8 @@
 
 Date: 2026-10-07
 
+Status: Implemented — awaiting Final Test Phase
+
 ## Delivered
 
 - Extended `MappingPublicationDbContext` so a mapping publication can atomically

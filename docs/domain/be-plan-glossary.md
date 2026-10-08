@@ -1,7 +1,7 @@
 # Be-Plan Glossary
 
 Status: **Approved**  
-Effective date: 2026-09-22; amended 2026-10-07 by Step 0R
+Effective date: 2026-09-22; amended 2026-10-08 by Step 0R
 Source of truth: `Codex-Plan/Be-Plan.md`
 
 Tài liệu này là glossary duy nhất cho workflow dịch vụ khảo sát. Tên trong code/API có thể dùng `PascalCase` hoặc mã `UPPER_SNAKE_CASE`, nhưng không được đổi nghĩa dưới đây.
@@ -19,9 +19,14 @@ Tài liệu này là glossary duy nhất cho workflow dịch vụ khảo sát. T
 | **Pole Position** | Vị trí một trụ thanh long trong approved FarmBoundary/scope; active pole position là đơn vị tính giá. | Số nhánh trên trụ; diện tích hectare; một AI detection chưa review. |
 | **ConfirmedSurveyPoleCount** | Số active pole positions trong approved boundary/scope được assigned SystemManager xác nhận từ current published Farm map. | Estimated pole count trong request; pending candidates; count tự suy ra từ area. |
 | **FarmBoundary** | Polygon SRID 4326 được version hóa; mỗi Farm có tối đa một current approved version và có thể chứa nhiều Zone không overlap. | Farm center point; Zone boundary; mutable polygon được sửa ngược lịch sử. |
+| **Boundary Exception** | Candidate/finding được phân loại `OutOfBoundary` hoặc `NeedsReview` theo một FarmBoundary và policy version cụ thể; chỉ decision có reviewer, reason và evidence mới resolve exception. | Dữ liệu được tự động kéo vào Farm gần nhất; lý do để overwrite original coordinate. |
+| **Farm Base Map** | Bản đồ cấp Farm đã publish, gồm các Zone map version và official active Plant mappings; là nguồn authoritative cho inventory/count tại một thời điểm. | Draft mapping candidate; một `ZoneMapVersion` độc lập; dữ liệu tự hết hạn theo TTL. |
 | **Disease Zone** | Polygon bệnh được đề xuất từ verified findings, review/correct và publish bởi assigned SystemManager. | Farm operational Zone; raw AI cluster; một region tự động official. |
+| **Treatment Recommendation** | Catalogue entry immutable/versioned theo condition và health/severity, có expert/source provenance, disclaimer và effective window; official result chỉ tham chiếu version đã được manager chọn. | Free-form advice do AI hoặc manager nhập trực tiếp; nội dung pending tự hiển thị cho TenantOwner. |
 | **Digital Plant Profile** | Lịch sử của một biological plant generation tại một pole position. Replacement kết thúc profile cũ và tạo PlantId mới. | Pole pricing unit bất biến qua mọi replacement; record bị overwrite khi thay cây. |
 | **PlantInventoryChangeReport** | Owner report cho removal/replacement/new plant; chỉ thay đổi official inventory sau manager verification và evidence gate tương ứng. | API trực tiếp tạo/xóa Plant hoặc tự thay đổi confirmed count. |
+| **MissionPurpose** | Mục đích readiness server-owned: `BaselineMapping`, `PlantHealth` hoặc `HarvestReadiness`; mỗi purpose có gate riêng. | Survey Service; client-supplied `IsReady`; một readiness rule yêu cầu payment cho mọi flight. |
+| **V3 Ready Handoff** | Payload BE2 → BE1 chứa kết quả AI còn pending review, đầy đủ order/mission/boundary/map/job/model/policy provenance. | Kết quả đã approved/published; quyền cho TenantOwner xem raw AI output. |
 
 ## Quy tắc ngôn ngữ liên quan
 
@@ -31,3 +36,4 @@ Tài liệu này là glossary duy nhất cho workflow dịch vụ khảo sát. T
 - “Published”, “official” và “verified” không được dùng cho AI output còn pending.
 - “Harvest Readiness” chỉ là đánh giá qua dấu hiệu nhìn thấy; không bao gồm harvest record, sản lượng, batch hoặc hậu thu hoạch.
 - `PricePerHa` và `ConfirmedSurveyAreaHa` chỉ là legacy compatibility fields; target flow không dùng để tính hoặc snapshot giá.
+- “Ready” trong tên V3 handoff nghĩa là sẵn sàng để BE1 ingest/review, không có nghĩa business data đã được approve hoặc publish.
