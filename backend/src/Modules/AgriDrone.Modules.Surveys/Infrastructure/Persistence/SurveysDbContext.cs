@@ -22,6 +22,7 @@ internal sealed class SurveysDbContext(DbContextOptions<SurveysDbContext> option
     public DbSet<PriceAdjustment> PriceAdjustments => Set<PriceAdjustment>();
     public DbSet<SurveyResult> SurveyResults => Set<SurveyResult>();
     public DbSet<HarvestReadinessAssessment> HarvestReadinessAssessments => Set<HarvestReadinessAssessment>();
+    public DbSet<HarvestReadinessCriterion> HarvestReadinessCriteria => Set<HarvestReadinessCriterion>();
 
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 

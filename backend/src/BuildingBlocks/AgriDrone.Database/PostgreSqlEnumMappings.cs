@@ -97,6 +97,8 @@ internal static class PostgreSqlEnumMappings
         modelBuilder.HasPostgresEnum<PriceAdjustmentStatus>(DbSchemas.System, "price_adjustment_status", translator);
         modelBuilder.HasPostgresEnum<SurveyResultStatus>(DbSchemas.System, "survey_result_status", translator);
         modelBuilder.HasPostgresEnum<HarvestReadinessReviewStatus>(DbSchemas.System, "harvest_readiness_review_status", translator);
+        modelBuilder.HasPostgresEnum<HarvestReadinessCriterionStatus>(DbSchemas.System, "harvest_readiness_criterion_status", translator);
+        modelBuilder.HasPostgresEnum<HarvestReadinessGranularity>(DbSchemas.System, "harvest_readiness_granularity", translator);
     }
 
     public static void ConfigureDataSource(NpgsqlDataSourceBuilder dataSourceBuilder)
@@ -166,5 +168,7 @@ internal static class PostgreSqlEnumMappings
         dataSourceBuilder.MapEnum<PriceAdjustmentStatus>("system.price_adjustment_status", translator);
         dataSourceBuilder.MapEnum<SurveyResultStatus>("system.survey_result_status", translator);
         dataSourceBuilder.MapEnum<HarvestReadinessReviewStatus>("system.harvest_readiness_review_status", translator);
+        dataSourceBuilder.MapEnum<HarvestReadinessCriterionStatus>("system.harvest_readiness_criterion_status", translator);
+        dataSourceBuilder.MapEnum<HarvestReadinessGranularity>("system.harvest_readiness_granularity", translator);
     }
 }

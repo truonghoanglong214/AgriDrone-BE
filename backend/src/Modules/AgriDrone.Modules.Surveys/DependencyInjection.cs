@@ -78,6 +78,14 @@ public static class DependencyInjection
                         "harvest_readiness_review_status",
                         "system",
                         translator)
+                    .MapEnum<HarvestReadinessCriterionStatus>(
+                        "harvest_readiness_criterion_status",
+                        "system",
+                        translator)
+                    .MapEnum<HarvestReadinessGranularity>(
+                        "harvest_readiness_granularity",
+                        "system",
+                        translator)
                     .MapEnum<AuditActorType>(
                         "audit_actor_type",
                         "system",
@@ -86,7 +94,9 @@ public static class DependencyInjection
         services.AddScoped<ISurveysUnitOfWork>(serviceProvider =>
             serviceProvider.GetRequiredService<SurveysDbContext>());
         services.AddScoped<ISurveyServiceRepository, SurveyServiceRepository>();
+        services.AddScoped<IHarvestReadinessCriterionRepository, HarvestReadinessCriterionRepository>();
         services.AddScoped<ISurveyCatalogueQueries, SurveyCatalogueQueries>();
+        services.AddScoped<IHarvestReadinessCriterionQueries, HarvestReadinessCriterionQueries>();
 
         services.TryAddSingleton(TimeProvider.System);
 

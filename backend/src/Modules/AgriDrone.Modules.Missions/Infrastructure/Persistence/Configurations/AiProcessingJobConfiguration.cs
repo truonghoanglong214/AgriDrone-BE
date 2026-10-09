@@ -26,6 +26,10 @@ public sealed class AiProcessingJobConfiguration : IEntityTypeConfiguration<AiPr
                 tableBuilder.HasCheckConstraint(
                     "ck_ai_job_threshold_model",
                     "threshold_profile_id IS NULL OR model_version_id IS NOT NULL");
+                tableBuilder.HasCheckConstraint(
+                    "ck_ai_job_harvest_criterion_snapshot",
+                    "(harvest_readiness_criterion_id IS NULL AND harvest_readiness_criterion_version_number IS NULL) OR " +
+                    "(harvest_readiness_criterion_id IS NOT NULL AND harvest_readiness_criterion_version_number IS NOT NULL)");
             });
 
         builder.HasKey(job => job.Id).HasName("pk_ai_processing_jobs");
@@ -47,6 +51,14 @@ public sealed class AiProcessingJobConfiguration : IEntityTypeConfiguration<AiPr
         builder.Property(job => job.ThresholdProfileId)
             .HasColumnName("threshold_profile_id")
             .HasColumnType("uuid");
+
+        builder.Property(job => job.HarvestReadinessCriterionId)
+            .HasColumnName("harvest_readiness_criterion_id")
+            .HasColumnType("uuid");
+
+        builder.Property(job => job.HarvestReadinessCriterionVersionNumber)
+            .HasColumnName("harvest_readiness_criterion_version_number")
+            .HasColumnType("integer");
 
         builder.Property(job => job.JobType)
             .HasColumnName("job_type")
@@ -127,6 +139,13 @@ public sealed class AiProcessingJobConfiguration : IEntityTypeConfiguration<AiPr
 
         builder.HasIndex(job => job.Status)
             .HasDatabaseName("ix_ai_jobs_status");
+
+        builder.HasIndex(job => new
+            {
+                job.HarvestReadinessCriterionId,
+                job.HarvestReadinessCriterionVersionNumber
+            })
+            .HasDatabaseName("ix_ai_jobs_harvest_readiness_criterion");
 
         builder.HasIndex(job => job.ClientOperationId)
             .HasDatabaseName("uq_ai_jobs_client_operation")

@@ -900,6 +900,71 @@ internal static class CrossModuleRelationshipConfiguration
             .OnDelete(DeleteBehavior.Restrict)
             .HasConstraintName("fk_harvest_readiness_users_reviewed_by");
 
+        modelBuilder.Entity<HarvestReadinessAssessment>()
+            .HasOne<AiModelVersion>()
+            .WithMany()
+            .HasForeignKey(assessment => assessment.AiModelVersionId)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_harvest_readiness_assessments_ai_model_version");
+
+        modelBuilder.Entity<HarvestReadinessAssessment>()
+            .HasOne<AiThresholdProfile>()
+            .WithMany()
+            .HasForeignKey(assessment => new
+            {
+                assessment.AiThresholdProfileId,
+                assessment.AiModelVersionId
+            })
+            .HasPrincipalKey(profile => new
+            {
+                profile.Id,
+                profile.ModelVersionId
+            })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName(
+                "fk_harvest_readiness_assessments_threshold_same_model");
+
+        modelBuilder.Entity<HarvestReadinessCriterion>()
+            .HasOne<User>()
+            .WithMany()
+            .HasForeignKey(criterion => criterion.CreatedBy)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName(
+                "fk_harvest_readiness_criteria_users_created_by");
+
+        modelBuilder.Entity<HarvestReadinessCriterion>()
+            .HasOne<User>()
+            .WithMany()
+            .HasForeignKey(criterion => criterion.ValidatedBy)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName(
+                "fk_harvest_readiness_criteria_users_validated_by");
+
+        modelBuilder.Entity<HarvestReadinessCriterion>()
+            .HasOne<User>()
+            .WithMany()
+            .HasForeignKey(criterion => criterion.RetiredBy)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName(
+                "fk_harvest_readiness_criteria_users_retired_by");
+
+        modelBuilder.Entity<AiProcessingJob>()
+            .HasOne<HarvestReadinessCriterion>()
+            .WithMany()
+            .HasForeignKey(job => new
+            {
+                job.HarvestReadinessCriterionId,
+                job.HarvestReadinessCriterionVersionNumber
+            })
+            .HasPrincipalKey(criterion => new
+            {
+                criterion.Id,
+                criterion.VersionNumber
+            })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName(
+                "fk_ai_jobs_harvest_readiness_criterion_version");
+
         modelBuilder.Entity<FarmBaseMapVersion>()
             .HasOne<SurveyOrder>()
             .WithMany()

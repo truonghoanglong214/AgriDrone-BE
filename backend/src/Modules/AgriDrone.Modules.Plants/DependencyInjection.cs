@@ -97,6 +97,7 @@ public static class DependencyInjection
         services.AddScoped<IPlantReferenceSource, PlantReferenceSource>();
         services.AddScoped<IHealthLevelQueries, HealthLevelQuery>();
         services.AddScoped<IPlantConditionQueries, PlantConditionQueries>();
+        services.AddScoped<ITreatmentRecommendationQueries, TreatmentRecommendationQueries>();
         services.AddScoped<IPlantConditionRepository, PlantConditionRepository>();
         services.AddScoped<IPlantRepository, PlantRepository>();
         services.AddScoped<
