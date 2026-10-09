@@ -44,6 +44,7 @@ internal sealed class SurveyCatalogueQueries(SurveysDbContext context)
             .Where(price =>
                 serviceIds.Contains(price.SurveyServiceId) &&
                 price.PricePerPole != null &&
+                price.Currency == "VND" &&
                 price.EffectiveFrom <= evaluatedAt &&
                 (!price.EffectiveTo.HasValue ||
                  evaluatedAt < price.EffectiveTo.Value))
