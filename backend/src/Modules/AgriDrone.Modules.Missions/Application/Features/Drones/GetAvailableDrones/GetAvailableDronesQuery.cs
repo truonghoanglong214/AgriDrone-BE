@@ -7,6 +7,7 @@ namespace AgriDrone.Modules.Missions.Application
 public sealed record GetAvailableDronesQuery(
     Guid FarmId,
     DateTimeOffset StartAt,
-    DateTimeOffset EndAt)
+    DateTimeOffset EndAt,
+    AgriDrone.Modules.Missions.Domain.Missions.MissionPurpose? Purpose = null)
     : IRequest<
         Result<IReadOnlyList<AvailableDroneResponse>>>;

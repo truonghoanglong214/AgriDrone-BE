@@ -1,6 +1,7 @@
 ﻿using System.Text.Json;
 using AgriDrone.Modules.Missions.Application.Abstractions;
 using AgriDrone.Modules.Missions.Application.Abstractions.Missions;
+using AgriDrone.Modules.Missions.Domain.Drones;
 using AgriDrone.Modules.Missions.Domain.Missions;
 using AgriDrone.SharedInfrastructure.Auditing;
 using AgriDrone.SharedKernel.Application;
@@ -72,7 +73,9 @@ internal sealed class ScheduleMissionCommandHandler(
                 cancellationToken);
 
         var droneIsAvailable = availableDrones.Any(
-            drone => drone.Id == mission.DroneId);
+            drone => drone.Id == mission.DroneId &&
+                (mission.Purpose is not { } purpose ||
+                 DroneCapabilityPolicy.Supports(drone.Specifications, purpose)));
 
         if (!droneIsAvailable)
         {

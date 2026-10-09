@@ -42,6 +42,8 @@ public static class DependencyInjection
                 serviceProvider.GetRequiredService<DisabledObjectStorage>());
             services.AddSingleton<IObjectStorageWriter>(serviceProvider =>
                 serviceProvider.GetRequiredService<DisabledObjectStorage>());
+            services.AddSingleton<IMultipartObjectStorage>(serviceProvider =>
+                serviceProvider.GetRequiredService<DisabledObjectStorage>());
             return services;
         }
 
@@ -70,6 +72,7 @@ public static class DependencyInjection
             MinioObjectStorage>();
         services.AddSingleton<IObjectStorageWriter>(provider =>
             (MinioObjectStorage)provider.GetRequiredService<IObjectStorage>());
+        services.AddSingleton<IMultipartObjectStorage, MinioMultipartObjectStorage>();
 
         services
             .AddHealthChecks()

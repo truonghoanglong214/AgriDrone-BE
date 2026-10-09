@@ -19,17 +19,35 @@ public sealed class DroneMission : AggregateRoot
 
     public Guid FarmId { get; private set; }
 
-    public Guid ZoneId { get; private set; }
+    public Guid? ZoneId { get; private set; }
 
     public Guid? SurveyOrderId { get; private set; }
 
-    public MissionPurpose? MissionPurpose { get; private set; }
+    public MissionPurpose? Purpose { get; private set; }
+
+    public Guid? PreparationOperationId { get; private set; }
+
+    public Guid[] ScopeZoneIds { get; private set; } = [];
+
+    public bool RequiresBaselineCompletion { get; private set; }
+
+    public MissionPurpose? MissionPurpose => Purpose;
 
     public Guid? SourceMapVersionId { get; private set; }
 
     public Guid? PreflightConfirmedBy { get; private set; }
 
     public DateTimeOffset? PreflightConfirmedAt { get; private set; }
+
+    public Guid? PreflightOperationId { get; private set; }
+
+    public string? PreflightChecklistVersion { get; private set; }
+
+    public JsonDocument? PreflightChecklistAnswers { get; private set; }
+
+    public bool? PreflightSuitableForFlight { get; private set; }
+
+    public string? PreflightNotes { get; private set; }
 
     public uint Version { get; private set; }
 
@@ -39,7 +57,7 @@ public sealed class DroneMission : AggregateRoot
 
     public string MissionCode { get; private set; } = null!;
 
-    public MissionType MissionType { get; private set; }
+    public MissionType? MissionType { get; private set; }
 
     public MissionStatus Status { get; private set; }
 
@@ -131,7 +149,7 @@ public sealed class DroneMission : AggregateRoot
         ArgumentException.ThrowIfNullOrWhiteSpace(missionCode);
         ArgumentNullException.ThrowIfNull(flightParameters);
 
-        if (missionType == MissionType.Mapping &&
+        if (missionType == global::AgriDrone.Modules.Missions.Domain.Missions.MissionType.Mapping &&
             sourceMapVersionId.HasValue)
         {
             throw new ArgumentException(
@@ -159,7 +177,7 @@ public sealed class DroneMission : AggregateRoot
             DomainGuard.NotEmpty(sourceMapVersionId.Value);
         }
 
-        if (missionType == MissionType.HealthInspection &&
+        if (missionType == global::AgriDrone.Modules.Missions.Domain.Missions.MissionType.HealthInspection &&
             sourceMapVersionId is null)
         {
             throw new ArgumentException(
@@ -208,8 +226,8 @@ public sealed class DroneMission : AggregateRoot
 
         var missionType = surveyContext.Purpose ==
             global::AgriDrone.Modules.Missions.Domain.Missions.MissionPurpose.BaselineMapping
-            ? MissionType.Mapping
-            : MissionType.HealthInspection;
+            ? global::AgriDrone.Modules.Missions.Domain.Missions.MissionType.Mapping
+            : global::AgriDrone.Modules.Missions.Domain.Missions.MissionType.HealthInspection;
 
         var mission = Create(
             surveyContext.TenantId,
@@ -226,8 +244,123 @@ public sealed class DroneMission : AggregateRoot
             createdAt);
 
         mission.SurveyOrderId = surveyContext.SurveyOrderId;
-        mission.MissionPurpose = surveyContext.Purpose;
+        mission.Purpose = surveyContext.Purpose;
         return mission;
+    }
+
+    public static DroneMission CreateOrderBound(
+        Guid surveyOrderId,
+        Guid tenantId,
+        Guid farmId,
+        IReadOnlyCollection<Guid> scopeZoneIds,
+        Guid droneId,
+        Guid pilotUserId,
+        string missionCode,
+        MissionPurpose purpose,
+        Guid preparationOperationId,
+        Guid? sourceMapVersionId,
+        bool requiresBaselineCompletion,
+        JsonDocument flightParameters,
+        Guid createdBy,
+        DateTimeOffset createdAt)
+    {
+        DomainGuard.NotEmpty(surveyOrderId);
+        DomainGuard.NotEmpty(tenantId);
+        DomainGuard.NotEmpty(farmId);
+        DomainGuard.NotEmpty(droneId);
+        DomainGuard.NotEmpty(pilotUserId);
+        DomainGuard.NotEmpty(preparationOperationId);
+        DomainGuard.NotEmpty(createdBy);
+        DomainGuard.Utc(createdAt);
+        ArgumentException.ThrowIfNullOrWhiteSpace(missionCode);
+        ArgumentNullException.ThrowIfNull(scopeZoneIds);
+        ArgumentNullException.ThrowIfNull(flightParameters);
+
+        if (!Enum.IsDefined(purpose))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(purpose),
+                purpose,
+                "Mission purpose is invalid.");
+        }
+
+        var normalizedScope = scopeZoneIds
+            .Where(zoneId => zoneId != Guid.Empty)
+            .Distinct()
+            .ToArray();
+
+        if (normalizedScope.Length != scopeZoneIds.Count)
+        {
+            throw new ArgumentException(
+                "Mission scope cannot contain empty or duplicate Zone identifiers.",
+                nameof(scopeZoneIds));
+        }
+
+        if (purpose == global::AgriDrone.Modules.Missions.Domain.Missions.MissionPurpose.BaselineMapping &&
+            sourceMapVersionId.HasValue)
+        {
+            throw new ArgumentException(
+                "A baseline-mapping mission cannot use a source map version.",
+                nameof(sourceMapVersionId));
+        }
+
+        if (requiresBaselineCompletion &&
+            purpose == global::AgriDrone.Modules.Missions.Domain.Missions.MissionPurpose.BaselineMapping)
+        {
+            throw new ArgumentException(
+                "The baseline mission cannot depend on its own completion.",
+                nameof(requiresBaselineCompletion));
+        }
+
+        if (!requiresBaselineCompletion &&
+            purpose != global::AgriDrone.Modules.Missions.Domain.Missions.MissionPurpose.BaselineMapping &&
+            sourceMapVersionId is null)
+        {
+            throw new ArgumentException(
+                "A service mission requires either a current base map or a baseline prerequisite.",
+                nameof(sourceMapVersionId));
+        }
+
+        var normalizedCode = missionCode.Trim().ToUpperInvariant();
+        if (normalizedCode.Length > 50)
+        {
+            throw new ArgumentException(
+                "Mission code cannot exceed 50 characters.",
+                nameof(missionCode));
+        }
+
+        if (sourceMapVersionId.HasValue)
+        {
+            DomainGuard.NotEmpty(sourceMapVersionId.Value);
+        }
+
+        return new DroneMission
+        {
+            Id = Guid.NewGuid(),
+            SurveyOrderId = surveyOrderId,
+            TenantId = tenantId,
+            FarmId = farmId,
+            ZoneId = normalizedScope.FirstOrDefault() is var primaryZone &&
+                     primaryZone != Guid.Empty
+                ? primaryZone
+                : null,
+            ScopeZoneIds = normalizedScope,
+            DroneId = droneId,
+            PilotUserId = pilotUserId,
+            MissionCode = normalizedCode,
+            Purpose = purpose,
+            MissionType = null,
+            PreparationOperationId = preparationOperationId,
+            SourceMapVersionId = sourceMapVersionId,
+            RequiresBaselineCompletion = requiresBaselineCompletion,
+            Status = MissionStatus.Draft,
+            ProcessingStatus = ProcessingStatus.NotUploaded,
+            FlightParameters = JsonDocument.Parse(
+                flightParameters.RootElement.GetRawText()),
+            CreatedBy = createdBy,
+            CreatedAt = createdAt,
+            UpdatedAt = createdAt
+    };
     }
     public void Schedule(
     DateTimeOffset scheduledAt,
@@ -262,11 +395,136 @@ public sealed class DroneMission : AggregateRoot
 
         EnsureStatus(MissionStatus.Scheduled);
 
+        if (SurveyOrderId.HasValue &&
+            (PreflightConfirmedBy is null ||
+             PreflightConfirmedAt is null ||
+             PreflightSuitableForFlight != true))
+        {
+            throw new InvalidOperationException(
+                "An order-bound mission requires a suitable completed pre-flight checklist.");
+        }
+
         Status = MissionStatus.InFlight;
         StartedAt = startedAt;
-        PreflightConfirmedBy = actorId;
-        PreflightConfirmedAt = startedAt;
+        if (!SurveyOrderId.HasValue)
+        {
+            PreflightConfirmedBy = actorId;
+            PreflightConfirmedAt = startedAt;
+        }
         UpdatedAt = startedAt;
+    }
+
+    public void CompletePreflight(
+        Guid operationId,
+        string checklistVersion,
+        JsonDocument answers,
+        bool suitableForFlight,
+        string? notes,
+        Guid actorId,
+        DateTimeOffset completedAt)
+    {
+        DomainGuard.NotEmpty(operationId);
+        DomainGuard.NotEmpty(actorId);
+        DomainGuard.Utc(completedAt);
+        ArgumentException.ThrowIfNullOrWhiteSpace(checklistVersion);
+        ArgumentNullException.ThrowIfNull(answers);
+        EnsureStatus(MissionStatus.Scheduled);
+
+        if (PreflightOperationId.HasValue)
+        {
+            throw new InvalidOperationException(
+                "The completed pre-flight checklist snapshot is immutable.");
+        }
+
+        var normalizedVersion = checklistVersion.Trim();
+        if (normalizedVersion.Length > 100)
+        {
+            throw new ArgumentException(
+                "Checklist version cannot exceed 100 characters.",
+                nameof(checklistVersion));
+        }
+
+        if (answers.RootElement.ValueKind != JsonValueKind.Object)
+        {
+            throw new ArgumentException(
+                "Checklist answers must be a JSON object.",
+                nameof(answers));
+        }
+
+        PreflightOperationId = operationId;
+        PreflightChecklistVersion = normalizedVersion;
+        PreflightChecklistAnswers = JsonDocument.Parse(
+            answers.RootElement.GetRawText());
+        PreflightSuitableForFlight = suitableForFlight;
+        PreflightNotes = string.IsNullOrWhiteSpace(notes)
+            ? null
+            : notes.Trim();
+        PreflightConfirmedBy = actorId;
+        PreflightConfirmedAt = completedAt;
+        UpdatedAt = completedAt;
+    }
+
+    public void ReplaceStalePreflight(DateTimeOffset changedAt)
+    {
+        DomainGuard.Utc(changedAt);
+        EnsureStatus(MissionStatus.Scheduled);
+        if (!PreflightOperationId.HasValue)
+            throw new InvalidOperationException("No completed pre-flight checklist exists.");
+
+        PreflightConfirmedBy = null;
+        PreflightConfirmedAt = null;
+        PreflightOperationId = null;
+        PreflightChecklistVersion = null;
+        PreflightChecklistAnswers = null;
+        PreflightSuitableForFlight = null;
+        PreflightNotes = null;
+        UpdatedAt = changedAt;
+    }
+
+    public bool Reschedule(DateTimeOffset scheduledAt,
+        DateTimeOffset scheduledEndAt, DateTimeOffset changedAt)
+    {
+        DomainGuard.Utc(scheduledAt);
+        DomainGuard.Utc(scheduledEndAt);
+        DomainGuard.Utc(changedAt);
+        EnsureStatus(MissionStatus.Scheduled);
+        if (SurveyOrderId is null)
+            throw new InvalidOperationException("Only an order-bound mission can be rescheduled here.");
+        if (scheduledEndAt <= scheduledAt)
+            throw new ArgumentException("Scheduled end time must be after its start time.");
+        if (ScheduledAt == scheduledAt && ScheduledEndAt == scheduledEndAt)
+            return false;
+
+        if (PreflightOperationId.HasValue)
+            ReplaceStalePreflight(changedAt);
+        ScheduledAt = scheduledAt;
+        ScheduledEndAt = scheduledEndAt;
+        UpdatedAt = changedAt;
+        return true;
+    }
+
+    public bool MatchesPreflightOperation(
+        Guid operationId,
+        string checklistVersion,
+        JsonDocument answers,
+        bool suitableForFlight,
+        string? notes)
+    {
+        ArgumentNullException.ThrowIfNull(answers);
+        return PreflightOperationId == operationId &&
+               string.Equals(
+                   PreflightChecklistVersion,
+                   checklistVersion.Trim(),
+                   StringComparison.Ordinal) &&
+               PreflightSuitableForFlight == suitableForFlight &&
+               string.Equals(
+                   PreflightNotes,
+                   string.IsNullOrWhiteSpace(notes) ? null : notes.Trim(),
+                   StringComparison.Ordinal) &&
+               string.Equals(
+                   PreflightChecklistAnswers?.RootElement.GetRawText(),
+                   answers.RootElement.GetRawText(),
+                   StringComparison.Ordinal);
     }
 
     public void CompleteFlight(DateTimeOffset completedAt)
@@ -416,7 +674,8 @@ public sealed class DroneMission : AggregateRoot
                 "The mapping mission is already linked to a different published map.");
         }
 
-        if (MissionType != MissionType.Mapping ||
+        if ((MissionType != global::AgriDrone.Modules.Missions.Domain.Missions.MissionType.Mapping &&
+             Purpose != global::AgriDrone.Modules.Missions.Domain.Missions.MissionPurpose.BaselineMapping) ||
             Status != MissionStatus.AwaitingReview ||
             ProcessingStatus != ProcessingStatus.ReviewRequired)
         {
@@ -429,6 +688,78 @@ public sealed class DroneMission : AggregateRoot
         MapPublishedAt = publishedAt;
         Status = MissionStatus.Completed;
         ProcessingStatus = ProcessingStatus.Completed;
+        UpdatedAt = publishedAt;
+        return true;
+    }
+
+    public bool ApplyPublishedFarmBaseMap(
+        Guid surveyOrderId,
+        Guid publicationId,
+        Guid farmBaseMapVersionId,
+        DateTimeOffset publishedAt)
+    {
+        DomainGuard.NotEmpty(surveyOrderId);
+        DomainGuard.NotEmpty(publicationId);
+        DomainGuard.NotEmpty(farmBaseMapVersionId);
+        DomainGuard.Utc(publishedAt);
+
+        if (SurveyOrderId != surveyOrderId)
+        {
+            throw new InvalidOperationException(
+                "The published base map belongs to a different Survey Order.");
+        }
+
+        if (Purpose == global::AgriDrone.Modules.Missions.Domain.Missions.MissionPurpose.BaselineMapping)
+        {
+            if (PublishedMapVersionId == farmBaseMapVersionId &&
+                MappingApprovalId == publicationId &&
+                Status == MissionStatus.Completed)
+            {
+                return false;
+            }
+
+            if (Purpose != global::AgriDrone.Modules.Missions.Domain.Missions.MissionPurpose.BaselineMapping ||
+                Status != MissionStatus.AwaitingReview ||
+                ProcessingStatus != ProcessingStatus.ReviewRequired ||
+                PublishedMapVersionId.HasValue ||
+                MappingApprovalId.HasValue)
+            {
+                throw new InvalidOperationException(
+                    "Only a baseline mission awaiting review can accept a published farm base map.");
+            }
+
+            PublishedMapVersionId = farmBaseMapVersionId;
+            MappingApprovalId = publicationId;
+            MapPublishedAt = publishedAt;
+            Status = MissionStatus.Completed;
+            ProcessingStatus = ProcessingStatus.Completed;
+            UpdatedAt = publishedAt;
+            return true;
+        }
+
+        if (Purpose is not (
+                global::AgriDrone.Modules.Missions.Domain.Missions.MissionPurpose.PlantHealth or
+                global::AgriDrone.Modules.Missions.Domain.Missions.MissionPurpose.HarvestReadiness))
+        {
+            throw new InvalidOperationException(
+                "A published farm base map can only be applied to an order mission.");
+        }
+
+        if (!RequiresBaselineCompletion && SourceMapVersionId == farmBaseMapVersionId)
+        {
+            return false;
+        }
+
+        if (!RequiresBaselineCompletion ||
+            Status is not MissionStatus.Draft and not MissionStatus.Scheduled ||
+            SourceMapVersionId.HasValue)
+        {
+            throw new InvalidOperationException(
+                "The service mission is not waiting for this baseline publication.");
+        }
+
+        SourceMapVersionId = farmBaseMapVersionId;
+        RequiresBaselineCompletion = false;
         UpdatedAt = publishedAt;
         return true;
     }
@@ -467,7 +798,8 @@ public sealed class DroneMission : AggregateRoot
                 nameof(changedAt));
         }
 
-        if (MissionType != MissionType.HealthInspection)
+        if (MissionType != global::AgriDrone.Modules.Missions.Domain.Missions.MissionType.HealthInspection &&
+            Purpose != global::AgriDrone.Modules.Missions.Domain.Missions.MissionPurpose.PlantHealth)
         {
             throw new InvalidOperationException(
                 "Only a health-inspection mission can accept health review state.");

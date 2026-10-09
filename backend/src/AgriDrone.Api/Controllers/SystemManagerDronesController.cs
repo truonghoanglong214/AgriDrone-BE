@@ -23,7 +23,8 @@ public sealed class SystemManagerDronesController(ISender sender) : ControllerBa
             new GetAvailableDronesQuery(
                 farmId,
                 request.StartAt,
-                request.EndAt),
+                request.EndAt,
+                request.Purpose),
             cancellationToken);
         return result.ToHttpResult(HttpContext, Results.Ok);
     }

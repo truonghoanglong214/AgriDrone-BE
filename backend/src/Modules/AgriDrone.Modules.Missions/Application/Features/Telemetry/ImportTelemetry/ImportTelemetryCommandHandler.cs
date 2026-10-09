@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using AgriDrone.Modules.Missions.Application
     .Abstractions.Missions;
 using AgriDrone.Modules.Missions.Application
@@ -7,6 +7,7 @@ using AgriDrone.Modules.Missions.Domain.Missions;
 using AgriDrone.Modules.Missions.Domain.Telemetry;
 using AgriDrone.SharedInfrastructure.Auditing;
 using AgriDrone.SharedKernel.Application;
+using AgriDrone.SharedKernel.Application.Abstractions.Authorization;
 using AgriDrone.SharedKernel.Application
     .Abstractions.Execution;
 using MediatR;
@@ -19,6 +20,7 @@ internal sealed class ImportTelemetryCommandHandler(
     IMissionsUnitOfWork unitOfWork,
     IAuditWriter auditWriter,
     IExecutionContext executionContext,
+    ISystemManagerAccessService managerAccessService,
     TimeProvider timeProvider)
     : IRequestHandler<
         ImportTelemetryCommand,
@@ -33,6 +35,13 @@ internal sealed class ImportTelemetryCommandHandler(
             return Result.Failure<ImportTelemetryResult>(
                 MissionError.CurrentUserRequired());
         }
+
+        var access = await managerAccessService.ResolveFarmAccessAsync(
+            request.FarmId, cancellationToken);
+        if (!access.IsAllowed || access.TenantId != request.TenantId ||
+            access.FarmId != request.FarmId)
+            return Result.Failure<ImportTelemetryResult>(AppError.Forbidden(
+                "MissionTelemetry.FarmAccessDenied", "The manager is not assigned to this Farm."));
 
         var mission = await missionRepository.GetByIdAsync(
             request.MissionId,

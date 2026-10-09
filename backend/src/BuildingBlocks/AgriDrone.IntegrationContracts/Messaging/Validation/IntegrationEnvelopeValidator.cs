@@ -75,6 +75,16 @@ namespace AgriDrone.IntegrationContracts.Messaging.Validation
                 return "ActorId cannot be an empty GUID when provided.";
             }
 
+            if (envelope.CausationId == Guid.Empty)
+            {
+                return "CausationId cannot be an empty GUID when provided.";
+            }
+
+            if (envelope.SourceSystem is { Length: > IntegrationContractLimits.MaximumSourceSystemLength })
+            {
+                return $"SourceSystem cannot exceed {IntegrationContractLimits.MaximumSourceSystemLength} characters.";
+            }
+
             if (envelope.OccurredAt == default)
             {
                 return "OccurredAt is required.";

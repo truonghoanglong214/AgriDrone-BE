@@ -99,6 +99,10 @@ public sealed class MediaUploadSessionConfiguration
             .HasColumnType("text")
             .IsRequired();
 
+        builder.Property(session => session.MultipartUploadId)
+            .HasColumnName("multipart_upload_id")
+            .HasMaxLength(512);
+
         builder.Property(session => session.Status)
             .HasColumnName("status")
             .HasConversion<string>()

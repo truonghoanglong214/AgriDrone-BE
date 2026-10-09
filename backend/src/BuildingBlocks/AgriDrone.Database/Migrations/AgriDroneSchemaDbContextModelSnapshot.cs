@@ -1687,6 +1687,12 @@ namespace AgriDrone.Database.Migrations
                         .HasColumnName("updated_at")
                         .HasDefaultValueSql("NOW()");
 
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
                     b.Property<decimal?>("WeightKg")
                         .HasPrecision(8, 3)
                         .HasColumnType("numeric(8,3)")
@@ -1719,6 +1725,59 @@ namespace AgriDrone.Database.Migrations
 
                             t.HasCheckConstraint("ck_drones_weight_positive", "weight_kg IS NULL OR weight_kg > 0");
                         });
+                });
+
+            modelBuilder.Entity("AgriDrone.Modules.Missions.Domain.Drones.DroneMaintenanceRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset?>("ClosedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("closed_at");
+
+                    b.Property<Guid?>("ClosedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("closed_by");
+
+                    b.Property<int?>("ClosingStatus")
+                        .HasColumnType("system.drone_status")
+                        .HasColumnName("closing_status");
+
+                    b.Property<Guid>("DroneId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("drone_id");
+
+                    b.Property<DateTimeOffset?>("NextMaintenanceAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("next_maintenance_at");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("reason");
+
+                    b.Property<DateTimeOffset>("StartedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("started_at");
+
+                    b.Property<Guid?>("StartedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("started_by");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DroneId")
+                        .IsUnique()
+                        .HasDatabaseName("uq_drone_maintenance_open")
+                        .HasFilter("closed_at IS NULL");
+
+                    b.HasIndex("DroneId", "StartedAt")
+                        .HasDatabaseName("ix_drone_maintenance_history");
+
+                    b.ToTable("drone_maintenance_records", "mission");
                 });
 
             modelBuilder.Entity("AgriDrone.Modules.Missions.Domain.Media.MediaAsset", b =>
@@ -1938,6 +1997,11 @@ namespace AgriDrone.Database.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("mission_id");
 
+                    b.Property<string>("MultipartUploadId")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)")
+                        .HasColumnName("multipart_upload_id");
+
                     b.Property<Guid>("OperationId")
                         .HasColumnType("uuid")
                         .HasColumnName("operation_id");
@@ -2147,11 +2211,7 @@ namespace AgriDrone.Database.Migrations
                         .HasColumnType("character varying(50)")
                         .HasColumnName("mission_code");
 
-                    b.Property<int?>("MissionPurpose")
-                        .HasColumnType("system.mission_purpose")
-                        .HasColumnName("mission_purpose");
-
-                    b.Property<int>("MissionType")
+                    b.Property<int?>("MissionType")
                         .HasColumnType("system.mission_type")
                         .HasColumnName("mission_type");
 
@@ -2163,6 +2223,15 @@ namespace AgriDrone.Database.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("pilot_user_id");
 
+                    b.Property<JsonDocument>("PreflightChecklistAnswers")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("preflight_checklist_answers");
+
+                    b.Property<string>("PreflightChecklistVersion")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("preflight_checklist_version");
+
                     b.Property<DateTimeOffset?>("PreflightConfirmedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("preflight_confirmed_at");
@@ -2170,6 +2239,22 @@ namespace AgriDrone.Database.Migrations
                     b.Property<Guid?>("PreflightConfirmedBy")
                         .HasColumnType("uuid")
                         .HasColumnName("preflight_confirmed_by");
+
+                    b.Property<string>("PreflightNotes")
+                        .HasColumnType("text")
+                        .HasColumnName("preflight_notes");
+
+                    b.Property<Guid?>("PreflightOperationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("preflight_operation_id");
+
+                    b.Property<bool?>("PreflightSuitableForFlight")
+                        .HasColumnType("boolean")
+                        .HasColumnName("preflight_suitable_for_flight");
+
+                    b.Property<Guid?>("PreparationOperationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("preparation_operation_id");
 
                     b.Property<int>("ProcessingStatus")
                         .ValueGeneratedOnAdd()
@@ -2181,6 +2266,16 @@ namespace AgriDrone.Database.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("published_map_version_id");
 
+                    b.Property<int?>("Purpose")
+                        .HasColumnType("system.mission_purpose")
+                        .HasColumnName("mission_purpose");
+
+                    b.Property<bool>("RequiresBaselineCompletion")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("requires_baseline_completion");
+
                     b.Property<DateTimeOffset?>("ScheduledAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("scheduled_at");
@@ -2188,6 +2283,13 @@ namespace AgriDrone.Database.Migrations
                     b.Property<DateTimeOffset?>("ScheduledEndAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("scheduled_end_at");
+
+                    b.PrimitiveCollection<Guid[]>("ScopeZoneIds")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid[]")
+                        .HasColumnName("scope_zone_ids")
+                        .HasDefaultValueSql("ARRAY[]::uuid[]");
 
                     b.Property<Guid?>("SourceMapVersionId")
                         .HasColumnType("uuid")
@@ -2223,7 +2325,7 @@ namespace AgriDrone.Database.Migrations
                         .HasColumnType("xid")
                         .HasColumnName("xmin");
 
-                    b.Property<Guid>("ZoneId")
+                    b.Property<Guid?>("ZoneId")
                         .HasColumnType("uuid")
                         .HasColumnName("zone_id");
 
@@ -2255,6 +2357,11 @@ namespace AgriDrone.Database.Migrations
 
                     b.HasIndex("PilotUserId");
 
+                    b.HasIndex("PreflightOperationId")
+                        .IsUnique()
+                        .HasDatabaseName("uq_drone_missions_preflight_operation")
+                        .HasFilter("preflight_operation_id IS NOT NULL");
+
                     b.HasIndex("TenantId")
                         .HasDatabaseName("ix_drone_missions_tenant");
 
@@ -2275,8 +2382,14 @@ namespace AgriDrone.Database.Migrations
                     b.HasIndex("Status", "ProcessingStatus")
                         .HasDatabaseName("ix_drone_missions_status");
 
-                    b.HasIndex("SurveyOrderId", "MissionPurpose")
-                        .HasDatabaseName("ix_drone_missions_order_purpose");
+                    b.HasIndex("SurveyOrderId", "PreparationOperationId")
+                        .HasDatabaseName("ix_drone_missions_order_operation")
+                        .HasFilter("survey_order_id IS NOT NULL");
+
+                    b.HasIndex("SurveyOrderId", "Purpose")
+                        .IsUnique()
+                        .HasDatabaseName("uq_drone_missions_order_purpose")
+                        .HasFilter("survey_order_id IS NOT NULL");
 
                     b.HasIndex("ZoneId", "FarmId");
 
@@ -2289,17 +2402,83 @@ namespace AgriDrone.Database.Migrations
                         {
                             t.HasComment("Drone flight mission for mapping or health inspection, including route and processing state.");
 
+                            t.HasCheckConstraint("ck_drone_missions_baseline_dependency", "requires_baseline_completion = FALSE OR mission_purpose IN ('PLANT_HEALTH'::system.mission_purpose, 'HARVEST_READINESS'::system.mission_purpose)");
+
                             t.HasCheckConstraint("ck_drone_missions_detected_count", "detected_plant_count IS NULL OR detected_plant_count >= 0");
 
                             t.HasCheckConstraint("ck_drone_missions_health_review_counts", "health_review_total >= 0 AND health_review_pending >= 0 AND health_review_awaiting_field_verification >= 0 AND health_review_resolved >= 0 AND health_review_pending + health_review_awaiting_field_verification + health_review_resolved = health_review_total");
 
+                            t.HasCheckConstraint("ck_drone_missions_order_binding", "(survey_order_id IS NULL AND mission_purpose IS NULL AND preparation_operation_id IS NULL) OR (survey_order_id IS NOT NULL AND mission_purpose IS NOT NULL AND preparation_operation_id IS NOT NULL)");
+
                             t.HasCheckConstraint("ck_drone_missions_preflight_confirmation", "(preflight_confirmed_by IS NULL AND preflight_confirmed_at IS NULL) OR (preflight_confirmed_by IS NOT NULL AND preflight_confirmed_at IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_drone_missions_preflight_snapshot", "(preflight_operation_id IS NULL AND preflight_checklist_version IS NULL AND preflight_checklist_answers IS NULL AND preflight_suitable_for_flight IS NULL) OR (preflight_operation_id IS NOT NULL AND preflight_checklist_version IS NOT NULL AND preflight_checklist_answers IS NOT NULL AND preflight_suitable_for_flight IS NOT NULL AND preflight_confirmed_by IS NOT NULL AND preflight_confirmed_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_drone_missions_schedule_time", "scheduled_end_at IS NULL OR scheduled_at IS NULL OR scheduled_end_at > scheduled_at");
 
-                            t.HasCheckConstraint("ck_drone_missions_source_map", "(mission_type = 'MAPPING'::system.mission_type AND source_map_version_id IS NULL) OR (mission_type = 'HEALTH_INSPECTION'::system.mission_type AND source_map_version_id IS NOT NULL)");
+                            t.HasCheckConstraint("ck_drone_missions_source_map", "(mission_purpose IS NULL AND ((mission_type = 'MAPPING'::system.mission_type AND source_map_version_id IS NULL) OR (mission_type = 'HEALTH_INSPECTION'::system.mission_type AND source_map_version_id IS NOT NULL))) OR (mission_purpose = 'BASELINE_MAPPING'::system.mission_purpose AND source_map_version_id IS NULL AND requires_baseline_completion = FALSE) OR (mission_purpose IN ('PLANT_HEALTH'::system.mission_purpose, 'HARVEST_READINESS'::system.mission_purpose) AND ((requires_baseline_completion = TRUE AND source_map_version_id IS NULL) OR (requires_baseline_completion = FALSE AND source_map_version_id IS NOT NULL)))");
 
                             t.HasCheckConstraint("ck_drone_missions_time", "ended_at IS NULL OR started_at IS NULL OR ended_at >= started_at");
+                        });
+                });
+
+            modelBuilder.Entity("AgriDrone.Modules.Missions.Domain.Missions.MissionFieldNote", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<Guid>("FarmId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("farm_id");
+
+                    b.Property<Guid>("MissionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("mission_id");
+
+                    b.Property<DateTimeOffset>("ObservedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("observed_at");
+
+                    b.Property<Guid>("OperationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("operation_id");
+
+                    b.Property<DateTimeOffset>("ReceivedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("received_at");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("text");
+
+                    b.HasKey("Id")
+                        .HasName("pk_mission_field_notes");
+
+                    b.HasIndex("MissionId", "FarmId");
+
+                    b.HasIndex("MissionId", "ObservedAt")
+                        .HasDatabaseName("ix_mission_field_notes_timeline");
+
+                    b.HasIndex("MissionId", "OperationId")
+                        .IsUnique()
+                        .HasDatabaseName("uq_mission_field_notes_operation");
+
+                    b.HasIndex("MissionId", "TenantId");
+
+                    b.ToTable("mission_field_notes", "mission", t =>
+                        {
+                            t.HasCheckConstraint("ck_mission_field_notes_text", "length(trim(text)) > 0");
                         });
                 });
 
@@ -7005,6 +7184,15 @@ namespace AgriDrone.Database.Migrations
                     b.Navigation("FarmMembership");
                 });
 
+            modelBuilder.Entity("AgriDrone.Modules.Missions.Domain.Drones.DroneMaintenanceRecord", b =>
+                {
+                    b.HasOne("AgriDrone.Modules.Missions.Domain.Drones.Drone", null)
+                        .WithMany()
+                        .HasForeignKey("DroneId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("AgriDrone.Modules.Missions.Domain.Media.MediaAsset", b =>
                 {
                     b.HasOne("AgriDrone.Modules.Identity.Domain.Tenants.Tenant", null)
@@ -7103,7 +7291,6 @@ namespace AgriDrone.Database.Migrations
                         .HasForeignKey("ZoneId", "FarmId")
                         .HasPrincipalKey("Id", "FarmId")
                         .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
                         .HasConstraintName("fk_drone_missions_zone_same_farm");
 
                     b.HasOne("AgriDrone.Modules.Surveys.Domain.SurveyOrder", null)
@@ -7114,6 +7301,25 @@ namespace AgriDrone.Database.Migrations
                         .HasConstraintName("fk_drone_missions_orders_same_tenant_farm");
 
                     b.Navigation("Drone");
+                });
+
+            modelBuilder.Entity("AgriDrone.Modules.Missions.Domain.Missions.MissionFieldNote", b =>
+                {
+                    b.HasOne("AgriDrone.Modules.Missions.Domain.Missions.DroneMission", null)
+                        .WithMany()
+                        .HasForeignKey("MissionId", "FarmId")
+                        .HasPrincipalKey("Id", "FarmId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_mission_field_notes_mission_farm");
+
+                    b.HasOne("AgriDrone.Modules.Missions.Domain.Missions.DroneMission", null)
+                        .WithMany()
+                        .HasForeignKey("MissionId", "TenantId")
+                        .HasPrincipalKey("Id", "TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_mission_field_notes_mission_tenant");
                 });
 
             modelBuilder.Entity("AgriDrone.Modules.Missions.Domain.Missions.MissionPreflightChecklist", b =>

@@ -1,4 +1,4 @@
-﻿namespace AgriDrone.Modules.Missions.Domain.Drones;
+namespace AgriDrone.Modules.Missions.Domain.Drones;
 
 public interface IDroneRepository
 {

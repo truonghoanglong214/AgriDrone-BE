@@ -18,4 +18,5 @@ public sealed record RegisterDroneResponse(
     decimal? WeightKg,
     DroneStatus Status,
     string? Notes,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    uint Version);

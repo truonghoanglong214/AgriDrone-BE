@@ -18,10 +18,10 @@ internal static class FinalizeMissionUploadError
             "Mission still has pending or verifying upload sessions.");
 
     public static AppError RequiredMediaMissing(
-        MissionType missionType) =>
+        string missionKind) =>
         AppError.Conflict(
             "MissionUpload.RequiredMediaMissing",
-            $"Mission type '{missionType}' does not have " +
+            $"Mission kind '{missionKind}' does not have " +
             "the required verified input media.");
 
     public static AppError TelemetryMissing() =>

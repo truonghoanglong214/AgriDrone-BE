@@ -5,6 +5,7 @@
 	<ItemGroup>
 		<FrameworkReference Include="Microsoft.AspNetCore.App" />
 		<PackageReference Include="Minio" />
+		<PackageReference Include="AWSSDK.S3" />
 	</ItemGroup>
 
 	<ItemGroup>

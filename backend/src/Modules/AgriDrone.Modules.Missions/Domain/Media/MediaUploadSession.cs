@@ -34,6 +34,8 @@ public sealed class MediaUploadSession : Entity
 
     public string StorageUri { get; private set; } = null!;
 
+    public string? MultipartUploadId { get; private set; }
+
     public MediaUploadSessionStatus Status { get; private set; }
 
     public DateTimeOffset CreatedAt { get; private set; }
@@ -219,6 +221,20 @@ public sealed class MediaUploadSession : Entity
             changedAt);
 
         ExpiresAt = expiresAt;
+        UpdatedAt = changedAt;
+    }
+
+    public void BeginMultipart(string uploadId, DateTimeOffset changedAt)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(uploadId);
+        DomainGuard.Utc(changedAt);
+        if (Status != MediaUploadSessionStatus.Pending || IsExpiredAt(changedAt))
+            throw new InvalidOperationException("Multipart upload requires an active pending session.");
+        if (MultipartUploadId is not null)
+            throw new InvalidOperationException("Multipart upload has already started.");
+        if (uploadId.Length > 512)
+            throw new ArgumentOutOfRangeException(nameof(uploadId));
+        MultipartUploadId = uploadId;
         UpdatedAt = changedAt;
     }
 

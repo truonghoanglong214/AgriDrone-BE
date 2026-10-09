@@ -1,12 +1,14 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using AgriDrone.Modules.Missions.Application
     .Abstractions.Media;
 using AgriDrone.Modules.Missions.Application
     .Abstractions.Missions;
+using AgriDrone.Modules.Missions.Application.Features.Media.StartMultipartUpload;
 using AgriDrone.Modules.Missions.Domain.Media;
 using AgriDrone.Modules.Missions.Domain.Missions;
 using AgriDrone.SharedInfrastructure.Auditing;
 using AgriDrone.SharedKernel.Application;
+using AgriDrone.SharedKernel.Application.Abstractions.Authorization;
 using AgriDrone.SharedKernel.Application
     .Abstractions.Execution;
 using MediatR;
@@ -19,10 +21,12 @@ internal sealed class CompleteUploadSessionCommandHandler(
     IMediaUploadSessionRepository uploadSessionRepository,
     IMissionMediaRepository missionMediaRepository,
     IObjectStorage objectStorage,
+    IMultipartObjectStorage multipartStorage,
     IChecksumCalculator checksumCalculator,
     IMissionsUnitOfWork unitOfWork,
     IAuditWriter auditWriter,
     IExecutionContext executionContext,
+    ISystemManagerAccessService managerAccessService,
     TimeProvider timeProvider)
     : IRequestHandler<
         CompleteUploadSessionCommand,
@@ -37,6 +41,13 @@ internal sealed class CompleteUploadSessionCommandHandler(
             return Result.Failure<CompleteUploadSessionResult>(
                 MissionError.CurrentUserRequired());
         }
+
+        var access = await managerAccessService.ResolveFarmAccessAsync(
+            request.FarmId, cancellationToken);
+        if (!access.IsAllowed || access.TenantId != request.TenantId ||
+            access.FarmId != request.FarmId)
+            return Result.Failure<CompleteUploadSessionResult>(AppError.Forbidden(
+                "MediaUpload.FarmAccessDenied", "The manager is not assigned to this Farm."));
 
         var mission = await missionRepository.GetByIdAsync(
             request.MissionId,
@@ -100,6 +111,20 @@ internal sealed class CompleteUploadSessionCommandHandler(
             return await SaveFailureAsync(
                 CompleteUploadSessionError.SessionExpired(),
                 cancellationToken);
+        }
+
+        if (session.MultipartUploadId is not null &&
+            await objectStorage.GetInfoAsync(session.StorageUri, cancellationToken) is null)
+        {
+            var parts = (await multipartStorage.ListPartsAsync(session.StorageUri,
+                    session.MultipartUploadId, cancellationToken))
+                .OrderBy(part => part.Number).ToArray();
+            if (!MultipartUploadPolicy.HasExpectedParts(session.FileSizeBytes, parts))
+                return Result.Failure<CompleteUploadSessionResult>(AppError.Validation(
+                    "MediaUpload.IncompleteMultipart",
+                    "Upload all parts with the expected sizes before completion."));
+            await multipartStorage.CompleteAsync(session.StorageUri,
+                session.MultipartUploadId, parts, cancellationToken);
         }
 
         session.BeginVerification(now);

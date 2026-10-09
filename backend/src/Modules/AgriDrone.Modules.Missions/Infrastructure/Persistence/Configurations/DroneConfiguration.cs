@@ -117,6 +117,9 @@ public sealed class DroneConfiguration : IEntityTypeConfiguration<Drone>
             .HasDefaultValueSql("NOW()")
             .IsRequired();
 
+        builder.Property(drone => drone.Version)
+            .IsRowVersion();
+
         builder.Property(drone => drone.DeletedAt)
             .HasColumnName("deleted_at")
             .HasColumnType("timestamp with time zone");
