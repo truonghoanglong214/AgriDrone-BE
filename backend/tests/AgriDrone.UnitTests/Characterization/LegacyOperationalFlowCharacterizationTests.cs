@@ -76,7 +76,7 @@ public sealed class LegacyOperationalFlowCharacterizationTests
 
     [Fact]
     [Trait("Category", "BePlanPhase0Characterization")]
-    public void MissionCurrentlyStartsWithoutSurveyOrderOrPaymentGate()
+    public void LegacyMissionRemainsReadableAndCanCompleteDrainWindowFlow()
     {
         using var flightParameters = JsonDocument.Parse("{}");
         var actorId = Guid.NewGuid();
@@ -102,6 +102,8 @@ public sealed class LegacyOperationalFlowCharacterizationTests
 
         Assert.Null(mission.SurveyOrderId);
         Assert.Null(mission.MissionPurpose);
+        Assert.Null(mission.Purpose);
+        Assert.Equal(MissionType.Mapping, mission.MissionType);
         Assert.Equal(MissionStatus.InFlight, mission.Status);
         Assert.Equal(actorId, mission.PreflightConfirmedBy);
         Assert.Equal(Now.AddHours(1), mission.StartedAt);

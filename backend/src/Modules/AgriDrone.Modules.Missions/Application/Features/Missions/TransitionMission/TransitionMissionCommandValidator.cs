@@ -26,7 +26,7 @@ internal sealed class TransitionMissionCommandValidator
                     MissionStatus.FlightFailed or
                     MissionStatus.Cancelled)
             .WithMessage(
-                "UC02 only supports InFlight, " +
+                "UC03 only supports InFlight, " +
                 "FlightCompleted, FlightFailed and Cancelled.");
 
         RuleFor(command => command.Reason)

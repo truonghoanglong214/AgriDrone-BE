@@ -3,7 +3,6 @@ using AgriDrone.Modules.Missions.Application.Features.Telemetry.NormalizeTelemet
 using AgriDrone.SharedInfrastructure.Authorization;
 using AgriDrone.SharedInfrastructure.Http;
 using AgriDrone.SharedKernel.Application.Abstractions.Authorization;
-using AgriDrone.SharedKernel.Application.Abstractions.Execution;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -15,14 +14,14 @@ namespace AgriDrone.Api.Controllers;
 [Route("api/missions/{missionId:guid}/farms/{farmId:guid}/telemetry")]
 public sealed class MissionTelemetryNormalizationController(
     ISender sender,
-    IAuthorizationService authorizationService,
-    IExecutionContext executionContext)
+    ISystemManagerAccessService managerAccessService)
     : ControllerBase
 {
     /// <summary>
     /// Giải mã Blackbox TXT/BBL thành các đoạn telemetry để kiểm tra trước import.
     /// </summary>
     [HttpPost("normalize")]
+    [Authorize(Policy = AccessAuthorizationPolicies.SystemManager)]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(21L * 1024 * 1024)]
     [RequestFormLimits(MultipartBodyLengthLimit = 20L * 1024 * 1024)]
@@ -32,15 +31,8 @@ public sealed class MissionTelemetryNormalizationController(
         [FromForm] NormalizeTelemetryLogRequest request,
         CancellationToken cancellationToken)
     {
-        if (executionContext.TenantId is not Guid tenantId)
-            return Results.Unauthorized();
-
-        var access = await authorizationService.AuthorizeAsync(
-            User,
-            new FarmAccessTarget(tenantId, farmId),
-            AccessAuthorizationPolicies.FarmManage);
-
-        if (!access.Succeeded)
+        var access = await managerAccessService.ResolveFarmAccessAsync(farmId, cancellationToken);
+        if (!access.IsAllowed || access.TenantId is null || access.FarmId != farmId)
             return Results.Forbid();
 
         if (request.File is null || request.File.Length == 0)

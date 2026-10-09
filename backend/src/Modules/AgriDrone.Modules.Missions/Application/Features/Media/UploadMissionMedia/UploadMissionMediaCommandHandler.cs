@@ -6,6 +6,7 @@ using AgriDrone.Modules.Missions.Application.Features.Media.CreateUploadSession;
 using AgriDrone.Modules.Missions.Domain.Media;
 using AgriDrone.Modules.Missions.Domain.Missions;
 using AgriDrone.SharedKernel.Application;
+using AgriDrone.SharedKernel.Application.Abstractions.Authorization;
 using AgriDrone.SharedKernel.Application.Abstractions.Execution;
 using MediatR;
 
@@ -15,6 +16,7 @@ internal sealed class UploadMissionMediaCommandHandler(
     IDroneMissionRepository missions,
     IMediaUploadSessionRepository sessions,
     IObjectStorageWriter writer,
+    ISystemManagerAccessService managerAccessService,
     IExecutionContext executionContext,
     ISender sender)
     : IRequestHandler<UploadMissionMediaCommand, Result<CompleteUploadSessionResult>>
@@ -22,8 +24,20 @@ internal sealed class UploadMissionMediaCommandHandler(
     public async Task<Result<CompleteUploadSessionResult>> Handle(
         UploadMissionMediaCommand request, CancellationToken cancellationToken)
     {
-        if (executionContext.TenantId != request.TenantId || executionContext.ActorId is null)
-            return Result.Failure<CompleteUploadSessionResult>(MissionError.CurrentTenantRequired());
+        if (executionContext.ActorId is null)
+            return Result.Failure<CompleteUploadSessionResult>(MissionError.CurrentUserRequired());
+
+        var access = await managerAccessService.ResolveFarmAccessAsync(
+            request.FarmId,
+            cancellationToken);
+        if (!access.IsAllowed || access.TenantId != request.TenantId ||
+            access.FarmId != request.FarmId)
+        {
+            return Result.Failure<CompleteUploadSessionResult>(
+                AppError.Forbidden(
+                    "MediaUpload.FarmAccessDenied",
+                    "The current SystemManager is not assigned and flight-qualified for this Farm."));
+        }
 
         var mission = await missions.GetByIdAsync(request.MissionId,
             request.TenantId, request.FarmId, cancellationToken);

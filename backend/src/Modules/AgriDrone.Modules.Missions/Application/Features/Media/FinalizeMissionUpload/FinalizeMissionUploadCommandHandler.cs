@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using AgriDrone.Modules.Missions.Application
     .Abstractions.Media;
 using AgriDrone.Modules.Missions.Application
@@ -6,6 +6,7 @@ using AgriDrone.Modules.Missions.Application
 using AgriDrone.Modules.Missions.Domain.Missions;
 using AgriDrone.SharedInfrastructure.Auditing;
 using AgriDrone.SharedKernel.Application;
+using AgriDrone.SharedKernel.Application.Abstractions.Authorization;
 using AgriDrone.SharedKernel.Application
     .Abstractions.Execution;
 using MediatR;
@@ -19,6 +20,7 @@ internal sealed class FinalizeMissionUploadCommandHandler(
     IMissionsUnitOfWork unitOfWork,
     IAuditWriter auditWriter,
     IExecutionContext executionContext,
+    ISystemManagerAccessService managerAccessService,
     TimeProvider timeProvider)
     : IRequestHandler<
         FinalizeMissionUploadCommand,
@@ -33,6 +35,13 @@ internal sealed class FinalizeMissionUploadCommandHandler(
             return Result.Failure<FinalizeMissionUploadResult>(
                 MissionError.CurrentUserRequired());
         }
+
+        var access = await managerAccessService.ResolveFarmAccessAsync(
+            request.FarmId, cancellationToken);
+        if (!access.IsAllowed || access.TenantId != request.TenantId ||
+            access.FarmId != request.FarmId)
+            return Result.Failure<FinalizeMissionUploadResult>(AppError.Forbidden(
+                "MissionUpload.FarmAccessDenied", "The manager is not assigned to this Farm."));
 
         var mission = await missionRepository.GetByIdAsync(
             request.MissionId,
@@ -82,7 +91,7 @@ internal sealed class FinalizeMissionUploadCommandHandler(
 
         var acceptedMediaCount =
         MissionUploadReadinessPolicy.GetAcceptedMediaCount(
-            mission.MissionType,
+            mission,
             readiness);
 
         var previousStatus = mission.Status;

@@ -1,4 +1,4 @@
-﻿using AgriDrone.Modules.Missions.Application.Abstractions.Missions;
+using AgriDrone.Modules.Missions.Application.Abstractions.Missions;
 using AgriDrone.Modules.Missions.Application.Abstractions.Telemetry;
 using AgriDrone.Modules.Missions.Domain.Missions;
 using AgriDrone.SharedKernel.Application;

@@ -6,7 +6,6 @@ using AgriDrone.SharedInfrastructure.Authorization;
 using AgriDrone.SharedInfrastructure.Http;
 using AgriDrone.SharedKernel.Application
     .Abstractions.Authorization;
-using AgriDrone.SharedKernel.Application.Abstractions.Execution;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -17,8 +16,7 @@ namespace AgriDrone.Api.Controllers;
 [Authorize]
 public sealed class MissionUploadController(
     ISender sender,
-    IAuthorizationService authorizationService,
-    IExecutionContext executionContext)
+    ISystemManagerAccessService managerAccessService)
     : ControllerBase
 {
     /// <summary>Hoàn tất giai đoạn upload của Mission.</summary>
@@ -29,26 +27,15 @@ public sealed class MissionUploadController(
     /// sang ReadyForProcessing để bắt đầu xử lý AI.
     /// </remarks>
     [HttpPost("api/missions/{missionId:guid}/farms/{farmId:guid}/upload/finalize")]
+    [Authorize(Policy = AccessAuthorizationPolicies.SystemManager)]
     public async Task<IResult> FinalizeMissionUpload(
         [FromRoute] Guid farmId,
         Guid missionId,
         [FromBody] FinalizeMissionUploadRequest request,
         CancellationToken cancellationToken)
     {
-        if (executionContext.TenantId is not Guid tenantId)
-        {
-            return Results.Unauthorized();
-        }
-
-        var authorization =
-            await authorizationService.AuthorizeAsync(
-                User,
-                new FarmAccessTarget(
-                    tenantId,
-                    farmId),
-                AccessAuthorizationPolicies.FarmManage);
-
-        if (!authorization.Succeeded)
+        var access = await managerAccessService.ResolveFarmAccessAsync(farmId, cancellationToken);
+        if (!access.IsAllowed || access.TenantId is not Guid tenantId || access.FarmId != farmId)
         {
             return Results.Forbid();
         }
@@ -76,6 +63,7 @@ public sealed class MissionUploadController(
 
     /// <summary>Kiểm tra điều kiện hoàn tất upload của Mission.</summary>
     [HttpGet("api/missions/{missionId:guid}/farms/{farmId:guid}/upload/readiness")]
+    [Authorize(Policy = AccessAuthorizationPolicies.SystemManager)]
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     [ProducesResponseType(
         typeof(MissionUploadReadinessResponse),
@@ -85,15 +73,8 @@ public sealed class MissionUploadController(
         [FromRoute] Guid missionId,
         CancellationToken cancellationToken)
     {
-        if (executionContext.TenantId is not Guid tenantId)
-            return Results.Unauthorized();
-
-        var authorization = await authorizationService.AuthorizeAsync(
-            User,
-            new FarmAccessTarget(tenantId, farmId),
-            AccessAuthorizationPolicies.FarmManage);
-
-        if (!authorization.Succeeded)
+        var access = await managerAccessService.ResolveFarmAccessAsync(farmId, cancellationToken);
+        if (!access.IsAllowed || access.TenantId is null || access.FarmId != farmId)
             return Results.Forbid();
 
         var result = await sender.Send(

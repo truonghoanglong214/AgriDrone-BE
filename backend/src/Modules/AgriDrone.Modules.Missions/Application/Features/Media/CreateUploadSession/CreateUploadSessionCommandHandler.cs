@@ -6,6 +6,7 @@ using AgriDrone.Modules.Missions.Domain.Media;
 using AgriDrone.Modules.Missions.Domain.Missions;
 using AgriDrone.SharedInfrastructure.Auditing;
 using AgriDrone.SharedKernel.Application;
+using AgriDrone.SharedKernel.Application.Abstractions.Authorization;
 using AgriDrone.SharedKernel.Application.Abstractions.Execution;
 using MediatR;
 
@@ -19,6 +20,7 @@ internal sealed class CreateUploadSessionCommandHandler(
     IMissionsUnitOfWork unitOfWork,
     IAuditWriter auditWriter,
     IExecutionContext executionContext,
+    ISystemManagerAccessService managerAccessService,
     TimeProvider timeProvider)
     : IRequestHandler<
         CreateUploadSessionCommand,
@@ -33,6 +35,13 @@ internal sealed class CreateUploadSessionCommandHandler(
             return Result.Failure<CreateUploadSessionResult>(
                 MissionError.CurrentUserRequired());
         }
+
+        var access = await managerAccessService.ResolveFarmAccessAsync(
+            request.FarmId, cancellationToken);
+        if (!access.IsAllowed || access.TenantId != request.TenantId ||
+            access.FarmId != request.FarmId)
+            return Result.Failure<CreateUploadSessionResult>(AppError.Forbidden(
+                "MediaUpload.FarmAccessDenied", "The manager is not assigned to this Farm."));
 
         var mission = await missionRepository.GetByIdAsync(
             request.MissionId,

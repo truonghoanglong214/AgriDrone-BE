@@ -2,4 +2,5 @@
 
 public sealed record GetAvailableDronesRequest(
     DateTimeOffset StartAt,
-    DateTimeOffset EndAt);
+    DateTimeOffset EndAt,
+    AgriDrone.Modules.Missions.Domain.Missions.MissionPurpose? Purpose = null);

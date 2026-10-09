@@ -29,6 +29,15 @@ internal static class MissionResponseMapper
             mission.Notes,
             mission.Version,
             mission.CreatedAt,
-            mission.UpdatedAt);
+            mission.UpdatedAt,
+            mission.SurveyOrderId,
+            mission.Purpose,
+            mission.ScopeZoneIds,
+            mission.RequiresBaselineCompletion,
+            mission.PreflightOperationId,
+            mission.PreflightChecklistVersion,
+            mission.PreflightChecklistAnswers?.RootElement.Clone(),
+            mission.PreflightSuitableForFlight,
+            mission.PreflightNotes);
     }
 }

@@ -1,5 +1,5 @@
-using AgriDrone.Modules.Missions.Application.Abstractions.Media;
 using AgriDrone.Modules.Missions.Application.Abstractions.Missions;
+using AgriDrone.Modules.Missions.Application.Abstractions.Media;
 using AgriDrone.Modules.Missions.Application.Abstractions.Telemetry;
 using AgriDrone.Modules.Missions.Domain.Drones;
 using AgriDrone.Modules.Missions.Domain.Media;
@@ -27,6 +27,9 @@ internal sealed class MissionsDbContext(
     private const string MissionFarmCodeConstraint =
         "uq_drone_missions_farm_code";
 
+    private const string MissionOrderPurposeConstraint =
+        "uq_drone_missions_order_purpose";
+
     private const string TelemetryImportOperationConstraint =
     "uq_telemetry_imports_operation";
 
@@ -39,10 +42,18 @@ internal sealed class MissionsDbContext(
     private const string TelemetryRecordedAtConstraint =
         "uq_mission_telemetry_mission_recorded_at";
 
+    private const string MissionFieldNoteOperationConstraint =
+        "uq_mission_field_notes_operation";
+
     public DbSet<Drone> Drones => Set<Drone>();
+
+    public DbSet<DroneMaintenanceRecord> DroneMaintenanceRecords =>
+        Set<DroneMaintenanceRecord>();
 
     public DbSet<DroneMission> DroneMissions =>
         Set<DroneMission>();
+
+    public DbSet<MissionFieldNote> MissionFieldNotes => Set<MissionFieldNote>();
 
     public DbSet<PreflightChecklistDefinition> PreflightChecklistDefinitions =>
         Set<PreflightChecklistDefinition>();
@@ -109,6 +120,20 @@ internal sealed class MissionsDbContext(
             throw new MissionConcurrencyException(
                 exception);
         }
+        catch (DbUpdateConcurrencyException exception)
+            when (exception.Entries.Any(entry => entry.Entity is Drone))
+        {
+            throw new DroneConcurrencyException(exception);
+        }
+        catch (DbUpdateException exception)
+            when (exception.InnerException is PostgresException
+            {
+                SqlState: PostgresErrorCodes.UniqueViolation,
+                ConstraintName: "uq_drone_maintenance_open"
+            })
+        {
+            throw new DroneMaintenanceConflictException(exception);
+        }
         catch (DbUpdateException exception)
             when (exception.InnerException is PostgresException
             {
@@ -130,6 +155,24 @@ internal sealed class MissionsDbContext(
         {
             throw new MissionCodeConflictException(exception);
         }
+        catch (DbUpdateException exception)
+            when (exception.InnerException is PostgresException
+            {
+                SqlState: PostgresErrorCodes.UniqueViolation,
+                ConstraintName: MissionOrderPurposeConstraint
+            })
+        {
+            throw new MissionSetConflictException(exception);
+        }
+        catch (DbUpdateException exception)
+            when (exception.InnerException is PostgresException
+            {
+                SqlState: PostgresErrorCodes.UniqueViolation,
+                ConstraintName: MissionFieldNoteOperationConstraint
+            })
+        {
+            throw new MissionFieldNoteConflictException(exception);
+        }
         catch (DbUpdateConcurrencyException exception)
             when (exception.Entries.Any(
         entry => entry.Entity is MediaUploadSession))
@@ -144,6 +187,21 @@ internal sealed class MissionsDbContext(
             })
         {
             throw new UploadOperationConflictException(exception);
+        }
+
+        catch (DbUpdateException exception)
+            when (exception.InnerException is PostgresException
+            {
+                SqlState: PostgresErrorCodes.UniqueViolation,
+                ConstraintName:
+                    "uq_preflight_definitions_code_version" or
+                    "uq_preflight_definitions_one_active" or
+                    "uq_mission_preflight_client_operation" or
+                    "uq_mission_preflight_one_completed" or
+                    "uq_mission_preflight_definition"
+            })
+        {
+            throw new PreflightChecklistConflictException(exception);
         }
 
         catch (DbUpdateException exception)

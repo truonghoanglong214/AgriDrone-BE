@@ -1,4 +1,4 @@
-﻿using AgriDrone.Modules.Missions.Domain.Missions;
+using AgriDrone.Modules.Missions.Domain.Missions;
 using AgriDrone.Modules.Missions.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -33,6 +33,17 @@ internal sealed class DroneMissionRepository(
                 mission.FarmId == farmId &&
                 mission.MissionCode == missionCode,
             cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<DroneMission>> GetBySurveyOrderIdAsync(
+        Guid surveyOrderId,
+        CancellationToken cancellationToken = default)
+    {
+        return await dbContext.DroneMissions
+            .AsNoTracking()
+            .Where(mission => mission.SurveyOrderId == surveyOrderId)
+            .OrderBy(mission => mission.Purpose)
+            .ToListAsync(cancellationToken);
     }
 
     public void Add(DroneMission mission)

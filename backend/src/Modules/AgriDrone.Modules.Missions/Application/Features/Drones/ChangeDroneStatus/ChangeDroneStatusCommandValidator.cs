@@ -12,6 +12,10 @@ internal sealed class ChangeDroneStatusCommandValidator
         RuleFor(command => command.DroneId)
             .NotEmpty();
 
+        RuleFor(command => command.ExpectedVersion)
+            .GreaterThan(0u)
+            .When(command => command.ExpectedVersion.HasValue);
+
         RuleFor(command => command.TargetStatus)
             .Must(status =>
                 status is
@@ -21,6 +25,8 @@ internal sealed class ChangeDroneStatusCommandValidator
                     DroneStatus.Retired)
             .WithMessage(
                 "Only Available, Maintenance, Inactive and Retired are supported.");
+
+        RuleFor(command => command.Reason).MaximumLength(1000);
 
         RuleFor(command => command)
             .Must(command =>

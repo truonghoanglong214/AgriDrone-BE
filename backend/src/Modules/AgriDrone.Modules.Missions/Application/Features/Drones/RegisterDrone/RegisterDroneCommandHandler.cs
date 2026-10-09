@@ -1,4 +1,4 @@
-﻿using AgriDrone.Modules.Missions.Application.Abstractions.Missions;
+using AgriDrone.Modules.Missions.Application.Abstractions.Missions;
 using AgriDrone.Modules.Missions.Application.Errors;
 using AgriDrone.Modules.Missions.Domain.Drones;
 using AgriDrone.SharedInfrastructure.Auditing;
@@ -44,7 +44,7 @@ internal sealed class RegisterDroneCommandHandler(
 
         if (await droneRepository.CodeExistsAsync(
                 normalizedCode,
-                cancellationToken))
+                cancellationToken: cancellationToken))
         {
             return Result.Failure<RegisterDroneResponse>(
                 DroneError.CodeAlreadyExists(normalizedCode));
@@ -56,7 +56,7 @@ internal sealed class RegisterDroneCommandHandler(
         if (normalizedSerial is not null &&
             await droneRepository.SerialNumberExistsAsync(
                 normalizedSerial,
-                cancellationToken))
+                cancellationToken: cancellationToken))
         {
             return Result.Failure<RegisterDroneResponse>(
                 DroneError.SerialNumberAlreadyExists(
@@ -69,7 +69,7 @@ internal sealed class RegisterDroneCommandHandler(
         if (normalizedRegistration is not null &&
             await droneRepository.RegistrationNumberExistsAsync(
                 normalizedRegistration,
-                cancellationToken))
+                cancellationToken: cancellationToken))
         {
             return Result.Failure<RegisterDroneResponse>(
                 DroneError.RegistrationNumberAlreadyExists(
@@ -159,7 +159,8 @@ internal sealed class RegisterDroneCommandHandler(
             drone.WeightKg,
             drone.Status,
             drone.Notes,
-            drone.CreatedAt);
+            drone.CreatedAt,
+            drone.Version);
     }
 
     private static string? NormalizeIdentifier(string? value)

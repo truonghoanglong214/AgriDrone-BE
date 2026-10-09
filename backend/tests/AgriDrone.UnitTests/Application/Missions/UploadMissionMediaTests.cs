@@ -7,6 +7,7 @@ using AgriDrone.Modules.Missions.Application.Features.Media.UploadMissionMedia;
 using AgriDrone.Modules.Missions.Domain.Media;
 using AgriDrone.Modules.Missions.Domain.Missions;
 using AgriDrone.SharedKernel.Application;
+using AgriDrone.SharedKernel.Application.Abstractions.Authorization;
 using AgriDrone.SharedKernel.Application.Abstractions.Execution;
 using MediatR;
 using Xunit;
@@ -79,7 +80,7 @@ public sealed class UploadMissionMediaTests
     }
 
     private sealed class Fixture : IDroneMissionRepository, IMediaUploadSessionRepository,
-        IObjectStorageWriter, IExecutionContext
+        IObjectStorageWriter, ISystemManagerAccessService, IExecutionContext
     {
         private readonly DateTimeOffset now = DateTimeOffset.UtcNow;
         private readonly DroneMission mission;
@@ -129,7 +130,7 @@ public sealed class UploadMissionMediaTests
                 }
                 throw new NotSupportedException();
             };
-            handler = new(this, this, this, this, sender);
+            handler = new(this, this, this, this, this, sender);
         }
 
         public async Task<Result<CompleteUploadSessionResult>> Upload(byte[] bytes, Guid? tenant = null)
@@ -144,6 +145,13 @@ public sealed class UploadMissionMediaTests
                 id == mission.Id && tenant == mission.TenantId && farm == mission.FarmId ? mission : null);
         public Task<bool> CodeExistsAsync(Guid farm, string code, CancellationToken cancellationToken = default)
             => Task.FromResult(false);
+        public Task<SystemManagerFarmAccess> ResolveFarmAccessAsync(
+            Guid farmId,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(SystemManagerFarmAccess.Allowed(
+                TenantId!.Value,
+                farmId,
+                Guid.NewGuid()));
         public void Add(DroneMission value) => throw new NotSupportedException();
         public void Add(MediaUploadSession value) => Session = value;
         public Task<MediaUploadSession?> GetByIdAsync(Guid tenant, Guid farm, Guid missionId,

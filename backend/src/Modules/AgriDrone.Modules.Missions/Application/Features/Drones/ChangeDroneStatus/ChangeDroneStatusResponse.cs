@@ -8,4 +8,5 @@ public sealed record ChangeDroneStatusResponse(
     DroneStatus Status,
     DateTimeOffset? LastMaintenanceAt,
     DateTimeOffset? NextMaintenanceAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    uint Version);

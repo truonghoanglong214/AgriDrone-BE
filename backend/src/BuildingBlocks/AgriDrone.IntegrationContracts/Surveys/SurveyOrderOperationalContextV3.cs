@@ -1,0 +1,32 @@
+namespace AgriDrone.IntegrationContracts.Surveys;
+
+// Internal synchronous boundary. V1/V2 payloads remain immutable for replay.
+public sealed record SurveyOrderOperationalContextV3(
+    Guid SurveyOrderId,
+    Guid TenantId,
+    Guid FarmId,
+    string ServiceCode,
+    string ServiceType,
+    string RequestedMissionPurpose,
+    string OrderStatus,
+    uint OrderVersion,
+    Guid? FarmBoundaryVersionId,
+    Guid? FarmBaseMapVersionId,
+    bool RequiresBaselineMapping,
+    int? ConfirmedSurveyPoleCount,
+    Guid? SurveyServicePriceId,
+    decimal? PricePerPole,
+    string? Currency,
+    decimal? FinalPrice,
+    Guid? AppointmentId,
+    string? AppointmentPurpose,
+    DateTimeOffset? AppointmentStartAt,
+    DateTimeOffset? AppointmentEndAt,
+    string? AppointmentStatus,
+    Guid? PaymentId,
+    string? PaymentStatus,
+    Guid? PrimarySystemManagerId,
+    Guid? PreviousCompatibleOrderId,
+    bool IsReady,
+    IReadOnlyList<string> ReadinessFailures,
+    DateTimeOffset EvaluatedAt);

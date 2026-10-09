@@ -9,7 +9,9 @@ public static class IntegrationEventEnvelopeFactory
         Guid tenantId,
         Guid? actorId,
         DateTimeOffset occurredAt,
-        TPayload payload)
+        TPayload payload,
+        Guid? causationId = null,
+        string? sourceSystem = null)
     {
         ArgumentNullException.ThrowIfNull(descriptor);
         ArgumentNullException.ThrowIfNull(payload);
@@ -41,6 +43,20 @@ public static class IntegrationEventEnvelopeFactory
                 nameof(actorId));
         }
 
+        if (causationId == Guid.Empty)
+        {
+            throw new ArgumentException(
+                "CausationId cannot be an empty GUID when provided.",
+                nameof(causationId));
+        }
+
+        if (sourceSystem is { Length: > IntegrationContractLimits.MaximumSourceSystemLength })
+        {
+            throw new ArgumentException(
+                $"SourceSystem cannot exceed {IntegrationContractLimits.MaximumSourceSystemLength} characters.",
+                nameof(sourceSystem));
+        }
+
         if (descriptor.RequiresActorId && !actorId.HasValue)
         {
             throw new ArgumentException(
@@ -63,6 +79,10 @@ public static class IntegrationEventEnvelopeFactory
             occurredAt,
             descriptor.SchemaVersion,
             descriptor.EventType,
-            payload);
+            payload,
+            causationId,
+            string.IsNullOrWhiteSpace(sourceSystem)
+                ? null
+                : sourceSystem.Trim());
     }
 }

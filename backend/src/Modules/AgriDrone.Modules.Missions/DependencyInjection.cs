@@ -1,10 +1,12 @@
+using AgriDrone.Modules.Missions.Application.Abstractions.Missions;
 using AgriDrone.IntegrationContracts.Farms;
 using AgriDrone.IntegrationContracts.Health;
 using AgriDrone.IntegrationContracts.Mapping;
 using AgriDrone.IntegrationContracts.Messaging;
+using AgriDrone.IntegrationContracts.Surveys;
 using AgriDrone.Modules.Missions.Application.Abstractions;
 using AgriDrone.Modules.Missions.Application.Abstractions.Media;
-using AgriDrone.Modules.Missions.Application.Abstractions.Missions;
+using AgriDrone.Modules.Missions.Application.Abstractions.MissionPlanning;
 using AgriDrone.Modules.Missions.Application.Abstractions.Telemetry;
 using AgriDrone.Modules.Missions.Domain.Drones;
 using AgriDrone.Modules.Missions.Domain.Media;
@@ -24,6 +26,7 @@ using FluentValidation;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace AgriDrone.Modules.Missions;
 
@@ -43,6 +46,7 @@ public static class DependencyInjection
                     .UseNetTopologySuite()
                     .MapEnum<DroneStatus>("drone_status", "system", translator)
                     .MapEnum<MissionType>("mission_type", "system", translator)
+                    .MapEnum<MissionPurpose>("mission_purpose", "system", translator)
                     .MapEnum<MissionStatus>("mission_status", "system", translator)
                     .MapEnum<ProcessingStatus>("processing_status", "system", translator)
                     .MapEnum<MediaType>("media_type", "system", translator)
@@ -72,10 +76,25 @@ public static class DependencyInjection
         services.AddScoped<
             IDroneRepository,
             DroneRepository>();
+        services.AddScoped<IDroneMaintenanceRepository, DroneMaintenanceRepository>();
+        services.AddScoped<
+            IDroneRegistryUniquenessQuery,
+            DroneRepository>();
 
         services.AddScoped<
             IDroneQueries,
             DroneQueries>();
+
+        services.TryAddScoped<
+            ISurveyOrderOperationalContextQuery,
+            UnavailableSurveyOrderOperationalContextQuery>();
+        services.TryAddScoped<
+            ISurveyOrderOperationalContextV3Query,
+            UnavailableSurveyOrderOperationalContextQuery>();
+        services.TryAddScoped<
+            ISurveyOrderMissionPlanningQuery,
+            SurveyOrderMissionPlanningQuery>();
+
         var assembly = typeof(DependencyInjection).Assembly;
 
         services.AddMediatR(mediatR =>
@@ -91,11 +110,27 @@ public static class DependencyInjection
             IntegrationConsumerNames.Be2ZoneMapPublishedV1);
 
         services.AddScoped<
+            IIntegrationMessageHandler<FarmBaseMapPublishedV2>,
+            FarmBaseMapPublishedV2Handler>();
+        services.AddIntegrationConsumer<FarmBaseMapPublishedV2Processor>(
+            IntegrationConsumerNames.Be2FarmBaseMapPublishedV2);
+
+        services.AddScoped<
+            IIntegrationMessageHandler<FarmBaseMapPublishedV3>,
+            FarmBaseMapPublishedV3Handler>();
+        services.AddIntegrationConsumer<FarmBaseMapPublishedV3Processor>(
+            IntegrationConsumerNames.Be2FarmBaseMapPublishedV3);
+
+        services.AddScoped<
             IIntegrationMessageHandler<HealthReviewStateChangedV1>,
             HealthReviewStateChangedHandler>();
 
         services.AddScoped<
             IDroneMissionRepository, DroneMissionRepository>();
+        services.AddScoped<IMissionFieldNoteRepository, MissionFieldNoteRepository>();
+        services.AddScoped<
+            IPreflightChecklistRepository,
+            PreflightChecklistRepository>();
 
         services.AddScoped<
             IMissionQueries, MissionQueries>();

@@ -50,11 +50,49 @@ public sealed class DroneMissionConfiguration : IEntityTypeConfiguration<DroneMi
                     "preflight_confirmed_at IS NOT NULL)");
 
                 tableBuilder.HasCheckConstraint(
+                    "ck_drone_missions_preflight_snapshot",
+                    "(preflight_operation_id IS NULL AND " +
+                    "preflight_checklist_version IS NULL AND " +
+                    "preflight_checklist_answers IS NULL AND " +
+                    "preflight_suitable_for_flight IS NULL) OR " +
+                    "(preflight_operation_id IS NOT NULL AND " +
+                    "preflight_checklist_version IS NOT NULL AND " +
+                    "preflight_checklist_answers IS NOT NULL AND " +
+                    "preflight_suitable_for_flight IS NOT NULL AND " +
+                    "preflight_confirmed_by IS NOT NULL AND " +
+                    "preflight_confirmed_at IS NOT NULL)");
+
+                tableBuilder.HasCheckConstraint(
                     "ck_drone_missions_source_map",
+                    "(mission_purpose IS NULL AND (" +
                     "(mission_type = 'MAPPING'::system.mission_type AND " +
                     "source_map_version_id IS NULL) OR " +
                     "(mission_type = 'HEALTH_INSPECTION'::system.mission_type AND " +
-                    "source_map_version_id IS NOT NULL)");
+                    "source_map_version_id IS NOT NULL))) OR " +
+                    "(mission_purpose = 'BASELINE_MAPPING'::system.mission_purpose AND " +
+                    "source_map_version_id IS NULL AND " +
+                    "requires_baseline_completion = FALSE) OR " +
+                    "(mission_purpose IN (" +
+                    "'PLANT_HEALTH'::system.mission_purpose, " +
+                    "'HARVEST_READINESS'::system.mission_purpose) AND ((" +
+                    "requires_baseline_completion = TRUE AND " +
+                    "source_map_version_id IS NULL) OR (" +
+                    "requires_baseline_completion = FALSE AND " +
+                    "source_map_version_id IS NOT NULL)))");
+
+                tableBuilder.HasCheckConstraint(
+                    "ck_drone_missions_order_binding",
+                    "(survey_order_id IS NULL AND mission_purpose IS NULL AND " +
+                    "preparation_operation_id IS NULL) OR " +
+                    "(survey_order_id IS NOT NULL AND mission_purpose IS NOT NULL AND " +
+                    "preparation_operation_id IS NOT NULL)");
+
+                tableBuilder.HasCheckConstraint(
+                    "ck_drone_missions_baseline_dependency",
+                    "requires_baseline_completion = FALSE OR " +
+                    "mission_purpose IN (" +
+                    "'PLANT_HEALTH'::system.mission_purpose, " +
+                    "'HARVEST_READINESS'::system.mission_purpose)");
             });
 
         builder.HasKey(mission => mission.Id).HasName("pk_drone_missions");
@@ -79,14 +117,29 @@ public sealed class DroneMissionConfiguration : IEntityTypeConfiguration<DroneMi
 
         builder.Property(mission => mission.ZoneId)
             .HasColumnName("zone_id")
-            .HasColumnType("uuid")
-            .IsRequired();
+            .HasColumnType("uuid");
 
         builder.Property(mission => mission.SurveyOrderId)
             .HasColumnName("survey_order_id")
             .HasColumnType("uuid");
 
-        builder.Property(mission => mission.MissionPurpose)
+        builder.Property(mission => mission.PreparationOperationId)
+            .HasColumnName("preparation_operation_id")
+            .HasColumnType("uuid");
+
+        builder.Property(mission => mission.ScopeZoneIds)
+            .HasColumnName("scope_zone_ids")
+            .HasColumnType("uuid[]")
+            .HasDefaultValueSql("ARRAY[]::uuid[]")
+            .IsRequired();
+
+        builder.Property(mission => mission.RequiresBaselineCompletion)
+            .HasColumnName("requires_baseline_completion")
+            .HasColumnType("boolean")
+            .HasDefaultValue(false)
+            .IsRequired();
+
+        builder.Property(mission => mission.Purpose)
             .HasColumnName("mission_purpose")
             .HasColumnType("system.mission_purpose");
 
@@ -106,8 +159,7 @@ public sealed class DroneMissionConfiguration : IEntityTypeConfiguration<DroneMi
 
         builder.Property(mission => mission.MissionType)
             .HasColumnName("mission_type")
-            .HasColumnType("system.mission_type")
-            .IsRequired();
+            .HasColumnType("system.mission_type");
 
         builder.Property(mission => mission.Status)
             .HasColumnName("status")
@@ -152,6 +204,32 @@ public sealed class DroneMissionConfiguration : IEntityTypeConfiguration<DroneMi
         builder.Property(mission => mission.PreflightConfirmedAt)
             .HasColumnName("preflight_confirmed_at")
             .HasColumnType("timestamp with time zone");
+
+        builder.Property(mission => mission.PreflightOperationId)
+            .HasColumnName("preflight_operation_id")
+            .HasColumnType("uuid");
+
+        builder.Property(mission => mission.PreflightChecklistVersion)
+            .HasColumnName("preflight_checklist_version")
+            .HasColumnType("character varying(100)")
+            .HasMaxLength(100);
+
+        builder.Property(mission => mission.PreflightChecklistAnswers)
+            .HasColumnName("preflight_checklist_answers")
+            .HasColumnType("jsonb");
+
+        builder.Property(mission => mission.PreflightSuitableForFlight)
+            .HasColumnName("preflight_suitable_for_flight")
+            .HasColumnType("boolean");
+
+        builder.Property(mission => mission.PreflightNotes)
+            .HasColumnName("preflight_notes")
+            .HasColumnType("text");
+
+        builder.HasIndex(mission => mission.PreflightOperationId)
+            .HasDatabaseName("uq_drone_missions_preflight_operation")
+            .HasFilter("preflight_operation_id IS NOT NULL")
+            .IsUnique();
 
         builder.Property(mission => mission.FlightRoute)
             .HasColumnName("flight_route")
@@ -266,15 +344,29 @@ public sealed class DroneMissionConfiguration : IEntityTypeConfiguration<DroneMi
             .HasDatabaseName("uq_drone_missions_farm_code")
             .IsUnique();
 
+        builder.HasIndex(mission => new
+            {
+                mission.SurveyOrderId,
+                mission.Purpose
+            })
+            .HasDatabaseName("uq_drone_missions_order_purpose")
+            .HasFilter("survey_order_id IS NOT NULL")
+            .IsUnique();
+
+        builder.HasIndex(mission => new
+            {
+                mission.SurveyOrderId,
+                mission.PreparationOperationId
+            })
+            .HasDatabaseName("ix_drone_missions_order_operation")
+            .HasFilter("survey_order_id IS NOT NULL");
+
         builder.HasIndex(mission => mission.TenantId)
             .HasDatabaseName("ix_drone_missions_tenant");
 
         builder.HasIndex(mission => new { mission.FarmId, mission.StartedAt })
             .HasDatabaseName("ix_drone_missions_farm_started")
             .IsDescending(false, true);
-
-        builder.HasIndex(mission => new { mission.SurveyOrderId, mission.MissionPurpose })
-            .HasDatabaseName("ix_drone_missions_order_purpose");
 
         builder.HasIndex(mission => new { mission.DroneId, mission.StartedAt })
             .HasDatabaseName("ix_drone_missions_drone_started")

@@ -1,10 +1,11 @@
+using AgriDrone.Modules.Missions.Application.Abstractions.Missions;
 using System.Text.Json;
 using AgriDrone.Modules.Missions.Application.Abstractions;
-using AgriDrone.Modules.Missions.Application.Abstractions.Missions;
 using AgriDrone.Modules.Missions.Application.Features.Drones.GetAvailableDrones;
 using AgriDrone.Modules.Missions.Application.Features.Drones.GetDroneRegistry;
 using AgriDrone.Modules.Missions.Application.Features.Drones.RegisterDrone;
 using AgriDrone.Modules.Missions.Domain.Drones;
+using AgriDrone.Modules.Missions.Domain.Missions;
 using AgriDrone.SharedInfrastructure.Auditing;
 using AgriDrone.SharedKernel.Application.Abstractions.Authorization;
 using AgriDrone.SharedKernel.Application.Abstractions.Execution;
@@ -16,6 +17,23 @@ public sealed class SystemOwnedDroneAvailabilityTests
 {
     private static readonly DateTimeOffset StartAt =
         new(2026, 9, 24, 1, 0, 0, TimeSpan.Zero);
+
+    [Fact]
+    public void FlightGateRequiresCompleteValidRegistration()
+    {
+        var drone = Drone.Create("SYS-02", "Survey Drone", null, null,
+            null, "SERIAL-02", "VN-002", null, null, null, null, StartAt);
+        Assert.False(drone.IsOperationalFor(StartAt, StartAt.AddHours(1)));
+
+        drone.UpdateDetails("Survey Drone", null, null, null, "SERIAL-02",
+            "VN-002", DateOnly.FromDateTime(StartAt.UtcDateTime),
+            DateOnly.FromDateTime(StartAt.AddDays(1).UtcDateTime), null,
+            null, StartAt);
+        Assert.True(drone.IsOperationalFor(StartAt, StartAt.AddHours(1)));
+
+        drone.SendToMaintenance(StartAt);
+        Assert.False(drone.IsOperationalFor(StartAt, StartAt.AddHours(1)));
+    }
 
     [Fact]
     public async Task AvailabilityRequiresActivePrimaryFarmAssignment()
@@ -58,6 +76,35 @@ public sealed class SystemOwnedDroneAvailabilityTests
     }
 
     [Fact]
+    public async Task AvailabilityFiltersByRequestedMissionPurpose()
+    {
+        var farmId = Guid.NewGuid();
+        var droneQueries = new RecordingDroneQueries();
+        var capableId = Guid.NewGuid();
+        var otherId = Guid.NewGuid();
+        droneQueries.Available =
+        [
+            Available(capableId, """{"capabilities":["plant_health"]}"""),
+            Available(otherId, """{"capabilities":["baseline_mapping"]}""")
+        ];
+        var handler = new GetAvailableDronesQueryHandler(
+            droneQueries, new AllowedManagerAccessService(farmId));
+
+        var result = await handler.Handle(new GetAvailableDronesQuery(
+            farmId, StartAt, StartAt.AddHours(1), MissionPurpose.PlantHealth),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(capableId, Assert.Single(result.Value).Id);
+    }
+
+    private static AvailableDroneResponse Available(Guid id, string specifications) =>
+        new(id, "CAP", "Survey Drone", null, null,
+            JsonSerializer.Deserialize<JsonElement>(specifications),
+            "VN-001", DateOnly.FromDateTime(StartAt.UtcDateTime),
+            null, DroneStatus.Available, null);
+
+    [Fact]
     public async Task RegistrationCreatesSystemScopedAuditWithoutTenant()
     {
         var repository = new RecordingDroneRepository();
@@ -97,6 +144,7 @@ public sealed class SystemOwnedDroneAvailabilityTests
     private sealed class RecordingDroneQueries : IDroneQueries
     {
         public int AvailabilityCallCount { get; private set; }
+        public IReadOnlyList<AvailableDroneResponse> Available { get; set; } = [];
 
         public Task<IReadOnlyList<AvailableDroneResponse>> GetAvailableAsync(
             DateTimeOffset startAt,
@@ -104,7 +152,7 @@ public sealed class SystemOwnedDroneAvailabilityTests
             CancellationToken cancellationToken = default)
         {
             AvailabilityCallCount++;
-            return Task.FromResult<IReadOnlyList<AvailableDroneResponse>>([]);
+            return Task.FromResult(Available);
         }
 
         public Task<IReadOnlyList<DroneRegistryItemResponse>> GetRegistryAsync(
