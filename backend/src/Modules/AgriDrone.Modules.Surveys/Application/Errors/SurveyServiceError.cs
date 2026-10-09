@@ -38,4 +38,9 @@ public static class SurveyServiceError
         AppError.Validation(
             "SurveyService.UnsupportedCurrency",
             "Only VND per-pole prices are supported.");
+
+    public static AppError PriceEffectiveFromInPast() =>
+        AppError.Validation(
+            "SurveyService.PriceEffectiveFromInPast",
+            "A new price version cannot take effect before server time.");
 }

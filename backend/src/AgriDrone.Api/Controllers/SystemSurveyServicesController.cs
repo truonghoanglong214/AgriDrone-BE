@@ -1,6 +1,8 @@
 using AgriDrone.Api.Contracts.Surveys.Catalogue;
 using AgriDrone.Modules.Surveys.Application.Features.Catalogue.ActivateSurveyService;
+using AgriDrone.Modules.Surveys.Application.Features.Catalogue.CreateSurveyServicePrice;
 using AgriDrone.Modules.Surveys.Application.Features.Catalogue.GetSurveyServiceCatalogue;
+using AgriDrone.Modules.Surveys.Application.Features.Catalogue.GetSurveyServicePriceHistory;
 using AgriDrone.Modules.Surveys.Application.Features.Catalogue.MarkSurveyServiceExperimental;
 using AgriDrone.Modules.Surveys.Application.Features.Catalogue.RetireSurveyService;
 using AgriDrone.Modules.Surveys.Application.Features.Catalogue.UpdateSurveyServiceMetadata;
@@ -122,6 +124,63 @@ public sealed class SystemSurveyServicesController(ISender sender)
                 response.Status,
                 response.Version,
                 response.UpdatedAt)));
+    }
+
+    /// <summary>Lấy lịch sử giá bất biến của một service.</summary>
+    [HttpGet("{serviceId:guid}/prices")]
+    public async Task<IResult> GetPriceHistory(
+        [FromRoute] Guid serviceId,
+        CancellationToken cancellationToken)
+    {
+        var result = await sender.Send(
+            new GetSurveyServicePriceHistoryQuery(serviceId),
+            cancellationToken);
+        return result.ToHttpResult(
+            HttpContext,
+            prices => Results.Ok(prices.Select(price =>
+                new SurveyServicePriceHistoryApiResponse(
+                    price.PriceVersionId,
+                    price.SurveyServiceId,
+                    price.PricePerPole,
+                    price.LegacyPricePerHa,
+                    price.Currency,
+                    price.EffectiveFrom,
+                    price.EffectiveTo,
+                    price.CreatedBy,
+                    price.CreatedAt,
+                    price.IsLegacyPerHectarePrice))));
+    }
+
+    /// <summary>Tạo price version VND theo trụ; không sửa amount lịch sử.</summary>
+    [HttpPost("{serviceId:guid}/prices")]
+    public async Task<IResult> CreatePrice(
+        [FromRoute] Guid serviceId,
+        [FromBody] CreateSurveyServicePriceRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await sender.Send(
+            new CreateSurveyServicePriceCommand(
+                serviceId,
+                request.AmountPerPole,
+                request.Currency,
+                request.EffectiveFrom,
+                request.EffectiveTo,
+                request.ExpectedServiceVersion),
+            cancellationToken);
+        return result.ToHttpResult(
+            HttpContext,
+            response => Results.Json(
+                new CreateSurveyServicePriceApiResponse(
+                    response.PriceVersionId,
+                    response.SurveyServiceId,
+                    response.AmountPerPole,
+                    response.Currency,
+                    response.EffectiveFrom,
+                    response.EffectiveTo,
+                    response.ClosedPriceVersionId,
+                    response.ServiceVersion,
+                    response.CreatedAt),
+                statusCode: StatusCodes.Status201Created));
     }
 
     private static SystemSurveyServiceApiResponse MapCatalogueResponse(

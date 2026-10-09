@@ -9,6 +9,8 @@ public readonly record struct PricePerPole
     public static PricePerPole Create(decimal amount)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(amount);
-        return new PricePerPole(Money.Round(amount));
+        var roundedAmount = Money.Round(amount);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(roundedAmount);
+        return new PricePerPole(roundedAmount);
     }
 }

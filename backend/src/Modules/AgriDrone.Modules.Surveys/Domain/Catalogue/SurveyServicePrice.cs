@@ -74,4 +74,24 @@ public sealed class SurveyServicePrice : Entity
         return EffectiveFrom <= evaluatedAt &&
                (!EffectiveTo.HasValue || evaluatedAt < EffectiveTo.Value);
     }
+
+    public void CloseAt(DateTimeOffset effectiveTo)
+    {
+        DomainGuard.Utc(effectiveTo);
+        if (EffectiveTo.HasValue)
+        {
+            throw new SurveyDomainException(
+                SurveyServiceDomainErrorCodes.PriceWindowAlreadyClosed,
+                "A closed price window cannot be changed.");
+        }
+
+        if (effectiveTo <= EffectiveFrom)
+        {
+            throw new SurveyDomainException(
+                SurveyServiceDomainErrorCodes.InvalidPriceWindow,
+                "Price effective end must be after its start.");
+        }
+
+        EffectiveTo = effectiveTo;
+    }
 }

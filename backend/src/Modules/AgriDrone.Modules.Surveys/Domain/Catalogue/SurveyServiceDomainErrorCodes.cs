@@ -8,4 +8,8 @@ public static class SurveyServiceDomainErrorCodes
         "SURVEY_SERVICE_RETIRED_IMMUTABLE";
     public const string VersionConflict =
         "SURVEY_SERVICE_VERSION_CONFLICT";
+    public const string InvalidPriceWindow =
+        "SURVEY_SERVICE_INVALID_PRICE_WINDOW";
+    public const string PriceWindowAlreadyClosed =
+        "SURVEY_SERVICE_PRICE_WINDOW_ALREADY_CLOSED";
 }
