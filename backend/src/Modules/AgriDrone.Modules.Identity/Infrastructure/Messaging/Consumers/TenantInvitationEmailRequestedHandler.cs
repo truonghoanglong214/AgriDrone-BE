@@ -41,7 +41,7 @@ namespace AgriDrone.Modules.Identity.Infrastructure.Messaging.Consumers
             CancellationToken cancellationToken)
         {
             var result = await emailDelivery.DeliverAsync(
-                envelope.TenantId,
+                envelope.TenantId!.Value,
                 envelope.Payload.InvitationId,
                 envelope.Payload.PlainTextToken,
                 cancellationToken);

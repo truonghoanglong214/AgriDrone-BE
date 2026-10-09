@@ -2,6 +2,9 @@ namespace AgriDrone.Modules.Surveys.Domain;
 
 public readonly record struct RequestIdempotency
 {
+    public const int MaximumCallerScopeLength = 100;
+    public const int MaximumKeyLength = 100;
+
     private RequestIdempotency(string callerScope, string key)
     {
         CallerScope = callerScope;
@@ -17,10 +20,18 @@ public readonly record struct RequestIdempotency
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
         var normalizedScope = callerScope.Trim().ToLowerInvariant();
         var normalizedKey = key.Trim();
-        if (normalizedScope.Length > 100 || normalizedKey.Length > 200)
+        if (normalizedScope.Length > MaximumCallerScopeLength)
         {
             throw new ArgumentException(
-                "Idempotency caller scope or key exceeds the supported length.");
+                $"Idempotency caller scope cannot exceed {MaximumCallerScopeLength} characters.",
+                nameof(callerScope));
+        }
+
+        if (normalizedKey.Length > MaximumKeyLength)
+        {
+            throw new ArgumentException(
+                $"Idempotency key cannot exceed {MaximumKeyLength} characters.",
+                nameof(key));
         }
 
         return new RequestIdempotency(normalizedScope, normalizedKey);

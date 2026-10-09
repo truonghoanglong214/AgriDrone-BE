@@ -6,7 +6,7 @@ public static class IntegrationEventEnvelopeFactory
         IntegrationEventDescriptor<TPayload> descriptor,
         Guid messageId,
         Guid correlationId,
-        Guid tenantId,
+        Guid? tenantId,
         Guid? actorId,
         DateTimeOffset occurredAt,
         TPayload payload)
@@ -15,7 +15,19 @@ public static class IntegrationEventEnvelopeFactory
         ArgumentNullException.ThrowIfNull(payload);
         ArgumentOutOfRangeException.ThrowIfEqual(messageId, Guid.Empty);
         ArgumentOutOfRangeException.ThrowIfEqual(correlationId, Guid.Empty);
-        ArgumentOutOfRangeException.ThrowIfEqual(tenantId, Guid.Empty);
+        if (tenantId == Guid.Empty)
+        {
+            throw new ArgumentException(
+                "TenantId cannot be an empty GUID when provided.",
+                nameof(tenantId));
+        }
+
+        if (descriptor.RequiresTenantId && !tenantId.HasValue)
+        {
+            throw new ArgumentException(
+                $"TenantId is required for event '{descriptor.EventType}'.",
+                nameof(tenantId));
+        }
 
         ArgumentException.ThrowIfNullOrWhiteSpace(descriptor.EventType);
 

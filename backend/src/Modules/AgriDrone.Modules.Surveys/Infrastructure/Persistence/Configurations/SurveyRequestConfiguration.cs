@@ -14,7 +14,7 @@ public sealed class SurveyRequestConfiguration : IEntityTypeConfiguration<Survey
             table =>
             {
                 table.HasCheckConstraint("ck_survey_requests_area_positive", "approximate_area_ha > 0");
-                table.HasCheckConstraint("ck_survey_requests_pole_count", "estimated_pole_count IS NULL OR estimated_pole_count >= 0");
+                table.HasCheckConstraint("ck_survey_requests_pole_count", "estimated_pole_count IS NULL OR estimated_pole_count > 0");
                 table.HasCheckConstraint("ck_survey_requests_preferred_window", "preferred_end_at IS NULL OR (preferred_start_at IS NOT NULL AND preferred_end_at > preferred_start_at)");
                 table.HasCheckConstraint(
                     "ck_survey_requests_kind_context",

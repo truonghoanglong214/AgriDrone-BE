@@ -7,7 +7,7 @@ namespace AgriDrone.IntegrationContracts.Messaging
     public sealed record IntegrationEventEnvelope<TPayload>(
     Guid MessageId,
     Guid CorrelationId,
-    Guid TenantId,
+    Guid? TenantId,
     Guid? ActorId,
     DateTimeOffset OccurredAt,
     int SchemaVersion,

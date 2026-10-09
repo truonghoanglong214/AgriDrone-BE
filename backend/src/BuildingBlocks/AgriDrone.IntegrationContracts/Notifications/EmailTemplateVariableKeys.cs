@@ -11,4 +11,10 @@ public static class EmailTemplateVariableKeys
     public const string ExpiresAt = "expiresAt";
 
     public const string UserName = "userName";
+
+    public const string ApplicantName = "applicantName";
+
+    public const string RequestNumber = "requestNumber";
+
+    public const string SurveyServiceName = "surveyServiceName";
 }

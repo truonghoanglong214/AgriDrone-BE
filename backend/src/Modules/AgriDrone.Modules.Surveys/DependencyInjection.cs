@@ -1,10 +1,15 @@
+using AgriDrone.Modules.Surveys.Application.Abstractions.Messaging;
 using AgriDrone.Modules.Surveys.Application.Abstractions.Persistence;
 using AgriDrone.Modules.Surveys.Application.Abstractions.Queries;
+using AgriDrone.Modules.Surveys.Application.Abstractions.Requests;
+using AgriDrone.Modules.Surveys.Application.Services;
 using AgriDrone.Modules.Surveys.Domain;
 using AgriDrone.Modules.Surveys.Infrastructure.Health;
+using AgriDrone.Modules.Surveys.Infrastructure.Messaging;
 using AgriDrone.Modules.Surveys.Infrastructure.Persistence;
 using AgriDrone.Modules.Surveys.Infrastructure.Persistence.Repositories;
 using AgriDrone.Modules.Surveys.Infrastructure.Queries;
+using AgriDrone.Modules.Surveys.Infrastructure.Requests;
 using AgriDrone.SharedInfrastructure.Auditing;
 using AgriDrone.SharedInfrastructure.Persistence;
 using FluentValidation;
@@ -95,8 +100,13 @@ public static class DependencyInjection
             serviceProvider.GetRequiredService<SurveysDbContext>());
         services.AddScoped<ISurveyServiceRepository, SurveyServiceRepository>();
         services.AddScoped<IHarvestReadinessCriterionRepository, HarvestReadinessCriterionRepository>();
+        services.AddScoped<ISurveyRequestRepository, SurveyRequestRepository>();
+        services.AddScoped<ISurveyIntegrationOutbox, SurveyIntegrationOutbox>();
         services.AddScoped<ISurveyCatalogueQueries, SurveyCatalogueQueries>();
         services.AddScoped<IHarvestReadinessCriterionQueries, HarvestReadinessCriterionQueries>();
+        services.AddScoped<ISurveyRequestQueries, SurveyRequestQueries>();
+        services.AddScoped<ISurveyRequestIdempotencyResolver, SurveyRequestIdempotencyResolver>();
+        services.AddSingleton<ISurveyRequestNumberGenerator, SurveyRequestNumberGenerator>();
 
         services.TryAddSingleton(TimeProvider.System);
 

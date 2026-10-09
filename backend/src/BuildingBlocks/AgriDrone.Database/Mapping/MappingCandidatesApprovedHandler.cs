@@ -48,7 +48,7 @@ internal sealed class MappingCandidatesApprovedHandler(
             IntegrationMessageDisposition.Acknowledge)
         {
             await plantReferenceCache.InvalidateZoneAsync(
-                envelope.TenantId,
+                envelope.TenantId!.Value,
                 envelope.Payload.FarmId,
                 envelope.Payload.ZoneId,
                 cancellationToken);
@@ -366,7 +366,7 @@ internal sealed class MappingCandidatesApprovedHandler(
 
         var access = await accessService.CheckZoneAsync(
             actorId,
-            envelope.TenantId,
+            envelope.TenantId!.Value,
             payload.FarmId,
             payload.ZoneId,
             FarmAccessLevel.Manager,
@@ -452,7 +452,7 @@ internal sealed class MappingCandidatesApprovedHandler(
             IntegrationEventDescriptors.ZoneMapPublishedV1,
             Guid.NewGuid(),
             source.CorrelationId,
-            source.TenantId,
+            source.TenantId!.Value,
             source.ActorId,
             publishedAt,
             published);
@@ -489,7 +489,7 @@ internal sealed class MappingCandidatesApprovedHandler(
         });
         auditWriter.AddUserAction(
             context,
-            source.TenantId,
+            source.TenantId!.Value,
             source.Payload.FarmId,
             actorId,
             source.CorrelationId,

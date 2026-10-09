@@ -34,7 +34,8 @@ public static class IntegrationEventDescriptors
         new(
             IntegrationEventTypes.EmailNotificationRequestedV1,
             IntegrationSchemaVersions.V1,
-            RequiresActorId: false);
+            RequiresActorId: false,
+            RequiresTenantId: false);
 
     public static IntegrationEventDescriptor<HealthObservationsReadyV1>
         HealthObservationsReadyV1

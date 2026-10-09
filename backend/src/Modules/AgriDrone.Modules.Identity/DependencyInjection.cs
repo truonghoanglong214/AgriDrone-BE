@@ -1,3 +1,4 @@
+using AgriDrone.IntegrationContracts.Identity;
 using AgriDrone.IntegrationContracts.Messaging;
 using AgriDrone.IntegrationContracts.Notifications;
 using AgriDrone.Modules.Identity.Application.Abstractions.Messaging;
@@ -109,6 +110,9 @@ public static class DependencyInjection
         services.AddScoped<IUserQueries, UserQueries>();
         services.AddScoped<ITenantQueries, TenantQueries>();
         services.AddScoped<ITenantMembershipQueries, TenantMembershipQueries>();
+        services.AddScoped<
+            ITenantOwnerRequestReferenceQuery,
+            TenantOwnerRequestReferenceQuery>();
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IRoleRepository, RoleRepository>();
         services.AddScoped<ISystemManagerProfileRepository, SystemManagerProfileRepository>();

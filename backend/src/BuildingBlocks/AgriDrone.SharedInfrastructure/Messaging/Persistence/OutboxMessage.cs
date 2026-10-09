@@ -8,7 +8,7 @@ public sealed class OutboxMessage
 
     private OutboxMessage(
         Guid messageId,
-        Guid tenantId,
+        Guid? tenantId,
         Guid correlationId,
         Guid? actorId,
         string eventType,
@@ -38,7 +38,7 @@ public sealed class OutboxMessage
 
     public Guid MessageId { get; private set; }
 
-    public Guid TenantId { get; private set; }
+    public Guid? TenantId { get; private set; }
 
     public Guid CorrelationId { get; private set; }
 
@@ -78,7 +78,7 @@ public sealed class OutboxMessage
 
     internal static OutboxMessage Create(
         Guid messageId,
-        Guid tenantId,
+        Guid? tenantId,
         Guid correlationId,
         Guid? actorId,
         string eventType,

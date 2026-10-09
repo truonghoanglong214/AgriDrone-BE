@@ -5,4 +5,7 @@ public static class EmailTemplateKeys
     public const string TenantInvitation = "tenant-invitation";
 
     public const string TenantWelcome = "tenant-welcome";
+
+    public const string SurveyRequestAcknowledgement =
+        "survey-request-acknowledgement";
 }

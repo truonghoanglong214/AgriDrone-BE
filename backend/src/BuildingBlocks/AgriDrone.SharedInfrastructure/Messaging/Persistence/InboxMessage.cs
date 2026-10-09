@@ -11,7 +11,7 @@ public sealed class InboxMessage
     private InboxMessage(
         string consumerName,
         Guid messageId,
-        Guid tenantId,
+        Guid? tenantId,
         Guid correlationId,
         string eventType,
         int schemaVersion,
@@ -31,7 +31,7 @@ public sealed class InboxMessage
 
     public Guid MessageId { get; private set; }
 
-    public Guid TenantId { get; private set; }
+    public Guid? TenantId { get; private set; }
 
     public Guid CorrelationId { get; private set; }
 

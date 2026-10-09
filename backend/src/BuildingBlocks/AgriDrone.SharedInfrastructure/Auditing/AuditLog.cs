@@ -12,7 +12,8 @@ public sealed class AuditLog : Entity<long>
     private AuditLog(
         Guid? tenantId,
         Guid? farmId,
-        Guid actorId,
+        AuditActorType actorType,
+        Guid? actorId,
         Guid correlationId,
         string entityType,
         Guid entityId,
@@ -21,10 +22,10 @@ public sealed class AuditLog : Entity<long>
         JsonDocument? newData,
         DateTimeOffset createdAt)
     {
-        UserId = actorId;
+        UserId = actorType == AuditActorType.User ? actorId : null;
         TenantId = tenantId;
         FarmId = farmId;
-        ActorType = AuditActorType.User;
+        ActorType = actorType;
         ActorId = actorId;
         CorrelationId = correlationId;
         EntityType = entityType;
@@ -97,6 +98,7 @@ public sealed class AuditLog : Entity<long>
         return new AuditLog(
             tenantId,
             farmId,
+            AuditActorType.User,
             actorId,
             correlationId,
             entityType.Trim(),
@@ -133,7 +135,43 @@ public sealed class AuditLog : Entity<long>
         return new AuditLog(
             tenantId: null,
             farmId: null,
+            AuditActorType.User,
             actorId,
+            correlationId,
+            entityType.Trim(),
+            entityId,
+            action.Trim(),
+            oldData,
+            newData,
+            createdAt);
+    }
+
+    public static AuditLog ForSystemAction(
+        Guid correlationId,
+        string entityType,
+        Guid entityId,
+        string action,
+        JsonDocument? oldData,
+        JsonDocument? newData,
+        DateTimeOffset createdAt)
+    {
+        ArgumentOutOfRangeException.ThrowIfEqual(correlationId, Guid.Empty);
+        ArgumentOutOfRangeException.ThrowIfEqual(entityId, Guid.Empty);
+        ArgumentException.ThrowIfNullOrWhiteSpace(entityType);
+        ArgumentException.ThrowIfNullOrWhiteSpace(action);
+
+        if (createdAt == default || createdAt.Offset != TimeSpan.Zero)
+        {
+            throw new ArgumentException(
+                "CreatedAt must be a non-default UTC timestamp.",
+                nameof(createdAt));
+        }
+
+        return new AuditLog(
+            tenantId: null,
+            farmId: null,
+            AuditActorType.System,
+            actorId: null,
             correlationId,
             entityType.Trim(),
             entityId,

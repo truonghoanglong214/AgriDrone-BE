@@ -5983,7 +5983,7 @@ namespace AgriDrone.Database.Migrations
 
                             t.HasCheckConstraint("ck_survey_requests_kind_context", "(kind = 'NEW_CUSTOMER'::system.survey_request_kind AND tenant_id IS NULL AND farm_id IS NULL AND requested_by_user_id IS NULL) OR (kind = 'EXISTING_TENANT_NEW_FARM'::system.survey_request_kind AND tenant_id IS NOT NULL AND farm_id IS NULL AND requested_by_user_id IS NOT NULL) OR (kind = 'EXISTING_FARM_SURVEY'::system.survey_request_kind AND tenant_id IS NOT NULL AND farm_id IS NOT NULL AND requested_by_user_id IS NOT NULL)");
 
-                            t.HasCheckConstraint("ck_survey_requests_pole_count", "estimated_pole_count IS NULL OR estimated_pole_count >= 0");
+                            t.HasCheckConstraint("ck_survey_requests_pole_count", "estimated_pole_count IS NULL OR estimated_pole_count > 0");
 
                             t.HasCheckConstraint("ck_survey_requests_preferred_window", "preferred_end_at IS NULL OR (preferred_start_at IS NOT NULL AND preferred_end_at > preferred_start_at)");
                         });
@@ -6457,7 +6457,7 @@ namespace AgriDrone.Database.Migrations
                         .HasColumnType("character varying(30)")
                         .HasColumnName("status");
 
-                    b.Property<Guid>("TenantId")
+                    b.Property<Guid?>("TenantId")
                         .HasColumnType("uuid")
                         .HasColumnName("tenant_id");
 
@@ -6483,6 +6483,8 @@ namespace AgriDrone.Database.Migrations
                             t.HasCheckConstraint("ck_inbox_messages_schema_version", "schema_version > 0");
 
                             t.HasCheckConstraint("ck_inbox_messages_status", "status IN ('PROCESSING', 'COMPLETED', 'FAILED')");
+
+                            t.HasCheckConstraint("ck_inbox_messages_tenant_scope", "tenant_id IS NOT NULL OR event_type = 'notification.email-requested.v1'");
                         });
                 });
 
@@ -6571,7 +6573,7 @@ namespace AgriDrone.Database.Migrations
                         .HasColumnType("character varying(30)")
                         .HasColumnName("status");
 
-                    b.Property<Guid>("TenantId")
+                    b.Property<Guid?>("TenantId")
                         .HasColumnType("uuid")
                         .HasColumnName("tenant_id");
 
@@ -6616,6 +6618,8 @@ namespace AgriDrone.Database.Migrations
                             t.HasCheckConstraint("ck_outbox_messages_schema_version", "schema_version > 0");
 
                             t.HasCheckConstraint("ck_outbox_messages_status", "status IN ('PENDING', 'PROCESSING', 'RETRY', 'PUBLISHED', 'DEAD')");
+
+                            t.HasCheckConstraint("ck_outbox_messages_tenant_scope", "tenant_id IS NOT NULL OR event_type = 'notification.email-requested.v1'");
 
                             t.HasCheckConstraint("ck_outbox_messages_timestamps", "created_at >= occurred_at AND (published_at IS NULL OR published_at >= created_at)");
                         });
