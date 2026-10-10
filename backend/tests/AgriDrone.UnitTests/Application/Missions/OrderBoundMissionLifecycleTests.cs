@@ -120,6 +120,7 @@ public sealed class OrderBoundMissionLifecycleTests
             [Guid.NewGuid()],
             Guid.NewGuid(),
             Guid.NewGuid(),
+            Guid.NewGuid(),
             "BE2-UC03-TEST",
             MissionPurpose.PlantHealth,
             Guid.NewGuid(),

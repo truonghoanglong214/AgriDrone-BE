@@ -1,4 +1,6 @@
 namespace AgriDrone.Api.Contracts.Missions;
 
 public sealed record SyncMissionFieldNoteRequest(
-    Guid OperationId, string Text, DateTimeOffset ObservedAt);
+    Guid OperationId, string Text, DateTimeOffset ObservedAt,
+    string? IncidentType = null, string? IncidentOutcome = null,
+    string? RecoveryDecision = null, string? EvidenceReference = null);

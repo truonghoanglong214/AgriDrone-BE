@@ -20,12 +20,10 @@ public sealed class PrepareMissionSetHandlerTests
         new(2026, 9, 27, 2, 0, 0, TimeSpan.Zero);
 
     [Fact]
-    public async Task MissingBaseMapCreatesBaselineAndDependentServiceMissions()
+    public async Task FirstSurveyCreatesOnlyBaselineMission()
     {
         var fixture = new Fixture(requiresBaselineMapping: true);
         var command = fixture.CreateCommand(
-            serviceStart: Now.AddHours(4),
-            serviceEnd: Now.AddHours(5),
             baselineStart: Now.AddHours(2),
             baselineEnd: Now.AddHours(3));
 
@@ -35,29 +33,128 @@ public sealed class PrepareMissionSetHandlerTests
 
         Assert.True(result.IsSuccess);
         Assert.False(result.Value.ReusedExistingSet);
-        Assert.Equal(2, result.Value.Missions.Count);
-        Assert.Equal(2, fixture.Repository.Added.Count);
-        Assert.Equal(2, fixture.UnitOfWork.Audits.Count);
+        Assert.Single(result.Value.Missions);
+        Assert.Single(fixture.Repository.Added);
+        Assert.Single(fixture.UnitOfWork.Audits);
         Assert.Equal(1, fixture.UnitOfWork.SaveCount);
 
         var baseline = Assert.Single(
             fixture.Repository.Added,
             mission => mission.Purpose == MissionPurpose.BaselineMapping);
-        var service = Assert.Single(
-            fixture.Repository.Added,
-            mission => mission.Purpose == MissionPurpose.PlantHealth);
-
         Assert.Equal(MissionStatus.Scheduled, baseline.Status);
         Assert.Null(baseline.SourceMapVersionId);
         Assert.False(baseline.RequiresBaselineCompletion);
         Assert.Equal(fixture.OrderId, baseline.SurveyOrderId);
         Assert.Equal(fixture.ScopeZoneIds, baseline.ScopeZoneIds);
+        Assert.Equal(fixture.FarmBoundaryVersionId, baseline.FarmBoundaryVersionId);
+    }
 
+    [Fact]
+    public async Task PaidServiceIsAddedOnlyAfterBaselinePublicationAndPayment()
+    {
+        var fixture = new Fixture(requiresBaselineMapping: true);
+        var baseline = await fixture.Handler.Handle(
+            fixture.CreateCommand(baselineStart: Now.AddHours(2),
+                baselineEnd: Now.AddHours(3)), CancellationToken.None);
+        Assert.True(baseline.IsSuccess);
+        Assert.Single(fixture.Repository.Added);
+
+        var publishedMapId = Guid.NewGuid();
+        fixture.PlanningQuery.Context = fixture.PlanningQuery.Context with
+        {
+            RequiresBaselineMapping = false,
+            CurrentBaseMapVersionId = publishedMapId
+        };
+        var paid = await fixture.Handler.Handle(
+            fixture.CreateCommand(serviceStart: Now.AddHours(4),
+                serviceEnd: Now.AddHours(5)), CancellationToken.None);
+
+        Assert.True(paid.IsSuccess);
+        Assert.Equal(2, paid.Value.Missions.Count);
+        Assert.Equal(2, fixture.Repository.Added.Count);
+        var service = Assert.Single(fixture.Repository.Added,
+            mission => mission.Purpose == MissionPurpose.PlantHealth);
+        Assert.Equal(publishedMapId, service.SourceMapVersionId);
+        Assert.Equal(fixture.FarmBoundaryVersionId, service.FarmBoundaryVersionId);
+        Assert.False(service.RequiresBaselineCompletion);
         Assert.Equal(MissionStatus.Scheduled, service.Status);
-        Assert.Null(service.SourceMapVersionId);
-        Assert.True(service.RequiresBaselineCompletion);
-        Assert.Equal(fixture.OrderId, service.SurveyOrderId);
-        Assert.Equal(fixture.ScopeZoneIds, service.ScopeZoneIds);
+    }
+
+    [Fact]
+    public async Task ChangedBoundaryAfterBaselineRequiresRecovery()
+    {
+        var fixture = new Fixture(requiresBaselineMapping: true);
+        var baseline = await fixture.Handler.Handle(
+            fixture.CreateCommand(baselineStart: Now.AddHours(2),
+                baselineEnd: Now.AddHours(3)), CancellationToken.None);
+        Assert.True(baseline.IsSuccess);
+
+        fixture.PlanningQuery.Context = fixture.PlanningQuery.Context with
+        {
+            RequiresBaselineMapping = false,
+            CurrentBaseMapVersionId = Guid.NewGuid(),
+            FarmBoundaryVersionId = Guid.NewGuid()
+        };
+        var paid = await fixture.Handler.Handle(
+            fixture.CreateCommand(serviceStart: Now.AddHours(4),
+                serviceEnd: Now.AddHours(5)), CancellationToken.None);
+
+        Assert.True(paid.IsFailure);
+        Assert.Equal("MissionPlanning.ExistingMissionSetRequiresRecovery", paid.Error.Code);
+        Assert.Single(fixture.Repository.Added);
+    }
+
+    [Fact]
+    public async Task ChangedZonePlanAfterBaselineRequiresRecovery()
+    {
+        var fixture = new Fixture(requiresBaselineMapping: true);
+        var baseline = await fixture.Handler.Handle(
+            fixture.CreateCommand(baselineStart: Now.AddHours(2),
+                baselineEnd: Now.AddHours(3)), CancellationToken.None);
+        Assert.True(baseline.IsSuccess);
+
+        fixture.PlanningQuery.Context = fixture.PlanningQuery.Context with
+        {
+            RequiresBaselineMapping = false,
+            CurrentBaseMapVersionId = Guid.NewGuid(),
+            ScopeZoneIds = [Guid.NewGuid()]
+        };
+        var paid = await fixture.Handler.Handle(
+            fixture.CreateCommand(serviceStart: Now.AddHours(4),
+                serviceEnd: Now.AddHours(5)), CancellationToken.None);
+
+        Assert.True(paid.IsFailure);
+        Assert.Equal("MissionPlanning.ExistingMissionSetRequiresRecovery", paid.Error.Code);
+        Assert.Single(fixture.Repository.Added);
+    }
+
+    [Fact]
+    public async Task PublishedBaselineWithoutPaymentStillCannotCreatePaidMission()
+    {
+        var fixture = new Fixture(requiresBaselineMapping: true);
+        var baseline = await fixture.Handler.Handle(
+            fixture.CreateCommand(baselineStart: Now.AddHours(2),
+                baselineEnd: Now.AddHours(3)), CancellationToken.None);
+        Assert.True(baseline.IsSuccess);
+
+        fixture.PlanningQuery.Context = fixture.PlanningQuery.Context with
+        {
+            RequiresBaselineMapping = false,
+            CurrentBaseMapVersionId = Guid.NewGuid(),
+            IsReadyForOperations = false,
+            IsEligibleForPlanning = false,
+            IsReadyToSchedule = false,
+            ReadinessFailureCode = "PaymentNotConfirmed"
+        };
+        var paid = await fixture.Handler.Handle(
+            fixture.CreateCommand(serviceStart: Now.AddHours(4),
+                serviceEnd: Now.AddHours(5)), CancellationToken.None);
+
+        Assert.True(paid.IsFailure);
+        Assert.Equal("MissionPlanning.OrderNotReady", paid.Error.Code);
+        Assert.Single(fixture.Repository.Added);
+        Assert.DoesNotContain(fixture.Repository.Added,
+            mission => mission.Purpose == MissionPurpose.PlantHealth);
     }
 
     [Fact]
@@ -83,49 +180,39 @@ public sealed class PrepareMissionSetHandlerTests
     }
 
     [Fact]
-    public async Task RetryReturnsCompleteExistingSetWithoutWritingAgain()
+    public async Task RetryReturnsExistingBaselineWithoutWritingAgain()
     {
         var fixture = new Fixture(requiresBaselineMapping: true);
-        fixture.Repository.Seed(
-            fixture.CreateExistingMission(
-                MissionPurpose.BaselineMapping,
-                Now.AddHours(2),
-                Now.AddHours(3)),
-            fixture.CreateExistingMission(
-                MissionPurpose.PlantHealth,
-                Now.AddHours(4),
-                Now.AddHours(5),
-                requiresBaselineCompletion: true));
+        fixture.Repository.Seed(fixture.CreateExistingMission(
+            MissionPurpose.BaselineMapping,
+            Now.AddHours(2), Now.AddHours(3)));
 
         var result = await fixture.Handler.Handle(
             fixture.CreateCommand(
-                serviceStart: Now.AddHours(4),
-                serviceEnd: Now.AddHours(5),
                 baselineStart: Now.AddHours(2),
                 baselineEnd: Now.AddHours(3)),
             CancellationToken.None);
 
         Assert.True(result.IsSuccess);
         Assert.True(result.Value.ReusedExistingSet);
-        Assert.Equal(2, result.Value.Missions.Count);
+        Assert.Single(result.Value.Missions);
         Assert.Empty(fixture.Repository.Added);
         Assert.Equal(0, fixture.UnitOfWork.SaveCount);
         Assert.Equal(0, fixture.DroneQueries.AvailabilityCallCount);
     }
 
     [Fact]
-    public async Task UnpaidOrderCanPrepareDraftsWithoutReservingDrone()
+    public async Task BaselineCanBeDraftWithoutEitherAppointmentWindow()
     {
         var fixture = new Fixture(requiresBaselineMapping: true,
             isReadyForOperations: false, isEligibleForPlanning: true,
             isReadyToSchedule: false);
-        var command = fixture.CreateCommand(Now.AddHours(4), Now.AddHours(5),
-            Now.AddHours(2), Now.AddHours(3));
+        var command = fixture.CreateCommand();
 
         var result = await fixture.Handler.Handle(command, CancellationToken.None);
 
         Assert.True(result.IsSuccess);
-        Assert.Equal(2, result.Value.Missions.Count);
+        Assert.Single(result.Value.Missions);
         Assert.All(result.Value.Missions, mission =>
         {
             Assert.Equal(MissionStatus.Draft, mission.Status);
@@ -137,38 +224,55 @@ public sealed class PrepareMissionSetHandlerTests
     }
 
     [Fact]
-    public async Task FirstSurveySchedulesBaselineButKeepsServiceDraftWithoutPaidAppointment()
+    public async Task BaselineDraftCanBeScheduledWithoutServiceWindow()
+    {
+        var fixture = new Fixture(requiresBaselineMapping: true,
+            isReadyForOperations: false, isEligibleForPlanning: true,
+            isReadyToSchedule: false);
+        var draft = await fixture.Handler.Handle(fixture.CreateCommand(),
+            CancellationToken.None);
+        Assert.True(draft.IsSuccess);
+        var missionId = Assert.Single(draft.Value.Missions).MissionId;
+
+        fixture.PlanningQuery.Context = fixture.PlanningQuery.Context with
+        {
+            IsReadyToSchedule = true
+        };
+        var scheduled = await fixture.Handler.Handle(
+            fixture.CreateCommand(baselineStart: Now.AddHours(2),
+                baselineEnd: Now.AddHours(3)), CancellationToken.None);
+
+        Assert.True(scheduled.IsSuccess);
+        Assert.Equal(missionId, Assert.Single(scheduled.Value.Missions).MissionId);
+        Assert.Equal(MissionStatus.Scheduled,
+            Assert.Single(fixture.Repository.Added).Status);
+        Assert.Equal(2, fixture.UnitOfWork.SaveCount);
+    }
+
+    [Fact]
+    public async Task FirstSurveySchedulesBaselineWithoutCreatingPaidServiceDraft()
     {
         var fixture = new Fixture(requiresBaselineMapping: true);
-        fixture.PlanningQuery.ServiceContext = fixture.PlanningQuery.Context with
-        {
-            IsReadyForOperations = false,
-            IsReadyToSchedule = false
-        };
-
         var result = await fixture.Handler.Handle(
-            fixture.CreateCommand(Now.AddHours(4), Now.AddHours(5),
-                Now.AddHours(2), Now.AddHours(3)), CancellationToken.None);
+            fixture.CreateCommand(baselineStart: Now.AddHours(2),
+                baselineEnd: Now.AddHours(3)), CancellationToken.None);
 
         Assert.True(result.IsSuccess);
         Assert.Equal(MissionStatus.Scheduled,
-            Assert.Single(result.Value.Missions,
-                mission => mission.Purpose == MissionPurpose.BaselineMapping).Status);
-        var service = Assert.Single(result.Value.Missions,
+            Assert.Single(result.Value.Missions).Status);
+        Assert.DoesNotContain(result.Value.Missions,
             mission => mission.Purpose == MissionPurpose.PlantHealth);
-        Assert.Equal(MissionStatus.Draft, service.Status);
-        Assert.Null(service.ScheduledAt);
         Assert.Equal(1, fixture.DroneQueries.AvailabilityCallCount);
     }
 
     [Fact]
-    public async Task PreparedDraftsAreScheduledWhenAppointmentIsConfirmed()
+    public async Task PaidDraftIsScheduledWhenAppointmentIsConfirmed()
     {
         var fixture = new Fixture(requiresBaselineMapping: false,
             isReadyForOperations: false, isEligibleForPlanning: true,
             isReadyToSchedule: false);
-        var command = fixture.CreateCommand(Now.AddHours(2), Now.AddHours(3));
-        var prepared = await fixture.Handler.Handle(command, CancellationToken.None);
+        var prepared = await fixture.Handler.Handle(fixture.CreateCommand(),
+            CancellationToken.None);
         Assert.True(prepared.IsSuccess);
         Assert.Equal(MissionStatus.Draft, Assert.Single(fixture.Repository.Added).Status);
 
@@ -176,7 +280,9 @@ public sealed class PrepareMissionSetHandlerTests
         {
             IsReadyToSchedule = true
         };
-        var scheduled = await fixture.Handler.Handle(command, CancellationToken.None);
+        var scheduled = await fixture.Handler.Handle(
+            fixture.CreateCommand(Now.AddHours(2), Now.AddHours(3)),
+            CancellationToken.None);
 
         Assert.True(scheduled.IsSuccess);
         Assert.Single(fixture.Repository.Added);
@@ -186,20 +292,20 @@ public sealed class PrepareMissionSetHandlerTests
     }
 
     [Fact]
-    public async Task ConfirmedAppointmentCanReserveDroneBeforePayment()
+    public async Task UnpaidRepeatOrderCannotPrepareOrReserveDrone()
     {
         var fixture = new Fixture(requiresBaselineMapping: false,
-            isReadyForOperations: false, isEligibleForPlanning: true,
-            isReadyToSchedule: true);
+            isReadyForOperations: false, isEligibleForPlanning: false,
+            isReadyToSchedule: false);
 
         var result = await fixture.Handler.Handle(
             fixture.CreateCommand(Now.AddHours(2), Now.AddHours(3)),
             CancellationToken.None);
 
-        Assert.True(result.IsSuccess);
-        Assert.Equal(MissionStatus.Scheduled,
-            Assert.Single(result.Value.Missions).Status);
-        Assert.Equal(1, fixture.DroneQueries.AvailabilityCallCount);
+        Assert.True(result.IsFailure);
+        Assert.Equal("MissionPlanning.OrderNotReady", result.Error.Code);
+        Assert.Empty(fixture.Repository.Added);
+        Assert.Equal(0, fixture.DroneQueries.AvailabilityCallCount);
     }
 
     [Fact]
@@ -271,18 +377,9 @@ public sealed class PrepareMissionSetHandlerTests
     public async Task ConcurrentWinnerIsReturnedAsAnIdempotentSuccess()
     {
         var fixture = new Fixture(requiresBaselineMapping: true);
-        var winner = new[]
-        {
-            fixture.CreateExistingMission(
-                MissionPurpose.BaselineMapping,
-                Now.AddHours(2),
-                Now.AddHours(3)),
-            fixture.CreateExistingMission(
-                MissionPurpose.PlantHealth,
-                Now.AddHours(4),
-                Now.AddHours(5),
-                requiresBaselineCompletion: true)
-        };
+        var winner = new[] { fixture.CreateExistingMission(
+            MissionPurpose.BaselineMapping,
+            Now.AddHours(2), Now.AddHours(3)) };
         fixture.UnitOfWork.BeforeSaveFailure = () =>
             fixture.Repository.ReplaceStored(winner);
         fixture.UnitOfWork.SaveException = new MissionSetConflictException(
@@ -290,8 +387,6 @@ public sealed class PrepareMissionSetHandlerTests
 
         var result = await fixture.Handler.Handle(
             fixture.CreateCommand(
-                serviceStart: Now.AddHours(4),
-                serviceEnd: Now.AddHours(5),
                 baselineStart: Now.AddHours(2),
                 baselineEnd: Now.AddHours(3)),
             CancellationToken.None);
@@ -410,8 +505,6 @@ public sealed class PrepareMissionSetHandlerTests
 
         var result = await fixture.Handler.Handle(
             fixture.CreateCommand(
-                serviceStart: Now.AddHours(4),
-                serviceEnd: Now.AddHours(5),
                 baselineStart: Now.AddHours(2),
                 baselineEnd: Now.AddHours(3)),
             CancellationToken.None);
@@ -441,7 +534,7 @@ public sealed class PrepareMissionSetHandlerTests
     }
 
     [Fact]
-    public async Task ServiceCannotBeScheduledBeforeRequiredBaseline()
+    public async Task ServiceWindowIsRejectedWhileBaselineIsRequired()
     {
         var fixture = new Fixture(requiresBaselineMapping: true);
 
@@ -450,7 +543,19 @@ public sealed class PrepareMissionSetHandlerTests
                 Now.AddHours(4), Now.AddHours(5)), CancellationToken.None);
 
         Assert.True(result.IsFailure);
-        Assert.Equal("MissionPlanning.BaselineMustPrecedeService", result.Error.Code);
+        Assert.Equal("MissionPlanning.ServiceWindowNotAllowed", result.Error.Code);
+        Assert.Empty(fixture.Repository.Added);
+    }
+
+    [Fact]
+    public async Task ScheduledPaidServiceRequiresServiceWindow()
+    {
+        var fixture = new Fixture(requiresBaselineMapping: false);
+        var result = await fixture.Handler.Handle(fixture.CreateCommand(),
+            CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("MissionPlanning.ServiceWindowRequired", result.Error.Code);
         Assert.Empty(fixture.Repository.Added);
     }
 
@@ -493,7 +598,8 @@ public sealed class PrepareMissionSetHandlerTests
                 isReadyForOperations,
                 isReadyForOperations ? null : "Appointment is not confirmed",
                 isEligibleForPlanning ?? isReadyForOperations,
-                isReadyToSchedule ?? isReadyForOperations);
+                isReadyToSchedule ?? isReadyForOperations,
+                FarmBoundaryVersionId);
 
             PlanningQuery = new StubPlanningQuery(context);
             Handler = new PrepareMissionSetCommandHandler(
@@ -517,6 +623,8 @@ public sealed class PrepareMissionSetHandlerTests
 
         public Guid[] ScopeZoneIds { get; }
 
+        public Guid FarmBoundaryVersionId { get; } = Guid.NewGuid();
+
         public RecordingMissionRepository Repository { get; }
 
         public RecordingMissionsUnitOfWork UnitOfWork { get; }
@@ -528,15 +636,17 @@ public sealed class PrepareMissionSetHandlerTests
         public StubPlanningQuery PlanningQuery { get; }
 
         public PrepareMissionSetCommand CreateCommand(
-            DateTimeOffset serviceStart,
-            DateTimeOffset serviceEnd,
+            DateTimeOffset? serviceStart = null,
+            DateTimeOffset? serviceEnd = null,
             DateTimeOffset? baselineStart = null,
             DateTimeOffset? baselineEnd = null) =>
             new(
                 OrderId,
                 DroneId,
                 _operationId,
-                new MissionScheduleWindow(serviceStart, serviceEnd),
+                serviceStart.HasValue && serviceEnd.HasValue
+                    ? new MissionScheduleWindow(serviceStart.Value, serviceEnd.Value)
+                    : null,
                 baselineStart.HasValue && baselineEnd.HasValue
                     ? new MissionScheduleWindow(
                         baselineStart.Value,
@@ -556,6 +666,7 @@ public sealed class PrepareMissionSetHandlerTests
                 _tenantId,
                 _farmId,
                 ScopeZoneIds,
+                FarmBoundaryVersionId,
                 DroneId,
                 _actorId,
                 $"EXISTING-{purpose}",

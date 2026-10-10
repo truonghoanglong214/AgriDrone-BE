@@ -42,6 +42,8 @@ internal sealed class GetFieldNotesQueryHandler(
         return Result.Success<IReadOnlyList<MissionFieldNoteResult>>(
             stored.Select(note => new MissionFieldNoteResult(
                 note.Id, note.OperationId, note.CreatedBy, note.Text,
-                note.ObservedAt, note.ReceivedAt)).ToArray());
+                note.ObservedAt, note.ReceivedAt, note.IncidentType,
+                note.IncidentOutcome, note.RecoveryDecision,
+                note.EvidenceReference)).ToArray());
     }
 }

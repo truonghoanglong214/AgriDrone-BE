@@ -133,6 +133,10 @@ public sealed class DroneMissionConfiguration : IEntityTypeConfiguration<DroneMi
             .HasDefaultValueSql("ARRAY[]::uuid[]")
             .IsRequired();
 
+        builder.Property(mission => mission.FarmBoundaryVersionId)
+            .HasColumnName("farm_boundary_version_id")
+            .HasColumnType("uuid");
+
         builder.Property(mission => mission.RequiresBaselineCompletion)
             .HasColumnName("requires_baseline_completion")
             .HasColumnType("boolean")

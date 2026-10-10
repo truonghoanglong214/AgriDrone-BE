@@ -46,6 +46,30 @@ internal static class MissionOperationError
         AppError.Conflict("MissionOperation.PreflightStale",
             "The pre-flight checklist definition changed. Complete the current checklist before flight.");
 
+    public static AppError SafetyEvidenceRequired() =>
+        AppError.Conflict("MissionOperation.SafetyEvidenceRequired",
+            "Flight authorization evidence and failsafe procedures are required before flight.");
+
+    public static AppError ReasonRequired() =>
+        AppError.Validation("MissionOperation.ReasonRequired",
+            "Flight failure and cancellation require a reason.");
+
+    public static AppError FailureIncidentRequired() =>
+        AppError.Validation("MissionOperation.FailureIncidentRequired",
+            "Flight failure requires an incident type, outcome, recovery decision, evidence reference and operation ID.");
+
+    public static AppError RecoveryDecisionRequired() =>
+        AppError.Conflict("MissionOperation.RecoveryDecisionRequired",
+            "The failed flight has no recorded RESCHEDULE_REQUIRED decision.");
+
+    public static AppError RecoveryWindowRequired() =>
+        AppError.Validation("MissionOperation.RecoveryWindowRequired",
+            "The recovery flight must be scheduled after the failure and in the future.");
+
+    public static AppError ReplacementDroneOnlyOnRecovery() =>
+        AppError.Validation("MissionOperation.ReplacementDroneOnlyOnRecovery",
+            "A replacement drone may be selected only for a failed flight recovery.");
+
     public static AppError DroneNotOperational(Guid droneId) =>
         AppError.Conflict("MissionOperation.DroneNotOperational",
             $"Drone '{droneId}' is unavailable, unregistered, expired or due for maintenance.");

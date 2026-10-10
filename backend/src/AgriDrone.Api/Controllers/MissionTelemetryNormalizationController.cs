@@ -20,6 +20,7 @@ public sealed class MissionTelemetryNormalizationController(
     /// <summary>
     /// Giải mã Blackbox TXT/BBL thành các đoạn telemetry để kiểm tra trước import.
     /// </summary>
+    /// <remarks>Trả các segment và điểm telemetry kèm cảnh báo để client kiểm tra. Bước này chưa lưu đường bay; dùng telemetry/imports để nhập segment được chọn.</remarks>
     [HttpPost("normalize")]
     [Authorize(Policy = AccessAuthorizationPolicies.SystemManager)]
     [Consumes("multipart/form-data")]

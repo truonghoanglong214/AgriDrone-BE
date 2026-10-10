@@ -71,14 +71,15 @@ internal sealed class CompleteMissionPreflightCommandHandler(
                 request.Answers,
                 request.SuitableForFlight,
                 request.Notes ?? request.UnsuitableConditionNotes ?? request.FailsafeNotes)
-                && (savedChecklist is null || savedChecklist.MatchesPayload(
+                && savedChecklist is not null && savedChecklist.MatchesPayload(
                     request.ChecklistDefinitionId,
                     request.Answers,
                     request.UnsuitableConditionNotes ??
                         (request.SuitableForFlight ? null : request.Notes),
                     request.FailsafeNotes,
                     actorId,
-                    request.DeviceCompletedAt))
+                    request.DeviceCompletedAt,
+                    request.FlightAuthorizationEvidence)
                 ? Result.Success(new CompleteMissionPreflightResult(
                     MissionResponseMapper.Map(mission),
                     true))
@@ -138,6 +139,14 @@ internal sealed class CompleteMissionPreflightCommandHandler(
             return Result.Failure<CompleteMissionPreflightResult>(answerError);
         }
 
+        if (request.SuitableForFlight &&
+            (request.Answers.RootElement.EnumerateObject().Any(answer =>
+                 answer.Value.ValueKind == JsonValueKind.False) ||
+             string.IsNullOrWhiteSpace(request.FlightAuthorizationEvidence) ||
+             string.IsNullOrWhiteSpace(request.FailsafeNotes)))
+            return Result.Failure<CompleteMissionPreflightResult>(
+                CompleteMissionPreflightError.SafetyEvidenceRequired());
+
         var now = timeProvider.GetUtcNow();
         if (mission.PreflightOperationId.HasValue)
         {
@@ -165,7 +174,8 @@ internal sealed class CompleteMissionPreflightCommandHandler(
             request.FailsafeNotes,
             actorId,
             request.DeviceCompletedAt ?? now,
-            now);
+            now,
+            request.FlightAuthorizationEvidence);
         checklistRepository.AddCompleted(checklist);
 
         using var auditData = JsonSerializer.SerializeToDocument(new
@@ -177,7 +187,8 @@ internal sealed class CompleteMissionPreflightCommandHandler(
             mission.PreflightNotes,
             mission.PreflightConfirmedAt,
             ChecklistDefinitionId = definition.Id,
-            ChecklistVersion = definition.VersionNumber
+            ChecklistVersion = definition.VersionNumber,
+            request.FlightAuthorizationEvidence
         });
         auditWriter.AddUserAction(
             unitOfWork,

@@ -62,6 +62,7 @@ public sealed class MissionUploadController(
     }
 
     /// <summary>Kiểm tra điều kiện hoàn tất upload của Mission.</summary>
+    /// <remarks>Trả CanFinalize và danh sách Blockers, cùng số media, điểm telemetry và tình trạng upload session. Dùng kết quả để xử lý dữ liệu còn thiếu trước khi gọi upload/finalize.</remarks>
     [HttpGet("api/missions/{missionId:guid}/farms/{farmId:guid}/upload/readiness")]
     [Authorize(Policy = AccessAuthorizationPolicies.SystemManager)]
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]

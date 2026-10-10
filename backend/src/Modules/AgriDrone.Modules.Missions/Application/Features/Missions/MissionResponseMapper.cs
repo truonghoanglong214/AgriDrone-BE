@@ -38,6 +38,7 @@ internal static class MissionResponseMapper
             mission.PreflightChecklistVersion,
             mission.PreflightChecklistAnswers?.RootElement.Clone(),
             mission.PreflightSuitableForFlight,
-            mission.PreflightNotes);
+            mission.PreflightNotes,
+            mission.FarmBoundaryVersionId);
     }
 }

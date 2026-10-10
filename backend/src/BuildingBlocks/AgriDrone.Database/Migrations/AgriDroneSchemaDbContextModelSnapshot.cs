@@ -2256,6 +2256,10 @@ namespace AgriDrone.Database.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("preparation_operation_id");
 
+                    b.Property<Guid?>("FarmBoundaryVersionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("farm_boundary_version_id");
+
                     b.Property<int>("ProcessingStatus")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("system.processing_status")
@@ -2436,6 +2440,21 @@ namespace AgriDrone.Database.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("farm_id");
 
+                    b.Property<string>("EvidenceReference")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("evidence_reference");
+
+                    b.Property<string>("IncidentOutcome")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("incident_outcome");
+
+                    b.Property<string>("IncidentType")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("incident_type");
+
                     b.Property<Guid>("MissionId")
                         .HasColumnType("uuid")
                         .HasColumnName("mission_id");
@@ -2451,6 +2470,11 @@ namespace AgriDrone.Database.Migrations
                     b.Property<DateTimeOffset>("ReceivedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("received_at");
+
+                    b.Property<string>("RecoveryDecision")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("recovery_decision");
 
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uuid")
@@ -2478,6 +2502,8 @@ namespace AgriDrone.Database.Migrations
 
                     b.ToTable("mission_field_notes", "mission", t =>
                         {
+                            t.HasCheckConstraint("ck_mission_field_notes_incident", "(incident_type IS NULL AND incident_outcome IS NULL AND recovery_decision IS NULL AND evidence_reference IS NULL) OR (incident_type IN ('SIGNAL_LOSS','LOW_BATTERY','INTERRUPTION','FLIGHT_FAILURE') AND incident_outcome IS NOT NULL AND recovery_decision IS NOT NULL AND evidence_reference IS NOT NULL AND length(trim(incident_outcome)) > 0 AND recovery_decision IN ('CONTINUE','ABORT','RESCHEDULE_REQUIRED') AND length(trim(evidence_reference)) > 0)");
+
                             t.HasCheckConstraint("ck_mission_field_notes_text", "length(trim(text)) > 0");
                         });
                 });
@@ -2518,6 +2544,10 @@ namespace AgriDrone.Database.Migrations
                     b.Property<string>("FailsafeNotes")
                         .HasColumnType("text")
                         .HasColumnName("failsafe_notes");
+
+                    b.Property<string>("FlightAuthorizationEvidence")
+                        .HasColumnType("text")
+                        .HasColumnName("flight_authorization_evidence");
 
                     b.Property<Guid>("MissionId")
                         .HasColumnType("uuid")
@@ -2574,7 +2604,7 @@ namespace AgriDrone.Database.Migrations
 
                             t.HasCheckConstraint("ck_mission_preflight_responses_object", "jsonb_typeof(responses) = 'object'");
 
-                            t.HasCheckConstraint("ck_mission_preflight_snapshot_object", "jsonb_typeof(definition_snapshot) = 'object'");
+                            t.HasCheckConstraint("ck_mission_preflight_snapshot_object", "jsonb_typeof(definition_snapshot) = 'array'");
                         });
                 });
 

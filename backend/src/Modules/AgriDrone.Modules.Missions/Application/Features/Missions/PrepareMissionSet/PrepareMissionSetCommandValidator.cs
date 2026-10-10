@@ -10,7 +10,6 @@ internal sealed class PrepareMissionSetCommandValidator
         RuleFor(command => command.SurveyOrderId).NotEmpty();
         RuleFor(command => command.DroneId).NotEmpty();
         RuleFor(command => command.OperationId).NotEmpty();
-        RuleFor(command => command.ServiceWindow).NotNull();
         RuleFor(command => command.ServiceWindow)
             .Must(IsValidWindow)
             .When(command => command.ServiceWindow is not null)
@@ -20,7 +19,8 @@ internal sealed class PrepareMissionSetCommandValidator
             .WithMessage("Baseline Mission schedule window is invalid.");
     }
 
-    private static bool IsValidWindow(MissionScheduleWindow window) =>
+    private static bool IsValidWindow(MissionScheduleWindow? window) =>
+        window is not null &&
         window.StartAt != default &&
         window.EndAt != default &&
         window.StartAt.Offset == TimeSpan.Zero &&

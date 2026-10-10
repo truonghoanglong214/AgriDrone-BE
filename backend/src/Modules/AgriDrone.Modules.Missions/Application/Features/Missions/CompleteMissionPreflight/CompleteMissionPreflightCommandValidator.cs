@@ -26,6 +26,7 @@ internal sealed class CompleteMissionPreflightCommandValidator
         RuleFor(command => command.Notes).MaximumLength(2000);
         RuleFor(command => command.UnsuitableConditionNotes).MaximumLength(2000);
         RuleFor(command => command.FailsafeNotes).MaximumLength(2000);
+        RuleFor(command => command.FlightAuthorizationEvidence).MaximumLength(2000);
         RuleFor(command => command.DeviceCompletedAt)
             .Must(value => !value.HasValue || value.Value.Offset == TimeSpan.Zero)
             .WithMessage("Device completion time must be UTC.");

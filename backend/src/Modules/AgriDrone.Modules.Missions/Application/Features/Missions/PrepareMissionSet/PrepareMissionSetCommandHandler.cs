@@ -64,6 +64,8 @@ internal sealed class PrepareMissionSetCommandHandler(
             order.ScopeZoneIds.Any(zoneId => zoneId == Guid.Empty) ||
             order.ScopeZoneIds.Distinct().Count() !=
             order.ScopeZoneIds.Count ||
+            order.FarmBoundaryVersionId is null ||
+            order.FarmBoundaryVersionId == Guid.Empty ||
             (!order.RequiresBaselineMapping &&
              order.CurrentBaseMapVersionId is null))
         {
@@ -91,8 +93,13 @@ internal sealed class PrepareMissionSetCommandHandler(
             order.SurveyOrderId,
             cancellationToken);
         var expectedPurposes = GetExpectedPurposes(order, existing);
-        var servicePurpose = expectedPurposes.Single(purpose =>
-            purpose != MissionPurpose.BaselineMapping);
+        var servicePurpose = order.SelectedService switch
+        {
+            SurveyServiceType.PlantHealth => MissionPurpose.PlantHealth,
+            SurveyServiceType.HarvestReadiness => MissionPurpose.HarvestReadiness,
+            _ => throw new InvalidOperationException(
+                $"Unsupported Survey Service '{order.SelectedService}'.")
+        };
 
         if (!order.IsEligibleForPlanning)
         {
@@ -112,31 +119,6 @@ internal sealed class PrepareMissionSetCommandHandler(
             purposeContexts[MissionPurpose.BaselineMapping] =
                 order with { IsReadyToSchedule = false };
         }
-        if (order.RequiresBaselineMapping)
-        {
-            SurveyOrderMissionPlanningContext? serviceOrder;
-            try
-            {
-                serviceOrder = await orderPlanningQuery.GetForPurposeAsync(
-                    request.SurveyOrderId, servicePurpose, cancellationToken);
-            }
-            catch (SurveyOrderMissionPlanningUnavailableException)
-            {
-                return Result.Failure<PrepareMissionSetResult>(
-                    PrepareMissionSetErrors.OrderContextUnavailable());
-            }
-            if (serviceOrder is null ||
-                serviceOrder.SurveyOrderId != order.SurveyOrderId ||
-                serviceOrder.TenantId != order.TenantId ||
-                serviceOrder.FarmId != order.FarmId ||
-                serviceOrder.SelectedService != order.SelectedService)
-            {
-                return Result.Failure<PrepareMissionSetResult>(
-                    PrepareMissionSetErrors.InvalidOrderContext());
-            }
-            purposeContexts[servicePurpose] = serviceOrder;
-        }
-
         if (HasInvalidExistingSet(existing, expectedPurposes, order))
         {
             return Result.Failure<PrepareMissionSetResult>(
@@ -156,7 +138,7 @@ internal sealed class PrepareMissionSetCommandHandler(
         }
 
         var scheduleValidation = ValidateSchedules(
-            request, order, purposeContexts);
+            request, order, purposeContexts, existing);
         if (scheduleValidation is not null)
         {
             return Result.Failure<PrepareMissionSetResult>(scheduleValidation);
@@ -173,7 +155,7 @@ internal sealed class PrepareMissionSetCommandHandler(
 
             var window = purpose == MissionPurpose.BaselineMapping
                 ? request.BaselineWindow!
-                : request.ServiceWindow;
+                : request.ServiceWindow!;
             var availableDrones = await droneQueries.GetAvailableAsync(
                 window.StartAt,
                 window.EndAt,
@@ -193,15 +175,15 @@ internal sealed class PrepareMissionSetCommandHandler(
 
         foreach (var purpose in expectedPurposes)
         {
-            var window = purpose == MissionPurpose.BaselineMapping
-                ? request.BaselineWindow!
-                : request.ServiceWindow;
             var draft = existing.SingleOrDefault(mission =>
                 mission.Purpose == purpose && mission.Status == MissionStatus.Draft);
             if (draft is not null)
             {
                 if (purposeContexts[purpose].IsReadyToSchedule)
                 {
+                    var window = purpose == MissionPurpose.BaselineMapping
+                        ? request.BaselineWindow!
+                        : request.ServiceWindow!;
                     draft.Schedule(window.StartAt, window.EndAt, now);
                     AddScheduleAudit(draft, actorId, now);
                 }
@@ -210,11 +192,7 @@ internal sealed class PrepareMissionSetCommandHandler(
             if (existing.Any(mission => mission.Purpose == purpose))
                 continue;
 
-            var isServiceWaitingForBaseline =
-                order.RequiresBaselineMapping &&
-                purpose != MissionPurpose.BaselineMapping;
-            var sourceMapVersionId = purpose == MissionPurpose.BaselineMapping ||
-                                     isServiceWaitingForBaseline
+            var sourceMapVersionId = purpose == MissionPurpose.BaselineMapping
                 ? null
                 : order.CurrentBaseMapVersionId;
 
@@ -223,18 +201,24 @@ internal sealed class PrepareMissionSetCommandHandler(
                 order.TenantId,
                 order.FarmId,
                 order.ScopeZoneIds,
+                order.FarmBoundaryVersionId!.Value,
                 request.DroneId,
                 actorId,
                 BuildMissionCode(order.SurveyOrderId, purpose),
                 purpose,
                 request.OperationId,
                 sourceMapVersionId,
-                isServiceWaitingForBaseline,
+                false,
                 flightParameters,
                 actorId,
                 now);
             if (purposeContexts[purpose].IsReadyToSchedule)
+            {
+                var window = purpose == MissionPurpose.BaselineMapping
+                    ? request.BaselineWindow!
+                    : request.ServiceWindow!;
                 mission.Schedule(window.StartAt, window.EndAt, now);
+            }
             missionRepository.Add(mission);
             AddAudit(mission, actorId, now);
             created.Add(mission);
@@ -292,6 +276,7 @@ internal sealed class PrepareMissionSetCommandHandler(
             Purpose = mission.Purpose!.Value.ToString(),
             mission.DroneId,
             mission.ScopeZoneIds,
+            mission.FarmBoundaryVersionId,
             mission.ScheduledAt,
             mission.ScheduledEndAt,
             mission.RequiresBaselineCompletion,
@@ -345,8 +330,10 @@ internal sealed class PrepareMissionSetCommandHandler(
                 $"Unsupported Survey Service '{order.SelectedService}'.")
         };
 
-        return order.RequiresBaselineMapping ||
-               existing.Any(mission => mission.Purpose == MissionPurpose.BaselineMapping)
+        if (order.RequiresBaselineMapping)
+            return [MissionPurpose.BaselineMapping];
+
+        return existing.Any(mission => mission.Purpose == MissionPurpose.BaselineMapping)
             ? [MissionPurpose.BaselineMapping, servicePurpose]
             : [servicePurpose];
     }
@@ -354,42 +341,36 @@ internal sealed class PrepareMissionSetCommandHandler(
     private static AppError? ValidateSchedules(
         PrepareMissionSetCommand request,
         SurveyOrderMissionPlanningContext order,
-        IReadOnlyDictionary<MissionPurpose, SurveyOrderMissionPlanningContext> purposeContexts)
+        IReadOnlyDictionary<MissionPurpose, SurveyOrderMissionPlanningContext> purposeContexts,
+        IReadOnlyCollection<DroneMission> existing)
     {
-        if (order.RequiresBaselineMapping && request.BaselineWindow is null)
-        {
-            return PrepareMissionSetErrors.BaselineWindowRequired();
-        }
-
+        if (order.RequiresBaselineMapping && request.ServiceWindow is not null)
+            return PrepareMissionSetErrors.ServiceWindowNotAllowed();
         if (!order.RequiresBaselineMapping && request.BaselineWindow is not null)
-        {
             return PrepareMissionSetErrors.BaselineWindowNotAllowed();
-        }
 
         foreach (var (purpose, context) in purposeContexts)
         {
             if (!context.IsReadyToSchedule)
                 continue;
             var window = purpose == MissionPurpose.BaselineMapping
-                ? request.BaselineWindow!
+                ? request.BaselineWindow
                 : request.ServiceWindow;
+            if (window is null)
+                return purpose == MissionPurpose.BaselineMapping
+                    ? PrepareMissionSetErrors.BaselineWindowRequired()
+                    : PrepareMissionSetErrors.ServiceWindowRequired();
             if (window.StartAt < context.AppointmentStartAt ||
                 window.EndAt > context.AppointmentEndAt)
                 return PrepareMissionSetErrors.ScheduleOutsideAppointment();
         }
 
-        if (request.BaselineWindow is { } baseline &&
-            baseline.StartAt < request.ServiceWindow.EndAt &&
-            baseline.EndAt > request.ServiceWindow.StartAt)
-        {
-            return PrepareMissionSetErrors.ScheduleOverlap();
-        }
-
-        if (request.BaselineWindow is { } orderedBaseline &&
-            request.ServiceWindow.StartAt < orderedBaseline.EndAt)
-        {
+        var baselinePublishedAt = existing.FirstOrDefault(mission =>
+            mission.Purpose == MissionPurpose.BaselineMapping)?.MapPublishedAt;
+        if (request.ServiceWindow is { } serviceWindow &&
+            baselinePublishedAt.HasValue &&
+            serviceWindow.StartAt < baselinePublishedAt.Value)
             return PrepareMissionSetErrors.BaselineMustPrecedeService();
-        }
 
         return null;
     }
@@ -408,6 +389,8 @@ internal sealed class PrepareMissionSetCommandHandler(
         existing.Any(mission =>
             mission.TenantId != order.TenantId ||
             mission.FarmId != order.FarmId ||
+            mission.FarmBoundaryVersionId != order.FarmBoundaryVersionId ||
+            !mission.ScopeZoneIds.Order().SequenceEqual(order.ScopeZoneIds.Order()) ||
             mission.Purpose is not { } purpose ||
             !expectedPurposes.Contains(purpose) ||
             mission.Status is MissionStatus.Cancelled or MissionStatus.FlightFailed ||

@@ -5,5 +5,6 @@ namespace AgriDrone.Modules.Missions.Application.Features.Missions.RescheduleOrd
 
 public sealed record RescheduleOrderMissionCommand(
     Guid FarmId, Guid MissionId, uint ExpectedVersion,
-    DateTimeOffset StartAt, DateTimeOffset EndAt)
+    DateTimeOffset StartAt, DateTimeOffset EndAt,
+    Guid? ReplacementDroneId = null)
     : IRequest<Result<MissionResponse>>;

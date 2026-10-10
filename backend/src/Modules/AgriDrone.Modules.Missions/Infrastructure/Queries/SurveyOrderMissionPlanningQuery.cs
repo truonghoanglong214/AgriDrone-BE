@@ -82,8 +82,7 @@ internal sealed class SurveyOrderMissionPlanningQuery(
                 "ReadyForPaidService";
         var planningFailures = source.ReadinessFailures.Where(failure =>
             failure is not ("OrderNotEligible" or "AppointmentNotConfirmed" or
-                "AppointmentPurposeMismatch" or "PaymentNotConfirmed" or
-                "PriceAdjustmentPending"));
+                "AppointmentPurposeMismatch"));
         var canPlan = purposeMatches && planningStatusAllowed &&
                       source.FarmBoundaryVersionId.HasValue &&
                       source.PrimarySystemManagerId.HasValue &&
@@ -96,9 +95,10 @@ internal sealed class SurveyOrderMissionPlanningQuery(
             source.SurveyOrderId, source.TenantId, source.FarmId,
             selectedService,
             source.RequiresBaselineMapping && source.FarmBaseMapVersionId is null,
-            source.FarmBaseMapVersionId, [], start, end, ready,
+            source.FarmBaseMapVersionId, source.ScopeZoneIds ?? [], start, end, ready,
             (!purposeMatches ? "PURPOSE_MISMATCH" : null) ??
             (source.ReadinessFailures.Count > 0 ? source.ReadinessFailures[0] : null) ??
-            (ready ? null : "ORDER_NOT_READY"), canPlan, canSchedule);
+            (ready ? null : "ORDER_NOT_READY"), canPlan, canSchedule,
+            source.FarmBoundaryVersionId, source.PrimarySystemManagerId);
     }
 }

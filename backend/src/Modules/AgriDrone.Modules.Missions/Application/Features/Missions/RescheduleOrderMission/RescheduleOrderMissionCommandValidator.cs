@@ -14,5 +14,7 @@ internal sealed class RescheduleOrderMissionCommandValidator
             value.Offset == TimeSpan.Zero);
         RuleFor(value => value.EndAt).Must((request, value) =>
             value.Offset == TimeSpan.Zero && value > request.StartAt);
+        RuleFor(value => value.ReplacementDroneId)
+            .Must(value => value is null || value != Guid.Empty);
     }
 }

@@ -13,4 +13,6 @@ public sealed record SurveyOrderMissionPlanningContext(
     bool IsReadyForOperations,
     string? ReadinessFailureCode,
     bool IsEligibleForPlanning = true,
-    bool IsReadyToSchedule = true);
+    bool IsReadyToSchedule = true,
+    Guid? FarmBoundaryVersionId = null,
+    Guid? PrimarySystemManagerId = null);

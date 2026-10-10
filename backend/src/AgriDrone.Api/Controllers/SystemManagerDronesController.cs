@@ -13,6 +13,7 @@ namespace AgriDrone.Api.Controllers;
 [Authorize(Policy = AccessAuthorizationPolicies.SystemManager)]
 public sealed class SystemManagerDronesController(ISender sender) : ControllerBase
 {
+    /// <remarks>Tìm drone còn khả dụng trong khoảng StartAt–EndAt và hỗ trợ Purpose yêu cầu. SystemManager phải có quyền trên Farm; kết quả tìm kiếm không thay thế kiểm tra lại khi đặt lịch hoặc bắt đầu bay.</remarks>
     [HttpGet("available")]
     public async Task<IResult> GetAvailable(
         [FromRoute] Guid farmId,

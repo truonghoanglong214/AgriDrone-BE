@@ -3,7 +3,7 @@ namespace AgriDrone.Api.Contracts.Missions;
 public sealed record PrepareMissionSetRequest(
     Guid DroneId,
     Guid OperationId,
-    DateTimeOffset ServiceStartAt,
-    DateTimeOffset ServiceEndAt,
-    DateTimeOffset? BaselineStartAt,
-    DateTimeOffset? BaselineEndAt);
+    DateTimeOffset? ServiceStartAt = null,
+    DateTimeOffset? ServiceEndAt = null,
+    DateTimeOffset? BaselineStartAt = null,
+    DateTimeOffset? BaselineEndAt = null);

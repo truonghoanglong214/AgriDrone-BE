@@ -51,6 +51,32 @@ internal sealed class SyncFieldNoteCommandHandler(
             return Result.Failure<SyncFieldNoteResult>(AppError.Conflict(
                 "MissionFieldNote.InvalidStatus",
                 $"Mission in status '{mission.Status}' cannot accept a new field note."));
+        if (request.IncidentType is not null &&
+            mission.Status is not (MissionStatus.InFlight or
+                MissionStatus.FlightCompleted or MissionStatus.FlightFailed))
+            return Result.Failure<SyncFieldNoteResult>(AppError.Conflict(
+                "MissionFieldNote.IncidentStatus",
+                "Flight incidents can only be recorded during or after a flight."));
+        if ((request.IncidentType is null &&
+             (request.IncidentOutcome is not null ||
+              request.RecoveryDecision is not null ||
+              request.EvidenceReference is not null)) ||
+            request.IncidentType is not null &&
+            (request.IncidentType is not ("SIGNAL_LOSS" or "LOW_BATTERY" or
+                 "INTERRUPTION" or "FLIGHT_FAILURE") ||
+             string.IsNullOrWhiteSpace(request.IncidentOutcome) ||
+             request.IncidentOutcome?.Length > 1000 ||
+             request.RecoveryDecision is not ("CONTINUE" or "ABORT" or
+                 "RESCHEDULE_REQUIRED") ||
+             string.IsNullOrWhiteSpace(request.EvidenceReference) ||
+             request.EvidenceReference?.Length > 500 ||
+             (request.RecoveryDecision is "ABORT" or "RESCHEDULE_REQUIRED" &&
+              mission.Status != MissionStatus.FlightFailed) ||
+             (request.RecoveryDecision == "CONTINUE" &&
+              mission.Status == MissionStatus.FlightFailed)))
+            return Result.Failure<SyncFieldNoteResult>(AppError.Validation(
+                "MissionFieldNote.InvalidIncident",
+                "Incident details and recovery decision must match the flight state."));
 
         var now = clock.GetUtcNow();
         if (request.ObservedAt < mission.CreatedAt.AddMinutes(-5) ||
@@ -66,12 +92,15 @@ internal sealed class SyncFieldNoteCommandHandler(
 
         var note = MissionFieldNote.Create(tenantId, request.FarmId,
             request.MissionId, request.OperationId, actorId,
-            request.Text, request.ObservedAt, now);
+            request.Text, request.ObservedAt, now,
+            request.IncidentType, request.IncidentOutcome,
+            request.RecoveryDecision, request.EvidenceReference);
         notes.Add(note);
         using var auditData = JsonSerializer.SerializeToDocument(new
         {
             note.MissionId, note.OperationId, note.ObservedAt,
-            note.ReceivedAt
+            note.ReceivedAt, note.IncidentType, note.IncidentOutcome,
+            note.RecoveryDecision, note.EvidenceReference
         });
         auditWriter.AddUserAction(unitOfWork, tenantId, request.FarmId,
             actorId, executionContext.CorrelationId, nameof(MissionFieldNote),
@@ -97,7 +126,9 @@ internal sealed class SyncFieldNoteCommandHandler(
 
     private static Result<SyncFieldNoteResult> MatchExisting(
         MissionFieldNote existing, Guid actorId, SyncFieldNoteCommand request) =>
-        existing.Matches(actorId, request.Text, request.ObservedAt)
+        existing.Matches(actorId, request.Text, request.ObservedAt,
+            request.IncidentType, request.IncidentOutcome,
+            request.RecoveryDecision, request.EvidenceReference)
             ? Result.Success(ToResult(existing, true))
             : Result.Failure<SyncFieldNoteResult>(AppError.Conflict(
                 "MissionFieldNote.OperationPayloadConflict",

@@ -31,6 +31,7 @@ public sealed class MissionMediaController(
             "Media upload interrupted for mission {MissionId}, file {Index}");
 
     /// <summary>Create or renew a direct-to-storage upload session for an assigned manager.</summary>
+    /// <remarks>Tạo hoặc lấy lại phiên upload trực tiếp lên storage bằng OperationId. Client dùng UploadUri được trả về để gửi file, sau đó gọi complete; ExpectedMissionVersion kiểm soát thay đổi đồng thời.</remarks>
     [HttpPost("upload-sessions")]
     [Authorize(Policy = AccessAuthorizationPolicies.SystemManager)]
     public async Task<IResult> CreateUploadSession(
@@ -54,6 +55,7 @@ public sealed class MissionMediaController(
     }
 
     /// <summary>Create or resume a direct-to-storage multipart upload.</summary>
+    /// <remarks>Tạo hoặc tiếp tục phiên multipart cho file lớn. Response cho biết kích thước part và các part đã upload để client tiếp tục sau khi mất kết nối.</remarks>
     [HttpPost("multipart-upload-sessions")]
     [Authorize(Policy = AccessAuthorizationPolicies.SystemManager)]
     public async Task<IResult> StartMultipartUpload(
@@ -88,6 +90,7 @@ public sealed class MissionMediaController(
     }
 
     /// <summary>Issue a short-lived URL for one multipart part.</summary>
+    /// <remarks>Cấp URL có thời hạn cho một part của upload session thuộc đúng mission. Client gửi dữ liệu part trực tiếp tới storage.</remarks>
     [HttpGet("upload-sessions/{uploadSessionId:guid}/parts/{partNumber:int}/url")]
     [Authorize(Policy = AccessAuthorizationPolicies.SystemManager)]
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
@@ -110,6 +113,7 @@ public sealed class MissionMediaController(
     }
 
     /// <summary>Verify a directly uploaded object and attach it to the mission.</summary>
+    /// <remarks>Kiểm tra object đã upload và hoàn tất media asset cho mission. Gọi lại phiên đã hoàn tất trả kết quả dùng lại thay vì tạo media trùng.</remarks>
     [HttpPost("upload-sessions/{uploadSessionId:guid}/complete")]
     [Authorize(Policy = AccessAuthorizationPolicies.SystemManager)]
     public async Task<IResult> CompleteUploadSession(

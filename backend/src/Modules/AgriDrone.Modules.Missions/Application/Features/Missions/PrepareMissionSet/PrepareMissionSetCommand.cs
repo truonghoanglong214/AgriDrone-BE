@@ -7,6 +7,6 @@ public sealed record PrepareMissionSetCommand(
     Guid SurveyOrderId,
     Guid DroneId,
     Guid OperationId,
-    MissionScheduleWindow ServiceWindow,
+    MissionScheduleWindow? ServiceWindow,
     MissionScheduleWindow? BaselineWindow)
     : IRequest<Result<PrepareMissionSetResult>>;

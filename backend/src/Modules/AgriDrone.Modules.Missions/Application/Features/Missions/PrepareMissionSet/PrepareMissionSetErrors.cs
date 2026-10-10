@@ -39,7 +39,17 @@ internal static class PrepareMissionSetErrors
     public static AppError BaselineWindowRequired() =>
         AppError.Validation(
             "MissionPlanning.BaselineWindowRequired",
-            "A baseline schedule window is required when the Farm has no approved base map.");
+            "A baseline schedule window is required to schedule the confirmed baseline appointment.");
+
+    public static AppError ServiceWindowRequired() =>
+        AppError.Validation(
+            "MissionPlanning.ServiceWindowRequired",
+            "A service schedule window is required to schedule the confirmed paid-service appointment.");
+
+    public static AppError ServiceWindowNotAllowed() =>
+        AppError.Validation(
+            "MissionPlanning.ServiceWindowNotAllowed",
+            "A paid-service schedule window is not accepted while baseline mapping is required.");
 
     public static AppError BaselineWindowNotAllowed() =>
         AppError.Validation(

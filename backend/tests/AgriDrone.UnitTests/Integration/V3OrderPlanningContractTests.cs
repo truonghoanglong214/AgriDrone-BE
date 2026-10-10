@@ -34,7 +34,30 @@ public sealed class V3OrderPlanningContractTests
     }
 
     [Fact]
-    public async Task UnpaidRepeatOrderIsEligibleForPlanningButNotFlight()
+    public async Task PlanningPreservesApprovedBoundaryAndSelectedZones()
+    {
+        var orderId = Guid.NewGuid();
+        var boundaryId = Guid.NewGuid();
+        var zones = new[] { Guid.NewGuid(), Guid.NewGuid() };
+        var appointment = new DateTimeOffset(2026, 10, 10, 2, 0, 0, TimeSpan.Zero);
+        var source = new SurveyOrderOperationalContextV3(
+            orderId, Guid.NewGuid(), Guid.NewGuid(), "PLANT_HEALTH", "PLANT_HEALTH",
+            nameof(MissionPurpose.PlantHealth), "ReadyForPaidService", 1,
+            boundaryId, Guid.NewGuid(), false, 100, Guid.NewGuid(), 10m,
+            "VND", 1000m, Guid.NewGuid(), "PaidService", appointment,
+            appointment.AddHours(1), "Confirmed", Guid.NewGuid(), "Confirmed",
+            Guid.NewGuid(), null, true, [], appointment, zones);
+
+        var planning = new SurveyOrderMissionPlanningQuery(new SingleContextQuery(source));
+        var context = await planning.GetAsync(orderId);
+
+        Assert.NotNull(context);
+        Assert.Equal(boundaryId, context.FarmBoundaryVersionId);
+        Assert.Equal(zones, context.ScopeZoneIds);
+    }
+
+    [Fact]
+    public async Task UnpaidRepeatOrderCannotBePlannedOrScheduled()
     {
         var orderId = Guid.NewGuid();
         var appointment = new DateTimeOffset(2026, 10, 10, 2, 0, 0, TimeSpan.Zero);
@@ -51,9 +74,9 @@ public sealed class V3OrderPlanningContractTests
         var context = await planning.GetAsync(orderId);
 
         Assert.NotNull(context);
-        Assert.True(context.IsEligibleForPlanning);
+        Assert.False(context.IsEligibleForPlanning);
         Assert.False(context.IsReadyForOperations);
-        Assert.True(context.IsReadyToSchedule);
+        Assert.False(context.IsReadyToSchedule);
         Assert.False(context.RequiresBaselineMapping);
     }
 

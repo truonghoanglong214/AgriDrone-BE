@@ -35,4 +35,5 @@ public sealed record MissionResponse(
     string? PreflightChecklistVersion,
     JsonElement? PreflightChecklistAnswers,
     bool? PreflightSuitableForFlight,
-    string? PreflightNotes);
+    string? PreflightNotes,
+    Guid? FarmBoundaryVersionId);

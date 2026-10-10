@@ -29,4 +29,5 @@ public sealed record SurveyOrderOperationalContextV3(
     Guid? PreviousCompatibleOrderId,
     bool IsReady,
     IReadOnlyList<string> ReadinessFailures,
-    DateTimeOffset EvaluatedAt);
+    DateTimeOffset EvaluatedAt,
+    IReadOnlyList<Guid>? ScopeZoneIds = null);

@@ -17,6 +17,7 @@ internal sealed class TransitionMissionCommandHandler(
     IDroneRepository droneRepository,
     IDroneMaintenanceRepository maintenanceRepository,
     IPreflightChecklistRepository checklistRepository,
+    IMissionFieldNoteRepository fieldNoteRepository,
     ISystemManagerAccessService managerAccessService,
     ISurveyOrderMissionPlanningQuery orderQuery,
     IMissionsUnitOfWork unitOfWork,
@@ -59,6 +60,14 @@ internal sealed class TransitionMissionCommandHandler(
             return Result.Failure<MissionResponse>(
                 MissionError.InvalidTransition(mission.Status, request.TargetStatus));
         }
+        if (request.TargetStatus is MissionStatus.FlightFailed or MissionStatus.Cancelled &&
+            string.IsNullOrWhiteSpace(request.Reason))
+            return Result.Failure<MissionResponse>(
+                MissionOperationError.ReasonRequired());
+        if (request.TargetStatus == MissionStatus.FlightFailed &&
+            !HasValidFailureIncident(request))
+            return Result.Failure<MissionResponse>(
+                MissionOperationError.FailureIncidentRequired());
 
         var drone = await droneRepository.GetByIdAsync(mission.DroneId, cancellationToken);
         if (drone is null)
@@ -68,7 +77,8 @@ internal sealed class TransitionMissionCommandHandler(
         if (request.TargetStatus == MissionStatus.InFlight)
         {
             var readinessError = await ValidateStartReadinessAsync(
-                mission, drone, surveyOrderId, now, cancellationToken);
+                mission, drone, surveyOrderId, access.ManagerProfileId, actorId, now,
+                cancellationToken);
             if (readinessError is not null)
                 return Result.Failure<MissionResponse>(readinessError);
         }
@@ -77,12 +87,20 @@ internal sealed class TransitionMissionCommandHandler(
         var previousDroneStatus = drone.Status;
         ApplyTransition(mission, drone, request.TargetStatus, actorId, now);
         if (request.TargetStatus == MissionStatus.FlightFailed)
+        {
+            fieldNoteRepository.Add(MissionFieldNote.Create(
+                mission.TenantId, mission.FarmId, mission.Id,
+                request.IncidentOperationId!.Value, actorId,
+                request.Reason!, now, now, request.IncidentType,
+                request.IncidentOutcome, request.RecoveryDecision,
+                request.EvidenceReference));
             maintenanceRepository.Add(DroneMaintenanceRecord.Start(
                 drone.Id, now, actorId,
                 string.IsNullOrWhiteSpace(request.Reason)
                     ? "FLIGHT_FAILURE"
                     : request.Reason.Trim()));
-        AddMissionAudit(mission, previousMissionStatus, request.Reason, actorId, now);
+        }
+        AddMissionAudit(mission, previousMissionStatus, request, actorId, now);
         if (previousDroneStatus != drone.Status)
             AddDroneAudit(drone, mission, previousDroneStatus, actorId, now);
 
@@ -102,6 +120,10 @@ internal sealed class TransitionMissionCommandHandler(
         {
             return Result.Failure<MissionResponse>(MissionError.ConcurrentUpdate());
         }
+        catch (MissionFieldNoteConflictException)
+        {
+            return Result.Failure<MissionResponse>(MissionError.ConcurrentUpdate());
+        }
 
         return Result.Success(MissionResponseMapper.Map(mission));
     }
@@ -110,6 +132,8 @@ internal sealed class TransitionMissionCommandHandler(
         DroneMission mission,
         Drone drone,
         Guid surveyOrderId,
+        Guid? managerProfileId,
+        Guid actorId,
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
@@ -134,17 +158,25 @@ internal sealed class TransitionMissionCommandHandler(
             mission.Purpose == MissionPurpose.HarvestReadiness &&
             order.SelectedService != SurveyServiceType.HarvestReadiness)
             return MissionOperationError.InvalidOrderContext();
-        if (!order.IsReadyForOperations)
+        if (order.FarmBoundaryVersionId is null ||
+            order.FarmBoundaryVersionId != mission.FarmBoundaryVersionId ||
+            order.ScopeZoneIds is null ||
+            !order.ScopeZoneIds.Order().SequenceEqual(mission.ScopeZoneIds.Order()) ||
+            managerProfileId is null ||
+            order.PrimarySystemManagerId != managerProfileId)
+            return MissionOperationError.InvalidOrderContext();
+        if (!order.IsReadyForOperations || !order.IsReadyToSchedule)
             return MissionOperationError.OrderNotReady(order.ReadinessFailureCode);
 
         if (mission.ScheduledAt is not DateTimeOffset scheduledAt ||
             mission.ScheduledEndAt is not DateTimeOffset scheduledEndAt ||
-            now < scheduledAt || now > scheduledEndAt)
+            now < scheduledAt || now >= scheduledEndAt)
             return MissionOperationError.ScheduleWindowClosed();
-        if (now < order.AppointmentStartAt || now > order.AppointmentEndAt)
+        if (now < order.AppointmentStartAt || now >= order.AppointmentEndAt)
             return MissionOperationError.AppointmentWindowClosed();
         if (mission.PreflightConfirmedBy is null || mission.PreflightConfirmedAt is null ||
-            mission.PreflightSuitableForFlight != true)
+            mission.PreflightSuitableForFlight != true ||
+            mission.PreflightConfirmedBy != actorId)
             return MissionOperationError.PreflightRequired();
         var currentChecklist = await checklistRepository.GetActiveDefinitionAsync(
             "DRONE_PRE_FLIGHT", cancellationToken);
@@ -152,6 +184,19 @@ internal sealed class TransitionMissionCommandHandler(
             !string.Equals(mission.PreflightChecklistVersion,
                 $"v{currentChecklist.VersionNumber}", StringComparison.Ordinal))
             return MissionOperationError.PreflightStale();
+        var completedChecklist = mission.PreflightOperationId is Guid operationId
+            ? await checklistRepository.GetByOperationIdAsync(
+                mission.Id, operationId, cancellationToken)
+            : null;
+        if (completedChecklist is null ||
+            completedChecklist.Status != MissionPreflightChecklistStatus.Completed ||
+            completedChecklist.ChecklistDefinitionId != currentChecklist.Id ||
+            completedChecklist.CompletedBy != mission.PreflightConfirmedBy ||
+            completedChecklist.Responses.RootElement.EnumerateObject().Any(answer =>
+                answer.Value.ValueKind == JsonValueKind.False) ||
+            string.IsNullOrWhiteSpace(completedChecklist.FlightAuthorizationEvidence) ||
+            string.IsNullOrWhiteSpace(completedChecklist.FailsafeNotes))
+            return MissionOperationError.SafetyEvidenceRequired();
         if (mission.RequiresBaselineCompletion && mission.SourceMapVersionId is null)
             return MissionOperationError.BaselineNotCompleted();
         if (mission.Purpose is MissionPurpose.PlantHealth or MissionPurpose.HarvestReadiness &&
@@ -201,7 +246,7 @@ internal sealed class TransitionMissionCommandHandler(
     }
 
     private void AddMissionAudit(
-        DroneMission mission, MissionStatus previousStatus, string? reason,
+        DroneMission mission, MissionStatus previousStatus, TransitionMissionCommand request,
         Guid actorId, DateTimeOffset changedAt)
     {
         using var oldData = JsonSerializer.SerializeToDocument(new
@@ -215,7 +260,12 @@ internal sealed class TransitionMissionCommandHandler(
             mission.EndedAt,
             mission.PreflightConfirmedBy,
             mission.PreflightConfirmedAt,
-            Reason = NormalizeReason(reason)
+            Reason = NormalizeReason(request.Reason),
+            request.IncidentOperationId,
+            request.IncidentType,
+            request.IncidentOutcome,
+            request.RecoveryDecision,
+            request.EvidenceReference
         });
         auditWriter.AddUserAction(unitOfWork, mission.TenantId, mission.FarmId,
             actorId, executionContext.CorrelationId, nameof(DroneMission), mission.Id,
@@ -251,4 +301,16 @@ internal sealed class TransitionMissionCommandHandler(
 
     private static string? NormalizeReason(string? reason) =>
         string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
+
+    private static bool HasValidFailureIncident(TransitionMissionCommand request) =>
+        request.IncidentOperationId is Guid operationId && operationId != Guid.Empty &&
+        !string.IsNullOrWhiteSpace(request.Reason) && request.Reason.Length <= 1000 &&
+        !request.Reason.Any(char.IsControl) &&
+        request.IncidentType is "SIGNAL_LOSS" or "LOW_BATTERY" or
+            "INTERRUPTION" or "FLIGHT_FAILURE" &&
+        !string.IsNullOrWhiteSpace(request.IncidentOutcome) &&
+        request.IncidentOutcome.Length <= 1000 &&
+        request.RecoveryDecision is "ABORT" or "RESCHEDULE_REQUIRED" &&
+        !string.IsNullOrWhiteSpace(request.EvidenceReference) &&
+        request.EvidenceReference.Length <= 500;
 }

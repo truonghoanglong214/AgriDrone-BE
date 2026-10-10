@@ -29,6 +29,8 @@ public sealed class DroneMission : AggregateRoot
 
     public Guid[] ScopeZoneIds { get; private set; } = [];
 
+    public Guid? FarmBoundaryVersionId { get; private set; }
+
     public bool RequiresBaselineCompletion { get; private set; }
 
     public MissionPurpose? MissionPurpose => Purpose;
@@ -253,6 +255,7 @@ public sealed class DroneMission : AggregateRoot
         Guid tenantId,
         Guid farmId,
         IReadOnlyCollection<Guid> scopeZoneIds,
+        Guid farmBoundaryVersionId,
         Guid droneId,
         Guid pilotUserId,
         string missionCode,
@@ -267,6 +270,7 @@ public sealed class DroneMission : AggregateRoot
         DomainGuard.NotEmpty(surveyOrderId);
         DomainGuard.NotEmpty(tenantId);
         DomainGuard.NotEmpty(farmId);
+        DomainGuard.NotEmpty(farmBoundaryVersionId);
         DomainGuard.NotEmpty(droneId);
         DomainGuard.NotEmpty(pilotUserId);
         DomainGuard.NotEmpty(preparationOperationId);
@@ -345,6 +349,7 @@ public sealed class DroneMission : AggregateRoot
                 ? primaryZone
                 : null,
             ScopeZoneIds = normalizedScope,
+            FarmBoundaryVersionId = farmBoundaryVersionId,
             DroneId = droneId,
             PilotUserId = pilotUserId,
             MissionCode = normalizedCode,
@@ -501,6 +506,37 @@ public sealed class DroneMission : AggregateRoot
         ScheduledEndAt = scheduledEndAt;
         UpdatedAt = changedAt;
         return true;
+    }
+
+    public void RecoverFailedFlight(Guid droneId, DateTimeOffset scheduledAt,
+        DateTimeOffset scheduledEndAt, DateTimeOffset changedAt)
+    {
+        DomainGuard.NotEmpty(droneId);
+        DomainGuard.Utc(scheduledAt);
+        DomainGuard.Utc(scheduledEndAt);
+        DomainGuard.Utc(changedAt);
+        EnsureStatus(MissionStatus.FlightFailed);
+        if (SurveyOrderId is null || EndedAt is null ||
+            scheduledEndAt <= scheduledAt || scheduledAt <= EndedAt ||
+            scheduledAt <= changedAt ||
+            changedAt < EndedAt)
+            throw new InvalidOperationException(
+                "A failed order-bound flight requires a later recovery window.");
+
+        Status = MissionStatus.Scheduled;
+        DroneId = droneId;
+        ScheduledAt = scheduledAt;
+        ScheduledEndAt = scheduledEndAt;
+        StartedAt = null;
+        EndedAt = null;
+        PreflightConfirmedBy = null;
+        PreflightConfirmedAt = null;
+        PreflightOperationId = null;
+        PreflightChecklistVersion = null;
+        PreflightChecklistAnswers = null;
+        PreflightSuitableForFlight = null;
+        PreflightNotes = null;
+        UpdatedAt = changedAt;
     }
 
     public bool MatchesPreflightOperation(

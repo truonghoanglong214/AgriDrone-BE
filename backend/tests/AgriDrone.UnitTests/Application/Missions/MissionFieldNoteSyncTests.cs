@@ -83,6 +83,66 @@ public sealed class MissionFieldNoteSyncTests
         Assert.Empty(fixture.Notes.Items);
     }
 
+    [Theory]
+    [InlineData("SIGNAL_LOSS")]
+    [InlineData("LOW_BATTERY")]
+    [InlineData("INTERRUPTION")]
+    public async Task FlightIncidentRetainsEvidenceActorAndOutcome(string incidentType)
+    {
+        var fixture = new Fixture();
+        using var answers = JsonDocument.Parse("""{"battery":true}""");
+        fixture.Mission.CompletePreflight(Guid.NewGuid(), "v1", answers,
+            true, "Ready", fixture.ActorId, Now.AddMinutes(-5));
+        fixture.Mission.StartFlight(fixture.ActorId, Now.AddMinutes(-4));
+        var command = new SyncFieldNoteCommand(fixture.FarmId, fixture.Mission.Id,
+            Guid.NewGuid(), "Safety observation", Now.AddMinutes(-2),
+            incidentType, "Safe landing procedure checked", "CONTINUE",
+            "media:flight-log-123");
+
+        var saved = await fixture.Handler.Handle(command, CancellationToken.None);
+        var replay = await fixture.Handler.Handle(command, CancellationToken.None);
+        var listed = await fixture.ReadHandler.Handle(new GetFieldNotesQuery(
+            fixture.FarmId, fixture.Mission.Id), CancellationToken.None);
+
+        Assert.True(saved.IsSuccess);
+        Assert.True(replay.Value.ReusedOperation);
+        Assert.Single(fixture.Notes.Items);
+        var item = Assert.Single(listed.Value);
+        Assert.Equal(incidentType, item.IncidentType);
+        Assert.Equal("Safe landing procedure checked", item.IncidentOutcome);
+        Assert.Equal("CONTINUE", item.RecoveryDecision);
+        Assert.Equal("media:flight-log-123", item.EvidenceReference);
+        Assert.Equal(fixture.ActorId, item.CreatedBy);
+    }
+
+    [Fact]
+    public async Task RescheduleDecisionRequiresFailedFlight()
+    {
+        var fixture = new Fixture();
+        var result = await fixture.Handler.Handle(new SyncFieldNoteCommand(
+            fixture.FarmId, fixture.Mission.Id, Guid.NewGuid(), "Low battery",
+            Now, "LOW_BATTERY", "Returned safely", "RESCHEDULE_REQUIRED",
+            "media:log-456"), CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("MissionFieldNote.IncidentStatus", result.Error.Code);
+        Assert.Empty(fixture.Notes.Items);
+    }
+
+    [Fact]
+    public async Task IncidentDetailsWithoutTypeAreRejectedByHandler()
+    {
+        var fixture = new Fixture();
+        var result = await fixture.Handler.Handle(new SyncFieldNoteCommand(
+            fixture.FarmId, fixture.Mission.Id, Guid.NewGuid(),
+            "Observation", Now, null, "Outcome", "CONTINUE",
+            "media:log-789"), CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("MissionFieldNote.InvalidIncident", result.Error.Code);
+        Assert.Empty(fixture.Notes.Items);
+    }
+
     private sealed class Fixture
     {
         public Guid TenantId { get; } = Guid.NewGuid();
@@ -98,7 +158,7 @@ public sealed class MissionFieldNoteSyncTests
         {
             using var parameters = JsonDocument.Parse("{}");
             Mission = DroneMission.CreateOrderBound(Guid.NewGuid(), TenantId,
-                FarmId, [], Guid.NewGuid(), ActorId, "FIELD-NOTE-TEST",
+                FarmId, [], Guid.NewGuid(), Guid.NewGuid(), ActorId, "FIELD-NOTE-TEST",
                 MissionPurpose.BaselineMapping, Guid.NewGuid(), null,
                 false, parameters, ActorId, Now.AddHours(-1));
             Mission.Schedule(Now.AddHours(-1), Now.AddHours(1), Now.AddHours(-1));

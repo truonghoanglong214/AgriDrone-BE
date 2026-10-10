@@ -15,6 +15,7 @@ public sealed class MissionPreflightChecklist : Entity
     public JsonDocument Responses { get; private set; } = null!;
     public string? UnsuitableConditionNotes { get; private set; }
     public string? FailsafeNotes { get; private set; }
+    public string? FlightAuthorizationEvidence { get; private set; }
     public Guid? CompletedBy { get; private set; }
     public DateTimeOffset? DeviceCompletedAt { get; private set; }
     public DateTimeOffset? CompletedAt { get; private set; }
@@ -32,7 +33,8 @@ public sealed class MissionPreflightChecklist : Entity
         string? failsafeNotes,
         Guid completedBy,
         DateTimeOffset deviceCompletedAt,
-        DateTimeOffset serverReceivedAt)
+        DateTimeOffset serverReceivedAt,
+        string? flightAuthorizationEvidence = null)
     {
         DomainGuard.NotEmpty(missionId);
         ArgumentNullException.ThrowIfNull(definition);
@@ -61,6 +63,7 @@ public sealed class MissionPreflightChecklist : Entity
                 responses.RootElement.GetRawText()),
             UnsuitableConditionNotes = Normalize(unsuitableConditionNotes),
             FailsafeNotes = Normalize(failsafeNotes),
+            FlightAuthorizationEvidence = Normalize(flightAuthorizationEvidence),
             CompletedBy = completedBy,
             DeviceCompletedAt = deviceCompletedAt,
             CompletedAt = serverReceivedAt,
@@ -74,7 +77,8 @@ public sealed class MissionPreflightChecklist : Entity
         string? unsuitableConditionNotes,
         string? failsafeNotes,
         Guid completedBy,
-        DateTimeOffset? deviceCompletedAt) =>
+        DateTimeOffset? deviceCompletedAt,
+        string? flightAuthorizationEvidence = null) =>
         ChecklistDefinitionId == definitionId &&
         string.Equals(
             Responses.RootElement.GetRawText(),
@@ -88,6 +92,8 @@ public sealed class MissionPreflightChecklist : Entity
             FailsafeNotes,
             Normalize(failsafeNotes),
             StringComparison.Ordinal) &&
+        string.Equals(FlightAuthorizationEvidence,
+            Normalize(flightAuthorizationEvidence), StringComparison.Ordinal) &&
         CompletedBy == completedBy &&
         (!deviceCompletedAt.HasValue ||
          DeviceCompletedAt == deviceCompletedAt.Value);

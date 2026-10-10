@@ -40,7 +40,6 @@ internal sealed class DroneMissionRepository(
         CancellationToken cancellationToken = default)
     {
         return await dbContext.DroneMissions
-            .AsNoTracking()
             .Where(mission => mission.SurveyOrderId == surveyOrderId)
             .OrderBy(mission => mission.Purpose)
             .ToListAsync(cancellationToken);

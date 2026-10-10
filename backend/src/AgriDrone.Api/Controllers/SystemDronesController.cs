@@ -17,6 +17,7 @@ namespace AgriDrone.Api.Controllers;
 [Authorize(Policy = AccessAuthorizationPolicies.SystemAdmin)]
 public sealed class SystemDronesController(ISender sender) : ControllerBase
 {
+    /// <remarks>Chỉ SystemAdmin xem danh sách drone cấp hệ thống. Registry nội bộ không dành cho TenantOwner.</remarks>
     [HttpGet]
     public async Task<IResult> GetRegistry(CancellationToken cancellationToken)
     {
@@ -26,6 +27,7 @@ public sealed class SystemDronesController(ISender sender) : ControllerBase
         return result.ToHttpResult(HttpContext, Results.Ok);
     }
 
+    /// <remarks>Xem lịch sử bảo trì của drone để đối chiếu tình trạng vận hành và các sự cố đã ghi nhận.</remarks>
     [HttpGet("{droneId:guid}/maintenance-history")]
     public async Task<IResult> GetMaintenanceHistory(
         [FromRoute] Guid droneId, CancellationToken cancellationToken)
@@ -35,6 +37,7 @@ public sealed class SystemDronesController(ISender sender) : ControllerBase
         return result.ToHttpResult(HttpContext, Results.Ok);
     }
 
+    /// <remarks>Đăng ký drone cấp hệ thống cùng thông số, serial và thông tin đăng ký. Code, serial và registration phải duy nhất.</remarks>
     [HttpPost]
     public async Task<IResult> Register(
         [FromBody] RegisterDroneRequest request,
@@ -60,6 +63,7 @@ public sealed class SystemDronesController(ISender sender) : ControllerBase
             drone => Results.Created($"/api/system/drones/{drone.Id}", drone));
     }
 
+    /// <remarks>Cập nhật thông tin drone. ExpectedVersion dùng để phát hiện cập nhật đồng thời.</remarks>
     [HttpPut("{droneId:guid}")]
     public async Task<IResult> Update(
         [FromRoute] Guid droneId,
@@ -84,6 +88,7 @@ public sealed class SystemDronesController(ISender sender) : ControllerBase
         return result.ToHttpResult(HttpContext, Results.Ok);
     }
 
+    /// <remarks>Đổi trạng thái vận hành hoặc bảo trì của drone, kèm lý do và lịch bảo trì kế tiếp khi áp dụng. Trạng thái mới ảnh hưởng đến khả năng được chọn cho mission.</remarks>
     [HttpPatch("{droneId:guid}/status")]
     public async Task<IResult> ChangeStatus(
         [FromRoute] Guid droneId,

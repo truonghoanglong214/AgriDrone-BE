@@ -13,7 +13,7 @@ public sealed class MissionPreflightChecklistConfiguration : IEntityTypeConfigur
             "mission",
             table =>
             {
-                table.HasCheckConstraint("ck_mission_preflight_snapshot_object", "jsonb_typeof(definition_snapshot) = 'object'");
+                table.HasCheckConstraint("ck_mission_preflight_snapshot_object", "jsonb_typeof(definition_snapshot) = 'array'");
                 table.HasCheckConstraint("ck_mission_preflight_responses_object", "jsonb_typeof(responses) = 'object'");
                 table.HasCheckConstraint(
                     "ck_mission_preflight_completion",
@@ -30,6 +30,8 @@ public sealed class MissionPreflightChecklistConfiguration : IEntityTypeConfigur
         builder.Property(checklist => checklist.Responses).HasColumnName("responses").HasColumnType("jsonb").IsRequired();
         builder.Property(checklist => checklist.UnsuitableConditionNotes).HasColumnName("unsuitable_condition_notes").HasColumnType("text");
         builder.Property(checklist => checklist.FailsafeNotes).HasColumnName("failsafe_notes").HasColumnType("text");
+        builder.Property(checklist => checklist.FlightAuthorizationEvidence)
+            .HasColumnName("flight_authorization_evidence").HasColumnType("text");
         builder.Property(checklist => checklist.CompletedBy).HasColumnName("completed_by").HasColumnType("uuid");
         builder.Property(checklist => checklist.DeviceCompletedAt).HasColumnName("device_completed_at").HasColumnType("timestamp with time zone");
         builder.Property(checklist => checklist.CompletedAt).HasColumnName("completed_at").HasColumnType("timestamp with time zone");

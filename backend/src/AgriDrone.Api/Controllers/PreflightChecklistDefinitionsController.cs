@@ -15,6 +15,7 @@ namespace AgriDrone.Api.Controllers;
 public sealed class PreflightChecklistDefinitionsController(ISender sender)
     : ControllerBase
 {
+    /// <remarks>SystemAdmin kích hoạt phiên bản mới của checklist DRONE_PRE_FLIGHT từ danh sách Items. Checklist đã hoàn tất theo phiên bản cũ sẽ bị coi là stale khi kiểm tra StartFlight.</remarks>
     [HttpPut("drone-pre-flight/active")]
     public async Task<IResult> ActivateNewVersion(
         [FromBody] ManagePreflightChecklistDefinitionRequest request,

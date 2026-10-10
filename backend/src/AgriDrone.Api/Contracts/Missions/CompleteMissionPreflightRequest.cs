@@ -12,4 +12,5 @@ public sealed record CompleteMissionPreflightRequest(
     string? Notes,
     DateTimeOffset? DeviceCompletedAt = null,
     string? UnsuitableConditionNotes = null,
-    string? FailsafeNotes = null);
+    string? FailsafeNotes = null,
+    string? FlightAuthorizationEvidence = null);
