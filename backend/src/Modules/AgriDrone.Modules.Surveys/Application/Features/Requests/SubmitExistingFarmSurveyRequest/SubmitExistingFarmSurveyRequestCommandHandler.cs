@@ -1,4 +1,5 @@
 using System.Text.Json;
+using AgriDrone.IntegrationContracts.Farms;
 using AgriDrone.IntegrationContracts.Identity;
 using AgriDrone.IntegrationContracts.Messaging;
 using AgriDrone.IntegrationContracts.Notifications;
@@ -17,9 +18,10 @@ using MediatR;
 using Microsoft.EntityFrameworkCore;
 using NetTopologySuite.Geometries;
 
-namespace AgriDrone.Modules.Surveys.Application.Features.Requests.SubmitNewFarmSurveyRequest;
+namespace AgriDrone.Modules.Surveys.Application.Features.Requests.SubmitExistingFarmSurveyRequest;
 
-internal sealed class SubmitNewFarmSurveyRequestCommandHandler(
+internal sealed class SubmitExistingFarmSurveyRequestCommandHandler(
+    ISurveyRequestFarmReferenceQuery farmReferenceQuery,
     ITenantOwnerRequestReferenceQuery tenantOwnerReferenceQuery,
     ISurveyRequestRepository requestRepository,
     ISurveyServiceRepository serviceRepository,
@@ -32,36 +34,53 @@ internal sealed class SubmitNewFarmSurveyRequestCommandHandler(
     IExecutionContext executionContext,
     TimeProvider timeProvider)
     : IRequestHandler<
-        SubmitNewFarmSurveyRequestCommand,
-        Result<SubmitNewFarmSurveyRequestResponse>>
+        SubmitExistingFarmSurveyRequestCommand,
+        Result<SubmitExistingFarmSurveyRequestResponse>>
 {
-    public async Task<Result<SubmitNewFarmSurveyRequestResponse>> Handle(
-        SubmitNewFarmSurveyRequestCommand request,
+    public async Task<Result<SubmitExistingFarmSurveyRequestResponse>> Handle(
+        SubmitExistingFarmSurveyRequestCommand request,
         CancellationToken cancellationToken)
     {
         if (!executionContext.IsInitialized ||
             executionContext.ActorId is not Guid actorId ||
-            executionContext.TenantId is not Guid tenantId ||
+            executionContext.TenantId is not Guid currentTenantId ||
             executionContext.CorrelationId == Guid.Empty)
         {
-            return Result.Failure<SubmitNewFarmSurveyRequestResponse>(
+            return Result.Failure<SubmitExistingFarmSurveyRequestResponse>(
                 SurveyRequestError.CurrentTenantOwnerRequired());
         }
 
+        var farm = await farmReferenceQuery.GetAsync(
+            request.FarmId,
+            cancellationToken);
+        if (farm is null ||
+            !farm.IsActive ||
+            farm.TenantId != currentTenantId)
+        {
+            return Result.Failure<SubmitExistingFarmSurveyRequestResponse>(
+                SurveyRequestError.FarmUnavailable());
+        }
+
         var owner = await tenantOwnerReferenceQuery.GetActiveOwnerAsync(
-            tenantId,
+            farm.TenantId,
             actorId,
             cancellationToken);
         if (owner is null)
         {
-            return Result.Failure<SubmitNewFarmSurveyRequestResponse>(
+            return Result.Failure<SubmitExistingFarmSurveyRequestResponse>(
                 SurveyRequestError.Forbidden());
         }
 
         if (!TenantOwnerApplicantProfileValidator.IsComplete(owner))
         {
-            return Result.Failure<SubmitNewFarmSurveyRequestResponse>(
+            return Result.Failure<SubmitExistingFarmSurveyRequestResponse>(
                 SurveyRequestError.ApplicantProfileIncomplete());
+        }
+
+        if (!HasCompleteFarmProfile(farm))
+        {
+            return Result.Failure<SubmitExistingFarmSurveyRequestResponse>(
+                SurveyRequestError.FarmProfileIncomplete());
         }
 
         RequestIdempotency idempotency;
@@ -69,24 +88,24 @@ internal sealed class SubmitNewFarmSurveyRequestCommandHandler(
         try
         {
             idempotency = SurveyRequestIdempotencyFactory.ForTenantActor(
-                tenantId,
+                farm.TenantId,
                 actorId,
                 request.IdempotencyKey);
             submission = SurveyRequestSubmissionSnapshot.Create(
-                SurveyRequestKind.ExistingTenantNewFarm,
-                tenantId,
-                farmId: null,
-                requestedByUserId: actorId,
+                SurveyRequestKind.ExistingFarmSurvey,
+                farm.TenantId,
+                farm.FarmId,
+                actorId,
                 request.SurveyServiceId,
                 owner.FullName,
                 owner.Email,
                 owner.Phone!,
-                request.FarmName,
-                request.FarmAddress,
-                request.ApproximateAreaHa,
-                request.Longitude,
-                request.Latitude,
-                mapSrid: 4326,
+                farm.Name,
+                farm.Address!,
+                farm.AreaHectares!.Value,
+                farm.Longitude!.Value,
+                farm.Latitude!.Value,
+                farm.MapSrid!.Value,
                 request.EstimatedPoleCount,
                 request.PreferredStartAt,
                 request.PreferredEndAt,
@@ -94,7 +113,7 @@ internal sealed class SubmitNewFarmSurveyRequestCommandHandler(
         }
         catch (ArgumentException)
         {
-            return Result.Failure<SubmitNewFarmSurveyRequestResponse>(
+            return Result.Failure<SubmitExistingFarmSurveyRequestResponse>(
                 SurveyRequestError.InvalidInput(
                     "The survey request payload is invalid."));
         }
@@ -116,7 +135,7 @@ internal sealed class SubmitNewFarmSurveyRequestCommandHandler(
             service.Status is not SurveyServiceStatus.Active and
                 not SurveyServiceStatus.Experimental)
         {
-            return Result.Failure<SubmitNewFarmSurveyRequestResponse>(
+            return Result.Failure<SubmitExistingFarmSurveyRequestResponse>(
                 SurveyRequestError.ServiceUnavailable());
         }
 
@@ -128,15 +147,16 @@ internal sealed class SubmitNewFarmSurveyRequestCommandHandler(
                 cancellationToken);
         if (effectivePrice is null)
         {
-            return Result.Failure<SubmitNewFarmSurveyRequestResponse>(
+            return Result.Failure<SubmitExistingFarmSurveyRequestResponse>(
                 SurveyRequestError.ServiceUnavailable());
         }
 
         SurveyRequest surveyRequest;
         try
         {
-            surveyRequest = SurveyRequest.CreateExistingTenantNewFarm(
-                tenantId,
+            surveyRequest = SurveyRequest.CreateExistingFarmSurvey(
+                farm.TenantId,
+                farm.FarmId,
                 actorId,
                 requestNumberGenerator.Create(),
                 service,
@@ -159,7 +179,7 @@ internal sealed class SubmitNewFarmSurveyRequestCommandHandler(
         }
         catch (ArgumentException)
         {
-            return Result.Failure<SubmitNewFarmSurveyRequestResponse>(
+            return Result.Failure<SubmitExistingFarmSurveyRequestResponse>(
                 SurveyRequestError.InvalidInput(
                     "The survey request payload is invalid."));
         }
@@ -171,6 +191,7 @@ internal sealed class SubmitNewFarmSurveyRequestCommandHandler(
             surveyRequest.Status,
             surveyRequest.SurveyServiceId,
             surveyRequest.TenantId,
+            surveyRequest.FarmId,
             surveyRequest.RequestedByUserId
         });
 
@@ -196,7 +217,7 @@ internal sealed class SubmitNewFarmSurveyRequestCommandHandler(
             IntegrationEventDescriptors.EmailNotificationRequestedV1,
             messageId,
             executionContext.CorrelationId,
-            tenantId,
+            farm.TenantId,
             actorId,
             now,
             acknowledgement);
@@ -209,13 +230,13 @@ internal sealed class SubmitNewFarmSurveyRequestCommandHandler(
                     requestRepository.Add(surveyRequest);
                     auditWriter.AddUserAction(
                         unitOfWork,
-                        tenantId,
-                        farmId: null,
+                        farm.TenantId,
+                        farm.FarmId,
                         actorId,
                         executionContext.CorrelationId,
                         "SurveyRequest",
                         surveyRequest.Id,
-                        "TENANT_OWNER_NEW_FARM_SUBMIT",
+                        "TENANT_OWNER_EXISTING_FARM_SURVEY_SUBMIT",
                         oldData: null,
                         auditData,
                         now);
@@ -238,21 +259,21 @@ internal sealed class SubmitNewFarmSurveyRequestCommandHandler(
                 submission,
                 cancellationToken);
             return ResolvePrevious(raceResolution) ??
-                Result.Failure<SubmitNewFarmSurveyRequestResponse>(
+                Result.Failure<SubmitExistingFarmSurveyRequestResponse>(
                     SurveyRequestError.Duplicate());
         }
         catch (DbUpdateException exception)
             when (exception.IsUniqueConstraintViolation(
                 SurveyRequestPersistenceConstraints.RequestNumber))
         {
-            return Result.Failure<SubmitNewFarmSurveyRequestResponse>(
+            return Result.Failure<SubmitExistingFarmSurveyRequestResponse>(
                 SurveyRequestError.RequestNumberConflict());
         }
 
         return Result.Success(MapResponse(surveyRequest));
     }
 
-    private static Result<SubmitNewFarmSurveyRequestResponse>?
+    private static Result<SubmitExistingFarmSurveyRequestResponse>?
         ResolvePrevious(SurveyRequestIdempotencyResolution resolution) =>
         resolution.Outcome switch
         {
@@ -260,7 +281,7 @@ internal sealed class SubmitNewFarmSurveyRequestCommandHandler(
             SurveyRequestIdempotencyOutcome.Replay =>
                 Result.Success(MapResponse(resolution.ExistingResponse!)),
             SurveyRequestIdempotencyOutcome.PayloadMismatch =>
-                Result.Failure<SubmitNewFarmSurveyRequestResponse>(
+                Result.Failure<SubmitExistingFarmSurveyRequestResponse>(
                     SurveyRequestError.IdempotencyPayloadMismatch()),
             _ => throw new ArgumentOutOfRangeException(
                 nameof(resolution),
@@ -268,7 +289,7 @@ internal sealed class SubmitNewFarmSurveyRequestCommandHandler(
                 "Unsupported idempotency outcome.")
         };
 
-    private static SubmitNewFarmSurveyRequestResponse MapResponse(
+    private static SubmitExistingFarmSurveyRequestResponse MapResponse(
         SurveyRequest request) =>
         new(
             request.Id,
@@ -277,7 +298,7 @@ internal sealed class SubmitNewFarmSurveyRequestCommandHandler(
             request.Status,
             request.CreatedAt);
 
-    private static SubmitNewFarmSurveyRequestResponse MapResponse(
+    private static SubmitExistingFarmSurveyRequestResponse MapResponse(
         SurveyRequestAcknowledgementResponse response) =>
         new(
             response.Id,
@@ -286,4 +307,31 @@ internal sealed class SubmitNewFarmSurveyRequestCommandHandler(
             response.Status,
             response.CreatedAt);
 
+    private static bool HasCompleteFarmProfile(
+        SurveyRequestFarmReference farm)
+    {
+        if (string.IsNullOrWhiteSpace(farm.Name) ||
+            farm.Name.Trim().Length > 200 ||
+            string.IsNullOrWhiteSpace(farm.Address) ||
+            farm.Address.Trim().Length > 2_000 ||
+            farm.AreaHectares is not decimal area ||
+            area <= 0m ||
+            area >= 100_000_000m ||
+            DecimalScale(area) > 4 ||
+            farm.Longitude is not double longitude ||
+            !double.IsFinite(longitude) ||
+            longitude is < -180d or > 180d ||
+            farm.Latitude is not double latitude ||
+            !double.IsFinite(latitude) ||
+            latitude is < -90d or > 90d ||
+            farm.MapSrid != 4326)
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private static int DecimalScale(decimal value) =>
+        (decimal.GetBits(value)[3] >> 16) & 0x7F;
 }

@@ -180,6 +180,9 @@ internal readonly record struct SurveyRequestSubmissionFingerprint
         ArgumentNullException.ThrowIfNull(snapshot);
         var includesApplicantPayload =
             snapshot.Kind == SurveyRequestKind.NewCustomer;
+        var includesProposedFarmPayload =
+            snapshot.Kind is SurveyRequestKind.NewCustomer or
+                SurveyRequestKind.ExistingTenantNewFarm;
         var canonicalPayload = new CanonicalFingerprintPayload(
             (int)snapshot.Kind,
             FormatId(snapshot.TenantId),
@@ -189,14 +192,20 @@ internal readonly record struct SurveyRequestSubmissionFingerprint
             includesApplicantPayload ? snapshot.ApplicantName : null,
             includesApplicantPayload ? snapshot.ApplicantEmail : null,
             includesApplicantPayload ? snapshot.ApplicantPhone : null,
-            snapshot.FarmName,
-            snapshot.FarmAddress,
-            snapshot.ApproximateAreaHa.ToString(
-                "G29",
-                CultureInfo.InvariantCulture),
-            FormatCoordinate(snapshot.Longitude),
-            FormatCoordinate(snapshot.Latitude),
-            snapshot.MapSrid,
+            includesProposedFarmPayload ? snapshot.FarmName : null,
+            includesProposedFarmPayload ? snapshot.FarmAddress : null,
+            includesProposedFarmPayload
+                ? snapshot.ApproximateAreaHa.ToString(
+                    "G29",
+                    CultureInfo.InvariantCulture)
+                : null,
+            includesProposedFarmPayload
+                ? FormatCoordinate(snapshot.Longitude)
+                : null,
+            includesProposedFarmPayload
+                ? FormatCoordinate(snapshot.Latitude)
+                : null,
+            includesProposedFarmPayload ? snapshot.MapSrid : null,
             snapshot.EstimatedPoleCount,
             FormatTimestamp(snapshot.PreferredStartAt),
             FormatTimestamp(snapshot.PreferredEndAt),
@@ -229,12 +238,12 @@ internal readonly record struct SurveyRequestSubmissionFingerprint
         string? ApplicantName,
         string? ApplicantEmail,
         string? ApplicantPhone,
-        string FarmName,
-        string FarmAddress,
-        string ApproximateAreaHa,
-        string Longitude,
-        string Latitude,
-        int MapSrid,
+        string? FarmName,
+        string? FarmAddress,
+        string? ApproximateAreaHa,
+        string? Longitude,
+        string? Latitude,
+        int? MapSrid,
         int? EstimatedPoleCount,
         string? PreferredStartAt,
         string? PreferredEndAt,

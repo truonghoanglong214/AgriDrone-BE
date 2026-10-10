@@ -69,6 +69,7 @@ public sealed class SurveyRequest : AggregateRoot
         CreateProposedFarmRequest(
             SurveyRequestKind.NewCustomer,
             tenantId: null,
+            farmId: null,
             requestedByUserId: null,
             requestNumber,
             surveyService,
@@ -107,6 +108,47 @@ public sealed class SurveyRequest : AggregateRoot
         CreateProposedFarmRequest(
             SurveyRequestKind.ExistingTenantNewFarm,
             tenantId,
+            farmId: null,
+            requestedByUserId,
+            requestNumber,
+            surveyService,
+            idempotency,
+            applicantName,
+            applicantEmail,
+            applicantPhone,
+            farmName,
+            farmAddress,
+            approximateAreaHa,
+            mapLocation,
+            estimatedPoleCount,
+            preferredStartAt,
+            preferredEndAt,
+            notes,
+            createdAt);
+
+    public static SurveyRequest CreateExistingFarmSurvey(
+        Guid tenantId,
+        Guid farmId,
+        Guid requestedByUserId,
+        string requestNumber,
+        SurveyService surveyService,
+        RequestIdempotency idempotency,
+        string applicantName,
+        string applicantEmail,
+        string applicantPhone,
+        string farmName,
+        string farmAddress,
+        decimal approximateAreaHa,
+        Point mapLocation,
+        int? estimatedPoleCount,
+        DateTimeOffset? preferredStartAt,
+        DateTimeOffset? preferredEndAt,
+        string? notes,
+        DateTimeOffset createdAt) =>
+        CreateProposedFarmRequest(
+            SurveyRequestKind.ExistingFarmSurvey,
+            tenantId,
+            farmId,
             requestedByUserId,
             requestNumber,
             surveyService,
@@ -127,6 +169,7 @@ public sealed class SurveyRequest : AggregateRoot
     private static SurveyRequest CreateProposedFarmRequest(
         SurveyRequestKind kind,
         Guid? tenantId,
+        Guid? farmId,
         Guid? requestedByUserId,
         string requestNumber,
         SurveyService surveyService,
@@ -147,11 +190,22 @@ public sealed class SurveyRequest : AggregateRoot
         switch (kind)
         {
             case SurveyRequestKind.NewCustomer
-                when !tenantId.HasValue && !requestedByUserId.HasValue:
+                when !tenantId.HasValue &&
+                     !farmId.HasValue &&
+                     !requestedByUserId.HasValue:
                 break;
             case SurveyRequestKind.ExistingTenantNewFarm
                 when tenantId.HasValue &&
                      tenantId.Value != Guid.Empty &&
+                     !farmId.HasValue &&
+                     requestedByUserId.HasValue &&
+                     requestedByUserId.Value != Guid.Empty:
+                break;
+            case SurveyRequestKind.ExistingFarmSurvey
+                when tenantId.HasValue &&
+                     tenantId.Value != Guid.Empty &&
+                     farmId.HasValue &&
+                     farmId.Value != Guid.Empty &&
                      requestedByUserId.HasValue &&
                      requestedByUserId.Value != Guid.Empty:
                 break;
@@ -239,7 +293,7 @@ public sealed class SurveyRequest : AggregateRoot
             RequestNumber = normalizedRequestNumber,
             Kind = kind,
             TenantId = tenantId,
-            FarmId = null,
+            FarmId = farmId,
             RequestedByUserId = requestedByUserId,
             SurveyServiceId = surveyService.Id,
             SurveyService = surveyService,

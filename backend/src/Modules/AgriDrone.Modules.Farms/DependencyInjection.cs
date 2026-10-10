@@ -51,6 +51,9 @@ public static class DependencyInjection
             LegacyReadOnlyFarmArchiveDependencyQuery>();
         services.AddScoped<IMissionPlanningReferenceQuery, MissionPlanningReferenceQuery>();
         services.AddScoped<IFarmAssignmentReferenceQuery, FarmAssignmentReferenceQuery>();
+        services.AddScoped<
+            ISurveyRequestFarmReferenceQuery,
+            SurveyRequestFarmReferenceQuery>();
         services.AddScoped<IFarmGeometryPolicy, FarmGeometryPolicy>();
         services.AddScoped<IFarmProvisioningPort, FarmProvisioningPort>();
         services.AddScoped<IFarmBaseMapPublicationService, FarmBaseMapPublicationService>();
