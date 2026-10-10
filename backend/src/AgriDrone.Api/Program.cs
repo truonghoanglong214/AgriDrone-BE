@@ -92,6 +92,7 @@ builder.Services
     .AddIntegrationMessagingFoundation(builder.Configuration)
     .AddMappingPublicationPersistence(builder.Configuration)
     .AddSurveyResultPublicationPersistence(builder.Configuration)
+    .AddSurveyApprovalPersistence(builder.Configuration)
     .AddAgriDroneHealthChecks()
     .AddExecutionContext()
     .AddJwtAuthentication(builder.Configuration)

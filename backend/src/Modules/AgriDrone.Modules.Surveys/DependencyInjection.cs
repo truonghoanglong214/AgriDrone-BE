@@ -1,9 +1,12 @@
 using AgriDrone.Modules.Surveys.Application.Abstractions.Messaging;
+using AgriDrone.Modules.Surveys.Application.Abstractions.Approvals;
 using AgriDrone.Modules.Surveys.Application.Abstractions.Persistence;
 using AgriDrone.Modules.Surveys.Application.Abstractions.Queries;
 using AgriDrone.Modules.Surveys.Application.Abstractions.Requests;
 using AgriDrone.Modules.Surveys.Application.Services;
+using AgriDrone.Modules.Surveys.Application.Features.Approvals.Common;
 using AgriDrone.Modules.Surveys.Domain;
+using AgriDrone.Modules.Surveys.Infrastructure.Approvals;
 using AgriDrone.Modules.Surveys.Infrastructure.Health;
 using AgriDrone.Modules.Surveys.Infrastructure.Messaging;
 using AgriDrone.Modules.Surveys.Infrastructure.Persistence;
@@ -107,6 +110,11 @@ public static class DependencyInjection
         services.AddScoped<ISurveyRequestQueries, SurveyRequestQueries>();
         services.AddScoped<ISurveyRequestIdempotencyResolver, SurveyRequestIdempotencyResolver>();
         services.AddSingleton<ISurveyRequestNumberGenerator, SurveyRequestNumberGenerator>();
+        services.AddSingleton<
+            ISurveyApprovalNumberGenerator,
+            SurveyApprovalNumberGenerator>();
+        services.AddScoped<ISurveyApprovalPrerequisiteResolver,
+            SurveyApprovalPrerequisiteResolver>();
 
         services.TryAddSingleton(TimeProvider.System);
 
