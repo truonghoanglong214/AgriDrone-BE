@@ -1,4 +1,6 @@
 using AgriDrone.Api.Legacy;
+using AgriDrone.Api.Surveys;
+using AgriDrone.Api.Swagger;
 using AgriDrone.Database;
 using AgriDrone.Integrations.Email;
 using AgriDrone.Integrations.Media;
@@ -35,6 +37,7 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
     options.OperationFilter<LegacyEndpointOperationFilter>();
+    options.OperationFilter<AllowAnonymousOperationFilter>();
 
     var xmlFileName =
         $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
@@ -72,6 +75,7 @@ builder.Services.AddCors(options =>
     {
         policy
             .WithOrigins("http://localhost:5173")
+            .AllowCredentials()
             .AllowAnyHeader()
             .AllowAnyMethod();
     });
@@ -92,12 +96,16 @@ builder.Services
     .AddIntegrationMessagingFoundation(builder.Configuration)
     .AddMappingPublicationPersistence(builder.Configuration)
     .AddSurveyResultPublicationPersistence(builder.Configuration)
+    .AddSurveyApprovalPersistence(builder.Configuration)
     .AddAgriDroneHealthChecks()
     .AddExecutionContext()
     .AddJwtAuthentication(builder.Configuration)
     .AddAccessAuthorization()
     .AddValidationPipeline()
     .AddGlobalExceptionHandling();
+
+builder.Services.AddSingleton<IPublicSurveyRequestCallerScope,
+    PublicSurveyRequestCallerScope>();
 
 var app = builder.Build();
 
@@ -107,7 +115,12 @@ if (builder.Configuration.GetValue<bool>(
     await app.Services.MigrateAgriDroneDatabaseAsync();
 }
 
-await app.Services.ValidateCoreMasterDataAsync();
+if (builder.Configuration.GetValue(
+        "DatabaseInitialization:ValidateCoreMasterDataOnStartup",
+        true))
+{
+    await app.Services.ValidateCoreMasterDataAsync();
+}
 await app.Services.BootstrapSystemAdminAsync();
 
 

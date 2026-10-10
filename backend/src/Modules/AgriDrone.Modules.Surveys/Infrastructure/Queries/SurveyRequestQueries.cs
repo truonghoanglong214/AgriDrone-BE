@@ -68,8 +68,6 @@ internal sealed class SurveyRequestQueries(SurveysDbContext context)
                 request.TenantId,
                 request.FarmId,
                 request.ApplicantName,
-                request.ApplicantEmail,
-                request.ApplicantPhone,
                 request.FarmName,
                 request.ApproximateAreaHa,
                 request.EstimatedPoleCount,

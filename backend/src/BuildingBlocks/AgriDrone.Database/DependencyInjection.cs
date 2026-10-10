@@ -3,7 +3,10 @@ using AgriDrone.Database.Surveys;
 using AgriDrone.IntegrationContracts.Surveys;
 using AgriDrone.IntegrationContracts.Mapping;
 using AgriDrone.IntegrationContracts.Messaging;
+using AgriDrone.Modules.Surveys.Application.Abstractions.Approvals;
 using AgriDrone.Modules.Surveys.Application.Abstractions.Persistence;
+using AgriDrone.Modules.Surveys.Application.Abstractions.Queries;
+using AgriDrone.Modules.Surveys.Domain;
 using AgriDrone.SharedInfrastructure.Auditing;
 using AgriDrone.SharedInfrastructure.Messaging;
 using AgriDrone.SharedInfrastructure.Messaging.Consumers;
@@ -11,6 +14,7 @@ using AgriDrone.SharedInfrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Npgsql;
 
 namespace AgriDrone.Database;
@@ -90,6 +94,40 @@ public static class DependencyInjection
         services.AddScoped<ISurveyResultPublicationUnitOfWork>(
             serviceProvider => serviceProvider.GetRequiredService<
                 SurveyResultPublicationDbContext>());
+
+        return services;
+    }
+
+    public static IServiceCollection AddSurveyApprovalPersistence(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        _ = configuration.GetRequiredAgriDroneConnectionString();
+
+        services.TryAddScoped<ISurveyApprovalFailureInjector,
+            SurveyApprovalFailureInjector>();
+
+        services.AddDbContext<SurveyApprovalDbContext>(
+            (serviceProvider, options) =>
+            {
+                var dataSource =
+                    serviceProvider.GetRequiredService<NpgsqlDataSource>();
+                options.UseNpgsql(
+                    dataSource,
+                    npgsql => npgsql.UseNetTopologySuite());
+            });
+
+        services.AddScoped<ISurveyApprovalUnitOfWork,
+            SurveyApprovalUnitOfWork>();
+        services.AddScoped<ISurveyApprovalRequestRepository,
+            SurveyApprovalRequestRepository>();
+        services.AddScoped<ISurveyApprovalReferenceQueries,
+            SurveyApprovalReferenceQueries>();
+        services.AddScoped<ISurveyApprovalProvisioningPort,
+            SurveyApprovalProvisioningPort>();
+        services.AddScoped<ISurveyApprovalOutbox, SurveyApprovalOutbox>();
+        services.AddScoped<ISurveyOrderRepository,
+            SurveyApprovalOrderRepository>();
 
         return services;
     }

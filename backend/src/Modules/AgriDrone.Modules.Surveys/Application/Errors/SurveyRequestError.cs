@@ -26,6 +26,14 @@ public static class SurveyRequestError
         "SurveyRequest.CurrentTenantOwnerRequired";
     public const string ApplicantProfileIncompleteCode =
         "SurveyRequest.ApplicantProfileIncomplete";
+    public const string FarmUnavailableCode =
+        "SurveyRequest.FarmUnavailable";
+    public const string FarmProfileIncompleteCode =
+        "SurveyRequest.FarmProfileIncomplete";
+    public const string CurrentSystemAdminRequiredCode =
+        "SurveyRequest.CurrentSystemAdminRequired";
+    public const string InvalidChecklistCode =
+        "SurveyRequest.InvalidChecklist";
 
     public static AppError NotFound(Guid id) =>
         AppError.NotFound(NotFoundCode, $"Survey request '{id}' was not found.");
@@ -90,4 +98,22 @@ public static class SurveyRequestError
         AppError.Validation(
             ApplicantProfileIncompleteCode,
             "The tenant owner profile must contain a valid name, email and phone number before submitting a survey request.");
+
+    public static AppError FarmUnavailable() =>
+        AppError.NotFound(
+            FarmUnavailableCode,
+            "The farm was not found or is unavailable for this operation.");
+
+    public static AppError FarmProfileIncomplete() =>
+        AppError.Conflict(
+            FarmProfileIncompleteCode,
+            "The farm must contain a valid name, address, area and center point before submitting a survey request.");
+
+    public static AppError CurrentSystemAdminRequired() =>
+        AppError.Unauthorized(
+            CurrentSystemAdminRequiredCode,
+            "An authenticated system administrator request context is required.");
+
+    public static AppError InvalidChecklist(string description) =>
+        AppError.Validation(InvalidChecklistCode, description);
 }

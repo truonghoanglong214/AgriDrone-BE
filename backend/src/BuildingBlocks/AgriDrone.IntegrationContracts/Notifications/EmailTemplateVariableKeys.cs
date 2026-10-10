@@ -17,4 +17,6 @@ public static class EmailTemplateVariableKeys
     public const string RequestNumber = "requestNumber";
 
     public const string SurveyServiceName = "surveyServiceName";
+
+    public const string RejectionReason = "rejectionReason";
 }

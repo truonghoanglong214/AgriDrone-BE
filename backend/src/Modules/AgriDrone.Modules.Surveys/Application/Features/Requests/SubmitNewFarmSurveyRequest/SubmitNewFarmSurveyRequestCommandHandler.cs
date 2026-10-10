@@ -1,4 +1,3 @@
-using System.Net.Mail;
 using System.Text.Json;
 using AgriDrone.IntegrationContracts.Identity;
 using AgriDrone.IntegrationContracts.Messaging;
@@ -59,7 +58,7 @@ internal sealed class SubmitNewFarmSurveyRequestCommandHandler(
                 SurveyRequestError.Forbidden());
         }
 
-        if (!HasCompleteApplicantProfile(owner))
+        if (!TenantOwnerApplicantProfileValidator.IsComplete(owner))
         {
             return Result.Failure<SubmitNewFarmSurveyRequestResponse>(
                 SurveyRequestError.ApplicantProfileIncomplete());
@@ -287,44 +286,4 @@ internal sealed class SubmitNewFarmSurveyRequestCommandHandler(
             response.Status,
             response.CreatedAt);
 
-    private static bool HasCompleteApplicantProfile(
-        TenantOwnerRequestReference owner)
-    {
-        if (string.IsNullOrWhiteSpace(owner.FullName) ||
-            owner.FullName.Trim().Length > 150 ||
-            string.IsNullOrWhiteSpace(owner.Email) ||
-            owner.Email.Trim().Length > 320 ||
-            !MailAddress.TryCreate(owner.Email.Trim(), out var address) ||
-            !string.Equals(
-                address.Address,
-                owner.Email.Trim(),
-                StringComparison.OrdinalIgnoreCase) ||
-            string.IsNullOrWhiteSpace(owner.Phone) ||
-            owner.Phone.Trim().Length > 30)
-        {
-            return false;
-        }
-
-        var phone = owner.Phone.Trim();
-        var digits = 0;
-        for (var index = 0; index < phone.Length; index++)
-        {
-            var character = phone[index];
-            if (character is >= '0' and <= '9')
-            {
-                digits++;
-                continue;
-            }
-
-            if (character == '+' && index == 0 ||
-                character is ' ' or '-' or '(' or ')' or '.')
-            {
-                continue;
-            }
-
-            return false;
-        }
-
-        return digits is >= 7 and <= 15;
-    }
 }

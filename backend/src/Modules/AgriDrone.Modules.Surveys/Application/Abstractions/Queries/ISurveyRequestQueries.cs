@@ -38,8 +38,6 @@ internal sealed record SurveyRequestInboxItem(
     Guid? TenantId,
     Guid? FarmId,
     string ApplicantName,
-    string ApplicantEmail,
-    string ApplicantPhone,
     string FarmName,
     decimal ApproximateAreaHa,
     int? EstimatedPoleCount,
