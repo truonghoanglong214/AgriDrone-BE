@@ -6,6 +6,8 @@ namespace AgriDrone.Modules.Surveys.Domain;
 
 public sealed class SurveyRequest : AggregateRoot
 {
+    private readonly List<SurveyRequestReview> _reviews = [];
+
     private static readonly Dictionary<SurveyRequestStatus, IReadOnlySet<SurveyRequestStatus>>
         AllowedTransitions = new Dictionary<SurveyRequestStatus, IReadOnlySet<SurveyRequestStatus>>
         {
@@ -48,7 +50,7 @@ public sealed class SurveyRequest : AggregateRoot
     public DateTimeOffset CreatedAt { get; private set; }
     public DateTimeOffset UpdatedAt { get; private set; }
     public SurveyService SurveyService { get; private set; } = null!;
-    public ICollection<SurveyRequestReview> Reviews { get; private set; } = [];
+    public IReadOnlyCollection<SurveyRequestReview> Reviews => _reviews;
 
     public static SurveyRequest CreateNewCustomer(
         string requestNumber,
@@ -351,7 +353,7 @@ public sealed class SurveyRequest : AggregateRoot
             reviewedBy,
             reviewedAt);
 
-    public void Reject(
+    public SurveyRequestReview Reject(
         JsonDocument checklistSnapshot,
         string reason,
         Guid reviewedBy,
@@ -367,7 +369,7 @@ public sealed class SurveyRequest : AggregateRoot
     public void Withdraw(DateTimeOffset withdrawnAt) =>
         TransitionTo(SurveyRequestStatus.Withdrawn, withdrawnAt);
 
-    private void RecordDecision(
+    private SurveyRequestReview RecordDecision(
         SurveyReviewDecision decision,
         SurveyRequestStatus target,
         JsonDocument checklistSnapshot,
@@ -376,19 +378,25 @@ public sealed class SurveyRequest : AggregateRoot
         DateTimeOffset reviewedAt)
     {
         ArgumentNullException.ThrowIfNull(checklistSnapshot);
-        ArgumentException.ThrowIfNullOrWhiteSpace(reason);
+        EnsureChecklistSnapshot(checklistSnapshot);
+        var normalizedReason = NormalizeRequired(
+            reason,
+            4_000,
+            nameof(reason));
         DomainGuard.NotEmpty(reviewedBy);
         SurveyTransitionGuard.EnsureTimestamp(reviewedAt, UpdatedAt);
         EnsureTransition(target);
 
-        Reviews.Add(SurveyRequestReview.Create(
+        var review = SurveyRequestReview.Create(
             Id,
             decision,
             checklistSnapshot,
-            reason.Trim(),
+            normalizedReason,
             reviewedBy,
-            reviewedAt));
+            reviewedAt);
+        _reviews.Add(review);
         SetState(target, reviewedAt);
+        return review;
     }
 
     private void TransitionTo(SurveyRequestStatus target, DateTimeOffset occurredAt)
@@ -518,4 +526,18 @@ public sealed class SurveyRequest : AggregateRoot
 
     private static int DecimalScale(decimal value) =>
         (decimal.GetBits(value)[3] >> 16) & 0x7F;
+
+    private static void EnsureChecklistSnapshot(JsonDocument snapshot)
+    {
+        var root = snapshot.RootElement;
+        if (root.ValueKind != JsonValueKind.Object ||
+            !root.TryGetProperty("version", out var version) ||
+            version.ValueKind != JsonValueKind.String ||
+            string.IsNullOrWhiteSpace(version.GetString()))
+        {
+            throw new ArgumentException(
+                "Checklist snapshot must be an object with a version.",
+                nameof(snapshot));
+        }
+    }
 }

@@ -15,6 +15,7 @@ internal sealed class SurveyRequestRepository(SurveysDbContext context)
             Guid.Empty);
 
         return context.SurveyRequests
+            .Include(request => request.SurveyService)
             .Include(request => request.Reviews)
             .SingleOrDefaultAsync(
                 request => request.Id == surveyRequestId,

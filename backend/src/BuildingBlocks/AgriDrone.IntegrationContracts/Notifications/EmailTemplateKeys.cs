@@ -8,4 +8,7 @@ public static class EmailTemplateKeys
 
     public const string SurveyRequestAcknowledgement =
         "survey-request-acknowledgement";
+
+    public const string SurveyRequestRejected =
+        "survey-request-rejected";
 }
