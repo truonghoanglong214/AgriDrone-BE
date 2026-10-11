@@ -91,6 +91,7 @@ internal static class PostgreSqlEnumMappings
         modelBuilder.HasPostgresEnum<SurveyRequestStatus>(DbSchemas.System, "survey_request_status", translator);
         modelBuilder.HasPostgresEnum<SurveyReviewDecision>(DbSchemas.System, "survey_review_decision", translator);
         modelBuilder.HasPostgresEnum<SurveyOrderStatus>(DbSchemas.System, "survey_order_status", translator);
+        modelBuilder.HasPostgresEnum<SurveyPoleCountSource>(DbSchemas.System, "survey_pole_count_source", translator);
         modelBuilder.HasPostgresEnum<SurveyAppointmentPurpose>(DbSchemas.System, "survey_appointment_purpose", translator);
         modelBuilder.HasPostgresEnum<SurveyAppointmentStatus>(DbSchemas.System, "survey_appointment_status", translator);
         modelBuilder.HasPostgresEnum<SurveyPaymentStatus>(DbSchemas.System, "survey_payment_status", translator);
@@ -162,6 +163,7 @@ internal static class PostgreSqlEnumMappings
         dataSourceBuilder.MapEnum<SurveyRequestStatus>("system.survey_request_status", translator);
         dataSourceBuilder.MapEnum<SurveyReviewDecision>("system.survey_review_decision", translator);
         dataSourceBuilder.MapEnum<SurveyOrderStatus>("system.survey_order_status", translator);
+        dataSourceBuilder.MapEnum<SurveyPoleCountSource>("system.survey_pole_count_source", translator);
         dataSourceBuilder.MapEnum<SurveyAppointmentPurpose>("system.survey_appointment_purpose", translator);
         dataSourceBuilder.MapEnum<SurveyAppointmentStatus>("system.survey_appointment_status", translator);
         dataSourceBuilder.MapEnum<SurveyPaymentStatus>("system.survey_payment_status", translator);

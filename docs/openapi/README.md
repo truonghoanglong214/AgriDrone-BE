@@ -12,7 +12,7 @@ Step 0R không mở thêm HTTP endpoint nên không tạo snapshot Swagger giả
 được mở, snapshot mới phải được sinh từ `GET /swagger/v1/swagger.json` và đối chiếu
 với intent này.
 
-`be1-surveys.openapi.json` là snapshot runtime mới nhất sau Phase 4B. Snapshot khóa
+`be1-surveys.openapi.json` là snapshot runtime mới nhất sau Phase 4C. Snapshot khóa
 tám route Survey Request cho public, TenantOwner và SystemAdmin; public submit là
 anonymous, các command retry-safe yêu cầu `Idempotency-Key`, các enum dùng wire
 token ổn định. Route approve chỉ dành cho SystemAdmin, nhận body có checklist/
@@ -22,7 +22,10 @@ assigned-manager work context và atomic boundary verification với GeoJSON,
 evidence cùng optimistic version guards. Bốn route Phase 4B bổ sung manager
 propose/re-propose Baseline appointment, owner confirm/request-reschedule và manager
 đọc authoritative Baseline readiness theo `missionId`; appointment dùng optimistic
-version guards và readiness không nhận payment state từ client. Snapshot được sinh từ
+version guards và readiness không nhận payment state từ client. Route Phase 4C
+`POST /api/system-manager/survey-orders/{orderId}/pole-count/confirm` chỉ nhận
+expected Order/base-map version và evidence; count, price version, unit price,
+currency và final price đều là server-owned output. Snapshot được sinh từ
 `GET /swagger/v1/swagger.json`
 của API Development đang chạy với startup migration/core-master-data validation
 tạm tắt bằng environment override; giá trị mặc định của ứng dụng vẫn bật các

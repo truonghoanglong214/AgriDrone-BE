@@ -1,5 +1,6 @@
 using AgriDrone.Api.Contracts.Surveys.Orders;
 using AgriDrone.Modules.Surveys.Application.Features.Orders.GetSurveyOrderBoundaryScope;
+using AgriDrone.Modules.Surveys.Application.Features.Orders.ConfirmSurveyOrderPoleCount;
 using AgriDrone.Modules.Surveys.Application.Features.Orders.VerifySurveyOrderBoundaryAndScope;
 using AgriDrone.Modules.Surveys.Domain;
 
@@ -56,6 +57,38 @@ internal static class SurveyOrderResponseMapper
             MapStatus(response.OrderStatus),
             response.OrderVersion,
             response.VerifiedAt);
+
+    public static ConfirmSurveyOrderPoleCountApiResponse ToResponse(
+        ConfirmSurveyOrderPoleCountResponse response) =>
+        new(
+            response.SurveyOrderId,
+            response.OrderNumber,
+            response.TenantId,
+            response.FarmId,
+            response.SurveyServiceId,
+            response.FarmBoundaryVersionId,
+            response.FarmBaseMapVersionId,
+            response.PoleCountSource switch
+            {
+                SurveyPoleCountSource.BaselinePublication =>
+                    "BASELINE_PUBLICATION",
+                SurveyPoleCountSource.CurrentPublishedInventory =>
+                    "CURRENT_PUBLISHED_INVENTORY",
+                _ => throw new ArgumentOutOfRangeException(
+                    nameof(response),
+                    response.PoleCountSource,
+                    "Unsupported pole-count source.")
+            },
+            response.PoleCountEvidenceReference,
+            response.ConfirmedSurveyPoleCount,
+            response.SurveyServicePriceId,
+            response.PricePerPole,
+            response.Currency,
+            response.FinalPrice,
+            response.SystemManagerProfileId,
+            MapStatus(response.OrderStatus),
+            response.OrderVersion,
+            response.ConfirmedAt);
 
     private static string MapStatus(SurveyOrderStatus status) =>
         status switch

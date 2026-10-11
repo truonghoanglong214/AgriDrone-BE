@@ -56,5 +56,8 @@ namespace AgriDrone.IntegrationContracts.Messaging
 
         public const string SurveyAppointmentChangedV1 =
             "survey.appointment-changed.v1";
+
+        public const string SurveyOrderPricingConfirmedV1 =
+            "survey.order-pricing-confirmed.v1";
     }
 }

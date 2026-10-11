@@ -29,8 +29,11 @@ public sealed class SurveyOrderConfiguration : IEntityTypeConfiguration<SurveyOr
                     "(confirmed_survey_area_ha IS NOT NULL AND price_per_ha_snapshot IS NOT NULL AND currency IS NOT NULL AND final_price IS NOT NULL AND scope_confirmed_by IS NOT NULL AND scope_confirmed_at IS NOT NULL)");
                 table.HasCheckConstraint(
                     "ck_survey_orders_pole_count_snapshot_complete",
-                    "(confirmed_survey_pole_count IS NULL AND pole_count_confirmed_by IS NULL AND pole_count_confirmed_at IS NULL) OR " +
-                    "(confirmed_survey_pole_count IS NOT NULL AND farm_boundary_version_id IS NOT NULL AND farm_base_map_version_id IS NOT NULL AND pole_count_confirmed_by IS NOT NULL AND pole_count_confirmed_at IS NOT NULL)");
+                    "(confirmed_survey_pole_count IS NULL AND pole_count_source IS NULL AND pole_count_evidence_reference IS NULL AND pole_count_confirmed_by IS NULL AND pole_count_confirmed_at IS NULL) OR " +
+                    "(confirmed_survey_pole_count IS NOT NULL AND farm_boundary_version_id IS NOT NULL AND farm_base_map_version_id IS NOT NULL AND pole_count_source IS NOT NULL AND pole_count_confirmed_by IS NOT NULL AND pole_count_confirmed_at IS NOT NULL)");
+                table.HasCheckConstraint(
+                    "ck_survey_orders_pole_count_evidence",
+                    "pole_count_evidence_reference IS NULL OR length(btrim(pole_count_evidence_reference)) > 0");
                 table.HasCheckConstraint(
                     "ck_survey_orders_per_pole_pricing_snapshot_complete",
                     "(price_per_pole_snapshot IS NULL AND pricing_confirmed_by IS NULL AND pricing_confirmed_at IS NULL) OR " +
@@ -75,6 +78,8 @@ public sealed class SurveyOrderConfiguration : IEntityTypeConfiguration<SurveyOr
             .HasPrecision(18, 2);
         builder.Property(order => order.FarmBoundaryVersionId).HasColumnName("farm_boundary_version_id").HasColumnType("uuid");
         builder.Property(order => order.FarmBaseMapVersionId).HasColumnName("farm_base_map_version_id").HasColumnType("uuid");
+        builder.Property(order => order.PoleCountSource).HasColumnName("pole_count_source").HasColumnType("system.survey_pole_count_source");
+        builder.Property(order => order.PoleCountEvidenceReference).HasColumnName("pole_count_evidence_reference").HasColumnType("character varying(1000)").HasMaxLength(1000);
         builder.Property(order => order.PoleCountConfirmedBy).HasColumnName("pole_count_confirmed_by").HasColumnType("uuid");
         builder.Property(order => order.PoleCountConfirmedAt).HasColumnName("pole_count_confirmed_at").HasColumnType("timestamp with time zone");
         builder.Property(order => order.PricingConfirmedBy).HasColumnName("pricing_confirmed_by").HasColumnType("uuid");

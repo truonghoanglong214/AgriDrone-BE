@@ -72,6 +72,7 @@ namespace AgriDrone.Database.Migrations
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "survey_appointment_status", new[] { "PROPOSED", "CONFIRMED", "RESCHEDULE_REQUESTED", "CANCELLED", "SUPERSEDED" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "survey_order_status", new[] { "PENDING_BOUNDARY_VERIFICATION", "AWAITING_BASELINE_APPOINTMENT", "BASELINE_READY", "BASELINE_IN_PROGRESS", "AWAITING_BASELINE_REVIEW", "AWAITING_PRICING", "AWAITING_PAID_APPOINTMENT", "AWAITING_PAYMENT", "READY_FOR_PAID_SERVICE", "IN_PROGRESS", "PENDING_REVIEW", "COMPLETED", "CANCELLED" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "survey_payment_status", new[] { "PENDING", "PROCESSING", "CONFIRMED", "FAILED", "REFUNDED", "ADJUSTMENT_REQUIRED" });
+            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "survey_pole_count_source", new[] { "BASELINE_PUBLICATION", "CURRENT_PUBLISHED_INVENTORY" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "survey_request_kind", new[] { "NEW_CUSTOMER", "EXISTING_TENANT_NEW_FARM", "EXISTING_FARM_SURVEY" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "survey_request_status", new[] { "SUBMITTED", "UNDER_REVIEW", "APPROVED", "REJECTED", "WITHDRAWN" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "survey_result_status", new[] { "PENDING_REVIEW", "APPROVED", "PUBLISHED" });
@@ -5694,6 +5695,15 @@ namespace AgriDrone.Database.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("pole_count_confirmed_by");
 
+                    b.Property<string>("PoleCountEvidenceReference")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("pole_count_evidence_reference");
+
+                    b.Property<int?>("PoleCountSource")
+                        .HasColumnType("system.survey_pole_count_source")
+                        .HasColumnName("pole_count_source");
+
                     b.Property<Guid?>("PreviousCompatibleOrderId")
                         .HasColumnType("uuid")
                         .HasColumnName("previous_compatible_order_id");
@@ -5819,9 +5829,11 @@ namespace AgriDrone.Database.Migrations
 
                             t.HasCheckConstraint("ck_survey_orders_per_pole_pricing_snapshot_complete", "(price_per_pole_snapshot IS NULL AND pricing_confirmed_by IS NULL AND pricing_confirmed_at IS NULL) OR (price_per_pole_snapshot IS NOT NULL AND survey_service_price_id IS NOT NULL AND confirmed_survey_pole_count IS NOT NULL AND farm_boundary_version_id IS NOT NULL AND farm_base_map_version_id IS NOT NULL AND pricing_confirmed_by IS NOT NULL AND pricing_confirmed_at IS NOT NULL AND currency IS NOT NULL AND final_price IS NOT NULL)");
 
+                            t.HasCheckConstraint("ck_survey_orders_pole_count_evidence", "pole_count_evidence_reference IS NULL OR length(btrim(pole_count_evidence_reference)) > 0");
+
                             t.HasCheckConstraint("ck_survey_orders_pole_count_positive", "confirmed_survey_pole_count IS NULL OR confirmed_survey_pole_count > 0");
 
-                            t.HasCheckConstraint("ck_survey_orders_pole_count_snapshot_complete", "(confirmed_survey_pole_count IS NULL AND pole_count_confirmed_by IS NULL AND pole_count_confirmed_at IS NULL) OR (confirmed_survey_pole_count IS NOT NULL AND farm_boundary_version_id IS NOT NULL AND farm_base_map_version_id IS NOT NULL AND pole_count_confirmed_by IS NOT NULL AND pole_count_confirmed_at IS NOT NULL)");
+                            t.HasCheckConstraint("ck_survey_orders_pole_count_snapshot_complete", "(confirmed_survey_pole_count IS NULL AND pole_count_source IS NULL AND pole_count_evidence_reference IS NULL AND pole_count_confirmed_by IS NULL AND pole_count_confirmed_at IS NULL) OR (confirmed_survey_pole_count IS NOT NULL AND farm_boundary_version_id IS NOT NULL AND farm_base_map_version_id IS NOT NULL AND pole_count_source IS NOT NULL AND pole_count_confirmed_by IS NOT NULL AND pole_count_confirmed_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_survey_orders_previous_not_self", "previous_compatible_order_id IS NULL OR previous_compatible_order_id <> id");
 

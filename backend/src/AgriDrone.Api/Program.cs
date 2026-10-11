@@ -99,6 +99,7 @@ builder.Services
     .AddSurveyApprovalPersistence(builder.Configuration)
     .AddSurveyBoundaryVerificationPersistence(builder.Configuration)
     .AddSurveyAppointmentSchedulingPersistence(builder.Configuration)
+    .AddSurveyPricingConfirmationPersistence(builder.Configuration)
     .AddAgriDroneHealthChecks()
     .AddExecutionContext()
     .AddJwtAuthentication(builder.Configuration)

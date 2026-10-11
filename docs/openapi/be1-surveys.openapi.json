@@ -2392,6 +2392,167 @@
         }
       }
     },
+    "/api/system-manager/survey-orders/{orderId}/pole-count/confirm": {
+      "post": {
+        "tags": [
+          "SystemManagerSurveyOrders"
+        ],
+        "summary": "Xác nhận active pole count và khóa snapshot giá theo trụ.",
+        "description": "Backend tự đọc current published base map, active Plant inventory trong\r\napproved boundary/Zone scope và bảng giá đang hiệu lực. Client chỉ xác nhận\r\nexpected map/Order version cùng evidence; không gửi count hoặc đơn giá.",
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmSurveyOrderPoleCountRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmSurveyOrderPoleCountRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmSurveyOrderPoleCountRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfirmSurveyOrderPoleCountApiResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfirmSurveyOrderPoleCountApiResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfirmSurveyOrderPoleCountApiResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/system-manager/survey-orders/{orderId}/appointments": {
       "post": {
         "tags": [
@@ -4752,6 +4913,110 @@
             "format": "int32"
           },
           "expectedAppointmentVersion": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ConfirmSurveyOrderPoleCountApiResponse": {
+        "type": "object",
+        "properties": {
+          "surveyOrderId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "orderNumber": {
+            "type": "string",
+            "nullable": true
+          },
+          "tenantId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "farmId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "surveyServiceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "farmBoundaryVersionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "farmBaseMapVersionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "poleCountSource": {
+            "type": "string",
+            "nullable": true
+          },
+          "poleCountEvidenceReference": {
+            "type": "string",
+            "nullable": true
+          },
+          "confirmedSurveyPoleCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "surveyServicePriceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "pricePerPole": {
+            "type": "number",
+            "format": "double"
+          },
+          "currency": {
+            "type": "string",
+            "nullable": true
+          },
+          "finalPrice": {
+            "type": "number",
+            "format": "double"
+          },
+          "systemManagerProfileId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "orderStatus": {
+            "type": "string",
+            "nullable": true
+          },
+          "orderVersion": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "confirmedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ConfirmSurveyOrderPoleCountRequest": {
+        "required": [
+          "evidenceReference",
+          "expectedFarmBaseMapVersionId",
+          "expectedOrderVersion"
+        ],
+        "type": "object",
+        "properties": {
+          "expectedFarmBaseMapVersionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "evidenceReference": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "type": "string"
+          },
+          "expectedOrderVersion": {
+            "maximum": 4294967295,
+            "minimum": 1,
             "type": "integer",
             "format": "int32"
           }

@@ -4,6 +4,7 @@ using AgriDrone.Api.Contracts.Surveys.Appointments;
 using AgriDrone.Api.Mapping;
 using AgriDrone.Modules.Surveys.Application.Features.Appointments.ProposeSurveyAppointment;
 using AgriDrone.Modules.Surveys.Application.Features.Orders.GetSurveyOrderReadiness;
+using AgriDrone.Modules.Surveys.Application.Features.Orders.ConfirmSurveyOrderPoleCount;
 using AgriDrone.Modules.Surveys.Application.Features.Orders.GetSurveyOrderBoundaryScope;
 using AgriDrone.Modules.Surveys.Application.Features.Orders.VerifySurveyOrderBoundaryAndScope;
 using AgriDrone.SharedInfrastructure.Authorization;
@@ -74,6 +75,39 @@ public sealed class SystemManagerSurveyOrdersController(ISender sender)
                 request.EvidenceReference,
                 request.ExpectedOrderVersion!.Value,
                 request.ExpectedCurrentBoundaryVersionNumber),
+            cancellationToken);
+
+        return result.ToHttpResult(
+            HttpContext,
+            response => Results.Ok(
+                SurveyOrderResponseMapper.ToResponse(response)));
+    }
+
+    /// <summary>Xác nhận active pole count và khóa snapshot giá theo trụ.</summary>
+    /// <remarks>
+    /// Backend tự đọc current published base map, active Plant inventory trong
+    /// approved boundary/Zone scope và bảng giá đang hiệu lực. Client chỉ xác nhận
+    /// expected map/Order version cùng evidence; không gửi count hoặc đơn giá.
+    /// </remarks>
+    [HttpPost("{orderId:guid}/pole-count/confirm")]
+    [ProducesResponseType<ConfirmSurveyOrderPoleCountApiResponse>(
+        StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IResult> ConfirmPoleCount(
+        [FromRoute] Guid orderId,
+        [FromBody] ConfirmSurveyOrderPoleCountRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await sender.Send(
+            new ConfirmSurveyOrderPoleCountCommand(
+                orderId,
+                request.ExpectedFarmBaseMapVersionId!.Value,
+                request.EvidenceReference,
+                request.ExpectedOrderVersion!.Value),
             cancellationToken);
 
         return result.ToHttpResult(

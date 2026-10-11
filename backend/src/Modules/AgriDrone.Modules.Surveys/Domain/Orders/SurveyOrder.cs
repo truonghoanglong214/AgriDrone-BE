@@ -74,6 +74,8 @@ public sealed class SurveyOrder : AggregateRoot
     public PricePerPole? PricePerPoleSnapshot { get; private set; }
     public Guid? FarmBoundaryVersionId { get; private set; }
     public Guid? FarmBaseMapVersionId { get; private set; }
+    public SurveyPoleCountSource? PoleCountSource { get; private set; }
+    public string? PoleCountEvidenceReference { get; private set; }
     public Guid? PoleCountConfirmedBy { get; private set; }
     public DateTimeOffset? PoleCountConfirmedAt { get; private set; }
     public Guid? PricingConfirmedBy { get; private set; }
@@ -206,6 +208,8 @@ public sealed class SurveyOrder : AggregateRoot
         FarmBoundaryVersionId = farmBoundaryVersionId;
         FarmBaseMapVersionId = farmBaseMapVersionId;
         ConfirmedSurveyPoleCount = validatedPoleCount;
+        PoleCountSource = SurveyPoleCountSource.CurrentPublishedInventory;
+        PoleCountEvidenceReference = null;
         ScopeConfirmedBy = verifiedBy;
         ScopeConfirmedAt = verifiedAt;
         PoleCountConfirmedBy = verifiedBy;
@@ -242,6 +246,8 @@ public sealed class SurveyOrder : AggregateRoot
             RequiresBaselineMapping = true;
             FarmBaseMapVersionId = null;
             ConfirmedSurveyPoleCount = null;
+            PoleCountSource = null;
+            PoleCountEvidenceReference = null;
             PoleCountConfirmedBy = null;
             PoleCountConfirmedAt = null;
             ApplyTransition(
@@ -262,6 +268,8 @@ public sealed class SurveyOrder : AggregateRoot
         RequiresBaselineMapping = false;
         FarmBaseMapVersionId = currentFarmBaseMapVersionId.Value;
         ConfirmedSurveyPoleCount = validatedPoleCount;
+        PoleCountSource = SurveyPoleCountSource.CurrentPublishedInventory;
+        PoleCountEvidenceReference = null;
         PoleCountConfirmedBy = verifiedBy;
         PoleCountConfirmedAt = verifiedAt;
         ApplyTransition(SurveyOrderStatus.AwaitingPricing, verifiedAt);
@@ -294,6 +302,8 @@ public sealed class SurveyOrder : AggregateRoot
 
         FarmBaseMapVersionId = farmBaseMapVersionId;
         ConfirmedSurveyPoleCount = validatedPoleCount;
+        PoleCountSource = SurveyPoleCountSource.BaselinePublication;
+        PoleCountEvidenceReference = null;
         PoleCountConfirmedBy = confirmedBy;
         PoleCountConfirmedAt = confirmedAt;
         ApplyTransition(SurveyOrderStatus.AwaitingPricing, confirmedAt);
@@ -334,6 +344,77 @@ public sealed class SurveyOrder : AggregateRoot
             validatedPrice,
             currency);
 
+        SurveyServicePriceId = surveyServicePriceId;
+        PricePerPoleSnapshot = validatedPrice;
+        Currency = currency.Value;
+        FinalPrice = finalPrice.Amount;
+        PricingConfirmedBy = confirmedBy;
+        PricingConfirmedAt = confirmedAt;
+        ApplyTransition(SurveyOrderStatus.AwaitingPaidAppointment, confirmedAt);
+    }
+
+    public void ConfirmPoleCountAndPricing(
+        Guid farmBaseMapVersionId,
+        ConfirmedSurveyPoleCount confirmedPoleCount,
+        SurveyPoleCountSource poleCountSource,
+        string evidenceReference,
+        Guid surveyServicePriceId,
+        PricePerPole pricePerPole,
+        CurrencyCode currency,
+        Guid confirmedBy,
+        DateTimeOffset confirmedAt)
+    {
+        DomainGuard.NotEmpty(farmBaseMapVersionId);
+        DomainGuard.NotEmpty(surveyServicePriceId);
+        DomainGuard.NotEmpty(confirmedBy);
+        DomainGuard.Utc(confirmedAt);
+        ArgumentException.ThrowIfNullOrWhiteSpace(evidenceReference);
+
+        var normalizedEvidence = evidenceReference.Trim();
+        if (normalizedEvidence.Length > 1000)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(evidenceReference),
+                "Pole-count evidence reference cannot exceed 1000 characters.");
+        }
+
+        if (!Enum.IsDefined(poleCountSource))
+        {
+            throw new ArgumentOutOfRangeException(nameof(poleCountSource));
+        }
+
+        EnsureTransitionTo(SurveyOrderStatus.AwaitingPaidAppointment, confirmedAt);
+
+        if (currency != CurrencyCode.Vnd)
+        {
+            throw new SurveyDomainException(
+                SurveyOrderDomainErrorCodes.PricingSnapshotIncomplete,
+                "Only VND per-pole pricing is supported in the MVP.");
+        }
+
+        if (FarmBoundaryVersionId is null || ScopeConfirmedBy is null)
+        {
+            throw new SurveyDomainException(
+                SurveyOrderDomainErrorCodes.PricingSnapshotIncomplete,
+                "An approved boundary and verified scope are required before pricing.");
+        }
+
+        var validatedPoleCount =
+            global::AgriDrone.Modules.Surveys.Domain.ConfirmedSurveyPoleCount
+                .Create(confirmedPoleCount.Value);
+        var validatedPrice = global::AgriDrone.Modules.Surveys.Domain.PricePerPole
+            .Create(pricePerPole.Amount);
+        var finalPrice = Money.CalculateSurveyPrice(
+            validatedPoleCount,
+            validatedPrice,
+            currency);
+
+        FarmBaseMapVersionId = farmBaseMapVersionId;
+        ConfirmedSurveyPoleCount = validatedPoleCount;
+        PoleCountSource = poleCountSource;
+        PoleCountEvidenceReference = normalizedEvidence;
+        PoleCountConfirmedBy = confirmedBy;
+        PoleCountConfirmedAt = confirmedAt;
         SurveyServicePriceId = surveyServicePriceId;
         PricePerPoleSnapshot = validatedPrice;
         Currency = currency.Value;

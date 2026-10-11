@@ -63,6 +63,10 @@ public static class DependencyInjection
                         "survey_order_status",
                         "system",
                         translator)
+                    .MapEnum<SurveyPoleCountSource>(
+                        "survey_pole_count_source",
+                        "system",
+                        translator)
                     .MapEnum<SurveyAppointmentPurpose>(
                         "survey_appointment_purpose",
                         "system",
