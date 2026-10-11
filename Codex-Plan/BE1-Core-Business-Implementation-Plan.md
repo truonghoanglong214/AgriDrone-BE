@@ -105,7 +105,7 @@ BE1 vẫn phải cung cấp/tiêu thụ contract rõ ràng để BE2 hoàn tất
 | 6R | Per-pole, purpose readiness, FarmBoundary, Disease Zone/recommendation, plant-change | Step 0R | **CodeComplete — AwaitingFinalTest** | Code/migration/contract/documentation hoàn tất; chỉ Final Test Phase được chuyển `Done` |
 | 7 | Catalogue/master data và Survey Request | Step 1B–1E, Step 2 | **CodeComplete — AwaitingFinalTest** | Step 1/2 implementation và OpenAPI hoàn tất; submit không provision resource |
 | 8 | Approval/onboarding/SurveyOrder | Step 3 | **CodeComplete — AwaitingFinalTest** | Ba request kinds atomic, retry-safe và đã mở SystemAdmin API/OpenAPI |
-| 9 | Boundary/scope, baseline count, pricing, appointment, payment | Step 4 | NotStarted | Purpose-aware readiness không bypass được |
+| 9 | Boundary/scope, baseline count, pricing, appointment, payment | Step 4 | **InProgress — 4A CodeComplete** | Purpose-aware readiness không bypass được |
 | 10 | Order-bound Mission/pre-flight | BE2 implementation + Step 5 BE1 boundary | External dependency | BE2 dùng authoritative BE1 context/readiness contract |
 | 11 | Initial Farm base map và persistent Plant identity | Step 6 | NotStarted | Hoàn tất publication V3 atomic, review và count handoff |
 | 12 | Plant Health/Disease Zone/recommendation và Harvest Readiness | Step 7–8 | NotStarted | Chỉ human-reviewed Published result lộ cho owner |
@@ -635,12 +635,17 @@ Domain/persistence files:
 | `[Tạo]` | `SURVEYS/Infrastructure/Persistence/Repositories/PriceAdjustmentRepository.cs` |
 | `[Tạo]` | `SURVEYS/Application/Abstractions/Queries/ISurveyOrderQueries.cs` |
 | `[Tạo]` | `SURVEYS/Infrastructure/Queries/SurveyOrderQueries.cs` |
+| `[Tạo]` | `SURVEYS/Application/Abstractions/Orders/ISurveyBoundaryVerificationUnitOfWork.cs` và boundary repository/outbox ports |
+| `[Tạo]` | `DB/Surveys/SurveyBoundaryVerificationDbContext.cs` | Transaction duy nhất cho FarmBoundary + SurveyOrder + audit + Outbox |
+| `[Tạo]` | `DB/Surveys/SurveyOrderBoundaryRepository.cs` và `SurveyOrderBoundaryQueries.cs` | Re-check assignment/baseline, stage boundary và work-context query |
+| `[Tạo]` | `DB/Migrations/20261011041401_Phase9BoundaryVerification*` | `SYSTEM_MANAGER` source và boundary evidence reference |
 
 Feature folders và exact files:
 
 | Folder | Files |
 |---|---|
 | `.../Features/Orders/VerifySurveyOrderBoundaryAndScope/` | `VerifySurveyOrderBoundaryAndScopeCommand.cs`, validator, handler, response |
+| `.../Features/Orders/GetSurveyOrderBoundaryScope/` | Query, validator, handler và response cho assigned-manager work context |
 | `.../Features/Orders/ConfirmSurveyOrderPoleCount/` | `ConfirmSurveyOrderPoleCountCommand.cs`, validator, handler, response; authoritative inventory source required |
 | `.../Features/Appointments/ProposeSurveyAppointment/` | `ProposeSurveyAppointmentCommand.cs`, `ProposeSurveyAppointmentCommandValidator.cs`, `ProposeSurveyAppointmentCommandHandler.cs`, `ProposeSurveyAppointmentResponse.cs` |
 | `.../Features/Appointments/ConfirmSurveyAppointment/` | `ConfirmSurveyAppointmentCommand.cs`, `ConfirmSurveyAppointmentCommandValidator.cs`, `ConfirmSurveyAppointmentCommandHandler.cs`, `ConfirmSurveyAppointmentResponse.cs` |
@@ -667,6 +672,7 @@ Payment adapter/API files:
 - `[Tạo] API/Controllers/SurveyPaymentCallbacksController.cs`
 - `[Tạo] API/Controllers/SystemSurveyPaymentsController.cs`
 - `[Tạo] API/Contracts/Surveys/Orders/VerifySurveyOrderBoundaryAndScopeRequest.cs`
+- `[Tạo] INTEGRATION_CONTRACTS/Surveys/SurveyOrderBoundaryVerifiedV1.cs`
 - `[Tạo] API/Contracts/Surveys/Orders/ConfirmSurveyOrderPoleCountRequest.cs`
 - `[Tạo] API/Contracts/Surveys/Appointments/ProposeSurveyAppointmentRequest.cs`
 - `[Tạo] API/Contracts/Surveys/Appointments/ConfirmSurveyAppointmentRequest.cs`
@@ -1438,6 +1444,19 @@ Luồng xử lý:
 5. Xác định authoritative `RequiresBaselineMapping` từ current published map + confirmed inventory.
 6. Transition order sang Baseline appointment hoặc pole-count confirmation, ghi audit/outbox và commit một lần.
 
+Checkpoint 2026-10-11: Phase 4A đạt `CodeComplete — AwaitingFinalTest`.
+`GET /api/system-manager/survey-orders/{orderId}/boundary-scope` trả Order,
+approved FarmBoundary hiện hành và active Zone scope cho primary assigned manager.
+`POST .../boundary-scope/verify` nhận GeoJSON Polygon, reason/evidence, expected
+Order version và expected current boundary version number. Specialized
+`SurveyBoundaryVerificationDbContext` khóa/re-check Order, active qualified
+manager assignment, Farm, current boundary và published base-map inventory; sau
+đó version/approve FarmBoundary, derive lại `RequiresBaselineMapping`, transition
+Order, ghi audit và `survey.order-boundary-verified.v1` Outbox trong một commit.
+Migration `20261011041401_Phase9BoundaryVerification` thêm nguồn
+`SYSTEM_MANAGER` và `evidence_reference`. Evidence tại
+`docs/operations/be1-step4a-boundary-scope-report.md`.
+
 #### Phase 4B — Baseline Mapping appointment và readiness
 
 Với Farm chưa có approved base map/confirmed inventory:
@@ -1505,10 +1524,10 @@ Danh sách scenario phải được bổ sung vào Final Test Backlog trong lúc
 
 ### 12.1. Boundary/scope và baseline decision
 
-- [ ] Assigned SystemManager query Order/Farm/FarmBoundary/Zone scope.
-- [ ] `VerifyBoundaryAndScope` nhận geometry/version, expected version và evidence/notes cần thiết.
-- [ ] FarmBoundary dùng SRID 4326, valid polygon; Zone nằm trong boundary và không overlap trái policy.
-- [ ] Derive `RequiresBaselineMapping` từ current published map + confirmed inventory, không từ client.
+- [x] Assigned SystemManager query Order/Farm/FarmBoundary/Zone scope.
+- [x] `VerifyBoundaryAndScope` nhận geometry/version, expected version và evidence/notes cần thiết.
+- [x] FarmBoundary dùng SRID 4326, valid polygon; Zone nằm trong boundary và không overlap trái policy.
+- [x] Derive `RequiresBaselineMapping` từ current published map + confirmed inventory, không từ client.
 - [ ] Detection/candidate ngoài hoặc nghi ngờ gần biên dùng `OutOfBoundary/NeedsReview`, không tự assign Farm.
 
 ### 12.2. Baseline appointment và confirmed pole-count price snapshot
@@ -1560,6 +1579,7 @@ Danh sách scenario phải được bổ sung vào Final Test Backlog trong lúc
 ### 12.7. API mục tiêu
 
 ```text
+GET  /api/system-manager/survey-orders/{orderId}/boundary-scope
 POST /api/system-manager/survey-orders/{orderId}/boundary-scope/verify
 POST /api/system-manager/survey-orders/{orderId}/pole-count/confirm
 POST /api/system-manager/survey-orders/{orderId}/appointments
@@ -2371,26 +2391,20 @@ Không gộp approval, payment, mapping và result publication vào một PR l�
 
 ## 25. Công việc nên bắt đầu ngay
 
-Step 0R–3 đã đạt `CodeComplete — AwaitingFinalTest`; phase code hiện tại là
-Phase 9 / Step 4. Thứ tự tiếp theo:
+Step 0R–3 và Phase 4A đã đạt `CodeComplete — AwaitingFinalTest`; phase code hiện
+tại là Phase 9 / Step 4B. Thứ tự tiếp theo:
 
-1. Khóa checkpoint Step 3 gồm approval orchestration, idempotency migration,
-   SystemAdmin API/OpenAPI và evidence; không đổi Step 3 sang `Done` trước Final
-   Test Phase.
-2. Triển khai Phase 4A `VerifySurveyOrderBoundaryAndScope` với transaction boundary
-   rõ ràng cho FarmBoundary, SurveyOrder, audit và Outbox; derive
-   `RequiresBaselineMapping` từ current published map + confirmed inventory.
-3. Triển khai Phase 4B Baseline Mapping appointment/readiness. Baseline không yêu
+1. Triển khai Phase 4B Baseline Mapping appointment/readiness. Baseline không yêu
    cầu payment nhưng vẫn phải có boundary/scope, active qualified assignment,
    appointment, drone/schedule/pre-flight và safety hợp lệ.
-4. Ở Phase 4C, hoàn thành ngay đường đi cho Farm đã mapped và contract/port nhận
+2. Ở Phase 4C, hoàn thành ngay đường đi cho Farm đã mapped và contract/port nhận
    confirmed count cho Farm mới. Producer thực tế cho initial Farm được nối trong
    Step 6 atomic map publication và phải gọi domain handoff
    `SurveyOrder.RecordBaselinePublication`; không nhận authoritative count từ
    client.
-5. Sau count/price snapshot mới triển khai paid-service appointment/payment ở
+3. Sau count/price snapshot mới triển khai paid-service appointment/payment ở
    Phase 4D và adjustment/reconciliation/authoritative readiness ở Phase 4E.
-6. Không bắt đầu paid-service mission/result flow trước khi boundary → baseline →
+4. Không bắt đầu paid-service mission/result flow trước khi boundary → baseline →
    count → price → appointment/payment dependency đã hoàn chỉnh về code và
    contract; integration test xác nhận ở Final Test Phase.
 
@@ -2480,6 +2494,8 @@ Không viết lại các unit/migration tests 0R-1 đến 0R-4 đã có cho per-
 #### Step 4 — Boundary, pricing, payment và readiness
 
 - [ ] Assigned/unassigned/expired manager verify boundary/scope và confirm count allow-deny.
+- [ ] Stale expected Order/boundary version và concurrent boundary replacement chỉ một commit thắng.
+- [ ] Published base map thiếu authoritative confirmed pole count fail closed; client không thể tự đổi `RequiresBaselineMapping`.
 - [ ] Invalid/cross-Farm boundary và OutOfBoundary candidate không được official assignment.
 - [ ] Decimal precision/rounding chính xác; FinalPrice bằng `ConfirmedSurveyPoleCount × PricePerPoleSnapshot`.
 - [ ] Catalogue price change không đổi snapshot.

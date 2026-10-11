@@ -97,6 +97,7 @@ builder.Services
     .AddMappingPublicationPersistence(builder.Configuration)
     .AddSurveyResultPublicationPersistence(builder.Configuration)
     .AddSurveyApprovalPersistence(builder.Configuration)
+    .AddSurveyBoundaryVerificationPersistence(builder.Configuration)
     .AddAgriDroneHealthChecks()
     .AddExecutionContext()
     .AddJwtAuthentication(builder.Configuration)

@@ -6,5 +6,6 @@ public static class SurveyOrderDomainErrorCodes
     public const string VersionConflict = "SurveyOrder.VersionConflict";
     public const string BaselineMappingRequired = "SurveyOrder.BaselineMappingRequired";
     public const string BaselineMappingNotRequired = "SurveyOrder.BaselineMappingNotRequired";
+    public const string BaselineSnapshotIncomplete = "SurveyOrder.BaselineSnapshotIncomplete";
     public const string PricingSnapshotIncomplete = "SurveyOrder.PricingSnapshotIncomplete";
 }

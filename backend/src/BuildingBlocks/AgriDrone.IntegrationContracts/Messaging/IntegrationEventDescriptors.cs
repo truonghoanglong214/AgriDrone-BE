@@ -115,4 +115,11 @@ public static class IntegrationEventDescriptors
             IntegrationEventTypes.SurveyRequestApprovedV1,
             IntegrationSchemaVersions.V1,
             RequiresActorId: true);
+
+    public static IntegrationEventDescriptor<SurveyOrderBoundaryVerifiedV1>
+        SurveyOrderBoundaryVerifiedV1 { get; } =
+        new(
+            IntegrationEventTypes.SurveyOrderBoundaryVerifiedV1,
+            IntegrationSchemaVersions.V1,
+            RequiresActorId: true);
 }

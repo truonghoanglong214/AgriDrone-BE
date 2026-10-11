@@ -43,6 +43,7 @@ public sealed class FarmBoundaryConfiguration : IEntityTypeConfiguration<FarmBou
         builder.Property(boundary => boundary.Source).HasColumnName("source").HasColumnType("system.farm_boundary_source").IsRequired();
         builder.Property(boundary => boundary.SourceSurveyRequestId).HasColumnName("source_survey_request_id").HasColumnType("uuid");
         builder.Property(boundary => boundary.SubmittedBy).HasColumnName("submitted_by").HasColumnType("uuid");
+        builder.Property(boundary => boundary.EvidenceReference).HasColumnName("evidence_reference").HasColumnType("character varying(1000)").HasMaxLength(1000);
         builder.Property(boundary => boundary.Status).HasColumnName("status").HasColumnType("system.farm_boundary_status").HasSentinel((FarmBoundaryStatus)(-1)).HasDefaultValueSql("'DRAFT'::system.farm_boundary_status").IsRequired();
         builder.Property(boundary => boundary.ReviewedBy).HasColumnName("reviewed_by").HasColumnType("uuid");
         builder.Property(boundary => boundary.ReviewedAt).HasColumnName("reviewed_at").HasColumnType("timestamp with time zone");

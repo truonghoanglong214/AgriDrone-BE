@@ -212,6 +212,60 @@ public sealed class SurveyOrder : AggregateRoot
         ApplyTransition(SurveyOrderStatus.AwaitingPricing, verifiedAt);
     }
 
+    public void VerifyBoundaryAndScope(
+        Guid farmBoundaryVersionId,
+        Guid? currentFarmBaseMapVersionId,
+        ConfirmedSurveyPoleCount? currentConfirmedPoleCount,
+        Guid verifiedBy,
+        DateTimeOffset verifiedAt)
+    {
+        ValidateBoundaryAndScope(farmBoundaryVersionId, verifiedBy, verifiedAt);
+
+        if (currentFarmBaseMapVersionId.HasValue !=
+            currentConfirmedPoleCount.HasValue)
+        {
+            throw new SurveyDomainException(
+                SurveyOrderDomainErrorCodes.BaselineSnapshotIncomplete,
+                "A current base map and confirmed pole count must be supplied together.");
+        }
+
+        if (!currentFarmBaseMapVersionId.HasValue)
+        {
+            EnsureTransitionTo(
+                SurveyOrderStatus.AwaitingBaselineAppointment,
+                verifiedAt);
+
+            FarmBoundaryVersionId = farmBoundaryVersionId;
+            ScopeConfirmedBy = verifiedBy;
+            ScopeConfirmedAt = verifiedAt;
+            RequiresBaselineMapping = true;
+            FarmBaseMapVersionId = null;
+            ConfirmedSurveyPoleCount = null;
+            PoleCountConfirmedBy = null;
+            PoleCountConfirmedAt = null;
+            ApplyTransition(
+                SurveyOrderStatus.AwaitingBaselineAppointment,
+                verifiedAt);
+            return;
+        }
+
+        DomainGuard.NotEmpty(currentFarmBaseMapVersionId.Value);
+        var validatedPoleCount =
+            global::AgriDrone.Modules.Surveys.Domain.ConfirmedSurveyPoleCount
+                .Create(currentConfirmedPoleCount!.Value.Value);
+        EnsureTransitionTo(SurveyOrderStatus.AwaitingPricing, verifiedAt);
+
+        FarmBoundaryVersionId = farmBoundaryVersionId;
+        ScopeConfirmedBy = verifiedBy;
+        ScopeConfirmedAt = verifiedAt;
+        RequiresBaselineMapping = false;
+        FarmBaseMapVersionId = currentFarmBaseMapVersionId.Value;
+        ConfirmedSurveyPoleCount = validatedPoleCount;
+        PoleCountConfirmedBy = verifiedBy;
+        PoleCountConfirmedAt = verifiedAt;
+        ApplyTransition(SurveyOrderStatus.AwaitingPricing, verifiedAt);
+    }
+
     public void MarkBaselineAppointmentConfirmed(DateTimeOffset occurredAt) =>
         TransitionTo(SurveyOrderStatus.BaselineReady, occurredAt);
 

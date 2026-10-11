@@ -5,6 +5,7 @@ using AgriDrone.IntegrationContracts.Messaging;
 using AgriDrone.Modules.Surveys.Application.Abstractions.Approvals;
 using AgriDrone.Modules.Surveys.Application.Abstractions.Persistence;
 using AgriDrone.Modules.Surveys.Application.Abstractions.Queries;
+using AgriDrone.Modules.Surveys.Application.Abstractions.Orders;
 using AgriDrone.Modules.Surveys.Domain;
 using AgriDrone.SharedInfrastructure.Auditing;
 using AgriDrone.SharedInfrastructure.Messaging;
@@ -126,6 +127,35 @@ public static class DependencyInjection
         services.AddScoped<ISurveyApprovalOutbox, SurveyApprovalOutbox>();
         services.AddScoped<ISurveyOrderRepository,
             SurveyApprovalOrderRepository>();
+
+        return services;
+    }
+
+    public static IServiceCollection AddSurveyBoundaryVerificationPersistence(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        _ = configuration.GetRequiredAgriDroneConnectionString();
+
+        services.AddDbContext<SurveyBoundaryVerificationDbContext>(
+            (serviceProvider, options) =>
+            {
+                var dataSource =
+                    serviceProvider.GetRequiredService<NpgsqlDataSource>();
+                options.UseNpgsql(
+                    dataSource,
+                    npgsql => npgsql.UseNetTopologySuite());
+            });
+
+        services.AddScoped<ISurveyBoundaryVerificationUnitOfWork>(
+            serviceProvider => serviceProvider.GetRequiredService<
+                SurveyBoundaryVerificationDbContext>());
+        services.AddScoped<ISurveyOrderBoundaryRepository,
+            SurveyOrderBoundaryRepository>();
+        services.AddScoped<ISurveyOrderBoundaryQueries,
+            SurveyOrderBoundaryQueries>();
+        services.AddScoped<ISurveyBoundaryVerificationOutbox,
+            SurveyBoundaryVerificationOutbox>();
 
         return services;
     }
