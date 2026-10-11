@@ -21,6 +21,7 @@ public sealed class SurveyOrder : AggregateRoot
             [SurveyOrderStatus.BaselineReady] = new HashSet<SurveyOrderStatus>
             {
                 SurveyOrderStatus.BaselineInProgress,
+                SurveyOrderStatus.AwaitingBaselineAppointment,
                 SurveyOrderStatus.Cancelled
             },
             [SurveyOrderStatus.BaselineInProgress] = new HashSet<SurveyOrderStatus>
@@ -268,6 +269,9 @@ public sealed class SurveyOrder : AggregateRoot
 
     public void MarkBaselineAppointmentConfirmed(DateTimeOffset occurredAt) =>
         TransitionTo(SurveyOrderStatus.BaselineReady, occurredAt);
+
+    public void ReopenBaselineAppointment(DateTimeOffset occurredAt) =>
+        TransitionTo(SurveyOrderStatus.AwaitingBaselineAppointment, occurredAt);
 
     public void StartBaselineMapping(DateTimeOffset occurredAt) =>
         TransitionTo(SurveyOrderStatus.BaselineInProgress, occurredAt);

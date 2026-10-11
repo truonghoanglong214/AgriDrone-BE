@@ -164,6 +164,9 @@ public sealed class PerPoleSurveyOrderTests
         var appointment = SurveyAppointment.Create(
             Guid.NewGuid(),
             purpose,
+            1,
+            null,
+            Guid.NewGuid(),
             Now.AddDays(1),
             Now.AddDays(1).AddHours(2),
             Now);

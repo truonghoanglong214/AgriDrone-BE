@@ -105,7 +105,7 @@ BE1 vẫn phải cung cấp/tiêu thụ contract rõ ràng để BE2 hoàn tất
 | 6R | Per-pole, purpose readiness, FarmBoundary, Disease Zone/recommendation, plant-change | Step 0R | **CodeComplete — AwaitingFinalTest** | Code/migration/contract/documentation hoàn tất; chỉ Final Test Phase được chuyển `Done` |
 | 7 | Catalogue/master data và Survey Request | Step 1B–1E, Step 2 | **CodeComplete — AwaitingFinalTest** | Step 1/2 implementation và OpenAPI hoàn tất; submit không provision resource |
 | 8 | Approval/onboarding/SurveyOrder | Step 3 | **CodeComplete — AwaitingFinalTest** | Ba request kinds atomic, retry-safe và đã mở SystemAdmin API/OpenAPI |
-| 9 | Boundary/scope, baseline count, pricing, appointment, payment | Step 4 | **InProgress — 4A CodeComplete** | Purpose-aware readiness không bypass được |
+| 9 | Boundary/scope, baseline count, pricing, appointment, payment | Step 4 | **InProgress — 4A–4B CodeComplete** | Purpose-aware readiness không bypass được |
 | 10 | Order-bound Mission/pre-flight | BE2 implementation + Step 5 BE1 boundary | External dependency | BE2 dùng authoritative BE1 context/readiness contract |
 | 11 | Initial Farm base map và persistent Plant identity | Step 6 | NotStarted | Hoàn tất publication V3 atomic, review và count handoff |
 | 12 | Plant Health/Disease Zone/recommendation và Harvest Readiness | Step 7–8 | NotStarted | Chỉ human-reviewed Published result lộ cho owner |
@@ -639,6 +639,10 @@ Domain/persistence files:
 | `[Tạo]` | `DB/Surveys/SurveyBoundaryVerificationDbContext.cs` | Transaction duy nhất cho FarmBoundary + SurveyOrder + audit + Outbox |
 | `[Tạo]` | `DB/Surveys/SurveyOrderBoundaryRepository.cs` và `SurveyOrderBoundaryQueries.cs` | Re-check assignment/baseline, stage boundary và work-context query |
 | `[Tạo]` | `DB/Migrations/20261011041401_Phase9BoundaryVerification*` | `SYSTEM_MANAGER` source và boundary evidence reference |
+| `[Tạo]` | `SURVEYS/Application/Abstractions/Appointments/*` | Port transaction/repository/outbox và baseline-readiness query |
+| `[Tạo]` | `DB/Surveys/SurveyAppointmentScheduling*` và `SurveyBaselineReadinessQueries.cs` | Transaction serializable, authorization hiện hành và snapshot readiness từ DB |
+| `[Tạo]` | `DB/Migrations/20261011080125_Phase9BaselineAppointmentReadiness*` | Revision chain, proposer, superseded state và constraint/index lịch hẹn |
+| `[Tạo]` | `INTEGRATION_CONTRACTS/Surveys/SurveyAppointmentChangedV1.cs` | Event append-only sau thay đổi appointment |
 
 Feature folders và exact files:
 
@@ -1468,6 +1472,18 @@ Với Farm chưa có approved base map/confirmed inventory:
 
 Farm đã có current approved base map/inventory bỏ qua Phase 4B; handler phải chứng minh inventory source/version thay vì tạo Baseline Mapping giả.
 
+Checkpoint 2026-10-11: Phase 4B đạt `CodeComplete — AwaitingFinalTest` cho phía BE1.
+SystemManager có thể propose/re-propose lịch Baseline Mapping; TenantOwner confirm hoặc
+request-reschedule bằng expected Order/appointment version. Lịch cũ chuyển
+`Superseded`, giữ revision chain; authorization, audit và
+`survey.appointment-changed.v1` Outbox cùng nằm trong transaction serializable.
+Readiness đọc lại boundary/scope, appointment, assigned manager, Mission purpose và
+schedule, Drone, completed pre-flight/safety trực tiếp từ database; Baseline không
+đọc payment. Consumer BE2 prepare/start sẽ nối port và re-check theo contract ở Step
+5C, không được cache decision. Migration/evidence lần lượt tại
+`20261011080125_Phase9BaselineAppointmentReadiness` và
+`docs/operations/be1-step4b-baseline-appointment-readiness-report.md`.
+
 #### Phase 4C — Confirmed pole count và per-pole price snapshot
 
 1. Nhận confirmed count từ atomic map publication (initial Farm) hoặc authoritative current inventory (mapped Farm).
@@ -1532,8 +1548,8 @@ Danh sách scenario phải được bổ sung vào Final Test Backlog trong lúc
 
 ### 12.2. Baseline appointment và confirmed pole-count price snapshot
 
-- [ ] Tạo/confirm/reschedule appointment có purpose `BaselineMapping` khi Order requires baseline.
-- [ ] Baseline readiness không yêu cầu Payment nhưng vẫn yêu cầu boundary/scope, manager, drone/schedule/pre-flight/safety.
+- [x] Tạo/confirm/reschedule appointment có purpose `BaselineMapping` khi Order requires baseline.
+- [x] Baseline readiness không yêu cầu Payment nhưng vẫn yêu cầu boundary/scope, manager, drone/schedule/pre-flight/safety.
 - [ ] Initial map publication hoặc authoritative mapped inventory cung cấp `ConfirmedSurveyPoleCount` + source version.
 - [ ] Resolve effective service price và lưu PriceVersionId, PricePerPoleSnapshot, ConfirmedSurveyPoleCount, Currency, FinalPrice.
 - [ ] Dùng duy nhất per-pole money policy; approximate area không tham gia công thức.
@@ -1583,6 +1599,7 @@ GET  /api/system-manager/survey-orders/{orderId}/boundary-scope
 POST /api/system-manager/survey-orders/{orderId}/boundary-scope/verify
 POST /api/system-manager/survey-orders/{orderId}/pole-count/confirm
 POST /api/system-manager/survey-orders/{orderId}/appointments
+GET  /api/system-manager/survey-orders/{orderId}/readiness/baseline-mapping?missionId={missionId}
 
 POST /api/tenant-owner/survey-orders/{orderId}/appointments/{appointmentId}/confirm
 POST /api/tenant-owner/survey-orders/{orderId}/appointments/{appointmentId}/request-reschedule
@@ -2391,19 +2408,18 @@ Không gộp approval, payment, mapping và result publication vào một PR l�
 
 ## 25. Công việc nên bắt đầu ngay
 
-Step 0R–3 và Phase 4A đã đạt `CodeComplete — AwaitingFinalTest`; phase code hiện
-tại là Phase 9 / Step 4B. Thứ tự tiếp theo:
+Step 0R–3 và Phase 4A–4B đã đạt `CodeComplete — AwaitingFinalTest`; phase code hiện
+tại là Phase 9 / Step 4C. Thứ tự tiếp theo:
 
-1. Triển khai Phase 4B Baseline Mapping appointment/readiness. Baseline không yêu
-   cầu payment nhưng vẫn phải có boundary/scope, active qualified assignment,
-   appointment, drone/schedule/pre-flight và safety hợp lệ.
-2. Ở Phase 4C, hoàn thành ngay đường đi cho Farm đã mapped và contract/port nhận
+1. Ở Phase 4C, hoàn thành ngay đường đi cho Farm đã mapped và contract/port nhận
    confirmed count cho Farm mới. Producer thực tế cho initial Farm được nối trong
    Step 6 atomic map publication và phải gọi domain handoff
    `SurveyOrder.RecordBaselinePublication`; không nhận authoritative count từ
    client.
-3. Sau count/price snapshot mới triển khai paid-service appointment/payment ở
+2. Sau count/price snapshot mới triển khai paid-service appointment/payment ở
    Phase 4D và adjustment/reconciliation/authoritative readiness ở Phase 4E.
+3. Nối BE2 prepare/start vào authoritative readiness port ở Step 5C và bắt buộc
+   truyền MissionPurpose/re-check ngay trước flight; không cache snapshot 4B.
 4. Không bắt đầu paid-service mission/result flow trước khi boundary → baseline →
    count → price → appointment/payment dependency đã hoàn chỉnh về code và
    contract; integration test xác nhận ở Final Test Phase.
@@ -2497,6 +2513,10 @@ Không viết lại các unit/migration tests 0R-1 đến 0R-4 đã có cho per-
 - [ ] Stale expected Order/boundary version và concurrent boundary replacement chỉ một commit thắng.
 - [ ] Published base map thiếu authoritative confirmed pole count fail closed; client không thể tự đổi `RequiresBaselineMapping`.
 - [ ] Invalid/cross-Farm boundary và OutOfBoundary candidate không được official assignment.
+- [ ] Stale expected Order/appointment version và concurrent Baseline proposal chỉ một current appointment thắng.
+- [ ] TenantOwner khác Tenant bị từ chối confirm/reschedule; reschedule mở lại baseline gate và re-proposal giữ nguyên revision cũ.
+- [ ] Baseline readiness yêu cầu Mission liên kết đúng purpose/window, Drone available, manager active/available/qualified và completed safe pre-flight nhưng không yêu cầu Payment.
+- [ ] Manager/appointment/Mission/Drone/pre-flight đổi sau lần đọc readiness phải bị phát hiện khi BE2 re-check trước flight.
 - [ ] Decimal precision/rounding chính xác; FinalPrice bằng `ConfirmedSurveyPoleCount × PricePerPoleSnapshot`.
 - [ ] Catalogue price change không đổi snapshot.
 - [ ] Wrong TenantOwner không confirm appointment/initiate payment.

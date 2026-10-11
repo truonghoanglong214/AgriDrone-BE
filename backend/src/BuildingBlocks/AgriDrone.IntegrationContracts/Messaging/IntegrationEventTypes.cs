@@ -53,5 +53,8 @@ namespace AgriDrone.IntegrationContracts.Messaging
 
         public const string SurveyOrderBoundaryVerifiedV1 =
             "survey.order-boundary-verified.v1";
+
+        public const string SurveyAppointmentChangedV1 =
+            "survey.appointment-changed.v1";
     }
 }

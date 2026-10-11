@@ -61,9 +61,40 @@ public static class SurveyOrderReadinessPolicy
             failures.Add(SurveyOrderReadinessFailure.AppointmentNotConfirmed);
         }
 
+        if (!snapshot.IsAppointmentCurrent)
+        {
+            failures.Add(SurveyOrderReadinessFailure.AppointmentNotCurrent);
+        }
+
+        if (!snapshot.IsMissionPreparedForPurpose)
+        {
+            failures.Add(
+                SurveyOrderReadinessFailure.MissionNotPreparedForPurpose);
+        }
+
+        if (!snapshot.IsMissionScheduledWithinAppointment)
+        {
+            failures.Add(SurveyOrderReadinessFailure.MissionScheduleMismatch);
+        }
+
+        if (!snapshot.IsDroneReady)
+        {
+            failures.Add(SurveyOrderReadinessFailure.DroneNotReady);
+        }
+
+        if (!snapshot.IsPreflightCompleted)
+        {
+            failures.Add(SurveyOrderReadinessFailure.PreflightNotCompleted);
+        }
+
         if (!snapshot.HasActiveQualifiedPrimaryManager)
         {
             failures.Add(SurveyOrderReadinessFailure.PrimaryManagerNotReady);
+        }
+
+        if (!snapshot.IsPrimaryManagerAvailable)
+        {
+            failures.Add(SurveyOrderReadinessFailure.PrimaryManagerUnavailable);
         }
 
         if (!snapshot.SafetyChecksSatisfied)

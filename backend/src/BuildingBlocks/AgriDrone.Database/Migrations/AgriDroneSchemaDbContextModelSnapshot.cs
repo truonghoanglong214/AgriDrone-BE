@@ -69,7 +69,7 @@ namespace AgriDrone.Database.Migrations
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "scan_media_role", new[] { "PRIMARY", "CONTEXT", "DETECTION_RESULT" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "scan_source", new[] { "DRONE_AI", "FIELD_MANUAL", "MANAGER" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "survey_appointment_purpose", new[] { "BASELINE_MAPPING", "PAID_SERVICE" });
-            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "survey_appointment_status", new[] { "PROPOSED", "CONFIRMED", "RESCHEDULE_REQUESTED", "CANCELLED" });
+            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "survey_appointment_status", new[] { "PROPOSED", "CONFIRMED", "RESCHEDULE_REQUESTED", "CANCELLED", "SUPERSEDED" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "survey_order_status", new[] { "PENDING_BOUNDARY_VERIFICATION", "AWAITING_BASELINE_APPOINTMENT", "BASELINE_READY", "BASELINE_IN_PROGRESS", "AWAITING_BASELINE_REVIEW", "AWAITING_PRICING", "AWAITING_PAID_APPOINTMENT", "AWAITING_PAYMENT", "READY_FOR_PAID_SERVICE", "IN_PROGRESS", "PENDING_REVIEW", "COMPLETED", "CANCELLED" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "survey_payment_status", new[] { "PENDING", "PROCESSING", "CONFIRMED", "FAILED", "REFUNDED", "ADJUSTMENT_REQUIRED" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "survey_request_kind", new[] { "NEW_CUSTOMER", "EXISTING_TENANT_NEW_FARM", "EXISTING_FARM_SURVEY" });
@@ -5482,6 +5482,14 @@ namespace AgriDrone.Database.Migrations
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("NOW()");
 
+                    b.Property<Guid?>("PreviousAppointmentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("previous_appointment_id");
+
+                    b.Property<Guid?>("ProposedBySystemManagerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("proposed_by_system_manager_id");
+
                     b.Property<DateTimeOffset>("ProposedEndAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("proposed_end_at");
@@ -5497,12 +5505,23 @@ namespace AgriDrone.Database.Migrations
                         .HasDefaultValueSql("'PAID_SERVICE'::system.survey_appointment_purpose");
 
                     b.Property<string>("RescheduleReason")
-                        .HasColumnType("text")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
                         .HasColumnName("reschedule_reason");
+
+                    b.Property<int>("RevisionNumber")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1)
+                        .HasColumnName("revision_number");
 
                     b.Property<int>("Status")
                         .HasColumnType("system.survey_appointment_status")
                         .HasColumnName("status");
+
+                    b.Property<DateTimeOffset?>("SupersededAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("superseded_at");
 
                     b.Property<Guid>("SurveyOrderId")
                         .HasColumnType("uuid")
@@ -5525,6 +5544,13 @@ namespace AgriDrone.Database.Migrations
 
                     b.HasIndex("ConfirmedByTenantOwnerId");
 
+                    b.HasIndex("PreviousAppointmentId")
+                        .IsUnique()
+                        .HasDatabaseName("uq_survey_appointments_previous")
+                        .HasFilter("previous_appointment_id IS NOT NULL");
+
+                    b.HasIndex("ProposedBySystemManagerId");
+
                     b.HasIndex("Status", "ProposedStartAt")
                         .HasDatabaseName("ix_survey_appointments_schedule");
 
@@ -5533,9 +5559,19 @@ namespace AgriDrone.Database.Migrations
                         .HasDatabaseName("uq_survey_appointments_one_active_per_order_purpose")
                         .HasFilter("status IN ('PROPOSED'::system.survey_appointment_status, 'CONFIRMED'::system.survey_appointment_status, 'RESCHEDULE_REQUESTED'::system.survey_appointment_status)");
 
+                    b.HasIndex("SurveyOrderId", "Purpose", "RevisionNumber")
+                        .IsUnique()
+                        .HasDatabaseName("uq_survey_appointments_revision");
+
                     b.ToTable("survey_appointments", "survey", t =>
                         {
                             t.HasCheckConstraint("ck_survey_appointments_confirmation", "(status = 'CONFIRMED'::system.survey_appointment_status AND confirmed_by_tenant_owner_id IS NOT NULL AND confirmed_at IS NOT NULL) OR (status <> 'CONFIRMED'::system.survey_appointment_status AND confirmed_at IS NULL)");
+
+                            t.HasCheckConstraint("ck_survey_appointments_reschedule_reason", "status <> 'RESCHEDULE_REQUESTED'::system.survey_appointment_status OR (reschedule_reason IS NOT NULL AND length(btrim(reschedule_reason)) > 0)");
+
+                            t.HasCheckConstraint("ck_survey_appointments_revision_chain", "(revision_number = 1 AND previous_appointment_id IS NULL) OR (revision_number > 1 AND previous_appointment_id IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_survey_appointments_superseded", "(status = 'SUPERSEDED'::system.survey_appointment_status AND superseded_at IS NOT NULL) OR (status <> 'SUPERSEDED'::system.survey_appointment_status AND superseded_at IS NULL)");
 
                             t.HasCheckConstraint("ck_survey_appointments_window", "proposed_end_at > proposed_start_at");
                         });
@@ -8133,6 +8169,18 @@ namespace AgriDrone.Database.Migrations
                         .HasForeignKey("ConfirmedByTenantOwnerId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("fk_survey_appointments_users_confirmed_by");
+
+                    b.HasOne("AgriDrone.Modules.Surveys.Domain.SurveyAppointment", null)
+                        .WithOne()
+                        .HasForeignKey("AgriDrone.Modules.Surveys.Domain.SurveyAppointment", "PreviousAppointmentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_survey_appointments_previous_appointment_id");
+
+                    b.HasOne("AgriDrone.Modules.Identity.Domain.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("ProposedBySystemManagerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_survey_appointments_users_proposed_by");
 
                     b.HasOne("AgriDrone.Modules.Surveys.Domain.SurveyOrder", "SurveyOrder")
                         .WithMany("Appointments")

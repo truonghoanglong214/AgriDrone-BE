@@ -3,6 +3,7 @@ using AgriDrone.Database.Surveys;
 using AgriDrone.IntegrationContracts.Mapping;
 using AgriDrone.IntegrationContracts.Messaging;
 using AgriDrone.Modules.Surveys.Application.Abstractions.Approvals;
+using AgriDrone.Modules.Surveys.Application.Abstractions.Appointments;
 using AgriDrone.Modules.Surveys.Application.Abstractions.Persistence;
 using AgriDrone.Modules.Surveys.Application.Abstractions.Queries;
 using AgriDrone.Modules.Surveys.Application.Abstractions.Orders;
@@ -156,6 +157,35 @@ public static class DependencyInjection
             SurveyOrderBoundaryQueries>();
         services.AddScoped<ISurveyBoundaryVerificationOutbox,
             SurveyBoundaryVerificationOutbox>();
+
+        return services;
+    }
+
+    public static IServiceCollection AddSurveyAppointmentSchedulingPersistence(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        _ = configuration.GetRequiredAgriDroneConnectionString();
+
+        services.AddDbContext<SurveyAppointmentSchedulingDbContext>(
+            (serviceProvider, options) =>
+            {
+                var dataSource =
+                    serviceProvider.GetRequiredService<NpgsqlDataSource>();
+                options.UseNpgsql(
+                    dataSource,
+                    npgsql => npgsql.UseNetTopologySuite());
+            });
+
+        services.AddScoped<ISurveyAppointmentSchedulingUnitOfWork>(
+            serviceProvider => serviceProvider.GetRequiredService<
+                SurveyAppointmentSchedulingDbContext>());
+        services.AddScoped<ISurveyAppointmentSchedulingRepository,
+            SurveyAppointmentSchedulingRepository>();
+        services.AddScoped<ISurveyAppointmentSchedulingOutbox,
+            SurveyAppointmentSchedulingOutbox>();
+        services.AddScoped<ISurveyBaselineReadinessQueries,
+            SurveyBaselineReadinessQueries>();
 
         return services;
     }

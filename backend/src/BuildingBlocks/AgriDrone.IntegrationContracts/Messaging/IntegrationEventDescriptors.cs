@@ -122,4 +122,11 @@ public static class IntegrationEventDescriptors
             IntegrationEventTypes.SurveyOrderBoundaryVerifiedV1,
             IntegrationSchemaVersions.V1,
             RequiresActorId: true);
+
+    public static IntegrationEventDescriptor<SurveyAppointmentChangedV1>
+        SurveyAppointmentChangedV1 { get; } =
+        new(
+            IntegrationEventTypes.SurveyAppointmentChangedV1,
+            IntegrationSchemaVersions.V1,
+            RequiresActorId: true);
 }
