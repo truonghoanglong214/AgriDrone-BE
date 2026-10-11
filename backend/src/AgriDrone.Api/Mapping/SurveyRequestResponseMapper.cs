@@ -1,4 +1,6 @@
 using AgriDrone.Api.Contracts.Surveys.Requests;
+using AgriDrone.Api.Contracts.Surveys.Approvals;
+using AgriDrone.Modules.Surveys.Application.Features.Approvals.ApproveSurveyRequest;
 using AgriDrone.Modules.Surveys.Application.Features.Requests.GetSurveyRequestDetail;
 using AgriDrone.Modules.Surveys.Application.Features.Requests.GetSurveyRequestInbox;
 using AgriDrone.Modules.Surveys.Application.Features.Requests.RejectSurveyRequest;
@@ -114,6 +116,26 @@ internal static class SurveyRequestResponseMapper
             response.ReviewId,
             response.ReviewedAt);
 
+    public static ApproveSurveyRequestApiResponse ToResponse(
+        ApproveSurveyRequestResponse response) =>
+        new(
+            response.SurveyRequestId,
+            response.RequestNumber,
+            MapStatus(response.RequestStatus),
+            response.RequestVersion,
+            response.ApprovalReviewId,
+            response.SurveyOrderId,
+            response.OrderNumber,
+            MapOrderStatus(response.OrderStatus),
+            response.TenantId,
+            response.FarmId,
+            response.SystemManagerProfileId,
+            response.PrimaryManagerAssignmentId,
+            response.OwnerInvitationId,
+            response.RequiresBaselineMapping,
+            response.PreviousCompatibleOrderId,
+            response.ApprovedAt);
+
     private static SurveyRequestInboxItemApiResponse ToResponse(
         SurveyRequestInboxItemResponse response) =>
         new(
@@ -182,5 +204,32 @@ internal static class SurveyRequestResponseMapper
                 nameof(decision),
                 decision,
                 "Unsupported survey review decision.")
+        };
+
+    private static string MapOrderStatus(SurveyOrderStatus status) =>
+        status switch
+        {
+            SurveyOrderStatus.PendingBoundaryVerification =>
+                "PENDING_BOUNDARY_VERIFICATION",
+            SurveyOrderStatus.AwaitingBaselineAppointment =>
+                "AWAITING_BASELINE_APPOINTMENT",
+            SurveyOrderStatus.BaselineReady => "BASELINE_READY",
+            SurveyOrderStatus.BaselineInProgress => "BASELINE_IN_PROGRESS",
+            SurveyOrderStatus.AwaitingBaselineReview =>
+                "AWAITING_BASELINE_REVIEW",
+            SurveyOrderStatus.AwaitingPricing => "AWAITING_PRICING",
+            SurveyOrderStatus.AwaitingPaidAppointment =>
+                "AWAITING_PAID_APPOINTMENT",
+            SurveyOrderStatus.AwaitingPayment => "AWAITING_PAYMENT",
+            SurveyOrderStatus.ReadyForPaidService =>
+                "READY_FOR_PAID_SERVICE",
+            SurveyOrderStatus.InProgress => "IN_PROGRESS",
+            SurveyOrderStatus.PendingReview => "PENDING_REVIEW",
+            SurveyOrderStatus.Completed => "COMPLETED",
+            SurveyOrderStatus.Cancelled => "CANCELLED",
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(status),
+                status,
+                "Unsupported survey order status.")
         };
 }

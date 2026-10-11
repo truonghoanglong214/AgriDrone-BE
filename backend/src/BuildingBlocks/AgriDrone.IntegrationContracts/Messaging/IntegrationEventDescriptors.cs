@@ -108,4 +108,11 @@ public static class IntegrationEventDescriptors
             IntegrationEventTypes.PlantHealthAnalysisReadyV3,
             IntegrationSchemaVersions.V3,
             RequiresActorId: false);
+
+    public static IntegrationEventDescriptor<SurveyRequestApprovedV1>
+        SurveyRequestApprovedV1 { get; } =
+        new(
+            IntegrationEventTypes.SurveyRequestApprovedV1,
+            IntegrationSchemaVersions.V1,
+            RequiresActorId: true);
 }

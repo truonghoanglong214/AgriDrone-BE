@@ -12,9 +12,12 @@ Step 0R không mở thêm HTTP endpoint nên không tạo snapshot Swagger giả
 được mở, snapshot mới phải được sinh từ `GET /swagger/v1/swagger.json` và đối chiếu
 với intent này.
 
-`be1-surveys.openapi.json` là snapshot runtime sau Step 2F. Snapshot khóa bảy route
-Survey Request cho public, TenantOwner và SystemAdmin; public submit là anonymous,
-hai luồng submit yêu cầu `Idempotency-Key`, các filter enum dùng wire token ổn định
-và không có route `approve`. Snapshot được lấy từ API Development đang chạy với
-startup migration/core-master-data validation tạm tắt bằng environment override;
-giá trị mặc định của ứng dụng vẫn bật các startup gate này.
+`be1-surveys.openapi.json` là snapshot runtime mới nhất sau Step 3E. Snapshot khóa
+tám route Survey Request cho public, TenantOwner và SystemAdmin; public submit là
+anonymous, các command retry-safe yêu cầu `Idempotency-Key`, các enum dùng wire
+token ổn định. Route approve chỉ dành cho SystemAdmin, nhận body có checklist/
+reason/expected version và trả identifiers/trạng thái, không lộ invitation token,
+password hoặc applicant PII. Snapshot được sinh từ `GET /swagger/v1/swagger.json`
+của API Development đang chạy với startup migration/core-master-data validation
+tạm tắt bằng environment override; giá trị mặc định của ứng dụng vẫn bật các
+startup gate này.

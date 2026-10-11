@@ -340,7 +340,7 @@ public sealed class SurveyRequest : AggregateRoot
     public void StartReview(DateTimeOffset reviewedAt) =>
         TransitionTo(SurveyRequestStatus.UnderReview, reviewedAt);
 
-    public void Approve(
+    public SurveyRequestReview Approve(
         JsonDocument checklistSnapshot,
         string reason,
         Guid reviewedBy,

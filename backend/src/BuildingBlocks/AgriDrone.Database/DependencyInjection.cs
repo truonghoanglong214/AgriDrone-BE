@@ -117,6 +117,8 @@ public static class DependencyInjection
             SurveyApprovalUnitOfWork>();
         services.AddScoped<ISurveyApprovalRequestRepository,
             SurveyApprovalRequestRepository>();
+        services.AddScoped<ISurveyApprovalIdempotencyRepository,
+            SurveyApprovalIdempotencyRepository>();
         services.AddScoped<ISurveyApprovalReferenceQueries,
             SurveyApprovalReferenceQueries>();
         services.AddScoped<ISurveyApprovalProvisioningPort,

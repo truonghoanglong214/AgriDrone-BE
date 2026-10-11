@@ -5,6 +5,7 @@ using AgriDrone.Modules.Surveys.Application.Abstractions.Queries;
 using AgriDrone.Modules.Surveys.Application.Abstractions.Requests;
 using AgriDrone.Modules.Surveys.Application.Services;
 using AgriDrone.Modules.Surveys.Application.Features.Approvals.Common;
+using AgriDrone.Modules.Surveys.Application.Features.Approvals.ApproveSurveyRequest;
 using AgriDrone.Modules.Surveys.Domain;
 using AgriDrone.Modules.Surveys.Infrastructure.Approvals;
 using AgriDrone.Modules.Surveys.Infrastructure.Health;
@@ -115,6 +116,12 @@ public static class DependencyInjection
             SurveyApprovalNumberGenerator>();
         services.AddScoped<ISurveyApprovalPrerequisiteResolver,
             SurveyApprovalPrerequisiteResolver>();
+        services.AddScoped<ISurveyRequestKindApprovalOrchestrator,
+            NewCustomerApprovalOrchestrator>();
+        services.AddScoped<ISurveyRequestKindApprovalOrchestrator,
+            ExistingTenantNewFarmApprovalOrchestrator>();
+        services.AddScoped<ISurveyRequestKindApprovalOrchestrator,
+            ExistingFarmSurveyApprovalOrchestrator>();
 
         services.TryAddSingleton(TimeProvider.System);
 

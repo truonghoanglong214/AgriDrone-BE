@@ -5536,6 +5536,63 @@ namespace AgriDrone.Database.Migrations
                         });
                 });
 
+            modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.SurveyApprovalIdempotencyRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("ActorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("actor_id");
+
+                    b.Property<string>("CommandFingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character(64)")
+                        .HasColumnName("command_fingerprint")
+                        .IsFixedLength();
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("IdempotencyKey")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("idempotency_key");
+
+                    b.Property<JsonDocument>("ResultSnapshot")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("result_snapshot");
+
+                    b.Property<Guid>("SurveyRequestId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("survey_request_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_survey_approval_idempotency");
+
+                    b.HasIndex("SurveyRequestId")
+                        .IsUnique()
+                        .HasDatabaseName("uq_survey_approval_idempotency_request");
+
+                    b.HasIndex("ActorId", "IdempotencyKey")
+                        .IsUnique()
+                        .HasDatabaseName("uq_survey_approval_idempotency_actor_key");
+
+                    b.ToTable("survey_approval_idempotency", "survey", t =>
+                        {
+                            t.HasCheckConstraint("ck_survey_approval_idempotency_completion", "(result_snapshot IS NULL AND completed_at IS NULL) OR (result_snapshot IS NOT NULL AND completed_at IS NOT NULL)");
+                        });
+                });
+
             modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.SurveyOrder", b =>
                 {
                     b.Property<Guid>("Id")
@@ -8080,6 +8137,16 @@ namespace AgriDrone.Database.Migrations
                         .HasConstraintName("fk_survey_appointments_orders_order_id");
 
                     b.Navigation("SurveyOrder");
+                });
+
+            modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.SurveyApprovalIdempotencyRecord", b =>
+                {
+                    b.HasOne("AgriDrone.Modules.Surveys.Domain.SurveyRequest", null)
+                        .WithOne()
+                        .HasForeignKey("AgriDrone.Modules.Surveys.Domain.SurveyApprovalIdempotencyRecord", "SurveyRequestId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_survey_approval_idempotency_requests_request_id");
                 });
 
             modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.SurveyOrder", b =>
