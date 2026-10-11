@@ -53,6 +53,14 @@ internal static class CompleteUploadSessionError
             "MediaUpload.ChecksumMismatch",
             "The uploaded object's SHA256 checksum does not match.");
 
+    public static AppError InvalidContent() =>
+        AppError.Validation("MediaUpload.InvalidContent",
+            "The uploaded image or video is incomplete or has an invalid container structure.");
+
+    public static AppError CaptureMetadataMissing() =>
+        AppError.Validation("MediaUpload.CaptureMetadataMissing",
+            "A UTC capture time within the Mission flight interval is required.");
+
     public static AppError ConcurrentUpdate() =>
         AppError.Conflict(
             "MediaUpload.ConcurrentUpdate",

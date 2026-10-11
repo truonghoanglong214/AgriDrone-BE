@@ -1941,6 +1941,10 @@ namespace AgriDrone.Database.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<DateTimeOffset?>("CapturedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("captured_at");
+
                     b.Property<string>("ChecksumAlgorithm")
                         .IsRequired()
                         .HasMaxLength(16)
@@ -2049,6 +2053,11 @@ namespace AgriDrone.Database.Migrations
                     b.HasIndex("Status", "ExpiresAt")
                         .HasDatabaseName("ix_upload_sessions_cleanup");
 
+                    b.HasIndex("TenantId", "MissionId", "ExpectedChecksum")
+                        .IsUnique()
+                        .HasDatabaseName("uq_upload_sessions_active_checksum")
+                        .HasFilter("status IN ('Pending', 'Verifying', 'Completed')");
+
                     b.HasIndex("TenantId", "MissionId", "OperationId")
                         .IsUnique()
                         .HasDatabaseName("uq_upload_sessions_operation");
@@ -2140,6 +2149,10 @@ namespace AgriDrone.Database.Migrations
                     b.Property<DateTimeOffset?>("EndedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("ended_at");
+
+                    b.Property<Guid?>("FarmBoundaryVersionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("farm_boundary_version_id");
 
                     b.Property<Guid>("FarmId")
                         .HasColumnType("uuid")
@@ -2255,10 +2268,6 @@ namespace AgriDrone.Database.Migrations
                     b.Property<Guid?>("PreparationOperationId")
                         .HasColumnType("uuid")
                         .HasColumnName("preparation_operation_id");
-
-                    b.Property<Guid?>("FarmBoundaryVersionId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("farm_boundary_version_id");
 
                     b.Property<int>("ProcessingStatus")
                         .ValueGeneratedOnAdd()
@@ -2436,14 +2445,14 @@ namespace AgriDrone.Database.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("created_by");
 
-                    b.Property<Guid>("FarmId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("farm_id");
-
                     b.Property<string>("EvidenceReference")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)")
                         .HasColumnName("evidence_reference");
+
+                    b.Property<Guid>("FarmId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("farm_id");
 
                     b.Property<string>("IncidentOutcome")
                         .HasMaxLength(1000)

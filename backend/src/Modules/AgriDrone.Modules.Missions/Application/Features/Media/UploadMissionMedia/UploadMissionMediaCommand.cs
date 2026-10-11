@@ -5,5 +5,6 @@ using MediatR;
 namespace AgriDrone.Modules.Missions.Application.Features.Media.UploadMissionMedia;
 
 public sealed record UploadMissionMediaCommand(
-    Guid TenantId, Guid FarmId, Guid MissionId, Stream Content)
+    Guid TenantId, Guid FarmId, Guid MissionId, Stream Content,
+    DateTimeOffset CapturedAt)
     : IRequest<Result<CompleteUploadSessionResult>>;

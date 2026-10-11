@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using AgriDrone.Modules.Missions.Application.Abstractions.Media;
 using AgriDrone.Modules.Missions.Application.Abstractions.Missions;
 using AgriDrone.Modules.Missions.Application.Features.Media.CompleteUploadSession;
@@ -44,6 +43,14 @@ internal sealed class UploadMissionMediaCommandHandler(
         if (mission is null)
             return Result.Failure<CompleteUploadSessionResult>(MissionError.NotFound(request.MissionId));
 
+        if (mission.SurveyOrderId is null)
+            return Result.Failure<CompleteUploadSessionResult>(
+                MediaUploadError.MissionNotOrderBound());
+        if (request.CapturedAt == default ||
+            request.CapturedAt.Offset != TimeSpan.Zero)
+            return Result.Failure<CompleteUploadSessionResult>(
+                MediaUploadError.CaptureOutsideFlight());
+
         // Multipart files are buffered by ASP.NET, spilling large files to disk.
         var content = request.Content;
         if (!content.CanRead || !content.CanSeek || content.Length == 0)
@@ -64,15 +71,17 @@ internal sealed class UploadMissionMediaCommandHandler(
             return InvalidFile("Images must be at most 50 MiB and videos at most 5 GiB.");
 
         content.Position = 0;
-        var hash = await SHA256.HashDataAsync(content, cancellationToken);
-        var checksum = Convert.ToHexString(hash).ToLowerInvariant();
+        var checksum = await UploadedMediaIntegrityVerifier.VerifyAsync(content,
+            mimeType, content.Length, cancellationToken);
+        if (checksum is null)
+            return InvalidFile("The image or video is incomplete or has an invalid container structure.");
         // Operation uniqueness is scoped by tenant/farm/mission in persistence.
-        var operationId = new Guid(hash.AsSpan(0, 16));
+        var operationId = new Guid(Convert.FromHexString(checksum).AsSpan(0, 16));
         var fileName = checksum + UploadedMediaFormat.Extension(mimeType);
         var existing = await sessions.GetByOperationIdAsync(request.TenantId,
             request.FarmId, request.MissionId, operationId, cancellationToken);
         if (existing is not null && !existing.MatchesRequest(fileName, mimeType,
-                mediaType, content.Length, checksum))
+                mediaType, content.Length, checksum, request.CapturedAt))
             return Result.Failure<CompleteUploadSessionResult>(
                 MediaUploadError.OperationPayloadConflict(operationId));
 
@@ -81,7 +90,8 @@ internal sealed class UploadMissionMediaCommandHandler(
 
         var created = await sender.Send(new CreateUploadSessionCommand(
             request.TenantId, request.FarmId, request.MissionId, operationId,
-            fileName, mimeType, mediaType, content.Length, checksum, mission.Version),
+            fileName, mimeType, mediaType, content.Length, checksum, mission.Version,
+            request.CapturedAt),
             cancellationToken);
         if (created.IsFailure)
             return Result.Failure<CompleteUploadSessionResult>(created.Error);

@@ -55,6 +55,11 @@ internal sealed class ImportTelemetryCommandHandler(
                 MissionError.NotFound(request.MissionId));
         }
 
+        if (mission.SurveyOrderId is null)
+            return Result.Failure<ImportTelemetryResult>(
+                AppError.Conflict("MissionTelemetry.MissionNotOrderBound",
+                    "Legacy Missions cannot accept new telemetry."));
+
         var existingOperation =
             await telemetryRepository
                 .GetImportByOperationIdAsync(

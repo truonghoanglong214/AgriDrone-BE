@@ -7,6 +7,18 @@ namespace AgriDrone.Modules.Missions.Application
 
 internal static class MediaUploadError
 {
+    public static AppError MissionNotOrderBound() =>
+        AppError.Conflict("MediaUpload.MissionNotOrderBound",
+            "Legacy Missions cannot accept new media uploads.");
+
+    public static AppError CaptureOutsideFlight() =>
+        AppError.Validation("MediaUpload.CaptureOutsideFlight",
+            "CapturedAt must be within the Mission flight interval.");
+
+    public static AppError ChecksumAlreadyActive() =>
+        AppError.Conflict("MediaUpload.ChecksumAlreadyActive",
+            "This file already has an active or completed upload for the Mission. Retry its original operation.");
+
     public static AppError MissionStatusNotAllowed(
         MissionStatus status) =>
         AppError.Conflict(

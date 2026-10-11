@@ -34,6 +34,10 @@ internal sealed class StartMultipartUploadCommandHandler(
             request.TenantId, request.FarmId, cancellationToken);
         if (mission is null)
             return Result.Failure<StartMultipartUploadResult>(MissionError.NotFound(request.MissionId));
+        if (mission.SurveyOrderId is null)
+            return Result.Failure<StartMultipartUploadResult>(
+                AppError.Conflict("MediaUpload.MissionNotOrderBound",
+                    "Legacy Missions cannot accept new media uploads."));
         var session = await sessions.GetByIdAsync(request.TenantId, request.FarmId,
             request.MissionId, request.UploadSessionId, cancellationToken);
         if (session is null)

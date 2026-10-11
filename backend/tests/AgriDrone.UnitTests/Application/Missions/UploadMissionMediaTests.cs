@@ -16,7 +16,8 @@ namespace AgriDrone.UnitTests.Application.Missions;
 
 public sealed class UploadMissionMediaTests
 {
-    private static readonly byte[] Png = [137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13];
+    private static readonly byte[] Png = Convert.FromBase64String(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC");
 
     [Fact]
     public async Task UploadComputesMetadataAndRetryDoesNotWriteAgain()
@@ -51,6 +52,17 @@ public sealed class UploadMissionMediaTests
     }
 
     [Fact]
+    public async Task TruncatedPngDoesNotCreateSession()
+    {
+        var fixture = new Fixture();
+        var result = await fixture.Upload(Png[..12]);
+        Assert.True(result.IsFailure);
+        Assert.Equal("MediaUpload.InvalidFile", result.Error.Code);
+        Assert.Null(fixture.Session);
+        Assert.Equal(0, fixture.WriteCount);
+    }
+
+    [Fact]
     public async Task TransferFailureCanRetryPendingSession()
     {
         var fixture = new Fixture { FailWrite = true };
@@ -70,6 +82,17 @@ public sealed class UploadMissionMediaTests
         var result = await fixture.Upload(Png, Guid.NewGuid());
         Assert.True(result.IsFailure);
         Assert.Null(fixture.Session);
+    }
+
+    [Fact]
+    public async Task LegacyMissionCannotAcceptNewMedia()
+    {
+        var fixture = new Fixture(legacyMission: true);
+        var result = await fixture.Upload(Png);
+        Assert.True(result.IsFailure);
+        Assert.Equal("MediaUpload.MissionNotOrderBound", result.Error.Code);
+        Assert.Null(fixture.Session);
+        Assert.Equal(0, fixture.WriteCount);
     }
 
     [Fact]
@@ -96,12 +119,17 @@ public sealed class UploadMissionMediaTests
         public Guid? MessageId => null;
         public ExecutionContextSource Source => default;
 
-        public Fixture()
+        public Fixture(bool legacyMission = false)
         {
             using var parameters = JsonDocument.Parse("{}");
-            mission = DroneMission.Create(TenantId!.Value, Guid.NewGuid(), Guid.NewGuid(),
-                Guid.NewGuid(), null, "UPLOAD-TEST", MissionType.Mapping, null,
-                parameters, null, ActorId!.Value, now);
+            mission = legacyMission
+                ? DroneMission.Create(TenantId!.Value, Guid.NewGuid(), Guid.NewGuid(),
+                    Guid.NewGuid(), null, "UPLOAD-TEST", MissionType.Mapping, null,
+                    parameters, null, ActorId!.Value, now)
+                : DroneMission.CreateOrderBound(Guid.NewGuid(), TenantId!.Value,
+                    Guid.NewGuid(), [], Guid.NewGuid(), Guid.NewGuid(), ActorId!.Value,
+                    "UPLOAD-TEST", MissionPurpose.BaselineMapping, Guid.NewGuid(),
+                    null, false, parameters, ActorId.Value, now);
             var sender = DispatchProxy.Create<ISender, SenderProxy>();
             ((SenderProxy)(object)sender).OnSend = message =>
             {
@@ -110,7 +138,8 @@ public sealed class UploadMissionMediaTests
                     Session ??= MediaUploadSession.Create(create.TenantId, create.FarmId,
                         create.MissionId, create.OperationId, Guid.NewGuid(), ActorId.Value,
                         create.FileName, create.MimeType, create.MediaType, create.FileSizeBytes,
-                        create.Sha256Checksum, "minio://media/test", now, now.AddHours(1));
+                        create.Sha256Checksum, "minio://media/test", now,
+                        now.AddHours(1), create.CapturedAt);
                     return Task.FromResult(Result.Success(new CreateUploadSessionResult(
                         Session.Id, Session.MediaAssetId, new Uri("https://example.invalid"),
                         Session.ExpiresAt, Session.Status, 1, false)));
@@ -137,7 +166,7 @@ public sealed class UploadMissionMediaTests
         {
             using var stream = new MemoryStream(bytes);
             return await handler.Handle(new UploadMissionMediaCommand(tenant ?? TenantId!.Value,
-                mission.FarmId, mission.Id, stream), CancellationToken.None);
+                mission.FarmId, mission.Id, stream, now), CancellationToken.None);
         }
 
         public Task<DroneMission?> GetByIdAsync(Guid id, Guid tenant, Guid farm,
@@ -159,6 +188,9 @@ public sealed class UploadMissionMediaTests
         public Task<MediaUploadSession?> GetByOperationIdAsync(Guid tenant, Guid farm, Guid missionId,
             Guid operation, CancellationToken cancellationToken = default) =>
             Task.FromResult(Session?.OperationId == operation ? Session : null);
+        public Task<MediaUploadSession?> GetActiveByChecksumAsync(Guid tenant, Guid farm,
+            Guid missionId, string checksum, CancellationToken cancellationToken = default) =>
+            Task.FromResult(Session?.ExpectedChecksum == checksum ? Session : null);
         public async Task UploadAsync(string uri, Stream content, long length, string mime,
             CancellationToken cancellationToken = default)
         {

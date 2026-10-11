@@ -193,6 +193,16 @@ internal sealed class MissionsDbContext(
             when (exception.InnerException is PostgresException
             {
                 SqlState: PostgresErrorCodes.UniqueViolation,
+                ConstraintName: "uq_upload_sessions_active_checksum"
+            })
+        {
+            throw new UploadChecksumConflictException(exception);
+        }
+
+        catch (DbUpdateException exception)
+            when (exception.InnerException is PostgresException
+            {
+                SqlState: PostgresErrorCodes.UniqueViolation,
                 ConstraintName:
                     "uq_preflight_definitions_code_version" or
                     "uq_preflight_definitions_one_active" or

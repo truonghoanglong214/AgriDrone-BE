@@ -31,6 +31,10 @@ internal sealed class GetMultipartPartUrlQueryHandler(
             request.TenantId, request.FarmId, cancellationToken);
         if (mission is null)
             return Result.Failure<GetMultipartPartUrlResult>(MissionError.NotFound(request.MissionId));
+        if (mission.SurveyOrderId is null)
+            return Result.Failure<GetMultipartPartUrlResult>(
+                AppError.Conflict("MediaUpload.MissionNotOrderBound",
+                    "Legacy Missions cannot accept new media uploads."));
         var session = await sessions.GetByIdAsync(request.TenantId,
             request.FarmId, request.MissionId, request.UploadSessionId,
             cancellationToken);

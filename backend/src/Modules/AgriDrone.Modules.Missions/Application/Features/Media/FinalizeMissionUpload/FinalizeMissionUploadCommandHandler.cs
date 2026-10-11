@@ -55,6 +55,11 @@ internal sealed class FinalizeMissionUploadCommandHandler(
                 MissionError.NotFound(request.MissionId));
         }
 
+        if (mission.SurveyOrderId is null)
+            return Result.Failure<FinalizeMissionUploadResult>(
+                AppError.Conflict("MissionUpload.MissionNotOrderBound",
+                    "Legacy Missions cannot finalize uploads."));
+
         if (mission.Status != MissionStatus.Uploading)
         {
             return Result.Failure<FinalizeMissionUploadResult>(
