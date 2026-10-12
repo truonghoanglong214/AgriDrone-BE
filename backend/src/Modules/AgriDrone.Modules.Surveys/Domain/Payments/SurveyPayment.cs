@@ -127,6 +127,28 @@ public sealed class SurveyPayment : Entity
     public void Refund(DateTimeOffset occurredAt) =>
         TransitionTo(SurveyPaymentStatus.Refunded, occurredAt);
 
+    public void Reconcile(
+        Money settledAmount,
+        string providerReference,
+        DateTimeOffset reconciledAt)
+    {
+        if (Status is not (
+            SurveyPaymentStatus.Pending or
+            SurveyPaymentStatus.Processing or
+            SurveyPaymentStatus.AdjustmentRequired))
+        {
+            throw new SurveyDomainException(
+                PaymentDomainErrorCodes.InvalidTransition,
+                $"Payment in state '{Status}' cannot be reconciled.");
+        }
+
+        SetProviderReference(providerReference);
+        Amount = settledAmount.Amount;
+        Currency = settledAmount.Currency.Value;
+        TransitionTo(SurveyPaymentStatus.Confirmed, reconciledAt);
+        ConfirmedAt = reconciledAt;
+    }
+
     private void SetProviderReference(string providerReference)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(providerReference);

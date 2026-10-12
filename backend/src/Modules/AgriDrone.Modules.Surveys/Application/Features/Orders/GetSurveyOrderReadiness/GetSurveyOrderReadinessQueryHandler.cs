@@ -1,6 +1,5 @@
-using AgriDrone.Modules.Surveys.Application.Abstractions.Appointments;
+using AgriDrone.Modules.Surveys.Application.Abstractions.Orders;
 using AgriDrone.Modules.Surveys.Application.Errors;
-using AgriDrone.Modules.Surveys.Domain;
 using AgriDrone.SharedKernel.Application;
 using AgriDrone.SharedKernel.Application.Abstractions.Execution;
 using MediatR;
@@ -8,9 +7,8 @@ using MediatR;
 namespace AgriDrone.Modules.Surveys.Application.Features.Orders.GetSurveyOrderReadiness;
 
 internal sealed class GetSurveyOrderReadinessQueryHandler(
-    ISurveyBaselineReadinessQueries readinessQueries,
-    IExecutionContext executionContext,
-    TimeProvider timeProvider)
+    ISurveyOrderReadinessService readinessService,
+    IExecutionContext executionContext)
     : IRequestHandler<GetSurveyOrderReadinessQuery,
         Result<SurveyOrderReadinessResponse>>
 {
@@ -25,66 +23,46 @@ internal sealed class GetSurveyOrderReadinessQueryHandler(
                 SurveyAppointmentError.Forbidden());
         }
 
-        var evaluatedAt = timeProvider.GetUtcNow();
-        var stateResult = await readinessQueries.GetAsync(
+        var evaluationResult = await readinessService.EvaluateAsync(
             query.SurveyOrderId,
             query.MissionId,
-            actorId,
-            evaluatedAt,
+            query.Purpose,
             cancellationToken);
-        if (stateResult.IsFailure)
+        if (evaluationResult.IsFailure)
         {
             return Result.Failure<SurveyOrderReadinessResponse>(
-                stateResult.Error);
+                evaluationResult.Error);
         }
 
-        var state = stateResult.Value;
-        var decision = SurveyOrderReadinessPolicy.Evaluate(state.Snapshot);
+        var evaluation = evaluationResult.Value;
+        if (evaluation.SystemManagerUserId != actorId)
+        {
+            return Result.Failure<SurveyOrderReadinessResponse>(
+                SurveyAppointmentError.Forbidden());
+        }
+
         return Result.Success(new SurveyOrderReadinessResponse(
-            state.SurveyOrderId,
-            query.MissionId,
-            state.TenantId,
-            state.FarmId,
-            "BASELINE_MAPPING",
-            state.OrderVersion,
-            state.AppointmentId,
-            state.SystemManagerProfileId,
-            decision.IsReady,
-            decision.Failures.Select(MapFailure).ToArray(),
-            evaluatedAt));
+            evaluation.SurveyOrderId,
+            evaluation.MissionId,
+            evaluation.TenantId,
+            evaluation.FarmId,
+            MapPurpose(evaluation.Purpose),
+            evaluation.OrderVersion,
+            evaluation.AppointmentId,
+            evaluation.SystemManagerProfileId,
+            evaluation.IsReady,
+            evaluation.FailureCodes,
+            evaluation.EvaluatedAt));
     }
 
-    private static string MapFailure(SurveyOrderReadinessFailure failure) =>
-        failure switch
+    private static string MapPurpose(Domain.SurveyOperationPurpose purpose) =>
+        purpose switch
         {
-            SurveyOrderReadinessFailure.BaselineMappingNotRequired =>
-                "BASELINE_MAPPING_NOT_REQUIRED",
-            SurveyOrderReadinessFailure.BoundaryNotApproved =>
-                "BOUNDARY_NOT_APPROVED",
-            SurveyOrderReadinessFailure.ScopeNotConfirmed =>
-                "SCOPE_NOT_CONFIRMED",
-            SurveyOrderReadinessFailure.AppointmentNotConfirmed =>
-                "APPOINTMENT_NOT_CONFIRMED",
-            SurveyOrderReadinessFailure.AppointmentPurposeMismatch =>
-                "APPOINTMENT_PURPOSE_MISMATCH",
-            SurveyOrderReadinessFailure.AppointmentNotCurrent =>
-                "APPOINTMENT_NOT_CURRENT",
-            SurveyOrderReadinessFailure.MissionNotPreparedForPurpose =>
-                "MISSION_NOT_PREPARED_FOR_PURPOSE",
-            SurveyOrderReadinessFailure.MissionScheduleMismatch =>
-                "MISSION_SCHEDULE_MISMATCH",
-            SurveyOrderReadinessFailure.DroneNotReady => "DRONE_NOT_READY",
-            SurveyOrderReadinessFailure.PreflightNotCompleted =>
-                "PREFLIGHT_NOT_COMPLETED",
-            SurveyOrderReadinessFailure.PrimaryManagerNotReady =>
-                "PRIMARY_MANAGER_NOT_READY",
-            SurveyOrderReadinessFailure.PrimaryManagerUnavailable =>
-                "PRIMARY_MANAGER_UNAVAILABLE",
-            SurveyOrderReadinessFailure.SafetyChecksNotSatisfied =>
-                "SAFETY_CHECKS_NOT_SATISFIED",
-            SurveyOrderReadinessFailure.OrderNotEligible =>
-                "ORDER_NOT_ELIGIBLE",
-            _ => throw new InvalidOperationException(
-                $"Unsupported Baseline readiness failure '{failure}'.")
+            Domain.SurveyOperationPurpose.BaselineMapping =>
+                "BASELINE_MAPPING",
+            Domain.SurveyOperationPurpose.PlantHealth => "PLANT_HEALTH",
+            Domain.SurveyOperationPurpose.HarvestReadiness =>
+                "HARVEST_READINESS",
+            _ => throw new ArgumentOutOfRangeException(nameof(purpose))
         };
 }

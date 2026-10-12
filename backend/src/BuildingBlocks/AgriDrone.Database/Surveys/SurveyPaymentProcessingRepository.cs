@@ -121,6 +121,147 @@ internal sealed class SurveyPaymentProcessingRepository(
             duplicate));
     }
 
+    public async Task<Result<SurveyPriceAdjustmentRequestState>>
+        GetForPriceAdjustmentRequestAsync(
+            Guid surveyOrderId,
+            Guid actorUserId,
+            DateTimeOffset evaluatedAt,
+            CancellationToken cancellationToken = default)
+    {
+        context.EnsureTransaction();
+        if (!await LockOrderAsync(surveyOrderId, cancellationToken))
+        {
+            return Result.Failure<SurveyPriceAdjustmentRequestState>(
+                SurveyOrderError.NotFound(surveyOrderId));
+        }
+
+        if (!await HasAssignedManagerAccessAsync(
+                surveyOrderId,
+                actorUserId,
+                evaluatedAt,
+                cancellationToken))
+        {
+            return Result.Failure<SurveyPriceAdjustmentRequestState>(
+                PriceAdjustmentError.Forbidden());
+        }
+
+        var order = await context.SurveyOrders.SingleAsync(
+            item => item.Id == surveyOrderId,
+            cancellationToken);
+        var openAdjustments = await context.PriceAdjustments
+            .FromSqlInterpolated($$"""
+                SELECT *
+                FROM survey.price_adjustments
+                WHERE survey_order_id = {{surveyOrderId}}
+                  AND status IN (
+                    'PENDING'::system.price_adjustment_status,
+                    'APPROVED'::system.price_adjustment_status)
+                FOR UPDATE
+                """)
+            .ToListAsync(cancellationToken);
+        var effectivePrices = await ReadEffectivePricesAsync(
+            order.SurveyServiceId,
+            evaluatedAt,
+            cancellationToken);
+        if (effectivePrices.Count != 1)
+        {
+            return Result.Failure<SurveyPriceAdjustmentRequestState>(
+                PriceAdjustmentError.EffectivePriceUnavailable());
+        }
+
+        var activePayment = await ReadLatestPaymentAsync(
+            surveyOrderId,
+            cancellationToken);
+        return Result.Success(new SurveyPriceAdjustmentRequestState(
+            order,
+            effectivePrices[0],
+            openAdjustments.SingleOrDefault(),
+            activePayment));
+    }
+
+    public async Task<Result<SurveyPriceAdjustmentReviewState>>
+        GetForPriceAdjustmentReviewAsync(
+            Guid surveyOrderId,
+            Guid adjustmentId,
+            CancellationToken cancellationToken = default)
+    {
+        context.EnsureTransaction();
+        if (!await LockOrderAsync(surveyOrderId, cancellationToken))
+        {
+            return Result.Failure<SurveyPriceAdjustmentReviewState>(
+                SurveyOrderError.NotFound(surveyOrderId));
+        }
+
+        if (!await ExistsAsync(
+                """
+                SELECT adjustment.id
+                FROM survey.price_adjustments AS adjustment
+                WHERE adjustment.id = @adjustment_id
+                  AND adjustment.survey_order_id = @order_id
+                FOR UPDATE OF adjustment
+                """,
+                cancellationToken,
+                Id("adjustment_id", adjustmentId),
+                Id("order_id", surveyOrderId)))
+        {
+            return Result.Failure<SurveyPriceAdjustmentReviewState>(
+                PriceAdjustmentError.NotFound(adjustmentId));
+        }
+
+        var order = await context.SurveyOrders.SingleAsync(
+            item => item.Id == surveyOrderId,
+            cancellationToken);
+        var adjustment = await context.PriceAdjustments.SingleAsync(
+            item => item.Id == adjustmentId,
+            cancellationToken);
+        var activePayment = await ReadLatestPaymentAsync(
+            surveyOrderId,
+            cancellationToken);
+        return Result.Success(new SurveyPriceAdjustmentReviewState(
+            order,
+            adjustment,
+            activePayment));
+    }
+
+    public async Task<Result<SurveyPaymentReconciliationState>>
+        GetForReconciliationAsync(
+            Guid paymentId,
+            CancellationToken cancellationToken = default)
+    {
+        context.EnsureTransaction();
+        Guid orderId;
+        await using (var command = CreateCommand(
+            """
+            SELECT payment.survey_order_id
+            FROM survey.survey_payments AS payment
+            JOIN survey.survey_orders AS survey_order
+              ON survey_order.id = payment.survey_order_id
+            WHERE payment.id = @payment_id
+            FOR UPDATE OF payment, survey_order
+            """,
+            Id("payment_id", paymentId)))
+        {
+            var value = await command.ExecuteScalarAsync(cancellationToken);
+            if (value is not Guid id)
+            {
+                return Result.Failure<SurveyPaymentReconciliationState>(
+                    PaymentError.NotFound(paymentId.ToString("D")));
+            }
+
+            orderId = id;
+        }
+
+        var payment = await context.SurveyPayments.SingleAsync(
+            item => item.Id == paymentId,
+            cancellationToken);
+        var order = await context.SurveyOrders.SingleAsync(
+            item => item.Id == orderId,
+            cancellationToken);
+        return Result.Success(new SurveyPaymentReconciliationState(
+            order,
+            payment));
+    }
+
     public void AddPayment(SurveyPayment payment)
     {
         ArgumentNullException.ThrowIfNull(payment);
@@ -133,6 +274,13 @@ internal sealed class SurveyPaymentProcessingRepository(
         ArgumentNullException.ThrowIfNull(paymentEvent);
         context.EnsureTransaction();
         context.PaymentEvents.Add(paymentEvent);
+    }
+
+    public void AddPriceAdjustment(PriceAdjustment adjustment)
+    {
+        ArgumentNullException.ThrowIfNull(adjustment);
+        context.EnsureTransaction();
+        context.PriceAdjustments.Add(adjustment);
     }
 
     private Task<bool> LockOrderAsync(
@@ -168,6 +316,101 @@ internal sealed class SurveyPaymentProcessingRepository(
             cancellationToken,
             Id("order_id", surveyOrderId),
             Id("actor_id", actorUserId));
+
+    private Task<bool> HasAssignedManagerAccessAsync(
+        Guid surveyOrderId,
+        Guid actorUserId,
+        DateTimeOffset evaluatedAt,
+        CancellationToken cancellationToken) => ExistsAsync(
+            """
+            SELECT profile.id
+            FROM survey.survey_orders AS survey_order
+            JOIN identity.farm_manager_assignments AS assignment
+              ON assignment.tenant_id = survey_order.tenant_id
+             AND assignment.farm_id = survey_order.farm_id
+             AND assignment.ended_at IS NULL
+            JOIN identity.system_manager_profiles AS profile
+              ON profile.id = assignment.system_manager_profile_id
+             AND profile.user_id = @actor_id
+             AND profile.status = 'ACTIVE'::system.system_manager_profile_status
+             AND profile.qualification_status = 'QUALIFIED'::system.flight_qualification_status
+             AND profile.qualification_expires_at > @evaluated_at
+            WHERE survey_order.id = @order_id
+            FOR SHARE OF assignment, profile
+            """,
+            cancellationToken,
+            Id("order_id", surveyOrderId),
+            Id("actor_id", actorUserId),
+            new NpgsqlParameter("evaluated_at", evaluatedAt));
+
+    private async Task<List<EffectiveSurveyPrice>> ReadEffectivePricesAsync(
+        Guid surveyServiceId,
+        DateTimeOffset evaluatedAt,
+        CancellationToken cancellationToken)
+    {
+        var prices = new List<EffectiveSurveyPrice>();
+        await using var command = CreateCommand(
+            """
+            SELECT price.id, price.price_per_pole, price.currency
+            FROM survey.survey_service_prices AS price
+            WHERE price.survey_service_id = @service_id
+              AND price.price_per_pole IS NOT NULL
+              AND price.currency = 'VND'
+              AND price.effective_from <= @evaluated_at
+              AND (price.effective_to IS NULL OR price.effective_to > @evaluated_at)
+            ORDER BY price.effective_from DESC
+            LIMIT 2
+            FOR SHARE OF price
+            """,
+            Id("service_id", surveyServiceId),
+            new NpgsqlParameter("evaluated_at", evaluatedAt));
+        await using var reader = await command.ExecuteReaderAsync(
+            cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            prices.Add(new EffectiveSurveyPrice(
+                reader.GetGuid(0),
+                reader.GetDecimal(1),
+                reader.GetString(2).Trim()));
+        }
+
+        return prices;
+    }
+
+    private async Task<SurveyPayment?> ReadLatestPaymentAsync(
+        Guid surveyOrderId,
+        CancellationToken cancellationToken)
+    {
+        var paymentIds = new List<Guid>();
+        await using (var command = CreateCommand(
+            """
+            SELECT payment.id
+            FROM survey.survey_payments AS payment
+            WHERE payment.survey_order_id = @order_id
+            ORDER BY payment.created_at DESC
+            LIMIT 1
+            FOR UPDATE OF payment
+            """,
+            Id("order_id", surveyOrderId)))
+        await using (var reader = await command.ExecuteReaderAsync(
+            cancellationToken))
+        {
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                paymentIds.Add(reader.GetGuid(0));
+            }
+        }
+
+        if (paymentIds.Count == 0)
+        {
+            return null;
+        }
+
+        var paymentId = paymentIds[0];
+        return await context.SurveyPayments.SingleAsync(
+            item => item.Id == paymentId,
+            cancellationToken);
+    }
 
     private async Task<Guid?> ReadConfirmedPaidAppointmentAsync(
         Guid surveyOrderId,

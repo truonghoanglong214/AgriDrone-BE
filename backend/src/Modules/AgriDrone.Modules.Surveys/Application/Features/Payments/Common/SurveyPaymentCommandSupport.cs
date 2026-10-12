@@ -10,11 +10,14 @@ internal static class SurveyPaymentCommandSupport
     public const string ProcessingEvent = "payment.processing";
     public const string SucceededEvent = "payment.succeeded";
     public const string FailedEvent = "payment.failed";
+    public const string RefundedEvent = "payment.refunded";
+    public const string ChargebackEvent = "payment.chargeback";
 
     public static bool IsSupportedEvent(string? eventType) =>
         !string.IsNullOrWhiteSpace(eventType) &&
         eventType.Trim().ToLowerInvariant() is
-            ProcessingEvent or SucceededEvent or FailedEvent;
+            ProcessingEvent or SucceededEvent or FailedEvent or
+            RefundedEvent or ChargebackEvent;
 
     public static AppError MapDomainError(SurveyDomainException exception) =>
         exception.Code switch

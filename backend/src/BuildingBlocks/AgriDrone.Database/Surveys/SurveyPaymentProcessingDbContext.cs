@@ -20,6 +20,7 @@ public sealed class SurveyPaymentProcessingDbContext(
     public DbSet<SurveyOrder> SurveyOrders => Set<SurveyOrder>();
     public DbSet<SurveyPayment> SurveyPayments => Set<SurveyPayment>();
     public DbSet<PaymentEvent> PaymentEvents => Set<PaymentEvent>();
+    public DbSet<PriceAdjustment> PriceAdjustments => Set<PriceAdjustment>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
 
@@ -102,6 +103,7 @@ public sealed class SurveyPaymentProcessingDbContext(
         modelBuilder.ApplyConfiguration(new SurveyOrderConfiguration());
         modelBuilder.ApplyConfiguration(new SurveyPaymentConfiguration());
         modelBuilder.ApplyConfiguration(new PaymentEventConfiguration());
+        modelBuilder.ApplyConfiguration(new PriceAdjustmentConfiguration());
         modelBuilder.ApplyConfiguration(new AuditLogConfiguration());
         modelBuilder.ApplyConfiguration(new OutboxMessageConfiguration());
 

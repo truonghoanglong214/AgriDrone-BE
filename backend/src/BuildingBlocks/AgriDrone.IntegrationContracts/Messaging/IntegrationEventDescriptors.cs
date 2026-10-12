@@ -143,4 +143,11 @@ public static class IntegrationEventDescriptors
             IntegrationEventTypes.SurveyPaymentChangedV1,
             IntegrationSchemaVersions.V1,
             RequiresActorId: false);
+
+    public static IntegrationEventDescriptor<SurveyPriceAdjustmentChangedV1>
+        SurveyPriceAdjustmentChangedV1 { get; } =
+        new(
+            IntegrationEventTypes.SurveyPriceAdjustmentChangedV1,
+            IntegrationSchemaVersions.V1,
+            RequiresActorId: true);
 }

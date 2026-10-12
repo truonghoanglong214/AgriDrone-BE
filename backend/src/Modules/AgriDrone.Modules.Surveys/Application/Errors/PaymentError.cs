@@ -17,6 +17,10 @@ public static class PaymentError
     public const string ProviderMismatchCode = "Payment.ProviderMismatch";
     public const string UnsupportedEventCode = "Payment.UnsupportedEvent";
     public const string PersistenceConflictCode = "Payment.PersistenceConflict";
+    public const string ReconciliationMismatchCode =
+        "Payment.ReconciliationMismatch";
+    public const string ReconciliationEvidenceRequiredCode =
+        "Payment.ReconciliationEvidenceRequired";
 
     public static AppError NotFound(string providerReference) =>
         AppError.NotFound(
@@ -58,4 +62,8 @@ public static class PaymentError
     public static AppError PersistenceConflict() => AppError.Conflict(
         PersistenceConflictCode,
         "Payment processing conflicted with another operation.");
+
+    public static AppError ReconciliationMismatch() => AppError.Conflict(
+        ReconciliationMismatchCode,
+        "Reconciled provider amount/currency must match the current SurveyOrder snapshot.");
 }

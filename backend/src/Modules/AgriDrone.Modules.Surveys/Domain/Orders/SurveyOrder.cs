@@ -51,6 +51,7 @@ public sealed class SurveyOrder : AggregateRoot
             [SurveyOrderStatus.ReadyForPaidService] = new HashSet<SurveyOrderStatus>
             {
                 SurveyOrderStatus.InProgress,
+                SurveyOrderStatus.AwaitingPayment,
                 SurveyOrderStatus.Cancelled
             },
             [SurveyOrderStatus.InProgress] = new HashSet<SurveyOrderStatus>
@@ -433,6 +434,67 @@ public sealed class SurveyOrder : AggregateRoot
 
     public void MarkPaymentConfirmed(DateTimeOffset occurredAt) =>
         TransitionTo(SurveyOrderStatus.ReadyForPaidService, occurredAt);
+
+    public void RevokePaidServiceReadiness(DateTimeOffset occurredAt)
+    {
+        if (Status == SurveyOrderStatus.ReadyForPaidService)
+        {
+            TransitionTo(SurveyOrderStatus.AwaitingPayment, occurredAt);
+        }
+    }
+
+    public void ApplyPriceAdjustment(
+        Guid surveyServicePriceId,
+        ConfirmedSurveyPoleCount confirmedPoleCount,
+        PricePerPole pricePerPole,
+        CurrencyCode currency,
+        Guid appliedBy,
+        DateTimeOffset appliedAt)
+    {
+        DomainGuard.NotEmpty(surveyServicePriceId);
+        DomainGuard.NotEmpty(appliedBy);
+        DomainGuard.Utc(appliedAt);
+        SurveyTransitionGuard.EnsureTimestamp(appliedAt, UpdatedAt);
+
+        if (Status is not (
+            SurveyOrderStatus.AwaitingPaidAppointment or
+            SurveyOrderStatus.AwaitingPayment or
+            SurveyOrderStatus.ReadyForPaidService))
+        {
+            throw new SurveyDomainException(
+                SurveyOrderDomainErrorCodes.InvalidTransition,
+                $"Order in state '{Status}' cannot apply a price adjustment.");
+        }
+
+        if (FarmBoundaryVersionId is null || FarmBaseMapVersionId is null)
+        {
+            throw new SurveyDomainException(
+                SurveyOrderDomainErrorCodes.PricingSnapshotIncomplete,
+                "Boundary and base-map snapshots are required for a price adjustment.");
+        }
+
+        var finalPrice = Money.CalculateSurveyPrice(
+            confirmedPoleCount,
+            pricePerPole,
+            currency);
+        SurveyServicePriceId = surveyServicePriceId;
+        ConfirmedSurveyPoleCount = confirmedPoleCount;
+        PricePerPoleSnapshot = pricePerPole;
+        Currency = currency.Value;
+        FinalPrice = finalPrice.Amount;
+        PoleCountConfirmedBy = appliedBy;
+        PoleCountConfirmedAt = appliedAt;
+        PricingConfirmedBy = appliedBy;
+        PricingConfirmedAt = appliedAt;
+        UpdatedAt = appliedAt;
+
+        if (Status == SurveyOrderStatus.ReadyForPaidService)
+        {
+            Status = SurveyOrderStatus.AwaitingPayment;
+        }
+
+        Version++;
+    }
 
     public void StartPaidService(DateTimeOffset occurredAt) =>
         TransitionTo(SurveyOrderStatus.InProgress, occurredAt);

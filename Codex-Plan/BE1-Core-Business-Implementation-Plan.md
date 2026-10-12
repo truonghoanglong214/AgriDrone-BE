@@ -105,7 +105,7 @@ BE1 vẫn phải cung cấp/tiêu thụ contract rõ ràng để BE2 hoàn tất
 | 6R | Per-pole, purpose readiness, FarmBoundary, Disease Zone/recommendation, plant-change | Step 0R | **CodeComplete — AwaitingFinalTest** | Code/migration/contract/documentation hoàn tất; chỉ Final Test Phase được chuyển `Done` |
 | 7 | Catalogue/master data và Survey Request | Step 1B–1E, Step 2 | **CodeComplete — AwaitingFinalTest** | Step 1/2 implementation và OpenAPI hoàn tất; submit không provision resource |
 | 8 | Approval/onboarding/SurveyOrder | Step 3 | **CodeComplete — AwaitingFinalTest** | Ba request kinds atomic, retry-safe và đã mở SystemAdmin API/OpenAPI |
-| 9 | Boundary/scope, baseline count, pricing, appointment, payment | Step 4 | **InProgress — 4A–4D CodeComplete** | Purpose-aware readiness không bypass được |
+| 9 | Boundary/scope, baseline count, pricing, appointment, payment | Step 4 | **CodeComplete — AwaitingFinalTest** | Purpose-aware readiness không bypass được |
 | 10 | Order-bound Mission/pre-flight | BE2 implementation + Step 5 BE1 boundary | External dependency | BE2 dùng authoritative BE1 context/readiness contract |
 | 11 | Initial Farm base map và persistent Plant identity | Step 6 | NotStarted | Hoàn tất publication V3 atomic, review và count handoff |
 | 12 | Plant Health/Disease Zone/recommendation và Harvest Readiness | Step 7–8 | NotStarted | Chỉ human-reviewed Published result lộ cho owner |
@@ -1551,7 +1551,7 @@ amount/currency mismatch chuyển `AdjustmentRequired`, không mở paid gate. A
 `survey.payment-changed.v1` Outbox và state commit trong cùng transaction. Migration
 `20261011162047_Phase9PaidAppointmentPayment` và evidence tại
 `docs/operations/be1-step4d-paid-appointment-payment-report.md`. Reconciliation,
-refund/chargeback và authoritative readiness tổng hợp tiếp tục ở Phase 4E.
+refund/chargeback và authoritative readiness tổng hợp đã được hoàn tất ở Phase 4E.
 
 #### Phase 4E — Adjustment, reconciliation và readiness authoritative service
 
@@ -1574,6 +1574,21 @@ Tạo một application query/service duy nhất xây `SurveyOrderReadinessSnaps
 Service gọi domain policy để nhận decision/failure codes, sau đó mới transition order nếu đủ điều kiện. Expose decision qua integration port cho BE2; BE2 không tự copy logic này.
 
 Danh sách scenario phải được bổ sung vào Final Test Backlog trong lúc code; chỉ viết test sau khi các phase implementation kết thúc. Final Test Phase phải có ít nhất một test cho mỗi failure code và một test state thay đổi sau khi readiness vừa được đọc.
+
+Checkpoint 2026-10-12: Phase 4E và toàn bộ Step 4 đạt
+`CodeComplete — AwaitingFinalTest`. PriceAdjustment dùng lifecycle append-only
+`Pending → Approved/Rejected` và `Approved → Applied` với optimistic version,
+reason/evidence, audit và `survey.price-adjustment-changed.v1` Outbox. Apply mới
+cập nhật pole-count/price snapshot và đưa confirmed Payment lệch snapshot về
+`AdjustmentRequired`; SystemAdmin reconciliation chỉ Confirmed khi provider
+reference cùng amount/currency evidence khớp snapshot hiện hành. Callback đã hỗ
+trợ `payment.refunded`/`payment.chargeback`, giữ PaymentEvent bất biến và đóng
+Order gate nếu flight chưa bắt đầu. `ISurveyOrderReadinessService` là port duy
+nhất cho Baseline Mapping, Plant Health và Harvest Readiness; implementation đọc
+lại Order/map/appointment/payment/adjustment/manager/Mission/Drone/pre-flight từ
+database rồi gọi domain policy. Migration/evidence tại
+`20261012024731_Phase9CommercialAdjustmentReadiness` và
+`docs/operations/be1-step4e-commercial-readiness-report.md`.
 
 ### 12.1. Boundary/scope và baseline decision
 
@@ -1608,25 +1623,25 @@ Danh sách scenario phải được bổ sung vào Final Test Backlog trong lúc
 - [x] Deduplicate theo `(Provider, ProviderReference, ProviderEventId)` dùng `PaymentEventIdentity`.
 - [x] Reject/out-of-order transition không lùi state.
 - [x] Amount/currency mismatch → `AdjustmentRequired`, không Confirmed; manual review tiếp tục ở 4E.
-- [ ] SystemAdmin reconciliation chỉ khi có provider reference, evidence và reason.
+- [x] SystemAdmin reconciliation chỉ khi có provider reference, evidence và reason.
 - [x] TenantOwner không có command mark-confirmed.
 - [x] Không tạo/đòi payment riêng cho Baseline Mapping.
 
 ### 12.5. Price adjustment
 
-- [ ] Trước payment confirmed, policy đổi boundary/scope/count/price phải explicit và giữ history.
-- [ ] Sau payment confirmed, mọi đổi confirmed pole count/price qua PriceAdjustment append-only.
-- [ ] Pending adjustment đóng readiness gate.
-- [ ] Approve/reject/apply adjustment có separate authorization, expected version và audit.
-- [ ] Refund/chargeback đóng gate cho flight chưa bắt đầu.
+- [x] Trước payment confirmed, policy đổi count/price sau snapshot phải explicit và giữ history; boundary/scope re-verification vẫn thuộc lifecycle riêng của 4A.
+- [x] Sau payment confirmed, mọi đổi confirmed pole count/price qua PriceAdjustment append-only.
+- [x] Pending/Approved chưa apply adjustment đóng readiness gate.
+- [x] Approve/reject/apply adjustment có separate authorization, expected version và audit.
+- [x] Refund/chargeback đóng gate cho flight chưa bắt đầu.
 
 ### 12.6. Purpose-aware readiness service/contract
 
-- [ ] Tạo application service build `SurveyOrderReadinessSnapshot` từ MissionPurpose + database state hiện hành.
-- [ ] Không persist `ReadyForOperations` từ payload; nếu lưu OrderStatus thì chỉ transition từ authoritative policy decision.
-- [ ] Expose internal query/port cho BE2 prepare/start flight.
-- [ ] Decision trả stable failures: boundary, scope, appointment/purpose, count-price, payment, manager, adjustment, eligibility và safety.
-- [ ] Re-check manager assignment/qualification thời điểm query.
+- [x] Tạo application service build `SurveyOrderReadinessSnapshot` từ MissionPurpose + database state hiện hành.
+- [x] Không persist `ReadyForOperations` từ payload; Order status thương mại chỉ đổi từ trusted payment/reconciliation và readiness vẫn re-check authoritative state.
+- [x] Expose internal query/port cho BE2 prepare/start flight.
+- [x] Decision trả stable failures: boundary, scope, appointment/purpose, count-price, payment, manager, adjustment, eligibility và safety.
+- [x] Re-check manager assignment/qualification thời điểm query.
 - Scenario missing payment/Baseline Mapping/paid-service đã chuyển xuống mục 27.2.
 
 ### 12.7. API mục tiêu
@@ -2445,16 +2460,13 @@ Không gộp approval, payment, mapping và result publication vào một PR l�
 
 ## 25. Công việc nên bắt đầu ngay
 
-Step 0R–3 và Phase 4A–4D đã đạt `CodeComplete — AwaitingFinalTest`; phase code hiện
-tại là Phase 9 / Step 4E. Thứ tự tiếp theo:
+Step 0R–4 đã đạt `CodeComplete — AwaitingFinalTest`. Thứ tự tiếp theo:
 
-1. Triển khai adjustment/reconciliation/authoritative paid-service readiness ở
-   Phase 4E; không silent-recalculate snapshot 4C.
-2. Nối producer initial-map publication ở Step 6C vào
+1. Nối producer initial-map publication ở Step 6C vào
    `SurveyOrder.RecordBaselinePublication`; không nhận authoritative count từ client.
-3. Nối BE2 prepare/start vào authoritative readiness port ở Step 5C và bắt buộc
+2. Nối BE2 prepare/start vào authoritative readiness port ở Step 5C và bắt buộc
    truyền MissionPurpose/re-check ngay trước flight; không cache snapshot 4B.
-4. Không bắt đầu paid-service mission/result flow trước khi boundary → baseline →
+3. Không bắt đầu paid-service mission/result flow trước khi boundary → baseline →
    count → price → appointment/payment dependency đã hoàn chỉnh về code và
    contract; integration test xác nhận ở Final Test Phase.
 
@@ -2563,6 +2575,11 @@ Không viết lại các unit/migration tests 0R-1 đến 0R-4 đã có cho per-
 - [ ] Duplicate/concurrent callback idempotent; invalid provider/signature/timestamp không tạo PaymentEvent.
 - [ ] Callback out-of-order/final-state không lùi state; amount/currency mismatch chuyển AdjustmentRequired và không mở gate.
 - [ ] Không có owner endpoint/command mark-confirmed và Baseline Mapping không tạo/đòi Payment.
+- [ ] Adjustment request chỉ assigned/current-qualified manager được tạo; unit price/currency/final price resolve phía server và race chỉ một Pending/Approved record thắng.
+- [ ] Stale Order/Adjustment/Payment version làm approve/reject/apply fail; reject không mutate Order và apply chỉ dùng snapshot đã approve.
+- [ ] Apply sau Confirmed payment đưa Payment lệch giá về AdjustmentRequired, giữ old/new snapshot cùng audit/Outbox và không silent-recalculate.
+- [ ] SystemAdmin reconciliation thiếu provider reference/reason/evidence hoặc amount/currency lệch current Order không thể Confirmed.
+- [ ] Duplicate/concurrent refund/chargeback callback idempotent, giữ PaymentEvent và chỉ đóng Order gate khi paid flight chưa bắt đầu.
 - [ ] Appointment cancel/reschedule, refund/chargeback và pending adjustment đóng gate.
 - [ ] Direct readiness/handler invocation không bypass rule.
 - [ ] Baseline không payment vẫn pass; Plant Health/Harvest Readiness thiếu payment phải fail.

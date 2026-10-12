@@ -9,5 +9,6 @@ internal sealed class GetSurveyOrderReadinessQueryValidator
     {
         RuleFor(query => query.SurveyOrderId).NotEmpty();
         RuleFor(query => query.MissionId).NotEmpty();
+        RuleFor(query => query.Purpose).IsInEnum();
     }
 }

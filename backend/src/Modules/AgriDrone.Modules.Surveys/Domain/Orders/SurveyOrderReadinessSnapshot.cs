@@ -20,6 +20,7 @@ public sealed record SurveyOrderReadinessSnapshot(
     bool IsDroneReady,
     bool IsPreflightCompleted,
     bool HasPendingPriceAdjustment,
+    bool IsPaymentAmountAndCurrencyMatched,
     bool SafetyChecksSatisfied)
 {
     public SurveyOrderReadinessSnapshot(
@@ -59,6 +60,7 @@ public sealed record SurveyOrderReadinessSnapshot(
             IsDroneReady: SafetyChecksSatisfied,
             IsPreflightCompleted: SafetyChecksSatisfied,
             HasPendingPriceAdjustment,
+            IsPaymentAmountAndCurrencyMatched: true,
             SafetyChecksSatisfied)
     {
     }

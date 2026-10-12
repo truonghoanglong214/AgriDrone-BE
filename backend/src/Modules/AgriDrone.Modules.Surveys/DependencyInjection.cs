@@ -1,6 +1,7 @@
 using AgriDrone.Modules.Surveys.Application.Abstractions.Messaging;
 using AgriDrone.Modules.Surveys.Application.Abstractions.Approvals;
 using AgriDrone.Modules.Surveys.Application.Abstractions.Payments;
+using AgriDrone.Modules.Surveys.Application.Abstractions.Orders;
 using AgriDrone.Modules.Surveys.Application.Abstractions.Persistence;
 using AgriDrone.Modules.Surveys.Application.Abstractions.Queries;
 using AgriDrone.Modules.Surveys.Application.Abstractions.Requests;
@@ -126,6 +127,8 @@ public static class DependencyInjection
         services.AddScoped<ISurveyPaymentGateway, SurveyPaymentGateway>();
         services.AddScoped<ISurveyPaymentCallbackVerifier,
             SurveyPaymentCallbackVerifier>();
+        services.AddScoped<ISurveyOrderReadinessService,
+            SurveyOrderReadinessService>();
         services.AddSingleton<ISurveyRequestNumberGenerator, SurveyRequestNumberGenerator>();
         services.AddSingleton<
             ISurveyApprovalNumberGenerator,

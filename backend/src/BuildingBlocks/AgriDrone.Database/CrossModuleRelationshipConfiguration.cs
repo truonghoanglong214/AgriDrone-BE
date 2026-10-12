@@ -866,9 +866,16 @@ internal static class CrossModuleRelationshipConfiguration
         modelBuilder.Entity<PriceAdjustment>()
             .HasOne<User>()
             .WithMany()
-            .HasForeignKey(adjustment => adjustment.ApprovedBy)
+            .HasForeignKey(adjustment => adjustment.ReviewedBy)
             .OnDelete(DeleteBehavior.Restrict)
-            .HasConstraintName("fk_price_adjustments_users_approved_by");
+            .HasConstraintName("fk_price_adjustments_users_reviewed_by");
+
+        modelBuilder.Entity<PriceAdjustment>()
+            .HasOne<User>()
+            .WithMany()
+            .HasForeignKey(adjustment => adjustment.AppliedBy)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_price_adjustments_users_applied_by");
 
         modelBuilder.Entity<SurveyResult>()
             .HasOne<User>()

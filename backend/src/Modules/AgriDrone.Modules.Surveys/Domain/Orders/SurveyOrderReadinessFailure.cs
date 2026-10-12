@@ -16,6 +16,8 @@ public enum SurveyOrderReadinessFailure
     PoleCountNotConfirmed,
     PriceNotConfirmed,
     PaymentNotConfirmed,
+    PaymentAmountOrCurrencyMismatch,
+    PaymentRevoked,
     PrimaryManagerNotReady,
     PrimaryManagerUnavailable,
     PriceAdjustmentPending,

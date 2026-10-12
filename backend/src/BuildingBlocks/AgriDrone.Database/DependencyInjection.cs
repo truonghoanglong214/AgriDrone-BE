@@ -186,8 +186,8 @@ public static class DependencyInjection
             SurveyAppointmentSchedulingRepository>();
         services.AddScoped<ISurveyAppointmentSchedulingOutbox,
             SurveyAppointmentSchedulingOutbox>();
-        services.AddScoped<ISurveyBaselineReadinessQueries,
-            SurveyBaselineReadinessQueries>();
+        services.AddScoped<ISurveyOrderReadinessStateQueries,
+            SurveyOrderReadinessStateQueries>();
 
         return services;
     }

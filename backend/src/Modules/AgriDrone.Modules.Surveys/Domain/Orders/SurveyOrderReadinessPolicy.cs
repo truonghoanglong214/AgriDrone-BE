@@ -130,9 +130,19 @@ public static class SurveyOrderReadinessPolicy
             failures.Add(SurveyOrderReadinessFailure.PriceNotConfirmed);
         }
 
-        if (snapshot.PaymentStatus != SurveyPaymentStatus.Confirmed)
+        if (snapshot.PaymentStatus == SurveyPaymentStatus.Refunded)
+        {
+            failures.Add(SurveyOrderReadinessFailure.PaymentRevoked);
+        }
+        else if (snapshot.PaymentStatus != SurveyPaymentStatus.Confirmed)
         {
             failures.Add(SurveyOrderReadinessFailure.PaymentNotConfirmed);
+        }
+
+        if (!snapshot.IsPaymentAmountAndCurrencyMatched)
+        {
+            failures.Add(
+                SurveyOrderReadinessFailure.PaymentAmountOrCurrencyMismatch);
         }
 
         if (snapshot.HasPendingPriceAdjustment)

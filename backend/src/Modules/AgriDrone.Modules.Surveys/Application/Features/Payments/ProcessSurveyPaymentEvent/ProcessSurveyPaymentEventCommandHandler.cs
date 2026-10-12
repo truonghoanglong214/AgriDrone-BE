@@ -200,6 +200,23 @@ internal sealed class ProcessSurveyPaymentEventCommandHandler(
         }
 
         var eventType = command.EventType.Trim().ToLowerInvariant();
+        if (eventType is SurveyPaymentCommandSupport.RefundedEvent or
+            SurveyPaymentCommandSupport.ChargebackEvent)
+        {
+            if (payment.Status is not (
+                SurveyPaymentStatus.Confirmed or
+                SurveyPaymentStatus.AdjustmentRequired))
+            {
+                return (false, "IGNORED_CURRENT_STATE");
+            }
+
+            payment.Refund(command.OccurredAt);
+            order.RevokePaidServiceReadiness(command.OccurredAt);
+            return (true, eventType == SurveyPaymentCommandSupport.ChargebackEvent
+                ? "CHARGEBACK_APPLIED"
+                : "REFUND_APPLIED");
+        }
+
         if (eventType == SurveyPaymentCommandSupport.ProcessingEvent)
         {
             if (payment.Status != SurveyPaymentStatus.Pending)
