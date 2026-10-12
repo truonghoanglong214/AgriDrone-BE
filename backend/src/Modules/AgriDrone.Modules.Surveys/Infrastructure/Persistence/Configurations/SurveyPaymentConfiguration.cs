@@ -16,6 +16,7 @@ public sealed class SurveyPaymentConfiguration : IEntityTypeConfiguration<Survey
                 table.HasCheckConstraint("ck_survey_payments_amount_positive", "amount > 0");
                 table.HasCheckConstraint("ck_survey_payments_currency", "currency ~ '^[A-Z]{3}$'");
                 table.HasCheckConstraint("ck_survey_payments_confirmation", "(status = 'CONFIRMED'::system.survey_payment_status AND confirmed_at IS NOT NULL AND provider_reference IS NOT NULL) OR (status <> 'CONFIRMED'::system.survey_payment_status)");
+                table.HasCheckConstraint("ck_survey_payments_provider_session", "status = 'PENDING'::system.survey_payment_status OR provider_reference IS NOT NULL");
             });
         builder.HasKey(payment => payment.Id).HasName("pk_survey_payments");
         builder.Property(payment => payment.Id).HasColumnName("id").HasColumnType("uuid").HasDefaultValueSql("gen_random_uuid()").ValueGeneratedOnAdd();

@@ -16,6 +16,10 @@ public static class SurveyAppointmentError
         "SurveyAppointment.VersionConflict";
     public const string BaselineMappingNotRequiredCode =
         "SurveyAppointment.BaselineMappingNotRequired";
+    public const string PaidServiceNotReadyCode =
+        "SurveyAppointment.PaidServiceNotReady";
+    public const string ActivePaymentBlocksRescheduleCode =
+        "SurveyAppointment.ActivePaymentBlocksReschedule";
     public const string InvalidTransitionCode =
         "SurveyAppointment.InvalidTransition";
     public const string ConfirmationWindowExpiredCode =
@@ -55,6 +59,15 @@ public static class SurveyAppointmentError
     public static AppError BaselineMappingNotRequired() => AppError.Conflict(
         BaselineMappingNotRequiredCode,
         "This order does not require a Baseline Mapping appointment.");
+
+    public static AppError PaidServiceNotReady() => AppError.Conflict(
+        PaidServiceNotReadyCode,
+        "The order does not have a confirmed pole-count and pricing snapshot for a paid-service appointment.");
+
+    public static AppError ActivePaymentBlocksReschedule() =>
+        AppError.Conflict(
+            ActivePaymentBlocksRescheduleCode,
+            "The paid-service appointment cannot be rescheduled after payment initiation.");
 
     public static AppError InvalidTransition(string description) =>
         AppError.Conflict(InvalidTransitionCode, description);

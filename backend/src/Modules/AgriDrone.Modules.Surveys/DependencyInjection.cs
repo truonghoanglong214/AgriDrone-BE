@@ -1,5 +1,6 @@
 using AgriDrone.Modules.Surveys.Application.Abstractions.Messaging;
 using AgriDrone.Modules.Surveys.Application.Abstractions.Approvals;
+using AgriDrone.Modules.Surveys.Application.Abstractions.Payments;
 using AgriDrone.Modules.Surveys.Application.Abstractions.Persistence;
 using AgriDrone.Modules.Surveys.Application.Abstractions.Queries;
 using AgriDrone.Modules.Surveys.Application.Abstractions.Requests;
@@ -10,6 +11,7 @@ using AgriDrone.Modules.Surveys.Domain;
 using AgriDrone.Modules.Surveys.Infrastructure.Approvals;
 using AgriDrone.Modules.Surveys.Infrastructure.Health;
 using AgriDrone.Modules.Surveys.Infrastructure.Messaging;
+using AgriDrone.Modules.Surveys.Infrastructure.Payments;
 using AgriDrone.Modules.Surveys.Infrastructure.Persistence;
 using AgriDrone.Modules.Surveys.Infrastructure.Persistence.Repositories;
 using AgriDrone.Modules.Surveys.Infrastructure.Queries;
@@ -21,6 +23,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 
 namespace AgriDrone.Modules.Surveys;
 
@@ -114,6 +117,15 @@ public static class DependencyInjection
         services.AddScoped<IHarvestReadinessCriterionQueries, HarvestReadinessCriterionQueries>();
         services.AddScoped<ISurveyRequestQueries, SurveyRequestQueries>();
         services.AddScoped<ISurveyRequestIdempotencyResolver, SurveyRequestIdempotencyResolver>();
+        services.AddOptions<SurveyPaymentProviderOptions>()
+            .Bind(configuration.GetSection(
+                SurveyPaymentProviderOptions.SectionName))
+            .ValidateOnStart();
+        services.AddSingleton<IValidateOptions<SurveyPaymentProviderOptions>,
+            SurveyPaymentProviderOptionsValidator>();
+        services.AddScoped<ISurveyPaymentGateway, SurveyPaymentGateway>();
+        services.AddScoped<ISurveyPaymentCallbackVerifier,
+            SurveyPaymentCallbackVerifier>();
         services.AddSingleton<ISurveyRequestNumberGenerator, SurveyRequestNumberGenerator>();
         services.AddSingleton<
             ISurveyApprovalNumberGenerator,

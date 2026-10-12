@@ -1,7 +1,9 @@
 using AgriDrone.Api.Contracts.Surveys.Appointments;
+using AgriDrone.Api.Contracts.Surveys.Payments;
 using AgriDrone.Api.Mapping;
 using AgriDrone.Modules.Surveys.Application.Features.Appointments.ConfirmSurveyAppointment;
 using AgriDrone.Modules.Surveys.Application.Features.Appointments.RequestSurveyAppointmentReschedule;
+using AgriDrone.Modules.Surveys.Application.Features.Payments.InitiateSurveyPayment;
 using AgriDrone.SharedInfrastructure.Authorization;
 using AgriDrone.SharedInfrastructure.Http;
 using MediatR;
@@ -71,5 +73,36 @@ public sealed class TenantOwnerSurveyOrdersController(ISender sender)
             HttpContext,
             response => Results.Ok(
                 SurveyAppointmentResponseMapper.ToResponse(response)));
+    }
+
+    /// <summary>Khởi tạo thanh toán theo snapshot giá hiện hành của SurveyOrder.</summary>
+    /// <remarks>
+    /// Amount và currency luôn được lấy từ snapshot phía server. TenantOwner chỉ
+    /// gửi expected Order version và không thể tự xác nhận thanh toán.
+    /// </remarks>
+    [HttpPost("{orderId:guid}/payments")]
+    [ProducesResponseType<InitiateSurveyPaymentApiResponse>(
+        StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IResult> InitiatePayment(
+        [FromRoute] Guid orderId,
+        [FromBody] InitiateSurveyPaymentRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await sender.Send(
+            new InitiateSurveyPaymentCommand(
+                orderId,
+                request.ExpectedOrderVersion!.Value),
+            cancellationToken);
+        return result.ToHttpResult(
+            HttpContext,
+            response => Results.Json(
+                SurveyPaymentResponseMapper.ToResponse(response),
+                statusCode: StatusCodes.Status201Created));
     }
 }

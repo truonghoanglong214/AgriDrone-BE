@@ -29,4 +29,5 @@ public sealed record SurveyAppointmentManagerState(
 
 public sealed record SurveyAppointmentOwnerState(
     SurveyOrder Order,
-    SurveyAppointment Appointment);
+    SurveyAppointment Appointment,
+    bool HasActivePayment);

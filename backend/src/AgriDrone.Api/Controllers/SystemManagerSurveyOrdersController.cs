@@ -116,7 +116,7 @@ public sealed class SystemManagerSurveyOrdersController(ISender sender)
                 SurveyOrderResponseMapper.ToResponse(response)));
     }
 
-    /// <summary>Đề xuất hoặc đề xuất lại lịch Baseline Mapping.</summary>
+    /// <summary>Đề xuất hoặc đề xuất lại lịch theo purpose của SurveyOrder.</summary>
     /// <remarks>
     /// Đề xuất lại yêu cầu ID/version của appointment đang RescheduleRequested.
     /// Version cũ được giữ lịch sử và chuyển Superseded; khung giờ không bị ghi đè.

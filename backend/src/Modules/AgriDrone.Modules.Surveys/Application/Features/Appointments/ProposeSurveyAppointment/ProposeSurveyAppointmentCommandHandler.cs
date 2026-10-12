@@ -102,17 +102,37 @@ internal sealed class ProposeSurveyAppointmentCommandHandler(
                 SurveyAppointmentCommandSupport.MapDomainError(exception));
         }
 
-        if (!order.RequiresBaselineMapping)
+        if (command.Purpose == SurveyAppointmentPurpose.BaselineMapping &&
+            !order.RequiresBaselineMapping)
         {
             return Result.Failure<ProposeSurveyAppointmentResponse>(
                 SurveyAppointmentError.BaselineMappingNotRequired());
         }
 
-        if (order.Status != SurveyOrderStatus.AwaitingBaselineAppointment)
+        if (command.Purpose == SurveyAppointmentPurpose.BaselineMapping &&
+            order.Status != SurveyOrderStatus.AwaitingBaselineAppointment)
         {
             return Result.Failure<ProposeSurveyAppointmentResponse>(
                 SurveyOrderError.InvalidTransition(
                     "A Baseline Mapping appointment can only be proposed while the order awaits that appointment."));
+        }
+
+        if (command.Purpose == SurveyAppointmentPurpose.PaidService &&
+            (order.ConfirmedSurveyPoleCount is null ||
+             order.PricePerPoleSnapshot is null ||
+             order.FinalPrice is null ||
+             order.Currency is null))
+        {
+            return Result.Failure<ProposeSurveyAppointmentResponse>(
+                SurveyAppointmentError.PaidServiceNotReady());
+        }
+
+        if (command.Purpose == SurveyAppointmentPurpose.PaidService &&
+            order.Status != SurveyOrderStatus.AwaitingPaidAppointment)
+        {
+            return Result.Failure<ProposeSurveyAppointmentResponse>(
+                SurveyOrderError.InvalidTransition(
+                    "A paid-service appointment can only be proposed after pole-count and pricing confirmation."));
         }
 
         var current = state.CurrentAppointment;
@@ -197,7 +217,9 @@ internal sealed class ProposeSurveyAppointmentCommandHandler(
             executionContext.CorrelationId,
             nameof(SurveyAppointment),
             appointment.Id,
-            "PROPOSE_BASELINE_APPOINTMENT",
+            command.Purpose == SurveyAppointmentPurpose.BaselineMapping
+                ? "PROPOSE_BASELINE_APPOINTMENT"
+                : "PROPOSE_PAID_SERVICE_APPOINTMENT",
             oldData,
             newData,
             proposedAt);
@@ -226,6 +248,7 @@ internal sealed class ProposeSurveyAppointmentCommandHandler(
             appointment.ProposedEndAt,
             appointment.Status,
             appointment.Version,
+            order.Status,
             order.Version,
             proposedAt));
     }

@@ -5352,6 +5352,18 @@ namespace AgriDrone.Database.Migrations
                         .HasColumnType("character varying(50)")
                         .HasColumnName("provider");
 
+                    b.Property<string>("ProviderEventId")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)")
+                        .HasColumnName("provider_event_id");
+
+                    b.Property<string>("ProviderReference")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)")
+                        .HasColumnName("provider_reference");
+
                     b.Property<DateTimeOffset>("ReceivedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
@@ -5371,6 +5383,10 @@ namespace AgriDrone.Database.Migrations
 
                     b.HasIndex("SurveyPaymentId", "OccurredAt")
                         .HasDatabaseName("ix_payment_events_timeline");
+
+                    b.HasIndex("Provider", "ProviderReference", "ProviderEventId")
+                        .IsUnique()
+                        .HasDatabaseName("uq_payment_events_provider_reference_event");
 
                     b.ToTable("payment_events", "survey");
                 });
@@ -5927,6 +5943,8 @@ namespace AgriDrone.Database.Migrations
                             t.HasCheckConstraint("ck_survey_payments_confirmation", "(status = 'CONFIRMED'::system.survey_payment_status AND confirmed_at IS NOT NULL AND provider_reference IS NOT NULL) OR (status <> 'CONFIRMED'::system.survey_payment_status)");
 
                             t.HasCheckConstraint("ck_survey_payments_currency", "currency ~ '^[A-Z]{3}$'");
+
+                            t.HasCheckConstraint("ck_survey_payments_provider_session", "status = 'PENDING'::system.survey_payment_status OR provider_reference IS NOT NULL");
                         });
                 });
 

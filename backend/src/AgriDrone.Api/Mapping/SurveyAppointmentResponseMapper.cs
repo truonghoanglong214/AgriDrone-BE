@@ -31,7 +31,7 @@ internal static class SurveyAppointmentResponseMapper
             response.ProposedEndAt,
             MapAppointmentStatus(response.Status),
             response.AppointmentVersion,
-            "AWAITING_BASELINE_APPOINTMENT",
+            MapOrderStatus(response.OrderStatus),
             response.OrderVersion,
             null,
             null,
@@ -96,6 +96,9 @@ internal static class SurveyAppointmentResponseMapper
             SurveyOrderStatus.AwaitingBaselineAppointment =>
                 "AWAITING_BASELINE_APPOINTMENT",
             SurveyOrderStatus.BaselineReady => "BASELINE_READY",
+            SurveyOrderStatus.AwaitingPaidAppointment =>
+                "AWAITING_PAID_APPOINTMENT",
+            SurveyOrderStatus.AwaitingPayment => "AWAITING_PAYMENT",
             _ => status.ToString().ToUpperInvariant()
         };
 

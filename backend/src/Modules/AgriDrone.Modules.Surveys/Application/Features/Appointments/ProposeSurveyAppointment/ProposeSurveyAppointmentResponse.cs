@@ -12,5 +12,6 @@ public sealed record ProposeSurveyAppointmentResponse(
     DateTimeOffset ProposedEndAt,
     SurveyAppointmentStatus Status,
     uint AppointmentVersion,
+    SurveyOrderStatus OrderStatus,
     uint OrderVersion,
     DateTimeOffset ProposedAt);

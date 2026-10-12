@@ -105,7 +105,7 @@ BE1 vẫn phải cung cấp/tiêu thụ contract rõ ràng để BE2 hoàn tất
 | 6R | Per-pole, purpose readiness, FarmBoundary, Disease Zone/recommendation, plant-change | Step 0R | **CodeComplete — AwaitingFinalTest** | Code/migration/contract/documentation hoàn tất; chỉ Final Test Phase được chuyển `Done` |
 | 7 | Catalogue/master data và Survey Request | Step 1B–1E, Step 2 | **CodeComplete — AwaitingFinalTest** | Step 1/2 implementation và OpenAPI hoàn tất; submit không provision resource |
 | 8 | Approval/onboarding/SurveyOrder | Step 3 | **CodeComplete — AwaitingFinalTest** | Ba request kinds atomic, retry-safe và đã mở SystemAdmin API/OpenAPI |
-| 9 | Boundary/scope, baseline count, pricing, appointment, payment | Step 4 | **InProgress — 4A–4C CodeComplete** | Purpose-aware readiness không bypass được |
+| 9 | Boundary/scope, baseline count, pricing, appointment, payment | Step 4 | **InProgress — 4A–4D CodeComplete** | Purpose-aware readiness không bypass được |
 | 10 | Order-bound Mission/pre-flight | BE2 implementation + Step 5 BE1 boundary | External dependency | BE2 dùng authoritative BE1 context/readiness contract |
 | 11 | Initial Farm base map và persistent Plant identity | Step 6 | NotStarted | Hoàn tất publication V3 atomic, review và count handoff |
 | 12 | Plant Health/Disease Zone/recommendation và Harvest Readiness | Step 7–8 | NotStarted | Chỉ human-reviewed Published result lộ cho owner |
@@ -647,6 +647,10 @@ Domain/persistence files:
 | `[Tạo]` | `DB/Surveys/SurveyPricingConfirmation*` | Transaction serializable đọc current map/inventory/effective price và ghi audit/Outbox |
 | `[Tạo]` | `DB/Migrations/20261011154933_Phase9PoleCountPricingSnapshot*` | CountSource/evidence, guarded backfill và snapshot constraints |
 | `[Tạo]` | `INTEGRATION_CONTRACTS/Surveys/SurveyOrderPricingConfirmedV1.cs` | Event count/price snapshot đã khóa |
+| `[Tạo]` | `SURVEYS/Application/Abstractions/Payments/*` và `.../Features/Payments/*` | Port provider, owner initiation và trusted callback processing |
+| `[Tạo]` | `DB/Surveys/SurveyPaymentProcessing*` | Transaction serializable cho Payment/Event/audit/Outbox |
+| `[Tạo]` | `DB/Migrations/20261011162047_Phase9PaidAppointmentPayment*` | Provider event identity, dedup index và payment-session constraint |
+| `[Tạo]` | `INTEGRATION_CONTRACTS/Surveys/SurveyPaymentChangedV1.cs` | Event trạng thái payment sau commit |
 
 Feature folders và exact files:
 
@@ -1533,6 +1537,22 @@ Tách adapter provider khỏi nghiệp vụ Surveys:
 
 Không bao giờ có endpoint TenantOwner `confirm payment`; Baseline Mapping không tạo payment riêng.
 
+Checkpoint 2026-10-12: Phase 4D đạt `CodeComplete — AwaitingFinalTest` cho phía BE1.
+Appointment dùng chung lifecycle theo `BaselineMapping`/`PaidService`; manager chỉ
+đề xuất PaidService sau snapshot 4C, owner confirm/reschedule bằng optimistic
+version và revision cũ vẫn được giữ. Payment initiation khóa Order, re-check active
+OWNER membership cùng PaidService appointment đã confirm/còn hiệu lực, rồi lấy duy
+nhất `FinalPrice/Currency` phía server. Adapter `agridrone-hmac` tách khỏi
+application và mặc định disabled cho tới khi secret/checkout URL được cấu hình.
+Callback anonymous chỉ vào handler sau khi provider, timestamp và HMAC-SHA256 hợp
+lệ; mỗi event được lưu immutable và deduplicate theo
+`(Provider, ProviderReference, ProviderEventId)`. Event cũ/final không lùi state;
+amount/currency mismatch chuyển `AdjustmentRequired`, không mở paid gate. Audit,
+`survey.payment-changed.v1` Outbox và state commit trong cùng transaction. Migration
+`20261011162047_Phase9PaidAppointmentPayment` và evidence tại
+`docs/operations/be1-step4d-paid-appointment-payment-report.md`. Reconciliation,
+refund/chargeback và authoritative readiness tổng hợp tiếp tục ở Phase 4E.
+
 #### Phase 4E — Adjustment, reconciliation và readiness authoritative service
 
 Tạo use case riêng cho request/approve/reject/apply price adjustment và admin reconciliation.
@@ -1574,23 +1594,23 @@ Danh sách scenario phải được bổ sung vào Final Test Backlog trong lúc
 
 ### 12.3. Paid-service appointment lifecycle
 
-- [ ] SystemManager `ProposeAppointment` cho selected service với start < end sau confirmed count/price.
-- [ ] TenantOwner `ConfirmAppointment` hoặc `RequestReschedule`.
-- [ ] Reschedule/cancel tạo history/version; không overwrite mất appointment cũ.
-- [ ] Chỉ appointment current + Confirmed + còn hiệu lực đúng MissionPurpose mới mở gate.
+- [x] SystemManager `ProposeAppointment` cho selected service với start < end sau confirmed count/price.
+- [x] TenantOwner `ConfirmAppointment` hoặc `RequestReschedule`.
+- [x] Reschedule tạo history/version; không overwrite mất appointment cũ; cancel là policy chưa mở ở 4D.
+- [x] Chỉ appointment current + Confirmed + còn hiệu lực đúng MissionPurpose mới cho phép initiate payment; readiness tổng hợp thuộc 4E.
 - [ ] SystemAdmin support action nếu có phải có reason/audit và không thay actor trong normal flow.
 
 ### 12.4. Payment lifecycle
 
-- [ ] TenantOwner initiate payment theo exact current amount/currency.
-- [ ] Tạo Payment `Pending/Processing`, provider reference và redirect/client token an toàn.
-- [ ] Payment callback endpoint xác thực signature/timestamp/source.
-- [ ] Deduplicate theo `(Provider, ProviderReference, ProviderEventId)` dùng `PaymentEventIdentity`.
-- [ ] Reject/out-of-order transition không lùi state.
-- [ ] Amount/currency mismatch → `AdjustmentRequired`/manual review, không Confirmed.
+- [x] TenantOwner initiate payment theo exact current amount/currency.
+- [x] Tạo Payment `Pending/Processing`, provider reference và redirect/client token an toàn.
+- [x] Payment callback endpoint xác thực signature/timestamp/source.
+- [x] Deduplicate theo `(Provider, ProviderReference, ProviderEventId)` dùng `PaymentEventIdentity`.
+- [x] Reject/out-of-order transition không lùi state.
+- [x] Amount/currency mismatch → `AdjustmentRequired`, không Confirmed; manual review tiếp tục ở 4E.
 - [ ] SystemAdmin reconciliation chỉ khi có provider reference, evidence và reason.
-- [ ] TenantOwner không có command mark-confirmed.
-- [ ] Không tạo/đòi payment riêng cho Baseline Mapping.
+- [x] TenantOwner không có command mark-confirmed.
+- [x] Không tạo/đòi payment riêng cho Baseline Mapping.
 
 ### 12.5. Price adjustment
 
@@ -2425,19 +2445,16 @@ Không gộp approval, payment, mapping và result publication vào một PR l�
 
 ## 25. Công việc nên bắt đầu ngay
 
-Step 0R–3 và Phase 4A–4C đã đạt `CodeComplete — AwaitingFinalTest`; phase code hiện
-tại là Phase 9 / Step 4D. Thứ tự tiếp theo:
+Step 0R–3 và Phase 4A–4D đã đạt `CodeComplete — AwaitingFinalTest`; phase code hiện
+tại là Phase 9 / Step 4E. Thứ tự tiếp theo:
 
-1. Triển khai paid-service appointment/payment ở Phase 4D; amount/currency chỉ lấy
-   từ immutable snapshot 4C và callback provider phải verify/deduplicate trước khi
-   mở commercial gate.
-2. Triển khai adjustment/reconciliation/authoritative paid-service readiness ở
+1. Triển khai adjustment/reconciliation/authoritative paid-service readiness ở
    Phase 4E; không silent-recalculate snapshot 4C.
-3. Nối producer initial-map publication ở Step 6C vào
+2. Nối producer initial-map publication ở Step 6C vào
    `SurveyOrder.RecordBaselinePublication`; không nhận authoritative count từ client.
-4. Nối BE2 prepare/start vào authoritative readiness port ở Step 5C và bắt buộc
+3. Nối BE2 prepare/start vào authoritative readiness port ở Step 5C và bắt buộc
    truyền MissionPurpose/re-check ngay trước flight; không cache snapshot 4B.
-5. Không bắt đầu paid-service mission/result flow trước khi boundary → baseline →
+4. Không bắt đầu paid-service mission/result flow trước khi boundary → baseline →
    count → price → appointment/payment dependency đã hoàn chỉnh về code và
    contract; integration test xác nhận ở Final Test Phase.
 
@@ -2541,7 +2558,11 @@ Không viết lại các unit/migration tests 0R-1 đến 0R-4 đã có cho per-
 - [ ] Decimal precision/rounding chính xác; FinalPrice bằng `ConfirmedSurveyPoleCount × PricePerPoleSnapshot`.
 - [ ] Catalogue price change không đổi snapshot.
 - [ ] Wrong TenantOwner không confirm appointment/initiate payment.
-- [ ] Duplicate callback idempotent; invalid signature reject; amount/currency mismatch không mở gate.
+- [ ] Paid appointment stale version/concurrent proposal chỉ một current revision thắng; reschedule trước payment giữ history và active payment chặn đổi lịch.
+- [ ] Payment initiation chỉ dùng server snapshot, yêu cầu PaidService appointment confirmed/còn hiệu lực và concurrent retry chỉ tạo một active Payment.
+- [ ] Duplicate/concurrent callback idempotent; invalid provider/signature/timestamp không tạo PaymentEvent.
+- [ ] Callback out-of-order/final-state không lùi state; amount/currency mismatch chuyển AdjustmentRequired và không mở gate.
+- [ ] Không có owner endpoint/command mark-confirmed và Baseline Mapping không tạo/đòi Payment.
 - [ ] Appointment cancel/reschedule, refund/chargeback và pending adjustment đóng gate.
 - [ ] Direct readiness/handler invocation không bypass rule.
 - [ ] Baseline không payment vẫn pass; Plant Health/Harvest Readiness thiếu payment phải fail.

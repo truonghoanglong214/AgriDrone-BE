@@ -10,8 +10,7 @@ internal sealed class ProposeSurveyAppointmentCommandValidator
     {
         RuleFor(command => command.SurveyOrderId).NotEmpty();
         RuleFor(command => command.Purpose)
-            .Equal(SurveyAppointmentPurpose.BaselineMapping)
-            .WithMessage("Phase 4B only supports BASELINE_MAPPING appointments.");
+            .IsInEnum();
         RuleFor(command => command.ProposedStartAt)
             .Must(value => value != default && value.Offset == TimeSpan.Zero);
         RuleFor(command => command.ProposedEndAt)
@@ -22,6 +21,10 @@ internal sealed class ProposeSurveyAppointmentCommandValidator
             .When(command => command.ExpectedCurrentAppointmentId.HasValue);
         RuleFor(command => command.ExpectedCurrentAppointmentId)
             .NotNull()
+            .When(command => command.ExpectedCurrentAppointmentVersion.HasValue);
+        RuleFor(command => command.ExpectedOrderVersion).GreaterThan(0u);
+        RuleFor(command => command.ExpectedCurrentAppointmentVersion)
+            .GreaterThan(0u)
             .When(command => command.ExpectedCurrentAppointmentVersion.HasValue);
     }
 }

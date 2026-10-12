@@ -115,7 +115,10 @@ internal sealed class SurveyAppointmentSchedulingRepository(
                 SurveyAppointmentError.NotFound(appointmentId))
             : Result.Success(new SurveyAppointmentOwnerState(
                 order,
-                appointment));
+                appointment,
+                await HasActivePaymentAsync(
+                    surveyOrderId,
+                    cancellationToken)));
     }
 
     public void Add(SurveyAppointment appointment)
@@ -196,6 +199,23 @@ internal sealed class SurveyAppointmentSchedulingRepository(
             cancellationToken,
             Id("order_id", surveyOrderId),
             Id("actor_id", actorUserId));
+
+    private Task<bool> HasActivePaymentAsync(
+        Guid surveyOrderId,
+        CancellationToken cancellationToken) => ExistsAsync(
+            """
+            SELECT payment.id
+            FROM survey.survey_payments AS payment
+            WHERE payment.survey_order_id = @order_id
+              AND payment.status IN (
+                'PENDING'::system.survey_payment_status,
+                'PROCESSING'::system.survey_payment_status,
+                'CONFIRMED'::system.survey_payment_status,
+                'ADJUSTMENT_REQUIRED'::system.survey_payment_status)
+            FOR SHARE OF payment
+            """,
+            cancellationToken,
+            Id("order_id", surveyOrderId));
 
     private async Task<bool> ExistsAsync(
         string sql,

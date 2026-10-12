@@ -84,11 +84,18 @@ internal sealed class RequestSurveyAppointmentRescheduleCommandHandler(
 
         var order = stateResult.Value.Order;
         var appointment = stateResult.Value.Appointment;
-        if (!order.RequiresBaselineMapping ||
-            appointment.Purpose != SurveyAppointmentPurpose.BaselineMapping)
+        if (appointment.Purpose == SurveyAppointmentPurpose.BaselineMapping &&
+            !order.RequiresBaselineMapping)
         {
             return Result.Failure<RequestSurveyAppointmentRescheduleResponse>(
                 SurveyAppointmentError.BaselineMappingNotRequired());
+        }
+
+        if (appointment.Purpose == SurveyAppointmentPurpose.PaidService &&
+            stateResult.Value.HasActivePayment)
+        {
+            return Result.Failure<RequestSurveyAppointmentRescheduleResponse>(
+                SurveyAppointmentError.ActivePaymentBlocksReschedule());
         }
 
         var previousAppointmentStatus = appointment.Status;
@@ -98,16 +105,30 @@ internal sealed class RequestSurveyAppointmentRescheduleCommandHandler(
             order.EnsureVersion(command.ExpectedOrderVersion);
             appointment.EnsureVersion(command.ExpectedAppointmentVersion);
             appointment.RequestReschedule(command.Reason, requestedAt);
-            if (previousOrderStatus == SurveyOrderStatus.BaselineReady)
+            if (appointment.Purpose == SurveyAppointmentPurpose.BaselineMapping &&
+                previousOrderStatus == SurveyOrderStatus.BaselineReady)
             {
                 order.ReopenBaselineAppointment(requestedAt);
             }
-            else if (previousOrderStatus !=
+            else if (appointment.Purpose == SurveyAppointmentPurpose.BaselineMapping &&
+                     previousOrderStatus !=
                      SurveyOrderStatus.AwaitingBaselineAppointment)
             {
                 return Result.Failure<RequestSurveyAppointmentRescheduleResponse>(
                     SurveyOrderError.InvalidTransition(
                         "A Baseline Mapping appointment cannot be rescheduled after Baseline work started."));
+            }
+            else if (appointment.Purpose == SurveyAppointmentPurpose.PaidService &&
+                     previousOrderStatus == SurveyOrderStatus.AwaitingPayment)
+            {
+                order.ReopenPaidAppointment(requestedAt);
+            }
+            else if (appointment.Purpose == SurveyAppointmentPurpose.PaidService &&
+                     previousOrderStatus != SurveyOrderStatus.AwaitingPaidAppointment)
+            {
+                return Result.Failure<RequestSurveyAppointmentRescheduleResponse>(
+                    SurveyOrderError.InvalidTransition(
+                        "A paid-service appointment cannot be rescheduled after paid-service readiness opened."));
             }
         }
         catch (SurveyDomainException exception)
@@ -135,7 +156,9 @@ internal sealed class RequestSurveyAppointmentRescheduleCommandHandler(
             executionContext.CorrelationId,
             nameof(SurveyAppointment),
             appointment.Id,
-            "REQUEST_BASELINE_APPOINTMENT_RESCHEDULE",
+            appointment.Purpose == SurveyAppointmentPurpose.BaselineMapping
+                ? "REQUEST_BASELINE_APPOINTMENT_RESCHEDULE"
+                : "REQUEST_PAID_SERVICE_APPOINTMENT_RESCHEDULE",
             oldData,
             newData,
             requestedAt);

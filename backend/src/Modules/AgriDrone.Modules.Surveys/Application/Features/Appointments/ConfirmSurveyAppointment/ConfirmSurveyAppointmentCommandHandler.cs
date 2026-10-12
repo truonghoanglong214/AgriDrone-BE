@@ -84,19 +84,28 @@ internal sealed class ConfirmSurveyAppointmentCommandHandler(
 
         var order = stateResult.Value.Order;
         var appointment = stateResult.Value.Appointment;
-        if (!order.RequiresBaselineMapping ||
-            appointment.Purpose != SurveyAppointmentPurpose.BaselineMapping)
+        if (appointment.Purpose == SurveyAppointmentPurpose.BaselineMapping &&
+            !order.RequiresBaselineMapping)
         {
             return Result.Failure<ConfirmSurveyAppointmentResponse>(
                 SurveyAppointmentError.BaselineMappingNotRequired());
         }
 
+        var previousAppointmentStatus = appointment.Status;
+        var previousOrderStatus = order.Status;
         try
         {
             order.EnsureVersion(command.ExpectedOrderVersion);
             appointment.EnsureVersion(command.ExpectedAppointmentVersion);
             appointment.Confirm(actorId, confirmedAt);
-            order.MarkBaselineAppointmentConfirmed(confirmedAt);
+            if (appointment.Purpose == SurveyAppointmentPurpose.BaselineMapping)
+            {
+                order.MarkBaselineAppointmentConfirmed(confirmedAt);
+            }
+            else
+            {
+                order.MarkPaidAppointmentConfirmed(confirmedAt);
+            }
         }
         catch (SurveyDomainException exception)
         {
@@ -106,8 +115,8 @@ internal sealed class ConfirmSurveyAppointmentCommandHandler(
 
         using var oldData = JsonSerializer.SerializeToDocument(new
         {
-            appointmentStatus = SurveyAppointmentStatus.Proposed.ToString(),
-            orderStatus = SurveyOrderStatus.AwaitingBaselineAppointment.ToString()
+            appointmentStatus = previousAppointmentStatus.ToString(),
+            orderStatus = previousOrderStatus.ToString()
         });
         using var newData = JsonSerializer.SerializeToDocument(new
         {
@@ -123,7 +132,9 @@ internal sealed class ConfirmSurveyAppointmentCommandHandler(
             executionContext.CorrelationId,
             nameof(SurveyAppointment),
             appointment.Id,
-            "CONFIRM_BASELINE_APPOINTMENT",
+            appointment.Purpose == SurveyAppointmentPurpose.BaselineMapping
+                ? "CONFIRM_BASELINE_APPOINTMENT"
+                : "CONFIRM_PAID_SERVICE_APPOINTMENT",
             oldData,
             newData,
             confirmedAt);

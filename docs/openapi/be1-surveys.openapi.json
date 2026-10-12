@@ -1610,6 +1610,193 @@
         "security": [ ]
       }
     },
+    "/api/integrations/payments/{provider}/callbacks": {
+      "post": {
+        "tags": [
+          "SurveyPaymentCallbacks"
+        ],
+        "summary": "Nhận callback thanh toán đã ký từ provider.",
+        "parameters": [
+          {
+            "name": "provider",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-AgriDrone-Payment-Timestamp",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-AgriDrone-Payment-Signature",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SurveyPaymentCallbackRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/SurveyPaymentCallbackResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SurveyPaymentCallbackResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SurveyPaymentCallbackResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Content Too Large",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [ ]
+      }
+    },
     "/api/system/drones": {
       "get": {
         "tags": [
@@ -2558,7 +2745,7 @@
         "tags": [
           "SystemManagerSurveyOrders"
         ],
-        "summary": "Đề xuất hoặc đề xuất lại lịch Baseline Mapping.",
+        "summary": "Đề xuất hoặc đề xuất lại lịch theo purpose của SurveyOrder.",
         "description": "Đề xuất lại yêu cầu ID/version của appointment đang RescheduleRequested.\r\nVersion cũ được giữ lịch sử và chuyển Superseded; khung giờ không bị ghi đè.",
         "parameters": [
           {
@@ -4411,6 +4598,187 @@
         }
       }
     },
+    "/api/tenant-owner/survey-orders/{orderId}/payments": {
+      "post": {
+        "tags": [
+          "TenantOwnerSurveyOrders"
+        ],
+        "summary": "Khởi tạo thanh toán theo snapshot giá hiện hành của SurveyOrder.",
+        "description": "Amount và currency luôn được lấy từ snapshot phía server. TenantOwner chỉ\r\ngửi expected Order version và không thể tự xác nhận thanh toán.",
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InitiateSurveyPaymentRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InitiateSurveyPaymentRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/InitiateSurveyPaymentRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/InitiateSurveyPaymentApiResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InitiateSurveyPaymentApiResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InitiateSurveyPaymentApiResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/tenant-owner/survey-requests/new-farm": {
       "post": {
         "tags": [
@@ -5381,6 +5749,84 @@
         },
         "additionalProperties": false
       },
+      "InitiateSurveyPaymentApiResponse": {
+        "type": "object",
+        "properties": {
+          "surveyPaymentId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "surveyOrderId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "paidServiceAppointmentId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "amount": {
+            "type": "number",
+            "format": "double"
+          },
+          "currency": {
+            "type": "string",
+            "nullable": true
+          },
+          "provider": {
+            "type": "string",
+            "nullable": true
+          },
+          "providerReference": {
+            "type": "string",
+            "nullable": true
+          },
+          "paymentStatus": {
+            "type": "string",
+            "nullable": true
+          },
+          "redirectUrl": {
+            "type": "string",
+            "format": "uri",
+            "nullable": true
+          },
+          "clientToken": {
+            "type": "string",
+            "nullable": true
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "paymentVersion": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "orderVersion": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "initiatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      },
+      "InitiateSurveyPaymentRequest": {
+        "required": [
+          "expectedOrderVersion"
+        ],
+        "type": "object",
+        "properties": {
+          "expectedOrderVersion": {
+            "maximum": 4294967295,
+            "minimum": 1,
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
       "InviteSystemManagerRequest": {
         "type": "object",
         "properties": {
@@ -6345,6 +6791,105 @@
         },
         "additionalProperties": false
       },
+      "SurveyPaymentCallbackRequest": {
+        "required": [
+          "amount",
+          "currency",
+          "eventId",
+          "eventType",
+          "occurredAt",
+          "providerReference"
+        ],
+        "type": "object",
+        "properties": {
+          "providerReference": {
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
+          },
+          "eventId": {
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
+          },
+          "eventType": {
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          },
+          "amount": {
+            "maximum": 79228162514264337593543950335,
+            "minimum": 0.01,
+            "type": "number",
+            "format": "double"
+          },
+          "currency": {
+            "maxLength": 3,
+            "minLength": 3,
+            "type": "string"
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Provider-neutral payment callback payload. The signature covers the exact\r\nrequest JSON as `{unixTimestamp}.{rawJson}` using HMAC-SHA256."
+      },
+      "SurveyPaymentCallbackResponse": {
+        "type": "object",
+        "properties": {
+          "surveyPaymentId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "surveyOrderId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "provider": {
+            "type": "string",
+            "nullable": true
+          },
+          "providerReference": {
+            "type": "string",
+            "nullable": true
+          },
+          "providerEventId": {
+            "type": "string",
+            "nullable": true
+          },
+          "eventType": {
+            "type": "string",
+            "nullable": true
+          },
+          "paymentStatus": {
+            "type": "string",
+            "nullable": true
+          },
+          "orderStatus": {
+            "type": "string",
+            "nullable": true
+          },
+          "duplicate": {
+            "type": "boolean"
+          },
+          "transitionApplied": {
+            "type": "boolean"
+          },
+          "disposition": {
+            "type": "string",
+            "nullable": true
+          },
+          "processedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      },
       "SurveyRequestAcknowledgementApiResponse": {
         "type": "object",
         "properties": {
@@ -7152,6 +7697,9 @@
     },
     {
       "name": "PublicSurveyServices"
+    },
+    {
+      "name": "SurveyPaymentCallbacks"
     },
     {
       "name": "SystemDrones"

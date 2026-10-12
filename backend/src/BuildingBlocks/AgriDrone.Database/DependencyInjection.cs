@@ -8,6 +8,7 @@ using AgriDrone.Modules.Surveys.Application.Abstractions.Persistence;
 using AgriDrone.Modules.Surveys.Application.Abstractions.Queries;
 using AgriDrone.Modules.Surveys.Application.Abstractions.Orders;
 using AgriDrone.Modules.Surveys.Application.Abstractions.Pricing;
+using AgriDrone.Modules.Surveys.Application.Abstractions.Payments;
 using AgriDrone.Modules.Surveys.Domain;
 using AgriDrone.SharedInfrastructure.Auditing;
 using AgriDrone.SharedInfrastructure.Messaging;
@@ -214,6 +215,33 @@ public static class DependencyInjection
             SurveyPricingConfirmationRepository>();
         services.AddScoped<ISurveyPricingConfirmationOutbox,
             SurveyPricingConfirmationOutbox>();
+
+        return services;
+    }
+
+    public static IServiceCollection AddSurveyPaymentProcessingPersistence(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        _ = configuration.GetRequiredAgriDroneConnectionString();
+
+        services.AddDbContext<SurveyPaymentProcessingDbContext>(
+            (serviceProvider, options) =>
+            {
+                var dataSource =
+                    serviceProvider.GetRequiredService<NpgsqlDataSource>();
+                options.UseNpgsql(
+                    dataSource,
+                    npgsql => npgsql.UseNetTopologySuite());
+            });
+
+        services.AddScoped<ISurveyPaymentProcessingUnitOfWork>(
+            serviceProvider => serviceProvider.GetRequiredService<
+                SurveyPaymentProcessingDbContext>());
+        services.AddScoped<ISurveyPaymentProcessingRepository,
+            SurveyPaymentProcessingRepository>();
+        services.AddScoped<ISurveyPaymentProcessingOutbox,
+            SurveyPaymentProcessingOutbox>();
 
         return services;
     }

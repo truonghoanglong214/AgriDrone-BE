@@ -38,6 +38,7 @@ builder.Services.AddSwaggerGen(options =>
 {
     options.OperationFilter<LegacyEndpointOperationFilter>();
     options.OperationFilter<AllowAnonymousOperationFilter>();
+    options.OperationFilter<SurveyPaymentCallbackOperationFilter>();
 
     var xmlFileName =
         $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
@@ -100,6 +101,7 @@ builder.Services
     .AddSurveyBoundaryVerificationPersistence(builder.Configuration)
     .AddSurveyAppointmentSchedulingPersistence(builder.Configuration)
     .AddSurveyPricingConfirmationPersistence(builder.Configuration)
+    .AddSurveyPaymentProcessingPersistence(builder.Configuration)
     .AddAgriDroneHealthChecks()
     .AddExecutionContext()
     .AddJwtAuthentication(builder.Configuration)

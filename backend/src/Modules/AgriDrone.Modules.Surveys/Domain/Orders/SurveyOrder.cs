@@ -44,6 +44,7 @@ public sealed class SurveyOrder : AggregateRoot
             },
             [SurveyOrderStatus.AwaitingPayment] = new HashSet<SurveyOrderStatus>
             {
+                SurveyOrderStatus.AwaitingPaidAppointment,
                 SurveyOrderStatus.ReadyForPaidService,
                 SurveyOrderStatus.Cancelled
             },
@@ -426,6 +427,9 @@ public sealed class SurveyOrder : AggregateRoot
 
     public void MarkPaidAppointmentConfirmed(DateTimeOffset occurredAt) =>
         TransitionTo(SurveyOrderStatus.AwaitingPayment, occurredAt);
+
+    public void ReopenPaidAppointment(DateTimeOffset occurredAt) =>
+        TransitionTo(SurveyOrderStatus.AwaitingPaidAppointment, occurredAt);
 
     public void MarkPaymentConfirmed(DateTimeOffset occurredAt) =>
         TransitionTo(SurveyOrderStatus.ReadyForPaidService, occurredAt);
