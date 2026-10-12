@@ -11,12 +11,14 @@ public sealed class SurveyPayment : Entity
             {
                 SurveyPaymentStatus.Processing,
                 SurveyPaymentStatus.Confirmed,
-                SurveyPaymentStatus.Failed
+                SurveyPaymentStatus.Failed,
+                SurveyPaymentStatus.AdjustmentRequired
             },
             [SurveyPaymentStatus.Processing] = new HashSet<SurveyPaymentStatus>
             {
                 SurveyPaymentStatus.Confirmed,
-                SurveyPaymentStatus.Failed
+                SurveyPaymentStatus.Failed,
+                SurveyPaymentStatus.AdjustmentRequired
             },
             [SurveyPaymentStatus.Confirmed] = new HashSet<SurveyPaymentStatus>
             {
@@ -45,6 +47,43 @@ public sealed class SurveyPayment : Entity
     public SurveyOrder SurveyOrder { get; private set; } = null!;
     public ICollection<PaymentEvent> Events { get; private set; } = [];
 
+    public static SurveyPayment Create(
+        Guid surveyOrderId,
+        Money amount,
+        string provider,
+        DateTimeOffset createdAt)
+    {
+        DomainGuard.NotEmpty(surveyOrderId);
+        DomainGuard.Utc(createdAt);
+        ArgumentException.ThrowIfNullOrWhiteSpace(provider);
+        if (amount.Amount <= 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(amount),
+                "Payment amount must be positive.");
+        }
+
+        var normalizedProvider = provider.Trim().ToLowerInvariant();
+        if (normalizedProvider.Length > 50)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(provider),
+                "Payment provider cannot exceed 50 characters.");
+        }
+
+        return new SurveyPayment
+        {
+            Id = Guid.CreateVersion7(),
+            SurveyOrderId = surveyOrderId,
+            Amount = amount.Amount,
+            Currency = amount.Currency.Value,
+            Provider = normalizedProvider,
+            Status = SurveyPaymentStatus.Pending,
+            CreatedAt = createdAt,
+            UpdatedAt = createdAt
+        };
+    }
+
     public static bool CanTransition(SurveyPaymentStatus from, SurveyPaymentStatus to) =>
         AllowedTransitions.TryGetValue(from, out var allowed) && allowed.Contains(to);
 
@@ -59,14 +98,23 @@ public sealed class SurveyPayment : Entity
         }
     }
 
+    public void StartProcessing(
+        string providerReference,
+        DateTimeOffset occurredAt)
+    {
+        SetProviderReference(providerReference);
+        TransitionTo(SurveyPaymentStatus.Processing, occurredAt);
+    }
+
+    // Compatibility for legacy in-memory callers. Target persistence assigns
+    // the provider reference through the overload above.
     public void StartProcessing(DateTimeOffset occurredAt) =>
         TransitionTo(SurveyPaymentStatus.Processing, occurredAt);
 
     public void Confirm(string providerReference, DateTimeOffset confirmedAt)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(providerReference);
+        SetProviderReference(providerReference);
         TransitionTo(SurveyPaymentStatus.Confirmed, confirmedAt);
-        ProviderReference = providerReference.Trim();
         ConfirmedAt = confirmedAt;
     }
 
@@ -78,6 +126,53 @@ public sealed class SurveyPayment : Entity
 
     public void Refund(DateTimeOffset occurredAt) =>
         TransitionTo(SurveyPaymentStatus.Refunded, occurredAt);
+
+    public void Reconcile(
+        Money settledAmount,
+        string providerReference,
+        DateTimeOffset reconciledAt)
+    {
+        if (Status is not (
+            SurveyPaymentStatus.Pending or
+            SurveyPaymentStatus.Processing or
+            SurveyPaymentStatus.AdjustmentRequired))
+        {
+            throw new SurveyDomainException(
+                PaymentDomainErrorCodes.InvalidTransition,
+                $"Payment in state '{Status}' cannot be reconciled.");
+        }
+
+        SetProviderReference(providerReference);
+        Amount = settledAmount.Amount;
+        Currency = settledAmount.Currency.Value;
+        TransitionTo(SurveyPaymentStatus.Confirmed, reconciledAt);
+        ConfirmedAt = reconciledAt;
+    }
+
+    private void SetProviderReference(string providerReference)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(providerReference);
+        var normalizedReference = providerReference.Trim();
+        if (normalizedReference.Length > 150)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(providerReference),
+                "Payment provider reference cannot exceed 150 characters.");
+        }
+
+        if (ProviderReference is not null &&
+            !string.Equals(
+                ProviderReference,
+                normalizedReference,
+                StringComparison.Ordinal))
+        {
+            throw new SurveyDomainException(
+                PaymentDomainErrorCodes.InvalidTransition,
+                "The provider reference cannot change after payment initiation.");
+        }
+
+        ProviderReference = normalizedReference;
+    }
 
     private void TransitionTo(SurveyPaymentStatus target, DateTimeOffset occurredAt)
     {

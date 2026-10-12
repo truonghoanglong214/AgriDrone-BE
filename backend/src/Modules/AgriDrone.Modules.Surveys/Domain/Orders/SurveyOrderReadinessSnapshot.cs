@@ -13,5 +13,55 @@ public sealed record SurveyOrderReadinessSnapshot(
     SurveyAppointmentStatus? AppointmentStatus,
     SurveyPaymentStatus? PaymentStatus,
     bool HasActiveQualifiedPrimaryManager,
+    bool IsPrimaryManagerAvailable,
+    bool IsAppointmentCurrent,
+    bool IsMissionPreparedForPurpose,
+    bool IsMissionScheduledWithinAppointment,
+    bool IsDroneReady,
+    bool IsPreflightCompleted,
     bool HasPendingPriceAdjustment,
-    bool SafetyChecksSatisfied);
+    bool IsPaymentAmountAndCurrencyMatched,
+    bool SafetyChecksSatisfied)
+{
+    public SurveyOrderReadinessSnapshot(
+        SurveyOrderStatus OrderStatus,
+        SurveyOperationPurpose Purpose,
+        bool RequiresBaselineMapping,
+        bool HasApprovedFarmBoundary,
+        bool IsScopeConfirmed,
+        bool HasPublishedFarmBaseMap,
+        bool HasConfirmedPoleCount,
+        bool HasPriceSnapshot,
+        SurveyAppointmentPurpose? AppointmentPurpose,
+        SurveyAppointmentStatus? AppointmentStatus,
+        SurveyPaymentStatus? PaymentStatus,
+        bool HasActiveQualifiedPrimaryManager,
+        bool HasPendingPriceAdjustment,
+        bool SafetyChecksSatisfied)
+        : this(
+            OrderStatus,
+            Purpose,
+            RequiresBaselineMapping,
+            HasApprovedFarmBoundary,
+            IsScopeConfirmed,
+            HasPublishedFarmBaseMap,
+            HasConfirmedPoleCount,
+            HasPriceSnapshot,
+            AppointmentPurpose,
+            AppointmentStatus,
+            PaymentStatus,
+            HasActiveQualifiedPrimaryManager,
+            IsPrimaryManagerAvailable:
+                HasActiveQualifiedPrimaryManager,
+            IsAppointmentCurrent:
+                AppointmentStatus == SurveyAppointmentStatus.Confirmed,
+            IsMissionPreparedForPurpose: SafetyChecksSatisfied,
+            IsMissionScheduledWithinAppointment: SafetyChecksSatisfied,
+            IsDroneReady: SafetyChecksSatisfied,
+            IsPreflightCompleted: SafetyChecksSatisfied,
+            HasPendingPriceAdjustment,
+            IsPaymentAmountAndCurrencyMatched: true,
+            SafetyChecksSatisfied)
+    {
+    }
+}

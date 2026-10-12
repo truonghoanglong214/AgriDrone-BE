@@ -20,7 +20,7 @@ public sealed class SurveyAppointment : Entity
             },
             [SurveyAppointmentStatus.RescheduleRequested] = new HashSet<SurveyAppointmentStatus>
             {
-                SurveyAppointmentStatus.Proposed,
+                SurveyAppointmentStatus.Superseded,
                 SurveyAppointmentStatus.Cancelled
             }
         };
@@ -29,12 +29,16 @@ public sealed class SurveyAppointment : Entity
 
     public Guid SurveyOrderId { get; private set; }
     public SurveyAppointmentPurpose Purpose { get; private set; }
+    public int RevisionNumber { get; private set; }
+    public Guid? PreviousAppointmentId { get; private set; }
+    public Guid? ProposedBySystemManagerId { get; private set; }
     public DateTimeOffset ProposedStartAt { get; private set; }
     public DateTimeOffset ProposedEndAt { get; private set; }
     public SurveyAppointmentStatus Status { get; private set; }
     public Guid? ConfirmedByTenantOwnerId { get; private set; }
     public DateTimeOffset? ConfirmedAt { get; private set; }
     public string? RescheduleReason { get; private set; }
+    public DateTimeOffset? SupersededAt { get; private set; }
     public uint Version { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
     public DateTimeOffset UpdatedAt { get; private set; }
@@ -43,13 +47,39 @@ public sealed class SurveyAppointment : Entity
     public static SurveyAppointment Create(
         Guid surveyOrderId,
         SurveyAppointmentPurpose purpose,
+        int revisionNumber,
+        Guid? previousAppointmentId,
+        Guid proposedBySystemManagerId,
         DateTimeOffset proposedStartAt,
         DateTimeOffset proposedEndAt,
         DateTimeOffset createdAt)
     {
         DomainGuard.NotEmpty(surveyOrderId);
+        DomainGuard.NotEmpty(proposedBySystemManagerId);
         DomainGuard.Utc(createdAt);
         EnsureWindow(proposedStartAt, proposedEndAt);
+
+        if (revisionNumber <= 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(revisionNumber),
+                "Appointment revision number must be positive.");
+        }
+
+        if ((revisionNumber == 1 && previousAppointmentId.HasValue) ||
+            (revisionNumber > 1 && !previousAppointmentId.HasValue))
+        {
+            throw new ArgumentException(
+                "Only appointment revisions after the first require a previous appointment.",
+                nameof(previousAppointmentId));
+        }
+
+        if (previousAppointmentId == Guid.Empty)
+        {
+            throw new ArgumentException(
+                "Previous appointment identifier cannot be empty.",
+                nameof(previousAppointmentId));
+        }
 
         if (!Enum.IsDefined(purpose))
         {
@@ -61,6 +91,9 @@ public sealed class SurveyAppointment : Entity
             Id = Guid.NewGuid(),
             SurveyOrderId = surveyOrderId,
             Purpose = purpose,
+            RevisionNumber = revisionNumber,
+            PreviousAppointmentId = previousAppointmentId,
+            ProposedBySystemManagerId = proposedBySystemManagerId,
             ProposedStartAt = proposedStartAt,
             ProposedEndAt = proposedEndAt,
             Status = SurveyAppointmentStatus.Proposed,
@@ -88,6 +121,14 @@ public sealed class SurveyAppointment : Entity
     public void Confirm(Guid tenantOwnerId, DateTimeOffset confirmedAt)
     {
         DomainGuard.NotEmpty(tenantOwnerId);
+        DomainGuard.Utc(confirmedAt);
+        if (confirmedAt >= ProposedEndAt)
+        {
+            throw new SurveyDomainException(
+                AppointmentDomainErrorCodes.ConfirmationWindowExpired,
+                "The appointment can no longer be confirmed after its proposed window ended.");
+        }
+
         TransitionTo(SurveyAppointmentStatus.Confirmed, confirmedAt);
         ConfirmedByTenantOwnerId = tenantOwnerId;
         ConfirmedAt = confirmedAt;
@@ -97,22 +138,23 @@ public sealed class SurveyAppointment : Entity
     public void RequestReschedule(string reason, DateTimeOffset requestedAt)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(reason);
+        if (reason.Trim().Length > 1000)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(reason),
+                "Reschedule reason cannot exceed 1000 characters.");
+        }
+
         TransitionTo(SurveyAppointmentStatus.RescheduleRequested, requestedAt);
         ConfirmedByTenantOwnerId = null;
         ConfirmedAt = null;
         RescheduleReason = reason.Trim();
     }
 
-    public void Repropose(
-        DateTimeOffset proposedStartAt,
-        DateTimeOffset proposedEndAt,
-        DateTimeOffset proposedAt)
+    public void Supersede(DateTimeOffset supersededAt)
     {
-        EnsureWindow(proposedStartAt, proposedEndAt);
-        TransitionTo(SurveyAppointmentStatus.Proposed, proposedAt);
-        ProposedStartAt = proposedStartAt;
-        ProposedEndAt = proposedEndAt;
-        RescheduleReason = null;
+        TransitionTo(SurveyAppointmentStatus.Superseded, supersededAt);
+        SupersededAt = supersededAt;
     }
 
     public void Cancel(DateTimeOffset cancelledAt)

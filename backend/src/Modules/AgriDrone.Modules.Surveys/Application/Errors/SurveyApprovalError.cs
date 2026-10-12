@@ -4,6 +4,20 @@ namespace AgriDrone.Modules.Surveys.Application.Errors;
 
 public static class SurveyApprovalError
 {
+    public const string RequestNotFoundCode =
+        "SurveyApproval.RequestNotFound";
+    public const string CurrentSystemAdminRequiredCode =
+        "SurveyApproval.CurrentSystemAdminRequired";
+    public const string VersionConflictCode =
+        "SurveyApproval.VersionConflict";
+    public const string InvalidChecklistCode =
+        "SurveyApproval.InvalidChecklist";
+    public const string IdempotencyConflictCode =
+        "SurveyApproval.IdempotencyConflict";
+    public const string InvalidIdempotencyKeyCode =
+        "SurveyApproval.InvalidIdempotencyKey";
+    public const string IdempotencyResultUnavailableCode =
+        "SurveyApproval.IdempotencyResultUnavailable";
     public const string RequestNotUnderReviewCode =
         "SurveyApproval.RequestNotUnderReview";
     public const string RequestContextInvalidCode =
@@ -34,6 +48,41 @@ public static class SurveyApprovalError
         "SurveyApproval.OwnerInvitationConflict";
     public const string OrderNumberConflictCode =
         "SurveyApproval.OrderNumberConflict";
+
+    public static AppError RequestNotFound(Guid requestId) =>
+        AppError.NotFound(
+            RequestNotFoundCode,
+            $"Survey request '{requestId}' was not found.");
+
+    public static AppError CurrentSystemAdminRequired() =>
+        AppError.Unauthorized(
+            CurrentSystemAdminRequiredCode,
+            "An authenticated SystemAdmin execution context is required.");
+
+    public static AppError VersionConflict() =>
+        AppError.Conflict(
+            VersionConflictCode,
+            "The survey request changed after it was loaded. Reload it and retry the approval.");
+
+    public static AppError InvalidChecklist(string description) =>
+        AppError.Validation(
+            InvalidChecklistCode,
+            description);
+
+    public static AppError IdempotencyConflict() =>
+        AppError.Conflict(
+            IdempotencyConflictCode,
+            "The idempotency key is already associated with a different approval command.");
+
+    public static AppError InvalidIdempotencyKey() =>
+        AppError.Validation(
+            InvalidIdempotencyKeyCode,
+            "A non-empty idempotency key of at most 100 characters is required.");
+
+    public static AppError IdempotencyResultUnavailable() =>
+        AppError.Failure(
+            IdempotencyResultUnavailableCode,
+            "The stored approval result is incomplete and cannot be replayed.");
 
     public static AppError RequestNotUnderReview(Guid requestId) =>
         AppError.Conflict(

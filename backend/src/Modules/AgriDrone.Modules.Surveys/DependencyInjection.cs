@@ -1,14 +1,18 @@
 using AgriDrone.Modules.Surveys.Application.Abstractions.Messaging;
 using AgriDrone.Modules.Surveys.Application.Abstractions.Approvals;
+using AgriDrone.Modules.Surveys.Application.Abstractions.Payments;
+using AgriDrone.Modules.Surveys.Application.Abstractions.Orders;
 using AgriDrone.Modules.Surveys.Application.Abstractions.Persistence;
 using AgriDrone.Modules.Surveys.Application.Abstractions.Queries;
 using AgriDrone.Modules.Surveys.Application.Abstractions.Requests;
 using AgriDrone.Modules.Surveys.Application.Services;
 using AgriDrone.Modules.Surveys.Application.Features.Approvals.Common;
+using AgriDrone.Modules.Surveys.Application.Features.Approvals.ApproveSurveyRequest;
 using AgriDrone.Modules.Surveys.Domain;
 using AgriDrone.Modules.Surveys.Infrastructure.Approvals;
 using AgriDrone.Modules.Surveys.Infrastructure.Health;
 using AgriDrone.Modules.Surveys.Infrastructure.Messaging;
+using AgriDrone.Modules.Surveys.Infrastructure.Payments;
 using AgriDrone.Modules.Surveys.Infrastructure.Persistence;
 using AgriDrone.Modules.Surveys.Infrastructure.Persistence.Repositories;
 using AgriDrone.Modules.Surveys.Infrastructure.Queries;
@@ -20,6 +24,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 
 namespace AgriDrone.Modules.Surveys;
 
@@ -60,6 +65,10 @@ public static class DependencyInjection
                         translator)
                     .MapEnum<SurveyOrderStatus>(
                         "survey_order_status",
+                        "system",
+                        translator)
+                    .MapEnum<SurveyPoleCountSource>(
+                        "survey_pole_count_source",
                         "system",
                         translator)
                     .MapEnum<SurveyAppointmentPurpose>(
@@ -109,12 +118,29 @@ public static class DependencyInjection
         services.AddScoped<IHarvestReadinessCriterionQueries, HarvestReadinessCriterionQueries>();
         services.AddScoped<ISurveyRequestQueries, SurveyRequestQueries>();
         services.AddScoped<ISurveyRequestIdempotencyResolver, SurveyRequestIdempotencyResolver>();
+        services.AddOptions<SurveyPaymentProviderOptions>()
+            .Bind(configuration.GetSection(
+                SurveyPaymentProviderOptions.SectionName))
+            .ValidateOnStart();
+        services.AddSingleton<IValidateOptions<SurveyPaymentProviderOptions>,
+            SurveyPaymentProviderOptionsValidator>();
+        services.AddScoped<ISurveyPaymentGateway, SurveyPaymentGateway>();
+        services.AddScoped<ISurveyPaymentCallbackVerifier,
+            SurveyPaymentCallbackVerifier>();
+        services.AddScoped<ISurveyOrderReadinessService,
+            SurveyOrderReadinessService>();
         services.AddSingleton<ISurveyRequestNumberGenerator, SurveyRequestNumberGenerator>();
         services.AddSingleton<
             ISurveyApprovalNumberGenerator,
             SurveyApprovalNumberGenerator>();
         services.AddScoped<ISurveyApprovalPrerequisiteResolver,
             SurveyApprovalPrerequisiteResolver>();
+        services.AddScoped<ISurveyRequestKindApprovalOrchestrator,
+            NewCustomerApprovalOrchestrator>();
+        services.AddScoped<ISurveyRequestKindApprovalOrchestrator,
+            ExistingTenantNewFarmApprovalOrchestrator>();
+        services.AddScoped<ISurveyRequestKindApprovalOrchestrator,
+            ExistingFarmSurveyApprovalOrchestrator>();
 
         services.TryAddSingleton(TimeProvider.System);
 

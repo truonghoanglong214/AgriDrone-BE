@@ -13,6 +13,7 @@ public interface ISurveyApprovalFailureInjector
 
 public enum SurveyApprovalPersistenceCheckpoint
 {
+    IdempotencyClaim,
     Tenant,
     Farm,
     PrimaryManagerAssignment,

@@ -2,6 +2,12 @@ namespace AgriDrone.Modules.Surveys.Application.Abstractions.Persistence;
 
 public static class SurveyApprovalPersistenceConstraints
 {
+    public const string IdempotencyRequest =
+        "uq_survey_approval_idempotency_request";
+
+    public const string IdempotencyActorKey =
+        "uq_survey_approval_idempotency_actor_key";
+
     public const string RequestOrder = "uq_survey_orders_request";
 
     public const string OrderNumber = "uq_survey_orders_number";

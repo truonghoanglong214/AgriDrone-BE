@@ -5,5 +5,6 @@ public enum SurveyAppointmentStatus
     Proposed,
     Confirmed,
     RescheduleRequested,
-    Cancelled
+    Cancelled,
+    Superseded
 }

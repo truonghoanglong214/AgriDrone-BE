@@ -4,8 +4,12 @@ using AgriDrone.IntegrationContracts.Surveys;
 using AgriDrone.IntegrationContracts.Mapping;
 using AgriDrone.IntegrationContracts.Messaging;
 using AgriDrone.Modules.Surveys.Application.Abstractions.Approvals;
+using AgriDrone.Modules.Surveys.Application.Abstractions.Appointments;
 using AgriDrone.Modules.Surveys.Application.Abstractions.Persistence;
 using AgriDrone.Modules.Surveys.Application.Abstractions.Queries;
+using AgriDrone.Modules.Surveys.Application.Abstractions.Orders;
+using AgriDrone.Modules.Surveys.Application.Abstractions.Pricing;
+using AgriDrone.Modules.Surveys.Application.Abstractions.Payments;
 using AgriDrone.Modules.Surveys.Domain;
 using AgriDrone.SharedInfrastructure.Auditing;
 using AgriDrone.SharedInfrastructure.Messaging;
@@ -121,6 +125,8 @@ public static class DependencyInjection
             SurveyApprovalUnitOfWork>();
         services.AddScoped<ISurveyApprovalRequestRepository,
             SurveyApprovalRequestRepository>();
+        services.AddScoped<ISurveyApprovalIdempotencyRepository,
+            SurveyApprovalIdempotencyRepository>();
         services.AddScoped<ISurveyApprovalReferenceQueries,
             SurveyApprovalReferenceQueries>();
         services.AddScoped<ISurveyApprovalProvisioningPort,
@@ -128,6 +134,118 @@ public static class DependencyInjection
         services.AddScoped<ISurveyApprovalOutbox, SurveyApprovalOutbox>();
         services.AddScoped<ISurveyOrderRepository,
             SurveyApprovalOrderRepository>();
+
+        return services;
+    }
+
+    public static IServiceCollection AddSurveyBoundaryVerificationPersistence(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        _ = configuration.GetRequiredAgriDroneConnectionString();
+
+        services.AddDbContext<SurveyBoundaryVerificationDbContext>(
+            (serviceProvider, options) =>
+            {
+                var dataSource =
+                    serviceProvider.GetRequiredService<NpgsqlDataSource>();
+                options.UseNpgsql(
+                    dataSource,
+                    npgsql => npgsql.UseNetTopologySuite());
+            });
+
+        services.AddScoped<ISurveyBoundaryVerificationUnitOfWork>(
+            serviceProvider => serviceProvider.GetRequiredService<
+                SurveyBoundaryVerificationDbContext>());
+        services.AddScoped<ISurveyOrderBoundaryRepository,
+            SurveyOrderBoundaryRepository>();
+        services.AddScoped<ISurveyOrderBoundaryQueries,
+            SurveyOrderBoundaryQueries>();
+        services.AddScoped<ISurveyBoundaryVerificationOutbox,
+            SurveyBoundaryVerificationOutbox>();
+
+        return services;
+    }
+
+    public static IServiceCollection AddSurveyAppointmentSchedulingPersistence(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        _ = configuration.GetRequiredAgriDroneConnectionString();
+
+        services.AddDbContext<SurveyAppointmentSchedulingDbContext>(
+            (serviceProvider, options) =>
+            {
+                var dataSource =
+                    serviceProvider.GetRequiredService<NpgsqlDataSource>();
+                options.UseNpgsql(
+                    dataSource,
+                    npgsql => npgsql.UseNetTopologySuite());
+            });
+
+        services.AddScoped<ISurveyAppointmentSchedulingUnitOfWork>(
+            serviceProvider => serviceProvider.GetRequiredService<
+                SurveyAppointmentSchedulingDbContext>());
+        services.AddScoped<ISurveyAppointmentSchedulingRepository,
+            SurveyAppointmentSchedulingRepository>();
+        services.AddScoped<ISurveyAppointmentSchedulingOutbox,
+            SurveyAppointmentSchedulingOutbox>();
+        services.AddScoped<ISurveyOrderReadinessStateQueries,
+            SurveyOrderReadinessStateQueries>();
+
+        return services;
+    }
+
+    public static IServiceCollection AddSurveyPricingConfirmationPersistence(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        _ = configuration.GetRequiredAgriDroneConnectionString();
+
+        services.AddDbContext<SurveyPricingConfirmationDbContext>(
+            (serviceProvider, options) =>
+            {
+                var dataSource =
+                    serviceProvider.GetRequiredService<NpgsqlDataSource>();
+                options.UseNpgsql(
+                    dataSource,
+                    npgsql => npgsql.UseNetTopologySuite());
+            });
+
+        services.AddScoped<ISurveyPricingConfirmationUnitOfWork>(
+            serviceProvider => serviceProvider.GetRequiredService<
+                SurveyPricingConfirmationDbContext>());
+        services.AddScoped<ISurveyPricingConfirmationRepository,
+            SurveyPricingConfirmationRepository>();
+        services.AddScoped<ISurveyPricingConfirmationOutbox,
+            SurveyPricingConfirmationOutbox>();
+
+        return services;
+    }
+
+    public static IServiceCollection AddSurveyPaymentProcessingPersistence(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        _ = configuration.GetRequiredAgriDroneConnectionString();
+
+        services.AddDbContext<SurveyPaymentProcessingDbContext>(
+            (serviceProvider, options) =>
+            {
+                var dataSource =
+                    serviceProvider.GetRequiredService<NpgsqlDataSource>();
+                options.UseNpgsql(
+                    dataSource,
+                    npgsql => npgsql.UseNetTopologySuite());
+            });
+
+        services.AddScoped<ISurveyPaymentProcessingUnitOfWork>(
+            serviceProvider => serviceProvider.GetRequiredService<
+                SurveyPaymentProcessingDbContext>());
+        services.AddScoped<ISurveyPaymentProcessingRepository,
+            SurveyPaymentProcessingRepository>();
+        services.AddScoped<ISurveyPaymentProcessingOutbox,
+            SurveyPaymentProcessingOutbox>();
 
         return services;
     }

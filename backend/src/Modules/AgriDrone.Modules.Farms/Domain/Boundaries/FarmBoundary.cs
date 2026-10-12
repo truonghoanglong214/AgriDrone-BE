@@ -14,6 +14,7 @@ public sealed class FarmBoundary : AggregateRoot
     public FarmBoundarySource Source { get; private set; }
     public Guid? SourceSurveyRequestId { get; private set; }
     public Guid? SubmittedBy { get; private set; }
+    public string? EvidenceReference { get; private set; }
     public FarmBoundaryStatus Status { get; private set; }
     public Guid? ReviewedBy { get; private set; }
     public DateTimeOffset? ReviewedAt { get; private set; }
@@ -32,7 +33,8 @@ public sealed class FarmBoundary : AggregateRoot
         FarmBoundarySource source,
         Guid? sourceSurveyRequestId,
         Guid? submittedBy,
-        DateTimeOffset createdAt)
+        DateTimeOffset createdAt,
+        string? evidenceReference = null)
     {
         DomainGuard.NotEmpty(tenantId);
         DomainGuard.NotEmpty(farmId);
@@ -75,6 +77,13 @@ public sealed class FarmBoundary : AggregateRoot
                 nameof(submittedBy));
         }
 
+        if (evidenceReference?.Trim().Length > 1000)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(evidenceReference),
+                "Boundary evidence reference cannot exceed 1000 characters.");
+        }
+
         return new FarmBoundary
         {
             Id = Guid.NewGuid(),
@@ -87,6 +96,9 @@ public sealed class FarmBoundary : AggregateRoot
             Source = source,
             SourceSurveyRequestId = sourceSurveyRequestId,
             SubmittedBy = submittedBy,
+            EvidenceReference = string.IsNullOrWhiteSpace(evidenceReference)
+                ? null
+                : evidenceReference.Trim(),
             Status = FarmBoundaryStatus.Draft,
             CreatedAt = createdAt,
             UpdatedAt = createdAt

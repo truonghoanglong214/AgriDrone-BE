@@ -1,5 +1,9 @@
+using System.ComponentModel.DataAnnotations;
+using AgriDrone.Api.Contracts.Surveys.Approvals;
 using AgriDrone.Api.Contracts.Surveys.Requests;
 using AgriDrone.Api.Mapping;
+using AgriDrone.Api.Surveys;
+using AgriDrone.Modules.Surveys.Application.Features.Approvals.ApproveSurveyRequest;
 using AgriDrone.Modules.Surveys.Application.Features.Requests.Common;
 using AgriDrone.Modules.Surveys.Application.Features.Requests.GetSurveyRequestDetail;
 using AgriDrone.Modules.Surveys.Application.Features.Requests.GetSurveyRequestInbox;
@@ -126,6 +130,67 @@ public sealed class SystemSurveyRequestsController(ISender sender)
                     checklist.Notes),
                 request.ExpectedVersion),
             cancellationToken);
+        return result.ToHttpResult(
+            HttpContext,
+            response => Results.Ok(
+                SurveyRequestResponseMapper.ToResponse(response)));
+    }
+
+    /// <summary>Phê duyệt atomically một yêu cầu đang UnderReview.</summary>
+    /// <remarks>
+    /// Idempotency-Key là bắt buộc. Tùy request kind, transaction có thể provision
+    /// Tenant, Farm, primary manager assignment và Owner invitation, sau đó tạo
+    /// SurveyOrder. Response không chứa invitation token, password hoặc applicant PII.
+    /// ExistingFarmSurvey không âm thầm đổi primary manager; manager ID nếu gửi lên
+    /// chỉ đóng vai trò expected-current guard.
+    /// </remarks>
+    [HttpPost("{requestId:guid}/approve")]
+    [ProducesResponseType<ApproveSurveyRequestApiResponse>(
+        StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IResult> Approve(
+        [FromRoute] Guid requestId,
+        [FromHeader(Name = SurveyRequestHttpIdempotency.HeaderName), Required]
+        [StringLength(
+            SurveyRequestHttpIdempotency.MaximumKeyLength,
+            MinimumLength = 1)]
+        string idempotencyKey,
+        [FromBody, Required] ApproveSurveyRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!SurveyRequestHttpIdempotency.TryNormalize(
+                HttpContext,
+                idempotencyKey,
+                out var normalizedKey,
+                out var error))
+        {
+            return error!;
+        }
+
+        var checklist = request.Checklist;
+        var result = await sender.Send(
+            new ApproveSurveyRequestCommand(
+                requestId,
+                request.SelectedSystemManagerProfileId,
+                request.Reason,
+                new SurveyRequestReviewChecklistInput(
+                    checklist.Version,
+                    checklist.ContactValid,
+                    checklist.IsDragonFruitFarm,
+                    checklist.IsServiceAreaSupported,
+                    checklist.IsLocationSufficient,
+                    checklist.IsPreliminaryLegalAndFlightFeasible,
+                    checklist.IsEligibleSystemManagerAvailable,
+                    checklist.Notes),
+                request.ExpectedVersion!.Value,
+                normalizedKey),
+            cancellationToken);
+
         return result.ToHttpResult(
             HttpContext,
             response => Results.Ok(

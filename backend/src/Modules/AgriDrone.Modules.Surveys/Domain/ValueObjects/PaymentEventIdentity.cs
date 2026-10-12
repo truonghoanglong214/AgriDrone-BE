@@ -33,6 +33,14 @@ public readonly record struct PaymentEventIdentity
         var normalizedProvider = provider.Trim().ToLowerInvariant();
         var normalizedReference = providerReference.Trim();
         var normalizedEventId = providerEventId.Trim();
+        if (normalizedProvider.Length > 50 ||
+            normalizedReference.Length > 150 ||
+            normalizedEventId.Length > 150)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(providerEventId),
+                "Payment event identity exceeds the supported provider limits.");
+        }
         var canonicalValue = string.Join(
             '\n',
             normalizedProvider,

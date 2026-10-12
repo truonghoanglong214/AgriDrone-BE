@@ -21,6 +21,7 @@ public sealed class SurveyOrder : AggregateRoot
             [SurveyOrderStatus.BaselineReady] = new HashSet<SurveyOrderStatus>
             {
                 SurveyOrderStatus.BaselineInProgress,
+                SurveyOrderStatus.AwaitingBaselineAppointment,
                 SurveyOrderStatus.Cancelled
             },
             [SurveyOrderStatus.BaselineInProgress] = new HashSet<SurveyOrderStatus>
@@ -43,12 +44,14 @@ public sealed class SurveyOrder : AggregateRoot
             },
             [SurveyOrderStatus.AwaitingPayment] = new HashSet<SurveyOrderStatus>
             {
+                SurveyOrderStatus.AwaitingPaidAppointment,
                 SurveyOrderStatus.ReadyForPaidService,
                 SurveyOrderStatus.Cancelled
             },
             [SurveyOrderStatus.ReadyForPaidService] = new HashSet<SurveyOrderStatus>
             {
                 SurveyOrderStatus.InProgress,
+                SurveyOrderStatus.AwaitingPayment,
                 SurveyOrderStatus.Cancelled
             },
             [SurveyOrderStatus.InProgress] = new HashSet<SurveyOrderStatus>
@@ -73,6 +76,8 @@ public sealed class SurveyOrder : AggregateRoot
     public PricePerPole? PricePerPoleSnapshot { get; private set; }
     public Guid? FarmBoundaryVersionId { get; private set; }
     public Guid? FarmBaseMapVersionId { get; private set; }
+    public SurveyPoleCountSource? PoleCountSource { get; private set; }
+    public string? PoleCountEvidenceReference { get; private set; }
     public Guid? PoleCountConfirmedBy { get; private set; }
     public DateTimeOffset? PoleCountConfirmedAt { get; private set; }
     public Guid? PricingConfirmedBy { get; private set; }
@@ -205,6 +210,8 @@ public sealed class SurveyOrder : AggregateRoot
         FarmBoundaryVersionId = farmBoundaryVersionId;
         FarmBaseMapVersionId = farmBaseMapVersionId;
         ConfirmedSurveyPoleCount = validatedPoleCount;
+        PoleCountSource = SurveyPoleCountSource.CurrentPublishedInventory;
+        PoleCountEvidenceReference = null;
         ScopeConfirmedBy = verifiedBy;
         ScopeConfirmedAt = verifiedAt;
         PoleCountConfirmedBy = verifiedBy;
@@ -212,8 +219,69 @@ public sealed class SurveyOrder : AggregateRoot
         ApplyTransition(SurveyOrderStatus.AwaitingPricing, verifiedAt);
     }
 
+    public void VerifyBoundaryAndScope(
+        Guid farmBoundaryVersionId,
+        Guid? currentFarmBaseMapVersionId,
+        ConfirmedSurveyPoleCount? currentConfirmedPoleCount,
+        Guid verifiedBy,
+        DateTimeOffset verifiedAt)
+    {
+        ValidateBoundaryAndScope(farmBoundaryVersionId, verifiedBy, verifiedAt);
+
+        if (currentFarmBaseMapVersionId.HasValue !=
+            currentConfirmedPoleCount.HasValue)
+        {
+            throw new SurveyDomainException(
+                SurveyOrderDomainErrorCodes.BaselineSnapshotIncomplete,
+                "A current base map and confirmed pole count must be supplied together.");
+        }
+
+        if (!currentFarmBaseMapVersionId.HasValue)
+        {
+            EnsureTransitionTo(
+                SurveyOrderStatus.AwaitingBaselineAppointment,
+                verifiedAt);
+
+            FarmBoundaryVersionId = farmBoundaryVersionId;
+            ScopeConfirmedBy = verifiedBy;
+            ScopeConfirmedAt = verifiedAt;
+            RequiresBaselineMapping = true;
+            FarmBaseMapVersionId = null;
+            ConfirmedSurveyPoleCount = null;
+            PoleCountSource = null;
+            PoleCountEvidenceReference = null;
+            PoleCountConfirmedBy = null;
+            PoleCountConfirmedAt = null;
+            ApplyTransition(
+                SurveyOrderStatus.AwaitingBaselineAppointment,
+                verifiedAt);
+            return;
+        }
+
+        DomainGuard.NotEmpty(currentFarmBaseMapVersionId.Value);
+        var validatedPoleCount =
+            global::AgriDrone.Modules.Surveys.Domain.ConfirmedSurveyPoleCount
+                .Create(currentConfirmedPoleCount!.Value.Value);
+        EnsureTransitionTo(SurveyOrderStatus.AwaitingPricing, verifiedAt);
+
+        FarmBoundaryVersionId = farmBoundaryVersionId;
+        ScopeConfirmedBy = verifiedBy;
+        ScopeConfirmedAt = verifiedAt;
+        RequiresBaselineMapping = false;
+        FarmBaseMapVersionId = currentFarmBaseMapVersionId.Value;
+        ConfirmedSurveyPoleCount = validatedPoleCount;
+        PoleCountSource = SurveyPoleCountSource.CurrentPublishedInventory;
+        PoleCountEvidenceReference = null;
+        PoleCountConfirmedBy = verifiedBy;
+        PoleCountConfirmedAt = verifiedAt;
+        ApplyTransition(SurveyOrderStatus.AwaitingPricing, verifiedAt);
+    }
+
     public void MarkBaselineAppointmentConfirmed(DateTimeOffset occurredAt) =>
         TransitionTo(SurveyOrderStatus.BaselineReady, occurredAt);
+
+    public void ReopenBaselineAppointment(DateTimeOffset occurredAt) =>
+        TransitionTo(SurveyOrderStatus.AwaitingBaselineAppointment, occurredAt);
 
     public void StartBaselineMapping(DateTimeOffset occurredAt) =>
         TransitionTo(SurveyOrderStatus.BaselineInProgress, occurredAt);
@@ -236,6 +304,8 @@ public sealed class SurveyOrder : AggregateRoot
 
         FarmBaseMapVersionId = farmBaseMapVersionId;
         ConfirmedSurveyPoleCount = validatedPoleCount;
+        PoleCountSource = SurveyPoleCountSource.BaselinePublication;
+        PoleCountEvidenceReference = null;
         PoleCountConfirmedBy = confirmedBy;
         PoleCountConfirmedAt = confirmedAt;
         ApplyTransition(SurveyOrderStatus.AwaitingPricing, confirmedAt);
@@ -285,11 +355,146 @@ public sealed class SurveyOrder : AggregateRoot
         ApplyTransition(SurveyOrderStatus.AwaitingPaidAppointment, confirmedAt);
     }
 
+    public void ConfirmPoleCountAndPricing(
+        Guid farmBaseMapVersionId,
+        ConfirmedSurveyPoleCount confirmedPoleCount,
+        SurveyPoleCountSource poleCountSource,
+        string evidenceReference,
+        Guid surveyServicePriceId,
+        PricePerPole pricePerPole,
+        CurrencyCode currency,
+        Guid confirmedBy,
+        DateTimeOffset confirmedAt)
+    {
+        DomainGuard.NotEmpty(farmBaseMapVersionId);
+        DomainGuard.NotEmpty(surveyServicePriceId);
+        DomainGuard.NotEmpty(confirmedBy);
+        DomainGuard.Utc(confirmedAt);
+        ArgumentException.ThrowIfNullOrWhiteSpace(evidenceReference);
+
+        var normalizedEvidence = evidenceReference.Trim();
+        if (normalizedEvidence.Length > 1000)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(evidenceReference),
+                "Pole-count evidence reference cannot exceed 1000 characters.");
+        }
+
+        if (!Enum.IsDefined(poleCountSource))
+        {
+            throw new ArgumentOutOfRangeException(nameof(poleCountSource));
+        }
+
+        EnsureTransitionTo(SurveyOrderStatus.AwaitingPaidAppointment, confirmedAt);
+
+        if (currency != CurrencyCode.Vnd)
+        {
+            throw new SurveyDomainException(
+                SurveyOrderDomainErrorCodes.PricingSnapshotIncomplete,
+                "Only VND per-pole pricing is supported in the MVP.");
+        }
+
+        if (FarmBoundaryVersionId is null || ScopeConfirmedBy is null)
+        {
+            throw new SurveyDomainException(
+                SurveyOrderDomainErrorCodes.PricingSnapshotIncomplete,
+                "An approved boundary and verified scope are required before pricing.");
+        }
+
+        var validatedPoleCount =
+            global::AgriDrone.Modules.Surveys.Domain.ConfirmedSurveyPoleCount
+                .Create(confirmedPoleCount.Value);
+        var validatedPrice = global::AgriDrone.Modules.Surveys.Domain.PricePerPole
+            .Create(pricePerPole.Amount);
+        var finalPrice = Money.CalculateSurveyPrice(
+            validatedPoleCount,
+            validatedPrice,
+            currency);
+
+        FarmBaseMapVersionId = farmBaseMapVersionId;
+        ConfirmedSurveyPoleCount = validatedPoleCount;
+        PoleCountSource = poleCountSource;
+        PoleCountEvidenceReference = normalizedEvidence;
+        PoleCountConfirmedBy = confirmedBy;
+        PoleCountConfirmedAt = confirmedAt;
+        SurveyServicePriceId = surveyServicePriceId;
+        PricePerPoleSnapshot = validatedPrice;
+        Currency = currency.Value;
+        FinalPrice = finalPrice.Amount;
+        PricingConfirmedBy = confirmedBy;
+        PricingConfirmedAt = confirmedAt;
+        ApplyTransition(SurveyOrderStatus.AwaitingPaidAppointment, confirmedAt);
+    }
+
     public void MarkPaidAppointmentConfirmed(DateTimeOffset occurredAt) =>
         TransitionTo(SurveyOrderStatus.AwaitingPayment, occurredAt);
 
+    public void ReopenPaidAppointment(DateTimeOffset occurredAt) =>
+        TransitionTo(SurveyOrderStatus.AwaitingPaidAppointment, occurredAt);
+
     public void MarkPaymentConfirmed(DateTimeOffset occurredAt) =>
         TransitionTo(SurveyOrderStatus.ReadyForPaidService, occurredAt);
+
+    public void RevokePaidServiceReadiness(DateTimeOffset occurredAt)
+    {
+        if (Status == SurveyOrderStatus.ReadyForPaidService)
+        {
+            TransitionTo(SurveyOrderStatus.AwaitingPayment, occurredAt);
+        }
+    }
+
+    public void ApplyPriceAdjustment(
+        Guid surveyServicePriceId,
+        ConfirmedSurveyPoleCount confirmedPoleCount,
+        PricePerPole pricePerPole,
+        CurrencyCode currency,
+        Guid appliedBy,
+        DateTimeOffset appliedAt)
+    {
+        DomainGuard.NotEmpty(surveyServicePriceId);
+        DomainGuard.NotEmpty(appliedBy);
+        DomainGuard.Utc(appliedAt);
+        SurveyTransitionGuard.EnsureTimestamp(appliedAt, UpdatedAt);
+
+        if (Status is not (
+            SurveyOrderStatus.AwaitingPaidAppointment or
+            SurveyOrderStatus.AwaitingPayment or
+            SurveyOrderStatus.ReadyForPaidService))
+        {
+            throw new SurveyDomainException(
+                SurveyOrderDomainErrorCodes.InvalidTransition,
+                $"Order in state '{Status}' cannot apply a price adjustment.");
+        }
+
+        if (FarmBoundaryVersionId is null || FarmBaseMapVersionId is null)
+        {
+            throw new SurveyDomainException(
+                SurveyOrderDomainErrorCodes.PricingSnapshotIncomplete,
+                "Boundary and base-map snapshots are required for a price adjustment.");
+        }
+
+        var finalPrice = Money.CalculateSurveyPrice(
+            confirmedPoleCount,
+            pricePerPole,
+            currency);
+        SurveyServicePriceId = surveyServicePriceId;
+        ConfirmedSurveyPoleCount = confirmedPoleCount;
+        PricePerPoleSnapshot = pricePerPole;
+        Currency = currency.Value;
+        FinalPrice = finalPrice.Amount;
+        PoleCountConfirmedBy = appliedBy;
+        PoleCountConfirmedAt = appliedAt;
+        PricingConfirmedBy = appliedBy;
+        PricingConfirmedAt = appliedAt;
+        UpdatedAt = appliedAt;
+
+        if (Status == SurveyOrderStatus.ReadyForPaidService)
+        {
+            Status = SurveyOrderStatus.AwaitingPayment;
+        }
+
+        Version++;
+    }
 
     public void StartPaidService(DateTimeOffset occurredAt) =>
         TransitionTo(SurveyOrderStatus.InProgress, occurredAt);

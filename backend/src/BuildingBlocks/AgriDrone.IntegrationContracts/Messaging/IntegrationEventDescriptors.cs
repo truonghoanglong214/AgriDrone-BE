@@ -108,4 +108,46 @@ public static class IntegrationEventDescriptors
             IntegrationEventTypes.PlantHealthAnalysisReadyV3,
             IntegrationSchemaVersions.V3,
             RequiresActorId: false);
+
+    public static IntegrationEventDescriptor<SurveyRequestApprovedV1>
+        SurveyRequestApprovedV1 { get; } =
+        new(
+            IntegrationEventTypes.SurveyRequestApprovedV1,
+            IntegrationSchemaVersions.V1,
+            RequiresActorId: true);
+
+    public static IntegrationEventDescriptor<SurveyOrderBoundaryVerifiedV1>
+        SurveyOrderBoundaryVerifiedV1 { get; } =
+        new(
+            IntegrationEventTypes.SurveyOrderBoundaryVerifiedV1,
+            IntegrationSchemaVersions.V1,
+            RequiresActorId: true);
+
+    public static IntegrationEventDescriptor<SurveyAppointmentChangedV1>
+        SurveyAppointmentChangedV1 { get; } =
+        new(
+            IntegrationEventTypes.SurveyAppointmentChangedV1,
+            IntegrationSchemaVersions.V1,
+            RequiresActorId: true);
+
+    public static IntegrationEventDescriptor<SurveyOrderPricingConfirmedV1>
+        SurveyOrderPricingConfirmedV1 { get; } =
+        new(
+            IntegrationEventTypes.SurveyOrderPricingConfirmedV1,
+            IntegrationSchemaVersions.V1,
+            RequiresActorId: true);
+
+    public static IntegrationEventDescriptor<SurveyPaymentChangedV1>
+        SurveyPaymentChangedV1 { get; } =
+        new(
+            IntegrationEventTypes.SurveyPaymentChangedV1,
+            IntegrationSchemaVersions.V1,
+            RequiresActorId: false);
+
+    public static IntegrationEventDescriptor<SurveyPriceAdjustmentChangedV1>
+        SurveyPriceAdjustmentChangedV1 { get; } =
+        new(
+            IntegrationEventTypes.SurveyPriceAdjustmentChangedV1,
+            IntegrationSchemaVersions.V1,
+            RequiresActorId: true);
 }

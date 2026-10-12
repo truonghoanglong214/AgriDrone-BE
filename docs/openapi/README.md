@@ -12,9 +12,30 @@ Step 0R không mở thêm HTTP endpoint nên không tạo snapshot Swagger giả
 được mở, snapshot mới phải được sinh từ `GET /swagger/v1/swagger.json` và đối chiếu
 với intent này.
 
-`be1-surveys.openapi.json` là snapshot runtime sau Step 2F. Snapshot khóa bảy route
-Survey Request cho public, TenantOwner và SystemAdmin; public submit là anonymous,
-hai luồng submit yêu cầu `Idempotency-Key`, các filter enum dùng wire token ổn định
-và không có route `approve`. Snapshot được lấy từ API Development đang chạy với
-startup migration/core-master-data validation tạm tắt bằng environment override;
-giá trị mặc định của ứng dụng vẫn bật các startup gate này.
+`be1-surveys.openapi.json` là snapshot runtime mới nhất sau Phase 4E. Snapshot khóa
+tám route Survey Request cho public, TenantOwner và SystemAdmin; public submit là
+anonymous, các command retry-safe yêu cầu `Idempotency-Key`, các enum dùng wire
+token ổn định. Route approve chỉ dành cho SystemAdmin, nhận body có checklist/
+reason/expected version và trả identifiers/trạng thái, không lộ invitation token,
+password hoặc applicant PII. Hai route SystemManager boundary-scope cung cấp
+assigned-manager work context và atomic boundary verification với GeoJSON,
+evidence cùng optimistic version guards. Bốn route Phase 4B bổ sung manager
+propose/re-propose Baseline appointment, owner confirm/request-reschedule và manager
+đọc authoritative Baseline readiness theo `missionId`; appointment dùng optimistic
+version guards và readiness không nhận payment state từ client. Route Phase 4C
+`POST /api/system-manager/survey-orders/{orderId}/pole-count/confirm` chỉ nhận
+expected Order/base-map version và evidence; count, price version, unit price,
+currency và final price đều là server-owned output. Phase 4D mở thêm
+`POST /api/tenant-owner/survey-orders/{orderId}/payments`, chỉ nhận
+expected Order version và trả session được tạo từ amount/currency snapshot phía
+server. `POST /api/integrations/payments/{provider}/callbacks` là anonymous provider
+route có hai header timestamp/signature, payload identity/event/amount/currency và
+không có Bearer security requirement; chữ ký vẫn được kiểm tra trước application
+handler. Phase 4E bổ sung request/review/apply PriceAdjustment append-only,
+SystemAdmin payment reconciliation và paid-service readiness theo MissionPurpose.
+Callback nhận thêm refund/chargeback nhưng vẫn giữ PaymentEvent bất biến; owner
+không có contract xác nhận payment trực tiếp. Snapshot được sinh từ
+`GET /swagger/v1/swagger.json`
+của API Development đang chạy với startup migration/core-master-data validation
+tạm tắt bằng environment override; giá trị mặc định của ứng dụng vẫn bật các
+startup gate này.
