@@ -46,8 +46,8 @@ internal sealed class UploadMissionMediaCommandHandler(
         if (mission.SurveyOrderId is null)
             return Result.Failure<CompleteUploadSessionResult>(
                 MediaUploadError.MissionNotOrderBound());
-        if (request.CapturedAt == default ||
-            request.CapturedAt.Offset != TimeSpan.Zero)
+        if (request.CapturedAt is DateTimeOffset capturedAt &&
+            (capturedAt == default || capturedAt.Offset != TimeSpan.Zero))
             return Result.Failure<CompleteUploadSessionResult>(
                 MediaUploadError.CaptureOutsideFlight());
 

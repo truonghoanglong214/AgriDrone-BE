@@ -9,8 +9,6 @@ public sealed class UploadMissionMediaRequest
     [MaxLength(20)]
     public List<IFormFile> Files { get; init; } = [];
 
-    [Required]
-    [MinLength(1)]
     [MaxLength(20)]
     public List<DateTimeOffset> CapturedAt { get; init; } = [];
 }

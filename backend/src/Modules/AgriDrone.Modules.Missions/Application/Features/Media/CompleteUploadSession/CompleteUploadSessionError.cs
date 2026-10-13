@@ -59,7 +59,7 @@ internal static class CompleteUploadSessionError
 
     public static AppError CaptureMetadataMissing() =>
         AppError.Validation("MediaUpload.CaptureMetadataMissing",
-            "A UTC capture time within the Mission flight interval is required.");
+            "When provided, capture time must be UTC and within the Mission flight interval.");
 
     public static AppError ConcurrentUpdate() =>
         AppError.Conflict(

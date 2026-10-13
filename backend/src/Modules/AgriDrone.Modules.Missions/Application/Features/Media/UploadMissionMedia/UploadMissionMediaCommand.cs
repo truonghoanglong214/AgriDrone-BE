@@ -6,5 +6,5 @@ namespace AgriDrone.Modules.Missions.Application.Features.Media.UploadMissionMed
 
 public sealed record UploadMissionMediaCommand(
     Guid TenantId, Guid FarmId, Guid MissionId, Stream Content,
-    DateTimeOffset CapturedAt)
+    DateTimeOffset? CapturedAt)
     : IRequest<Result<CompleteUploadSessionResult>>;

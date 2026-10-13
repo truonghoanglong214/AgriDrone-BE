@@ -308,19 +308,21 @@ namespace AgriDrone.Database.Migrations
                         ELSE NULL
                     END
                 FROM survey.survey_orders AS survey_order
+                JOIN survey.price_adjustments AS source_adjustment
+                    ON source_adjustment.survey_order_id = survey_order.id
                 CROSS JOIN LATERAL (
                     SELECT
                         GREATEST(
                             1,
                             COALESCE(
                                 survey_order.confirmed_survey_pole_count,
-                                round(adjustment.old_area_ha)::integer,
+                                round(source_adjustment.old_area_ha)::integer,
                                 1)) AS old_pole_count,
                         GREATEST(
                             1,
                             COALESCE(
                                 survey_order.confirmed_survey_pole_count,
-                                round(adjustment.new_area_ha)::integer,
+                                round(source_adjustment.new_area_ha)::integer,
                                 1)) AS new_pole_count
                 ) AS counts
                 CROSS JOIN LATERAL (
@@ -331,7 +333,7 @@ namespace AgriDrone.Database.Migrations
                             0.01,
                             round(
                                 COALESCE(
-                                    NULLIF(adjustment.old_price, 0) /
+                                    NULLIF(source_adjustment.old_price, 0) /
                                         counts.old_pole_count,
                                     survey_order.price_per_pole_snapshot,
                                     0.01),
@@ -340,13 +342,13 @@ namespace AgriDrone.Database.Migrations
                             0.01,
                             round(
                                 COALESCE(
-                                    NULLIF(adjustment.new_price, 0) /
+                                    NULLIF(source_adjustment.new_price, 0) /
                                         counts.new_pole_count,
                                     survey_order.price_per_pole_snapshot,
                                     0.01),
                                 2)) AS new_price_per_pole
                 ) AS legacy
-                WHERE survey_order.id = adjustment.survey_order_id;
+                WHERE source_adjustment.id = adjustment.id;
                 """);
 
             migrationBuilder.AlterColumn<string>(

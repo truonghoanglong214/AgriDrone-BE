@@ -23,11 +23,6 @@ internal sealed class MissionUploadReadinessQueries(
                 link.MissionId == missionId &&
                 link.Mission.TenantId == tenantId &&
                 link.Mission.FarmId == farmId &&
-                link.CapturedAt != null &&
-                link.Mission.StartedAt != null &&
-                link.Mission.EndedAt != null &&
-                link.CapturedAt >= link.Mission.StartedAt &&
-                link.CapturedAt <= link.Mission.EndedAt &&
                 link.Media.StorageStatus ==
                     MediaStorageStatus.Active)
             .GroupBy(_ => 1)
