@@ -6,7 +6,6 @@ namespace AgriDrone.Modules.Missions.Application
 
 public sealed record RegisterDroneResponse(
     Guid Id,
-    Guid TenantId,
     string Code,
     string Name,
     string? Model,
@@ -19,4 +18,5 @@ public sealed record RegisterDroneResponse(
     decimal? WeightKg,
     DroneStatus Status,
     string? Notes,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    uint Version);

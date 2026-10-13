@@ -19,4 +19,28 @@ public static class IntegrationConsumerNames
 
     public const string Be2HealthReviewStateChangedV1 =
         "be2-health-review-state-changed-v1";
+
+    public const string Be1BaselineMappingCandidatesApprovedV2 =
+        "be1-baseline-mapping-candidates-approved-v2";
+
+    public const string Be2FarmBaseMapPublishedV2 =
+        "be2-farm-base-map-published-v2";
+
+    public const string Be1HealthObservationsReadyV2 =
+        "be1-health-observations-ready-v2";
+
+    public const string Be1HarvestReadinessAssessmentsReadyV2 =
+        "be1-harvest-readiness-assessments-ready-v2";
+
+    public const string Be2SurveyResultReviewStateChangedV2 =
+        "be2-survey-result-review-state-changed-v2";
+
+    public const string Be1BaselineMappingCandidatesReadyV3 =
+        "be1-baseline-mapping-candidates-ready-v3";
+
+    public const string Be2FarmBaseMapPublishedV3 =
+        "be2-farm-base-map-published-v3";
+
+    public const string Be1PlantHealthAnalysisReadyV3 =
+        "be1-plant-health-analysis-ready-v3";
 }

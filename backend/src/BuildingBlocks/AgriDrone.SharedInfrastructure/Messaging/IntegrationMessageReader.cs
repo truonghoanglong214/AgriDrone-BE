@@ -53,6 +53,7 @@ internal sealed class IntegrationMessageReader(
             envelope,
             descriptor.EventType,
             descriptor.SchemaVersion,
+            descriptor.RequiresTenantId,
             timeProvider.GetUtcNow());
 
         if (envelopeError is not null)

@@ -6,8 +6,9 @@ namespace AgriDrone.Modules.Missions.Application
     .Features.Drones.ChangeDroneStatus;
 
 public sealed record ChangeDroneStatusCommand(
-    Guid TenantId,
     Guid DroneId,
     DroneStatus TargetStatus,
-    DateTimeOffset? NextMaintenanceAt)
+    DateTimeOffset? NextMaintenanceAt,
+    uint? ExpectedVersion = null,
+    string? Reason = null)
     : IRequest<Result<ChangeDroneStatusResponse>>;

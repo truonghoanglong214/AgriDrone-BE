@@ -55,6 +55,7 @@ BenchmarkDotNet.Artifacts/
 # Local .NET tooling and caches
 .dotnet/
 .nuget/
+.tools/
 project.lock.json
 project.fragment.lock.json
 artifacts-obj/

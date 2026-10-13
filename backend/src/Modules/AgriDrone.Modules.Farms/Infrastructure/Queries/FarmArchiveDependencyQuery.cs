@@ -5,11 +5,13 @@ using Microsoft.EntityFrameworkCore;
 
 namespace AgriDrone.Modules.Farms.Infrastructure.Queries;
 
-internal sealed class FarmArchiveDependencyQuery(
+/// <summary>
+/// Read-only dependency adapter for archive operations. SurveyOrder can be
+/// added here once its schema and internal query port exist.
+/// </summary>
+internal sealed class LegacyReadOnlyFarmArchiveDependencyQuery(
     FarmsDbContext dbContext,
-    IMissionArchiveReferenceQuery missionReferenceQuery,
-    IFieldTaskArchiveReferenceQuery fieldTaskReferenceQuery,
-    IPlantArchiveReferenceQuery plantReferenceQuery)
+    IMissionArchiveReferenceQuery missionReferenceQuery)
     : IFarmArchiveDependencyQuery
 {
     public async Task<ArchiveDependencySummary> GetForZoneAsync(
@@ -25,23 +27,9 @@ internal sealed class FarmArchiveDependencyQuery(
                 zoneId,
                 cancellationToken);
 
-        var plantReferences =
-            await plantReferenceQuery.GetZoneReferencesAsync(
-                farmId,
-                zoneId,
-                cancellationToken);
-
-        var openFieldTaskCount =
-            await fieldTaskReferenceQuery.CountOpenForZoneReferencesAsync(
-                farmId,
-                plantReferences.PlantIds,
-                plantReferences.ScanIds,
-                cancellationToken);
-
         return new ArchiveDependencySummary(
             ActiveZoneCount: 0,
-            activeMissionCount,
-            openFieldTaskCount);
+            activeMissionCount);
     }
 
     public async Task<ArchiveDependencySummary> GetForFarmAsync(
@@ -64,14 +52,8 @@ internal sealed class FarmArchiveDependencyQuery(
                 farmId,
                 cancellationToken);
 
-        var openFieldTaskCount =
-            await fieldTaskReferenceQuery.CountOpenForFarmAsync(
-                farmId,
-                cancellationToken);
-
         return new ArchiveDependencySummary(
             activeZoneCount,
-            activeMissionCount,
-            openFieldTaskCount);
+            activeMissionCount);
     }
 }

@@ -2,6 +2,16 @@ namespace AgriDrone.IntegrationContracts.Farms;
 
 public interface IFarmAssignmentReferenceQuery
 {
+    Task<SystemManagerFarmReference?> GetActiveFarmAsync(
+        Guid farmId,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult<SystemManagerFarmReference?>(null);
+
+    Task<IReadOnlyCollection<SystemManagerFarmReference>> GetActiveFarmsAsync(
+        IReadOnlyCollection<Guid> farmIds,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyCollection<SystemManagerFarmReference>>([]);
+
     Task<bool> IsActiveFarmAsync(
         Guid tenantId,
         Guid farmId,
@@ -16,6 +26,14 @@ public interface IFarmAssignmentReferenceQuery
         IReadOnlyCollection<Guid> farmIds,
         CancellationToken cancellationToken = default);
 }
+
+public sealed record SystemManagerFarmReference(
+    Guid TenantId,
+    Guid FarmId,
+    string Code,
+    string Name,
+    string? Address,
+    decimal? AreaHectares);
 
 public sealed record FarmAssignmentReference(
     Guid FarmId,

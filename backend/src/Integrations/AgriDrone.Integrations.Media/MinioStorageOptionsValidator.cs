@@ -37,6 +37,11 @@ internal sealed class MinioStorageOptionsValidator
             failures.Add("ObjectStorage:Bucket is required.");
         }
 
+        if (string.IsNullOrWhiteSpace(options.Region))
+        {
+            failures.Add("ObjectStorage:Region is required for multipart signing.");
+        }
+
         if (string.IsNullOrWhiteSpace(options.AccessKey))
         {
             failures.Add("ObjectStorage:AccessKey is required.");

@@ -6,10 +6,9 @@ using AgriDrone.Modules.Missions.Application
 using AgriDrone.Modules.Missions.Domain.Missions;
 using AgriDrone.SharedInfrastructure.Auditing;
 using AgriDrone.SharedKernel.Application;
+using AgriDrone.SharedKernel.Application.Abstractions.Authorization;
 using AgriDrone.SharedKernel.Application
     .Abstractions.Execution;
-using AgriDrone.Modules.Missions.Application
-    .Abstractions.Processing;
 using MediatR;
 
 namespace AgriDrone.Modules.Missions.Application
@@ -21,7 +20,7 @@ internal sealed class FinalizeMissionUploadCommandHandler(
     IMissionsUnitOfWork unitOfWork,
     IAuditWriter auditWriter,
     IExecutionContext executionContext,
-    IMissionProcessingQueue processingQueue,
+    ISystemManagerAccessService managerAccessService,
     TimeProvider timeProvider)
     : IRequestHandler<
         FinalizeMissionUploadCommand,
@@ -37,6 +36,13 @@ internal sealed class FinalizeMissionUploadCommandHandler(
                 MissionError.CurrentUserRequired());
         }
 
+        var access = await managerAccessService.ResolveFarmAccessAsync(
+            request.FarmId, cancellationToken);
+        if (!access.IsAllowed || access.TenantId != request.TenantId ||
+            access.FarmId != request.FarmId)
+            return Result.Failure<FinalizeMissionUploadResult>(AppError.Forbidden(
+                "MissionUpload.FarmAccessDenied", "The manager is not assigned to this Farm."));
+
         var mission = await missionRepository.GetByIdAsync(
             request.MissionId,
             request.TenantId,
@@ -48,6 +54,11 @@ internal sealed class FinalizeMissionUploadCommandHandler(
             return Result.Failure<FinalizeMissionUploadResult>(
                 MissionError.NotFound(request.MissionId));
         }
+
+        if (mission.SurveyOrderId is null)
+            return Result.Failure<FinalizeMissionUploadResult>(
+                AppError.Conflict("MissionUpload.MissionNotOrderBound",
+                    "Legacy Missions cannot finalize uploads."));
 
         if (mission.Status != MissionStatus.Uploading)
         {
@@ -73,56 +84,20 @@ internal sealed class FinalizeMissionUploadCommandHandler(
             now,
             cancellationToken);
 
-        if (readiness.HasActiveUploadSessions)
+        var errors = MissionUploadReadinessPolicy.Evaluate(
+            mission,
+            readiness);
+
+        if (errors.Count > 0)
         {
             return Result.Failure<FinalizeMissionUploadResult>(
-                FinalizeMissionUploadError
-                    .ActiveUploadSessionsExist());
+                errors[0]);
         }
 
-        var acceptedMediaCount = mission.MissionType switch
-        {
-            MissionType.Mapping =>
-                readiness.RawImageCount,
-
-            MissionType.HealthInspection =>
-                readiness.RawImageCount +
-                readiness.RawVideoCount,
-
-            _ => 0
-        };
-
-        if (acceptedMediaCount < 1)
-        {
-            return Result.Failure<FinalizeMissionUploadResult>(
-                FinalizeMissionUploadError
-                    .RequiredMediaMissing(mission.MissionType));
-        }
-
-        if (!readiness.HasTelemetryImport ||
-            readiness.ImportedPointCount < 2)
-        {
-            return Result.Failure<FinalizeMissionUploadResult>(
-                FinalizeMissionUploadError.TelemetryMissing());
-        }
-
-        if (readiness.ImportedPointCount !=
-            readiness.PersistedPointCount)
-        {
-            return Result.Failure<FinalizeMissionUploadResult>(
-                FinalizeMissionUploadError.TelemetryInconsistent(
-                    readiness.ImportedPointCount,
-                    readiness.PersistedPointCount));
-        }
-
-        if (mission.FlightRoute is null ||
-            mission.FlightRoute.IsEmpty ||
-            mission.FlightRoute.NumPoints < 2 ||
-            mission.FlightRoute.SRID != 4326)
-        {
-            return Result.Failure<FinalizeMissionUploadResult>(
-                FinalizeMissionUploadError.FlightRouteMissing());
-        }
+        var acceptedMediaCount =
+        MissionUploadReadinessPolicy.GetAcceptedMediaCount(
+            mission,
+            readiness);
 
         var previousStatus = mission.Status;
 
@@ -146,13 +121,6 @@ internal sealed class FinalizeMissionUploadCommandHandler(
             return Result.Failure<FinalizeMissionUploadResult>(
                 FinalizeMissionUploadError.ConcurrentUpdate());
         }
-
-        await processingQueue.EnqueueAsync(
-            new MissionProcessingWorkItem(
-                mission.TenantId,
-                mission.FarmId,
-                mission.Id),
-            cancellationToken);
 
         return Result.Success(
             new FinalizeMissionUploadResult(

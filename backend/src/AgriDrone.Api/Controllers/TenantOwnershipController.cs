@@ -2,6 +2,7 @@ using AgriDrone.Api.Contracts.TenantMembership;
 using AgriDrone.SharedInfrastructure.Authorization;
 using AgriDrone.Modules.Identity.Application.Features.TransferTenantOwnership;
 using AgriDrone.SharedInfrastructure.Http;
+using AgriDrone.Api.Legacy;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -20,6 +21,9 @@ public sealed class TenantOwnershipController(ISender sender)
     /// tenant. Owner cũ được hạ xuống Tenant Admin trong cùng transaction.
     /// </remarks>
     [HttpPost("transfer-ownership")]
+    [LegacyEndpoint(
+        "tenant-ownership.transfer",
+        "TenantOwner replacement must be coordinated through the approved customer-account workflow.")]
     public async Task<IResult> TransferOwnership(
         [FromBody] TransferTenantOwnershipRequest request,
         CancellationToken cancellationToken)

@@ -35,6 +35,13 @@ internal sealed class PreviewTenantInvitationQueryHandler(
                 TenantInvitationError.InvalidOrExpired());
         }
 
+        if (invitation.Purpose != TenantInvitationPurpose.OwnerProvisioning ||
+            invitation.Role != TenantMemberRole.Owner)
+        {
+            return Result.Failure<PreviewTenantInvitationResponse>(
+                TenantInvitationError.InvalidOrExpired());
+        }
+
         var tenant = await tenantRepository.GetByIdIgnoreStatusAsync(
             invitation.TenantId,
             cancellationToken);

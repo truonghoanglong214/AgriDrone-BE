@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using AgriDrone.IntegrationContracts.Farms;
 using AgriDrone.Modules.Missions.Application.Abstractions.Missions;
 using AgriDrone.Modules.Missions.Domain.Drones;
@@ -64,7 +64,6 @@ internal sealed class CreateMissionCommandHandler(
 
         var drone = await droneRepository.GetByIdAsync(
             request.DroneId,
-            tenantId,
             cancellationToken);
 
         if (drone is null)

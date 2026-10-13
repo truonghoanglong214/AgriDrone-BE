@@ -1,13 +1,16 @@
+using AgriDrone.Api.Legacy;
+using AgriDrone.Api.Surveys;
+using AgriDrone.Api.Swagger;
 using AgriDrone.Database;
 using AgriDrone.Integrations.Email;
 using AgriDrone.Integrations.Media;
+using AgriDrone.Integrations.Media.Telemetry;
 using AgriDrone.Modules.Farms;
-using AgriDrone.Modules.FieldTasks;
-using AgriDrone.Modules.Harvests;
 using AgriDrone.Modules.Identity;
 using AgriDrone.Modules.Missions;
 using AgriDrone.Modules.Notifications;
 using AgriDrone.Modules.Plants;
+using AgriDrone.Modules.Surveys;
 using AgriDrone.SharedInfrastructure.Authentication;
 using AgriDrone.SharedInfrastructure.Authorization;
 using AgriDrone.SharedInfrastructure.ExceptionHandling;
@@ -18,33 +21,25 @@ using AgriDrone.SharedInfrastructure.Validation;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.OpenApi;
 using System.Reflection;
-using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services
-    .AddControllers()
-    .AddJsonOptions(options =>
-    {
-        options.JsonSerializerOptions.Converters.Add(
-            new JsonStringEnumConverter(
-                namingPolicy: null,
-                allowIntegerValues: false));
-    });
+builder.Services.AddControllers();
 
-builder.Services.ConfigureHttpJsonOptions(options =>
-{
-    options.SerializerOptions.Converters.Add(
-        new JsonStringEnumConverter(
-            namingPolicy: null,
-            allowIntegerValues: false));
-});
+builder.Services
+    .AddOptions<LegacyFeaturesOptions>()
+    .Bind(builder.Configuration.GetSection(
+        LegacyFeaturesOptions.SectionName));
 
 // Swagger
 builder.Services.AddEndpointsApiExplorer();
 
 builder.Services.AddSwaggerGen(options =>
 {
+    options.OperationFilter<LegacyEndpointOperationFilter>();
+    options.OperationFilter<AllowAnonymousOperationFilter>();
+    options.OperationFilter<SurveyPaymentCallbackOperationFilter>();
+
     var xmlFileName =
         $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
     var xmlFilePath = Path.Combine(
@@ -81,6 +76,7 @@ builder.Services.AddCors(options =>
     {
         policy
             .WithOrigins("http://localhost:5173")
+            .AllowCredentials()
             .AllowAnyHeader()
             .AllowAnyMethod();
     });
@@ -90,22 +86,31 @@ builder.Services.AddCors(options =>
 builder.Services
     .AddEmailIntegration(builder.Configuration)
     .AddMediaIntegration(builder.Configuration)
+    .AddTelemetryNormalization(builder.Configuration)
     .AddAgriDroneDatabase(builder.Configuration)
     .AddFarmsModule(builder.Configuration)
-    .AddFieldTasksModule(builder.Configuration)
-    .AddHarvestsModule(builder.Configuration)
     .AddIdentityModule(builder.Configuration)
     .AddMissionsModule(builder.Configuration)
     .AddNotificationsModule(builder.Configuration)
     .AddPlantsModule(builder.Configuration)
+    .AddSurveysModule(builder.Configuration)
     .AddIntegrationMessagingFoundation(builder.Configuration)
     .AddMappingPublicationPersistence(builder.Configuration)
+    .AddSurveyResultPublicationPersistence(builder.Configuration)
+    .AddSurveyApprovalPersistence(builder.Configuration)
+    .AddSurveyBoundaryVerificationPersistence(builder.Configuration)
+    .AddSurveyAppointmentSchedulingPersistence(builder.Configuration)
+    .AddSurveyPricingConfirmationPersistence(builder.Configuration)
+    .AddSurveyPaymentProcessingPersistence(builder.Configuration)
     .AddAgriDroneHealthChecks()
     .AddExecutionContext()
     .AddJwtAuthentication(builder.Configuration)
     .AddAccessAuthorization()
     .AddValidationPipeline()
     .AddGlobalExceptionHandling();
+
+builder.Services.AddSingleton<IPublicSurveyRequestCallerScope,
+    PublicSurveyRequestCallerScope>();
 
 var app = builder.Build();
 
@@ -115,7 +120,14 @@ if (builder.Configuration.GetValue<bool>(
     await app.Services.MigrateAgriDroneDatabaseAsync();
 }
 
+if (builder.Configuration.GetValue(
+        "DatabaseInitialization:ValidateCoreMasterDataOnStartup",
+        true))
+{
+    await app.Services.ValidateCoreMasterDataAsync();
+}
 await app.Services.BootstrapSystemAdminAsync();
+
 
 app.UseExceptionHandler();
 
@@ -127,10 +139,13 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
+app.UseRouting();
+
 app.UseCors("Frontend");
 
 app.UseAuthentication();
 app.UseExecutionContext();
+app.UseMiddleware<LegacyEndpointGateMiddleware>();
 app.UseAuthorization();
 
 app.MapControllers();

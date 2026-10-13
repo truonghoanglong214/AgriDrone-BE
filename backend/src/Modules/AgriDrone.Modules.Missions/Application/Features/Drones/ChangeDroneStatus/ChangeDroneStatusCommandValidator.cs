@@ -9,11 +9,12 @@ internal sealed class ChangeDroneStatusCommandValidator
 {
     public ChangeDroneStatusCommandValidator()
     {
-        RuleFor(command => command.TenantId)
-            .NotEmpty();
-
         RuleFor(command => command.DroneId)
             .NotEmpty();
+
+        RuleFor(command => command.ExpectedVersion)
+            .GreaterThan(0u)
+            .When(command => command.ExpectedVersion.HasValue);
 
         RuleFor(command => command.TargetStatus)
             .Must(status =>
@@ -23,16 +24,15 @@ internal sealed class ChangeDroneStatusCommandValidator
                     DroneStatus.Inactive or
                     DroneStatus.Retired)
             .WithMessage(
-                "Only Available, Maintenance, Inactive " +
-                "or Retired are supported.");
+                "Only Available, Maintenance, Inactive and Retired are supported.");
+
+        RuleFor(command => command.Reason).MaximumLength(1000);
 
         RuleFor(command => command)
             .Must(command =>
-                command.TargetStatus ==
-                    DroneStatus.Available ||
+                command.TargetStatus == DroneStatus.Available ||
                 !command.NextMaintenanceAt.HasValue)
             .WithMessage(
-                "NextMaintenanceAt can only be supplied " +
-                "when changing the drone to Available.");
+                "NextMaintenanceAt can only be supplied when completing maintenance.");
     }
 }

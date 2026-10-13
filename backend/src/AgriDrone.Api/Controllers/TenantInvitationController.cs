@@ -1,8 +1,6 @@
 using AgriDrone.Api.Contracts.TenantInvitations;
 using AgriDrone.SharedInfrastructure.Authorization;
 using AgriDrone.Modules.Identity.Application.Features.AcceptTenantInvitation;
-using AgriDrone.Modules.Identity.Application.Features.InviteTenantAdmin;
-using AgriDrone.Modules.Identity.Application.Features.InviteTenantMember;
 using AgriDrone.Modules.Identity.Application.Features.PreviewTenantInvitation;
 using AgriDrone.SharedInfrastructure.Http;
 using MediatR;
@@ -33,51 +31,6 @@ public sealed class TenantInvitationController(ISender sender) : ControllerBase
         return result.ToHttpResult(
             HttpContext,
             response => Results.Ok(response));
-    }
-
-    /// <summary>Mời Tenant Admin vào tenant hiện tại.</summary>
-    /// <remarks>
-    /// Tenant Owner tạo lời mời có thời hạn cho email được chỉ định. Lời mời dùng
-    /// để tạo hoặc liên kết tài khoản với membership Tenant Admin.
-    /// </remarks>
-    [HttpPost("/current/invitations/tenant-admin")]
-    [Authorize(Policy = AccessAuthorizationPolicies.TenantOwner)]
-    public async Task<IResult> InviteTenantAdmin(
-        [FromBody] InviteTenantAdminRequest request,
-        CancellationToken cancellationToken)
-    {
-        var result = await sender.Send(
-            new InviteTenantAdminCommand(request.Email),
-            cancellationToken);
-
-        return result.ToHttpResult(
-            HttpContext,
-            response => Results.Json(
-                response,
-                statusCode: StatusCodes.Status201Created));
-    }
-
-    /// <summary>Mời Member vào tenant hiện tại.</summary>
-    /// <remarks>
-    /// Tenant Admin hoặc Owner tạo lời mời có thời hạn. Khi chấp nhận, người
-    /// nhận trở thành Member của tenant nhưng chưa có quyền trên Farm nào cho
-    /// đến khi được gán Farm Membership riêng.
-    /// </remarks>
-    [HttpPost("/api/tenants/current/invitations/member")]
-    [Authorize(Policy = AccessAuthorizationPolicies.TenantAdmin)]
-    public async Task<IResult> InviteTenantMember(
-        [FromBody] InviteTenantMemberRequest request,
-        CancellationToken cancellationToken)
-    {
-        var result = await sender.Send(
-            new InviteTenantMemberCommand(request.Email),
-            cancellationToken);
-
-        return result.ToHttpResult(
-            HttpContext,
-            response => Results.Json(
-                response,
-                statusCode: StatusCodes.Status201Created));
     }
 
     /// <summary>Chấp nhận lời mời tham gia tenant.</summary>

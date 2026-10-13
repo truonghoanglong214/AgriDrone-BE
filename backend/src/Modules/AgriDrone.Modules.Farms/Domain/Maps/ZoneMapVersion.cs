@@ -43,6 +43,8 @@ public sealed class ZoneMapVersion : AggregateRoot
 
     public Guid ZoneId { get; private set; }
 
+    public Guid? FarmBaseMapVersionId { get; private set; }
+
     public Guid? SourceMissionId { get; private set; }
 
     public Guid? SourceApprovalId { get; private set; }
@@ -68,6 +70,8 @@ public sealed class ZoneMapVersion : AggregateRoot
     public DateTimeOffset CreatedAt { get; private set; }
 
     public FarmZone Zone { get; private set; } = null!;
+
+    public FarmBaseMapVersion? FarmBaseMapVersion { get; private set; }
 
     public static ZoneMapVersion CreateDraft(
         Guid id,

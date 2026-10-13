@@ -16,7 +16,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Application\Features\RegisterUser\" />
     <Folder Include="Application\Integration\" />
   </ItemGroup>
 </Project>

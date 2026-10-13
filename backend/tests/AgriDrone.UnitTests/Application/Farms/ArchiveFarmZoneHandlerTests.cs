@@ -38,15 +38,15 @@ public sealed class ArchiveFarmZoneHandlerTests
         Assert.Equal(1, fixture.ZoneRepository.UpdateCallCount);
         Assert.Equal(1, fixture.UnitOfWork.SaveCallCount);
         Assert.Equal(1, fixture.AuditWriter.UserActionCallCount);
-        Assert.Equal(TenantAccessLevel.Owner, fixture.AccessService.RequiredAccess);
+        Assert.Equal(fixture.Farm.Id, fixture.AccessService.FarmId);
     }
 
     [Fact]
     public async Task ArchiveZoneRejectsNonOwner()
     {
         var fixture = CreateFixture();
-        fixture.AccessService.Decision = AccessDecision.Deny(
-            AccessDenialReason.TenantRoleInsufficient);
+        fixture.AccessService.Decision = SystemManagerFarmAccess.Denied(
+            "The manager assignment is not active.");
 
         var result = await fixture.ZoneHandler.Handle(
             new ArchiveZoneCommand(
@@ -67,8 +67,7 @@ public sealed class ArchiveFarmZoneHandlerTests
         var fixture = CreateFixture();
         fixture.DependencyQuery.ZoneDependencies = new(
             ActiveZoneCount: 0,
-            ActiveMissionCount: 1,
-            OpenFieldTaskCount: 2);
+            ActiveMissionCount: 1);
 
         var result = await fixture.ZoneHandler.Handle(
             new ArchiveZoneCommand(
@@ -101,7 +100,7 @@ public sealed class ArchiveFarmZoneHandlerTests
         Assert.Equal(1, fixture.FarmRepository.UpdateCallCount);
         Assert.Equal(1, fixture.UnitOfWork.SaveCallCount);
         Assert.Equal(1, fixture.AuditWriter.UserActionCallCount);
-        Assert.Equal(TenantAccessLevel.Owner, fixture.AccessService.RequiredAccess);
+        Assert.Equal(fixture.Farm.Id, fixture.AccessService.FarmId);
     }
 
     [Fact]
@@ -110,8 +109,7 @@ public sealed class ArchiveFarmZoneHandlerTests
         var fixture = CreateFixture();
         fixture.DependencyQuery.FarmDependencies = new(
             ActiveZoneCount: 1,
-            ActiveMissionCount: 0,
-            OpenFieldTaskCount: 0);
+            ActiveMissionCount: 0);
 
         var result = await fixture.FarmHandler.Handle(
             new ArchiveFarmCommand(
@@ -175,7 +173,9 @@ public sealed class ArchiveFarmZoneHandlerTests
         var dependencyQuery = new FakeArchiveDependencyQuery();
         var auditWriter = new FakeAuditWriter();
         var executionContext = new FakeExecutionContext(tenantId, actorId);
-        var accessService = new FakeEffectiveAccessService();
+        var accessService = new FakeSystemManagerAccessService(
+            tenantId,
+            farm.Id);
         var timeProvider = new FixedTimeProvider(Now);
 
         return new Fixture(
@@ -220,7 +220,7 @@ public sealed class ArchiveFarmZoneHandlerTests
         FakeFarmUnitOfWork UnitOfWork,
         FakeArchiveDependencyQuery DependencyQuery,
         FakeAuditWriter AuditWriter,
-        FakeEffectiveAccessService AccessService);
+        FakeSystemManagerAccessService AccessService);
 
     private sealed class FakeFarmRepository(Farm farm) : IFarmRepository
     {
@@ -325,10 +325,10 @@ public sealed class ArchiveFarmZoneHandlerTests
         : IFarmArchiveDependencyQuery
     {
         public ArchiveDependencySummary ZoneDependencies { get; set; } =
-            new(0, 0, 0);
+            new(0, 0);
 
         public ArchiveDependencySummary FarmDependencies { get; set; } =
-            new(0, 0, 0);
+            new(0, 0);
 
         public int FarmCallCount { get; private set; }
 
@@ -380,37 +380,24 @@ public sealed class ArchiveFarmZoneHandlerTests
             throw new NotSupportedException();
     }
 
-    private sealed class FakeEffectiveAccessService : IEffectiveAccessService
+    private sealed class FakeSystemManagerAccessService(
+        Guid tenantId,
+        Guid assignedFarmId) : ISystemManagerAccessService
     {
-        public AccessDecision Decision { get; set; } = AccessDecision.Allow();
-        public TenantAccessLevel? RequiredAccess { get; private set; }
+        public SystemManagerFarmAccess Decision { get; set; } =
+            SystemManagerFarmAccess.Allowed(
+                tenantId,
+                assignedFarmId,
+                Guid.NewGuid());
+        public Guid? FarmId { get; private set; }
 
-        public Task<AccessDecision> CheckTenantAsync(
-            Guid actorId,
-            Guid tenantId,
-            TenantAccessLevel requiredAccess,
+        public Task<SystemManagerFarmAccess> ResolveFarmAccessAsync(
+            Guid farmId,
             CancellationToken cancellationToken = default)
         {
-            RequiredAccess = requiredAccess;
+            FarmId = farmId;
             return Task.FromResult(Decision);
         }
-
-        public Task<AccessDecision> CheckFarmAsync(
-            Guid actorId,
-            Guid tenantId,
-            Guid farmId,
-            FarmAccessLevel requiredAccess,
-            CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
-
-        public Task<AccessDecision> CheckZoneAsync(
-            Guid actorId,
-            Guid tenantId,
-            Guid farmId,
-            Guid zoneId,
-            FarmAccessLevel requiredAccess,
-            CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
     }
 
     private sealed class FakeExecutionContext(Guid tenantId, Guid actorId)

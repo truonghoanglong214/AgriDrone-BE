@@ -85,6 +85,85 @@ public sealed class TenantInvitationInactiveTests
         Assert.Empty(emailSender.SentMessages);
     }
 
+    [Fact]
+    public async Task AcceptInvitationRejectsLegacyStaffInvitation()
+    {
+        var tenant = CreateTenant(GeneralStatus.Active);
+        var invitation = TenantInvitation.Create(
+            tenant.Id,
+            "admin@example.com",
+            TenantMemberRole.TenantAdmin,
+            TenantInvitationPurpose.Membership,
+            StubInvitationTokenService.TokenHash,
+            Guid.NewGuid(),
+            Now.AddHours(1),
+            Now.AddMinutes(-10));
+        var membershipRepository = new StubTenantMembershipRepository();
+        var handler = new AcceptTenantInvitationCommandHandler(
+            new StubInvitationTokenService(),
+            new StubTenantInvitationRepository(invitation),
+            new StubTenantRepository(tenant),
+            new StubUserRepository(),
+            membershipRepository,
+            new StubPasswordService(),
+            new StubIdentityIntegrationOutbox(),
+            new StubExecutionContext(),
+            new FixedTimeProvider(Now),
+            new StubIdentityUnitOfWork());
+
+        var result = await handler.Handle(
+            new AcceptTenantInvitationCommand(
+                StubInvitationTokenService.PlainTextToken,
+                null,
+                null,
+                null),
+            CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("TenantInvitation.InvalidOrExpired", result.Error.Code);
+        Assert.False(membershipRepository.AddCalled);
+    }
+
+    [Fact]
+    public async Task DeliverInvitationEmailSkipsLegacyStaffInvitation()
+    {
+        var tenant = CreateTenant(GeneralStatus.Active);
+        var invitation = TenantInvitation.Create(
+            tenant.Id,
+            "admin@example.com",
+            TenantMemberRole.TenantAdmin,
+            TenantInvitationPurpose.Membership,
+            StubInvitationTokenService.TokenHash,
+            Guid.NewGuid(),
+            Now.AddHours(1),
+            Now.AddMinutes(-10));
+        var emailSender = new StubEmailSender();
+        var delivery = new TenantInvitationEmailDelivery(
+            new StubTenantInvitationRepository(invitation),
+            new StubTenantRepository(tenant),
+            new StubInvitationTokenService(),
+            emailSender,
+            Options.Create(new TenantInvitationOptions
+            {
+                AcceptUrl = "https://example.test/invitations/accept",
+                ExpirationHours = 24
+            }),
+            new FixedTimeProvider(Now));
+
+        var result = await delivery.DeliverAsync(
+            tenant.Id,
+            invitation.Id,
+            StubInvitationTokenService.PlainTextToken,
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.False(result.Value.Sent);
+        Assert.Equal(
+            "Legacy staff invitations are retired.",
+            result.Value.SkipReason);
+        Assert.Empty(emailSender.SentMessages);
+    }
+
     private static Tenant CreateTenant(GeneralStatus status)
     {
         var tenant = Tenant.Create(
@@ -105,8 +184,8 @@ public sealed class TenantInvitationInactiveTests
         TenantInvitation.Create(
             tenantId,
             "admin@example.com",
-            TenantMemberRole.TenantAdmin,
-            TenantInvitationPurpose.Membership,
+            TenantMemberRole.Owner,
+            TenantInvitationPurpose.OwnerProvisioning,
             StubInvitationTokenService.TokenHash,
             Guid.NewGuid(),
             Now.AddHours(1),

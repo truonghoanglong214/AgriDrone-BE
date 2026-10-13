@@ -1,10 +1,5 @@
 ﻿using AgriDrone.Api.Contracts.Users;
-using AgriDrone.Api.Contracts.FarmMemberships;
-using AgriDrone.Api.Mapping;
-using AgriDrone.Modules.Identity.Application.Features.GetMyFarmAssignments;
-using AgriDrone.Modules.Identity.Domain.FarmMemberships;
 using AgriDrone.SharedInfrastructure.Authorization;
-using AgriDrone.Modules.Identity.Application.Features.GetTenantUsers;
 using AgriDrone.Modules.Identity.Application.Features.GetUsers;
 using AgriDrone.Modules.Identity.Application.Features.UpdateUser;
 using AgriDrone.Modules.Identity.Application.Features.UpdateUserPassword;
@@ -42,61 +37,6 @@ namespace AgriDrone.Api.Controllers
             return result.ToHttpResult(
                 HttpContext,
                 users => Results.Ok(users));
-        }
-
-        /// <summary>Lấy thành viên của tenant hiện tại.</summary>
-        /// <remarks>
-        /// Trả danh sách người dùng và tenant membership theo tenant trong access
-        /// token. Chỉ Tenant Admin hoặc Owner được phép truy vấn.
-        /// </remarks>
-        [HttpGet("/tenants/current/users")]
-        [Authorize(Policy = AccessAuthorizationPolicies.TenantAdmin)]
-        public async Task<IResult> GetTenantUsers(
-            [FromQuery] GetTenantUserRequest request,
-            CancellationToken cancellationToken)
-        {
-            var query = new GetTenantUsersQuery(
-                request.PageNumber,
-                request.PageSize);
-
-            var result = await sender.Send(query, cancellationToken);
-
-            return result.ToHttpResult(
-                HttpContext,
-                users => Results.Ok(users));
-        }
-
-        /// <summary>Lấy các farm đang được gán cho người dùng hiện tại.</summary>
-        /// <remarks>
-        /// UserId được lấy từ access token và tenant được lấy từ tenant context.
-        /// Mặc định chỉ trả assignment đang Active. Farm đã archive không xuất
-        /// hiện trong kết quả, kể cả khi assignment cũ vẫn còn Active.
-        /// </remarks>
-        [HttpGet("me/farm-assignments")]
-        [Authorize(Policy = AccessAuthorizationPolicies.TenantMember)]
-        public async Task<IResult> GetMyFarmAssignments(
-            [FromQuery] GetMyFarmAssignmentsRequest request,
-            CancellationToken cancellationToken)
-        {
-            FarmMemberRole? role = request.Role switch
-            {
-                FarmMemberRoleValue.Manager => FarmMemberRole.Manager,
-                FarmMemberRoleValue.Worker => FarmMemberRole.Worker,
-                null => null,
-                _ => (FarmMemberRole)(-1)
-            };
-
-            var query = new GetMyFarmAssignmentsQuery(
-                role,
-                request.PageNumber,
-                request.PageSize);
-
-            var result = await sender.Send(query, cancellationToken);
-
-            return result.ToHttpResult(
-                HttpContext,
-                assignments => Results.Ok(
-                    FarmMembershipResponseMapper.ToResponse(assignments)));
         }
 
         /// <summary>Cập nhật hồ sơ người dùng hiện tại.</summary>

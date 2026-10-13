@@ -6,6 +6,7 @@ using AgriDrone.Modules.Missions.Domain.Media;
 using AgriDrone.Modules.Missions.Domain.Missions;
 using AgriDrone.SharedInfrastructure.Auditing;
 using AgriDrone.SharedKernel.Application;
+using AgriDrone.SharedKernel.Application.Abstractions.Authorization;
 using AgriDrone.SharedKernel.Application.Abstractions.Execution;
 using MediatR;
 
@@ -19,6 +20,7 @@ internal sealed class CreateUploadSessionCommandHandler(
     IMissionsUnitOfWork unitOfWork,
     IAuditWriter auditWriter,
     IExecutionContext executionContext,
+    ISystemManagerAccessService managerAccessService,
     TimeProvider timeProvider)
     : IRequestHandler<
         CreateUploadSessionCommand,
@@ -34,6 +36,13 @@ internal sealed class CreateUploadSessionCommandHandler(
                 MissionError.CurrentUserRequired());
         }
 
+        var access = await managerAccessService.ResolveFarmAccessAsync(
+            request.FarmId, cancellationToken);
+        if (!access.IsAllowed || access.TenantId != request.TenantId ||
+            access.FarmId != request.FarmId)
+            return Result.Failure<CreateUploadSessionResult>(AppError.Forbidden(
+                "MediaUpload.FarmAccessDenied", "The manager is not assigned to this Farm."));
+
         var mission = await missionRepository.GetByIdAsync(
             request.MissionId,
             request.TenantId,
@@ -45,6 +54,16 @@ internal sealed class CreateUploadSessionCommandHandler(
             return Result.Failure<CreateUploadSessionResult>(
                 MissionError.NotFound(request.MissionId));
         }
+
+        if (mission.SurveyOrderId is null)
+            return Result.Failure<CreateUploadSessionResult>(
+                MediaUploadError.MissionNotOrderBound());
+
+        if (mission.StartedAt is not DateTimeOffset startedAt ||
+            mission.EndedAt is not DateTimeOffset endedAt ||
+            request.CapturedAt < startedAt || request.CapturedAt > endedAt)
+            return Result.Failure<CreateUploadSessionResult>(
+                MediaUploadError.CaptureOutsideFlight());
 
         if (!AllowsUpload(mission.Status))
         {
@@ -78,6 +97,13 @@ internal sealed class CreateUploadSessionCommandHandler(
                     mission.Version));
         }
 
+        var matchingChecksum = await uploadSessionRepository
+            .GetActiveByChecksumAsync(request.TenantId, request.FarmId,
+                request.MissionId, request.Sha256Checksum, cancellationToken);
+        if (matchingChecksum is not null)
+            return Result.Failure<CreateUploadSessionResult>(
+                MediaUploadError.ChecksumAlreadyActive());
+
         var now = timeProvider.GetUtcNow();
         var mediaAssetId = Guid.NewGuid();
 
@@ -107,7 +133,8 @@ internal sealed class CreateUploadSessionCommandHandler(
             request.Sha256Checksum,
             objectSession.StorageUri,
             now,
-            objectSession.ExpiresAt);
+            objectSession.ExpiresAt,
+            request.CapturedAt);
 
         var previousMissionStatus = mission.Status;
 
@@ -156,6 +183,11 @@ internal sealed class CreateUploadSessionCommandHandler(
             return Result.Failure<CreateUploadSessionResult>(
                 MediaUploadError.OperationAlreadyExists());
         }
+        catch (UploadChecksumConflictException)
+        {
+            return Result.Failure<CreateUploadSessionResult>(
+                MediaUploadError.ChecksumAlreadyActive());
+        }
 
         return Result.Success(
             MapResult(
@@ -177,7 +209,8 @@ internal sealed class CreateUploadSessionCommandHandler(
                 request.MimeType,
                 request.MediaType,
                 request.FileSizeBytes,
-                request.Sha256Checksum))
+                request.Sha256Checksum,
+                request.CapturedAt))
         {
             return Result.Failure<CreateUploadSessionResult>(
                 MediaUploadError.OperationPayloadConflict(

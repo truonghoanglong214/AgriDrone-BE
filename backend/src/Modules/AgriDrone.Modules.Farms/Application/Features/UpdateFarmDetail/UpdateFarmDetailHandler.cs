@@ -1,6 +1,7 @@
 using System.Text.Json;
 using AgriDrone.Modules.Farms.Application.Abstractions.Persistence;
 using AgriDrone.Modules.Farms.Application.Errors;
+using AgriDrone.Modules.Farms.Application.Policies;
 using AgriDrone.Modules.Farms.Domain.Farms;
 using AgriDrone.SharedInfrastructure.Auditing;
 using AgriDrone.SharedKernel.Application;
@@ -17,7 +18,8 @@ internal sealed class UpdateFarmDetailHandler(
     IFarmUnitOfWork unitOfWork,
     IAuditWriter auditWriter,
     IExecutionContext executionContext,
-    IEffectiveAccessService effectiveAccessService,
+    ISystemManagerAccessService managerAccessService,
+    IFarmGeometryPolicy geometryPolicy,
     TimeProvider timeProvider)
     : IRequestHandler<UpdateFarmDetailCommand, Result<UpdateFarmDetailResponse>>
 {
@@ -31,10 +33,13 @@ internal sealed class UpdateFarmDetailHandler(
                 AuthenticationError.CurrentUserRequired());
         }
 
-        if (executionContext.TenantId is not Guid tenantId)
+        var accessDecision = await managerAccessService.ResolveFarmAccessAsync(
+            request.farmId,
+            cancellationToken);
+
+        if (!accessDecision.IsAllowed || accessDecision.TenantId is not Guid tenantId)
         {
-            return Result.Failure<UpdateFarmDetailResponse>(
-                AuthenticationError.CurrentTenantRequired());
+            return Result.Failure<UpdateFarmDetailResponse>(FarmError.AccessDenied());
         }
 
         var farm = await farmRepository.GetByIdAsync(
@@ -47,15 +52,13 @@ internal sealed class UpdateFarmDetailHandler(
             return Result.Failure<UpdateFarmDetailResponse>(FarmError.NotFound());
         }
 
-        var accessDecision = await effectiveAccessService.CheckTenantAsync(
-            actorId,
-            tenantId,
-            TenantAccessLevel.Admin,
-            cancellationToken);
-
-        if (!accessDecision.IsAllowed)
+        var geometryDecision = geometryPolicy.ValidateFarm(
+            request.boundary,
+            request.centerPoint,
+            request.areaHectares);
+        if (geometryDecision.IsFailure)
         {
-            return Result.Failure<UpdateFarmDetailResponse>(FarmError.AccessDenied());
+            return Result.Failure<UpdateFarmDetailResponse>(geometryDecision.Error);
         }
 
         if (farm.Version != request.expectedVersion)

@@ -21,7 +21,7 @@ public sealed record ExecutionContextSnapshot(
     }
 
     public static ExecutionContextSnapshot ForRabbitMq(
-        Guid tenantId,
+        Guid? tenantId,
         Guid? actorId,
         Guid correlationId,
         Guid messageId)

@@ -17,6 +17,10 @@ public sealed class AiProcessingJob : Entity
 
     public Guid? ThresholdProfileId { get; private set; }
 
+    public Guid? HarvestReadinessCriterionId { get; private set; }
+
+    public int? HarvestReadinessCriterionVersionNumber { get; private set; }
+
     public AiJobType JobType { get; private set; }
 
     public AiJobStatus Status { get; private set; }
@@ -52,4 +56,28 @@ public sealed class AiProcessingJob : Entity
     public AiThresholdProfile? ThresholdProfile { get; private set; }
 
     public ICollection<MissionPlantObservation> PlantObservations { get; private set; } = [];
+
+    public void SnapshotHarvestReadinessCriterion(
+        Guid criterionId,
+        int criterionVersionNumber)
+    {
+        DomainGuard.NotEmpty(criterionId);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(
+            criterionVersionNumber);
+
+        if (Status != AiJobStatus.Queued)
+        {
+            throw new InvalidOperationException(
+                "Harvest-readiness criterion can only be snapshotted while the job is queued.");
+        }
+
+        if (HarvestReadinessCriterionId.HasValue)
+        {
+            throw new InvalidOperationException(
+                "Harvest-readiness criterion snapshot is already assigned.");
+        }
+
+        HarvestReadinessCriterionId = criterionId;
+        HarvestReadinessCriterionVersionNumber = criterionVersionNumber;
+    }
 }

@@ -20,6 +20,9 @@ public sealed class InboxMessageConfiguration
                     "ck_inbox_messages_schema_version",
                     "schema_version > 0");
                 tableBuilder.HasCheckConstraint(
+                    "ck_inbox_messages_tenant_scope",
+                    "tenant_id IS NOT NULL OR event_type = 'notification.email-requested.v1'");
+                tableBuilder.HasCheckConstraint(
                     "ck_inbox_messages_status",
                     "status IN ('PROCESSING', 'COMPLETED', 'FAILED')");
                 tableBuilder.HasCheckConstraint(
@@ -56,8 +59,7 @@ public sealed class InboxMessageConfiguration
 
         builder.Property(message => message.TenantId)
             .HasColumnName("tenant_id")
-            .HasColumnType("uuid")
-            .IsRequired();
+            .HasColumnType("uuid");
 
         builder.Property(message => message.CorrelationId)
             .HasColumnName("correlation_id")

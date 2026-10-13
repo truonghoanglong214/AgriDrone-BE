@@ -32,7 +32,11 @@ public sealed class MediaUploadSession : Entity
 
     public string ExpectedChecksum { get; private set; } = null!;
 
+    public DateTimeOffset? CapturedAt { get; private set; }
+
     public string StorageUri { get; private set; } = null!;
+
+    public string? MultipartUploadId { get; private set; }
 
     public MediaUploadSessionStatus Status { get; private set; }
 
@@ -58,7 +62,8 @@ public sealed class MediaUploadSession : Entity
         string expectedChecksum,
         string storageUri,
         DateTimeOffset createdAt,
-        DateTimeOffset expiresAt)
+        DateTimeOffset expiresAt,
+        DateTimeOffset? capturedAt = null)
     {
         DomainGuard.NotEmpty(tenantId);
         DomainGuard.NotEmpty(farmId);
@@ -69,6 +74,8 @@ public sealed class MediaUploadSession : Entity
 
         DomainGuard.Utc(createdAt);
         DomainGuard.Utc(expiresAt);
+        if (capturedAt.HasValue)
+            DomainGuard.Utc(capturedAt.Value);
 
         ArgumentException.ThrowIfNullOrWhiteSpace(fileName);
         ArgumentException.ThrowIfNullOrWhiteSpace(mimeType);
@@ -150,6 +157,7 @@ public sealed class MediaUploadSession : Entity
             FileSizeBytes = fileSizeBytes,
             ChecksumAlgorithm = "SHA256",
             ExpectedChecksum = normalizedChecksum,
+            CapturedAt = capturedAt,
             StorageUri = storageUri,
             Status = MediaUploadSessionStatus.Pending,
             CreatedAt = createdAt,
@@ -163,7 +171,8 @@ public sealed class MediaUploadSession : Entity
         string mimeType,
         MediaType mediaType,
         long fileSizeBytes,
-        string expectedChecksum)
+        string expectedChecksum,
+        DateTimeOffset? capturedAt = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(fileName);
         ArgumentException.ThrowIfNullOrWhiteSpace(mimeType);
@@ -179,6 +188,7 @@ public sealed class MediaUploadSession : Entity
                    StringComparison.OrdinalIgnoreCase) &&
                MediaType == mediaType &&
                FileSizeBytes == fileSizeBytes &&
+               CapturedAt == capturedAt &&
                string.Equals(
                    ExpectedChecksum,
                    expectedChecksum.Trim(),
@@ -222,6 +232,20 @@ public sealed class MediaUploadSession : Entity
         UpdatedAt = changedAt;
     }
 
+    public void BeginMultipart(string uploadId, DateTimeOffset changedAt)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(uploadId);
+        DomainGuard.Utc(changedAt);
+        if (Status != MediaUploadSessionStatus.Pending || IsExpiredAt(changedAt))
+            throw new InvalidOperationException("Multipart upload requires an active pending session.");
+        if (MultipartUploadId is not null)
+            throw new InvalidOperationException("Multipart upload has already started.");
+        if (uploadId.Length > 512)
+            throw new ArgumentOutOfRangeException(nameof(uploadId));
+        MultipartUploadId = uploadId;
+        UpdatedAt = changedAt;
+    }
+
     public void BeginVerification(DateTimeOffset changedAt)
     {
         DomainGuard.Utc(changedAt);
@@ -239,6 +263,17 @@ public sealed class MediaUploadSession : Entity
         }
 
         Status = MediaUploadSessionStatus.Verifying;
+        UpdatedAt = changedAt;
+    }
+
+    public void SetCapturedAt(DateTimeOffset capturedAt, DateTimeOffset changedAt)
+    {
+        DomainGuard.Utc(capturedAt);
+        DomainGuard.Utc(changedAt);
+        if (Status != MediaUploadSessionStatus.Pending || CapturedAt.HasValue)
+            throw new InvalidOperationException(
+                "Capture time can only be set once on a pending upload session.");
+        CapturedAt = capturedAt;
         UpdatedAt = changedAt;
     }
 

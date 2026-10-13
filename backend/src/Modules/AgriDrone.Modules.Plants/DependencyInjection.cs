@@ -1,16 +1,23 @@
 using AgriDrone.IntegrationContracts.Farms;
+using AgriDrone.IntegrationContracts.Plants;
 using AgriDrone.Modules.Plants.Application.Abstractions.Persistence;
 using AgriDrone.Modules.Plants.Application.Abstractions.Queries;
+using AgriDrone.Modules.Plants.Domain.Changes;
 using AgriDrone.Modules.Plants.Domain.Conditions;
 using AgriDrone.Modules.Plants.Domain.Diseases;
+using AgriDrone.Modules.Plants.Domain.DiseaseZones;
 using AgriDrone.Modules.Plants.Domain.Mapping;
 using AgriDrone.Modules.Plants.Domain.Plants;
 using AgriDrone.Modules.Plants.Domain.Scans;
+using AgriDrone.Modules.Plants.Domain.Recommendations;
 using AgriDrone.Modules.Plants.Domain.Verifications;
+using AgriDrone.Modules.Plants.Infrastructure.Health;
+using AgriDrone.Modules.Plants.Infrastructure.Initialization;
 using AgriDrone.Modules.Plants.Infrastructure.Persistence;
 using AgriDrone.Modules.Plants.Infrastructure.Queries;
 using AgriDrone.Modules.Plants.Infrastructure.Repositories;
 using AgriDrone.SharedInfrastructure.Auditing;
+using AgriDrone.SharedInfrastructure.Caching;
 using AgriDrone.SharedInfrastructure.Persistence;
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
@@ -42,9 +49,20 @@ public static class DependencyInjection
                     .MapEnum<PlantChangeType>("plant_change_type", "system", translator)
                     .MapEnum<PlantChangeSource>("plant_change_source", "system", translator)
                     .MapEnum<ReviewStatus>("review_status", "system", translator)
+                    .MapEnum<PlantInventoryChangeKind>(
+                        "plant_inventory_change_kind",
+                        "system",
+                        translator)
+                    .MapEnum<PlantInventoryChangeStatus>(
+                        "plant_inventory_change_status",
+                        "system",
+                        translator)
                     .MapEnum<ScanSource>("scan_source", "system", translator)
                     .MapEnum<ScanMediaRole>("scan_media_role", "system", translator)
                     .MapEnum<FindingSource>("finding_source", "system", translator)
+                    .MapEnum<DiseaseZoneStatus>("disease_zone_status", "system", translator)
+                    .MapEnum<DiseaseZoneMembershipKind>("disease_zone_membership_kind", "system", translator)
+                    .MapEnum<TreatmentRecommendationStatus>("treatment_recommendation_status", "system", translator)
                     .MapEnum<VerificationDecision>(
                         "verification_decision",
                         "system",
@@ -60,6 +78,12 @@ public static class DependencyInjection
 
         services.AddScoped<IPlantsUnitOfWork>(serviceProvider =>
             serviceProvider.GetRequiredService<PlantsDbContext>());
+        services.AddScoped<HealthLevelSeedValidator>();
+
+        services.AddHealthChecks()
+            .AddCheck<HealthLevelSeedReadinessHealthCheck>(
+                "health-level-seeds",
+                tags: ["ready"]);
 
         var assembly = typeof(DependencyInjection).Assembly;
 
@@ -69,9 +93,18 @@ public static class DependencyInjection
             assembly,
             includeInternalTypes: true);
 
-        services.AddScoped<IPlantArchiveReferenceQuery,PlantArchiveReferenceQuery>();
+        services.AddScoped<IHealthLevelReferenceQuery, HealthLevelReferenceQuery>();
+        services.AddScoped<IPlantReferenceSource, PlantReferenceSource>();
         services.AddScoped<IHealthLevelQueries, HealthLevelQuery>();
+        services.AddScoped<IPlantConditionQueries, PlantConditionQueries>();
+        services.AddScoped<ITreatmentRecommendationQueries, TreatmentRecommendationQueries>();
         services.AddScoped<IPlantConditionRepository, PlantConditionRepository>();
+        services.AddScoped<IPlantRepository, PlantRepository>();
+        services.AddScoped<
+            IPlantInventoryChangeReportRepository,
+            PlantInventoryChangeReportRepository>();
+        services.AddScoped<IDiseaseZoneRepository, DiseaseZoneRepository>();
+        services.AddScoped<ITreatmentRecommendationRepository, TreatmentRecommendationRepository>();
 
         return services;
     }

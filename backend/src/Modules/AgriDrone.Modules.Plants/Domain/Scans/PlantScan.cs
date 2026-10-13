@@ -17,11 +17,13 @@ public sealed class PlantScan : Entity
 
     public Guid? MissionId { get; private set; }
 
+    public Guid? SurveyOrderId { get; private set; }
+
+    public Guid? SurveyResultId { get; private set; }
+
     public Guid? AiJobId { get; private set; }
 
     public Guid? VerificationOfScanId { get; private set; }
-
-    public Guid? SourceTaskId { get; private set; }
 
     public Guid? ClientOperationId { get; private set; }
 
@@ -56,4 +58,20 @@ public sealed class PlantScan : Entity
     public ICollection<ConditionDetection> ConditionDetections { get; private set; } = [];
 
     public ICollection<ScanVerification> Verifications { get; private set; } = [];
+
+    public void AttachToSurveyResult(Guid surveyOrderId, Guid surveyResultId)
+    {
+        DomainGuard.NotEmpty(surveyOrderId);
+        DomainGuard.NotEmpty(surveyResultId);
+
+        if (SurveyOrderId.HasValue &&
+            (SurveyOrderId != surveyOrderId || SurveyResultId != surveyResultId))
+        {
+            throw new InvalidOperationException(
+                "The plant scan is already attached to another survey result.");
+        }
+
+        SurveyOrderId = surveyOrderId;
+        SurveyResultId = surveyResultId;
+    }
 }

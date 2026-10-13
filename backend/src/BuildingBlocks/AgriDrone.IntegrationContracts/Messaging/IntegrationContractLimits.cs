@@ -6,6 +6,8 @@ public static class IntegrationContractLimits
 
     public const int MaximumEventTypeLength = 128;
 
+    public const int MaximumSourceSystemLength = 100;
+
     public const int MaximumAlgorithmVersionLength = 128;
 
     public const int MaximumParameterCount = 64;

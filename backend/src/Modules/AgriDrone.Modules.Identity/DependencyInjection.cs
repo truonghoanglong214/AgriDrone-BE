@@ -1,16 +1,21 @@
+using AgriDrone.IntegrationContracts.Identity;
 using AgriDrone.IntegrationContracts.Messaging;
 using AgriDrone.IntegrationContracts.Notifications;
 using AgriDrone.Modules.Identity.Application.Abstractions.Messaging;
 using AgriDrone.Modules.Identity.Application.Abstractions.Persistence;
 using AgriDrone.Modules.Identity.Application.Abstractions.Queries;
 using AgriDrone.Modules.Identity.Application.Abstractions.Services;
+using AgriDrone.Modules.Identity.Application.Features.SystemManagers.EmailDelivery;
 using AgriDrone.Modules.Identity.Application.Invitations.Creation;
 using AgriDrone.Modules.Identity.Application.Invitations.EmailDelivery;
 using AgriDrone.Modules.Identity.Application.Options;
 using AgriDrone.Modules.Identity.Application.PasswordReset.EmailDelivery;
+using AgriDrone.Modules.Identity.Application.Provisioning;
 using AgriDrone.Modules.Identity.Domain.FarmMemberships;
 using AgriDrone.Modules.Identity.Domain.PasswordResetTokens;
 using AgriDrone.Modules.Identity.Domain.Roles;
+using AgriDrone.Modules.Identity.Domain.SystemManagerInvitations;
+using AgriDrone.Modules.Identity.Domain.SystemManagers;
 using AgriDrone.Modules.Identity.Domain.TenantInvitations;
 using AgriDrone.Modules.Identity.Domain.Tenants;
 using AgriDrone.Modules.Identity.Domain.Users;
@@ -53,11 +58,6 @@ public static class DependencyInjection
             .ValidateOnStart();
 
         services
-            .AddOptions<TenantRegistrationOptions>()
-            .Bind(configuration.GetSection(TenantRegistrationOptions.SectionName))
-            .ValidateOnStart();
-
-        services
             .AddOptions<PasswordResetOptions>()
             .Bind(configuration.GetSection(PasswordResetOptions.SectionName))
             .ValidateOnStart();
@@ -65,6 +65,12 @@ public static class DependencyInjection
         services
             .AddOptions<SystemAdminBootstrapOptions>()
             .Bind(configuration.GetSection(SystemAdminBootstrapOptions.SectionName))
+            .ValidateOnStart();
+
+        services
+            .AddOptions<SystemManagerInvitationOptions>()
+            .Bind(configuration.GetSection(
+                SystemManagerInvitationOptions.SectionName))
             .ValidateOnStart();
 
         services.AddSingleton<
@@ -76,18 +82,21 @@ public static class DependencyInjection
             TenantInvitationOptionsValidator>();
 
         services.AddSingleton<
-            IValidateOptions<TenantRegistrationOptions>,
-            TenantRegistrationOptionsValidator>();
-
-        services.AddSingleton<
             IValidateOptions<PasswordResetOptions>,
             PasswordResetOptionsValidator>();
+
+        services.AddSingleton<
+            IValidateOptions<SystemManagerInvitationOptions>,
+            SystemManagerInvitationOptionsValidator>();
 
         services.AddDbContext<IdentityDbContext>(options =>
             options.UseNpgsql(
                 connectionString,
                 npgsql => npgsql
                     .MapEnum<UserStatus>("user_status", "system", translator)
+                    .MapEnum<SystemManagerProfileStatus>("system_manager_profile_status", "system", translator)
+                    .MapEnum<SystemManagerAvailabilityStatus>("system_manager_availability_status", "system", translator)
+                    .MapEnum<FlightQualificationStatus>("flight_qualification_status", "system", translator)
                     .MapEnum<FarmMemberRole>("farm_member_role", "system", translator)
                     .MapEnum<FarmAccessScope>("farm_access_scope", "system", translator)
                     .MapEnum<TenantMemberRole>("tenant_member_role", "system", translator)
@@ -101,9 +110,14 @@ public static class DependencyInjection
         services.AddScoped<IUserQueries, UserQueries>();
         services.AddScoped<ITenantQueries, TenantQueries>();
         services.AddScoped<ITenantMembershipQueries, TenantMembershipQueries>();
-        services.AddScoped<IFarmMembershipQueries, FarmMembershipQueries>();
+        services.AddScoped<
+            ITenantOwnerRequestReferenceQuery,
+            TenantOwnerRequestReferenceQuery>();
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IRoleRepository, RoleRepository>();
+        services.AddScoped<ISystemManagerProfileRepository, SystemManagerProfileRepository>();
+        services.AddScoped<IFarmManagerAssignmentRepository, FarmManagerAssignmentRepository>();
+        services.AddScoped<ISystemManagerAccessService, SystemManagerAccessService>();
         services.AddScoped<ISystemAdminBootstrapLock, SystemAdminBootstrapLock>();
         services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
         services.AddScoped<ITenantSelectionTokenService, TenantSelectionTokenService>();
@@ -111,20 +125,23 @@ public static class DependencyInjection
         services.AddScoped<IPasswordService, PasswordService>();
         services.AddScoped<ITenantRepository, TenantRepository>();
         services.AddScoped<ITenantMembershipRepository, TenantMembershipRepository>();
-        services.AddScoped<IFarmMembershipRepository, FarmMembershipRepository>();
         services.AddScoped<ITenantInvitationRepository, TenantInvitationRepository>();
         services.AddScoped<IPasswordResetTokenRepository, PasswordResetTokenRepository>();
         services.AddScoped<IPasswordResetEmailDelivery, PasswordResetEmailDelivery>();
         services.AddScoped<ITenantInvitationService, TenantInvitationService>();
+        services.AddScoped<ITenantProvisioningPort, TenantProvisioningPort>();
+        services.AddScoped<ITenantOwnerInvitationPort, TenantOwnerInvitationPort>();
         services.AddScoped<ITenantInvitationEmailDelivery, TenantInvitationEmailDelivery>();
         services.AddScoped<IIntegrationMessageHandler<TenantInvitationEmailRequestedV1>, TenantInvitationEmailRequestedHandler>();
         services.AddScoped<IIdentityIntegrationOutbox, IdentityIntegrationOutbox>();
         services.AddSingleton<IInvitationTokenService, InvitationTokenService>();
         services.AddSingleton<IPasswordResetTokenService, PasswordResetTokenService>();
         services.AddIntegrationConsumer<TenantInvitationEmailRequestedProcessor>(IntegrationConsumerNames.EmailTenantInvitationV1);
-
+        services.AddScoped<ISystemManagerInvitationEmailDelivery, SystemManagerInvitationEmailDelivery>();
         var assembly = typeof(DependencyInjection).Assembly;
-
+        services.AddScoped<
+            ISystemManagerInvitationRepository,
+            SystemManagerInvitationRepository>();
         services.AddMediatR(mediatR =>
             mediatR.RegisterServicesFromAssembly(assembly));
         services.AddValidatorsFromAssembly(

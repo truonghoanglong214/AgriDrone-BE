@@ -8,6 +8,9 @@ internal sealed class GetAvailableDronesQueryValidator
 {
     public GetAvailableDronesQueryValidator()
     {
+        RuleFor(query => query.FarmId)
+            .NotEmpty();
+
         RuleFor(query => query.StartAt)
             .NotEqual(default(DateTimeOffset));
 
@@ -18,5 +21,8 @@ internal sealed class GetAvailableDronesQueryValidator
             .Must(query => query.EndAt > query.StartAt)
             .WithMessage(
                 "EndAt must be later than StartAt.");
+
+        RuleFor(query => query.Purpose)
+            .Must(purpose => !purpose.HasValue || Enum.IsDefined(purpose.Value));
     }
 }

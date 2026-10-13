@@ -1,4 +1,5 @@
 using System.Text.Json;
+using AgriDrone.Modules.Missions.Domain.Missions;
 using AgriDrone.SharedKernel.Domain;
 
 namespace AgriDrone.Modules.Missions.Domain.Drones;
@@ -13,7 +14,6 @@ public sealed class Drone : AggregateRoot
     // Constructor đầy đủ dùng trong Domain.
     private Drone(
         Guid id,
-        Guid tenantId,
         string code,
         string name,
         string? model,
@@ -28,7 +28,6 @@ public sealed class Drone : AggregateRoot
         DateTimeOffset createdAt)
     {
         Id = id;
-        TenantId = tenantId;
         Code = code;
         Name = name;
         Model = model;
@@ -47,8 +46,6 @@ public sealed class Drone : AggregateRoot
         UpdatedAt = createdAt;
         DeletedAt = null;
     }
-
-    public Guid TenantId { get; private set; }
 
     public string Code { get; private set; } = string.Empty;
 
@@ -82,10 +79,11 @@ public sealed class Drone : AggregateRoot
 
     public DateTimeOffset UpdatedAt { get; private set; }
 
+    public uint Version { get; private set; }
+
     public DateTimeOffset? DeletedAt { get; private set; }
 
     public static Drone Create(
-        Guid tenantId,
         string code,
         string name,
         string? model,
@@ -99,13 +97,6 @@ public sealed class Drone : AggregateRoot
         string? notes,
         DateTimeOffset createdAt)
     {
-        if (tenantId == Guid.Empty)
-        {
-            throw new ArgumentException(
-                "Tenant ID is required.",
-                nameof(tenantId));
-        }
-
         if (string.IsNullOrWhiteSpace(code))
         {
             throw new ArgumentException(
@@ -142,7 +133,6 @@ public sealed class Drone : AggregateRoot
 
         return new Drone(
             id: Guid.NewGuid(),
-            tenantId: tenantId,
             code: code.Trim().ToUpperInvariant(),
             name: name.Trim(),
             model: NormalizeOptional(model),
@@ -155,6 +145,56 @@ public sealed class Drone : AggregateRoot
             weightKg: weightKg,
             notes: NormalizeOptional(notes),
             createdAt: createdAt);
+    }
+
+    public void UpdateDetails(
+        string name,
+        string? model,
+        string? manufacturer,
+        JsonElement? specifications,
+        string? serialNumber,
+        string? registrationNumber,
+        DateOnly? registrationDate,
+        DateOnly? registrationExpiryDate,
+        decimal? weightKg,
+        string? notes,
+        DateTimeOffset changedAt)
+    {
+        EnsureTimestampIsProvided(changedAt, nameof(changedAt));
+        if (Status == DroneStatus.Retired)
+        {
+            throw new InvalidOperationException("A retired Drone cannot be edited.");
+        }
+
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            throw new ArgumentException("Drone name is required.", nameof(name));
+        }
+
+        if (weightKg.HasValue && weightKg.Value <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(weightKg));
+        }
+
+        if (registrationDate.HasValue && registrationExpiryDate.HasValue &&
+            registrationExpiryDate.Value < registrationDate.Value)
+        {
+            throw new ArgumentException(
+                "Registration expiry date cannot be earlier than registration date.",
+                nameof(registrationExpiryDate));
+        }
+
+        Name = name.Trim();
+        Model = NormalizeOptional(model);
+        Manufacturer = NormalizeOptional(manufacturer);
+        Specifications = CreateSpecificationsSnapshot(specifications);
+        SerialNumber = NormalizeIdentifier(serialNumber);
+        RegistrationNumber = NormalizeIdentifier(registrationNumber);
+        RegistrationDate = registrationDate;
+        RegistrationExpiryDate = registrationExpiryDate;
+        WeightKg = weightKg;
+        Notes = NormalizeOptional(notes);
+        UpdatedAt = changedAt;
     }
 
     public void SendToMaintenance(DateTimeOffset sentAt)
@@ -217,17 +257,53 @@ public sealed class Drone : AggregateRoot
             return;
         }
 
-        if (Status is not DroneStatus.Available and
-            not DroneStatus.Maintenance and
-            not DroneStatus.Inactive)
+        if (Status != DroneStatus.Available &&
+            Status != DroneStatus.Maintenance &&
+            Status != DroneStatus.Inactive)
         {
             throw new InvalidOperationException(
-                "Only an available, maintenance or " +
-                "inactive drone can be retired.");
+                "Only an available, inactive or maintenance drone can be retired.");
         }
 
         Status = DroneStatus.Retired;
         UpdatedAt = retiredAt;
+    }
+
+    public void Deactivate(DateTimeOffset deactivatedAt)
+    {
+        EnsureTimestampIsProvided(
+            deactivatedAt,
+            nameof(deactivatedAt));
+
+        if (Status == DroneStatus.Inactive)
+        {
+            return;
+        }
+
+        if (Status != DroneStatus.Available)
+        {
+            throw new InvalidOperationException(
+                "Only an available drone can be deactivated.");
+        }
+
+        Status = DroneStatus.Inactive;
+        UpdatedAt = deactivatedAt;
+    }
+
+    public void Reactivate(DateTimeOffset reactivatedAt)
+    {
+        EnsureTimestampIsProvided(
+            reactivatedAt,
+            nameof(reactivatedAt));
+
+        if (Status != DroneStatus.Inactive)
+        {
+            throw new InvalidOperationException(
+                "Only an inactive drone can be reactivated.");
+        }
+
+        Status = DroneStatus.Available;
+        UpdatedAt = reactivatedAt;
     }
 
     public void StartMission(DateTimeOffset startedAt)
@@ -245,6 +321,26 @@ public sealed class Drone : AggregateRoot
         Status = DroneStatus.InMission;
         UpdatedAt = startedAt;
     }
+
+    public bool IsOperationalFor(DateTimeOffset startAt, DateTimeOffset endAt)
+    {
+        DomainGuard.Utc(startAt);
+        DomainGuard.Utc(endAt);
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(endAt, startAt);
+
+        var startDate = DateOnly.FromDateTime(startAt.UtcDateTime);
+        var endDate = DateOnly.FromDateTime(endAt.UtcDateTime);
+        return DeletedAt is null && Status == DroneStatus.Available &&
+               !string.IsNullOrWhiteSpace(RegistrationNumber) &&
+               RegistrationDate is DateOnly registrationDate &&
+               registrationDate <= startDate &&
+               RegistrationExpiryDate is DateOnly registrationExpiryDate &&
+               registrationExpiryDate >= endDate &&
+               (!NextMaintenanceAt.HasValue || NextMaintenanceAt.Value >= endAt);
+    }
+
+    public bool SupportsPurpose(MissionPurpose purpose) =>
+        DroneCapabilityPolicy.Supports(Specifications, purpose);
 
     public void CompleteMission(DateTimeOffset completedAt)
     {
@@ -291,6 +387,9 @@ public sealed class Drone : AggregateRoot
             return emptyDocument.RootElement.Clone();
         }
 
+        if (!DroneCapabilityPolicy.IsValid(specifications.Value))
+            throw new ArgumentException("Specifications must contain only supported capabilities.", nameof(specifications));
+
         return specifications.Value.Clone();
     }
 
@@ -306,49 +405,6 @@ public sealed class Drone : AggregateRoot
         return string.IsNullOrWhiteSpace(value)
             ? null
             : value.Trim().ToUpperInvariant();
-    }
-
-    public void Deactivate(DateTimeOffset deactivatedAt)
-    {
-        EnsureTimestampIsProvided(
-            deactivatedAt,
-            nameof(deactivatedAt));
-
-        if (Status == DroneStatus.Inactive)
-        {
-            return;
-        }
-
-        if (Status != DroneStatus.Available &&
-            Status != DroneStatus.Maintenance)
-        {
-            throw new InvalidOperationException(
-                "Only an available or maintenance drone can be deactivated.");
-        }
-
-        Status = DroneStatus.Inactive;
-        UpdatedAt = deactivatedAt;
-    }
-
-    public void Activate(DateTimeOffset activatedAt)
-    {
-        EnsureTimestampIsProvided(
-            activatedAt,
-            nameof(activatedAt));
-
-        if (Status == DroneStatus.Available)
-        {
-            return;
-        }
-
-        if (Status != DroneStatus.Inactive)
-        {
-            throw new InvalidOperationException(
-                "Only an inactive drone can be activated.");
-        }
-
-        Status = DroneStatus.Available;
-        UpdatedAt = activatedAt;
     }
 
     private static void EnsureTimestampIsProvided(

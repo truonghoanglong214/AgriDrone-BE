@@ -31,11 +31,14 @@ public sealed class MissionMedia
     Guid missionId,
     Guid mediaId,
     MissionMediaRole mediaRole,
-    DateTimeOffset createdAt)
+    DateTimeOffset createdAt,
+    DateTimeOffset? capturedAt = null)
     {
         DomainGuard.NotEmpty(missionId);
         DomainGuard.NotEmpty(mediaId);
         DomainGuard.Utc(createdAt);
+        if (capturedAt.HasValue)
+            DomainGuard.Utc(capturedAt.Value);
 
         if (!Enum.IsDefined(mediaRole))
         {
@@ -48,6 +51,8 @@ public sealed class MissionMedia
             MissionId = missionId,
             MediaId = mediaId,
             MediaRole = mediaRole,
+            CapturedAt = capturedAt,
+            CaptureClockSource = capturedAt.HasValue ? "CLIENT_REPORTED_UTC" : null,
             CreatedAt = createdAt
         };
     }

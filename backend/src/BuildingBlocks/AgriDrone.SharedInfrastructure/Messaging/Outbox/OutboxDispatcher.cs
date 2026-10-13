@@ -87,9 +87,14 @@ internal sealed partial class OutboxDispatcher(
         {
             var headers = new Dictionary<string, object?>
             {
-                ["x-tenant-id"] = message.TenantId.ToString("D"),
                 ["x-schema-version"] = message.SchemaVersion
             };
+
+            if (message.TenantId.HasValue)
+            {
+                headers["x-tenant-id"] =
+                    message.TenantId.Value.ToString("D");
+            }
 
             if (message.ActorId.HasValue)
             {

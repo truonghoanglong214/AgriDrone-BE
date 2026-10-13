@@ -9,6 +9,7 @@ using AgriDrone.Modules.Missions.Domain.Media;
 using AgriDrone.Modules.Missions.Domain.Missions;
 using AgriDrone.Modules.Missions.Infrastructure.Queries;
 using AgriDrone.SharedKernel.Application.Abstractions.Execution;
+using AgriDrone.SharedKernel.Application.Abstractions.Authorization;
 using AgriDrone.SharedKernel.Application.Pagination;
 using Xunit;
 
@@ -39,7 +40,7 @@ public sealed class MissionMediaReadTests
             case "asset-farm": Set(fixture.Asset, nameof(MediaAsset.FarmId), Guid.NewGuid()); break;
         }
 
-        var details = await new GetMissionMediaDetailsQueryHandler(fixture, fixture)
+        var details = await new GetMissionMediaDetailsQueryHandler(fixture, fixture, fixture)
             .Handle(new(farmId, missionId, mediaId), default);
         var download = await fixture.Download(farmId, missionId, mediaId);
         Assert.True(details.IsFailure);
@@ -59,7 +60,7 @@ public sealed class MissionMediaReadTests
         Set(fixture.Asset, nameof(MediaAsset.StorageStatus), status);
 
         var list = await fixture.List();
-        var details = await new GetMissionMediaDetailsQueryHandler(fixture, fixture)
+        var details = await new GetMissionMediaDetailsQueryHandler(fixture, fixture, fixture)
             .Handle(new(fixture.FarmId, fixture.Mission.Id, fixture.Asset.Id), default);
         var download = await fixture.Download();
         Assert.True(list.IsSuccess);
@@ -112,12 +113,29 @@ public sealed class MissionMediaReadTests
     }
 
     [Fact]
+    public async Task RevokedManagerAssignmentBlocksRawMedia()
+    {
+        var fixture = new Fixture { ManagerAssigned = false };
+
+        var list = await fixture.List();
+        var details = await new GetMissionMediaDetailsQueryHandler(fixture, fixture, fixture)
+            .Handle(new(fixture.FarmId, fixture.Mission.Id, fixture.Asset.Id), default);
+        var download = await fixture.Download();
+
+        Assert.Equal("MissionMedia.FarmAccessDenied", list.Error.Code);
+        Assert.Equal("MissionMedia.FarmAccessDenied", details.Error.Code);
+        Assert.Equal("MissionMedia.FarmAccessDenied", download.Error.Code);
+        Assert.Equal(0, fixture.InfoCalls);
+        Assert.Equal(0, fixture.SignCalls);
+    }
+
+    [Fact]
     public async Task EmptyMissionReturnsEmptyPageButUnknownMissionReturnsNotFound()
     {
         var fixture = new Fixture();
         fixture.Items.Clear();
         var empty = await fixture.List();
-        var missing = await new GetMissionMediaQueryHandler(fixture, fixture)
+        var missing = await new GetMissionMediaQueryHandler(fixture, fixture, fixture)
             .Handle(new(fixture.FarmId, Guid.NewGuid(), 1, 20, null, null), default);
         Assert.True(empty.IsSuccess);
         Assert.Empty(empty.Value.Items);
@@ -164,7 +182,8 @@ public sealed class MissionMediaReadTests
         public override DateTimeOffset GetUtcNow() => now;
     }
 
-    private sealed class Fixture : IMissionMediaQueries, IObjectStorage, IExecutionContext
+    private sealed class Fixture : IMissionMediaQueries, IObjectStorage,
+        IExecutionContext, ISystemManagerAccessService
     {
         public DateTimeOffset Now { get; } = new(2026, 9, 16, 8, 0, 0, TimeSpan.Zero);
         public Guid? TenantId { get; set; } = Guid.NewGuid();
@@ -178,6 +197,7 @@ public sealed class MissionMediaReadTests
         public MediaAsset Asset { get; }
         public List<MissionMedia> Items { get; } = [];
         public bool ObjectExists { get; set; } = true;
+        public bool ManagerAssigned { get; set; } = true;
         public int InfoCalls { get; private set; }
         public int SignCalls { get; private set; }
         public TimeSpan SignedLifetime { get; private set; }
@@ -199,16 +219,22 @@ public sealed class MissionMediaReadTests
 
         public Task<AgriDrone.SharedKernel.Application.Result<MissionMediaDownloadResponse>> Download(
             Guid? farmId = null, Guid? missionId = null, Guid? mediaId = null) =>
-            new GetMissionMediaDownloadUrlQueryHandler(this, this, this, new FixedTimeProvider(Now))
+            new GetMissionMediaDownloadUrlQueryHandler(this, this, this, this, new FixedTimeProvider(Now))
                 .Handle(new(farmId ?? FarmId, missionId ?? Mission.Id, mediaId ?? Asset.Id), default);
 
         public Task<AgriDrone.SharedKernel.Application.Result<PagedResult<MissionMediaResponse>>> List() =>
-            new GetMissionMediaQueryHandler(this, this)
+            new GetMissionMediaQueryHandler(this, this, this)
                 .Handle(new(FarmId, Mission.Id, 1, 20, null, null), default);
 
         public Task<bool> MissionExistsAsync(
             Guid tenantId, Guid farmId, Guid missionId, CancellationToken cancellationToken) =>
             Task.FromResult(Mission.TenantId == tenantId && Mission.FarmId == farmId && Mission.Id == missionId);
+
+        public Task<SystemManagerFarmAccess> ResolveFarmAccessAsync(
+            Guid farmId, CancellationToken cancellationToken = default) =>
+            Task.FromResult(ManagerAssigned && farmId == FarmId
+                ? SystemManagerFarmAccess.Allowed(Mission.TenantId, FarmId, Guid.NewGuid())
+                : SystemManagerFarmAccess.Denied("Farm is not assigned."));
 
         private IQueryable<MissionMedia> Scope(Guid tenantId, Guid farmId, Guid missionId) =>
             MissionMediaQueries.VisibleMedia(Items.AsQueryable(), tenantId, farmId, missionId);

@@ -19,6 +19,14 @@ public static class FarmZoneError
             "FarmZone.AccessDenied",
             "The user does not have access to the selected farm zone.");
 
+    public static AppError InvalidBoundary() => AppError.Validation(
+        "FarmZone.InvalidBoundary",
+        "The zone boundary must be a non-empty valid polygon using SRID 4326.");
+
+    public static AppError InvalidArea() => AppError.Validation(
+        "FarmZone.InvalidArea",
+        "The zone area must be non-negative and cannot exceed the farm area.");
+
     public static AppError BoundaryOutsideFarm() =>
         AppError.Validation(
             "FarmZone.BoundaryOutsideFarm",
@@ -34,12 +42,9 @@ public static class FarmZoneError
                 "FarmZone.ConcurrentUpdate",
                 "The zone was changed by another request. Reload it and try again.");
 
-    public static AppError ActiveDependenciesExist(
-        int activeMissionCount,
-        int openFieldTaskCount) =>
+    public static AppError ActiveDependenciesExist(int activeMissionCount) =>
         AppError.Conflict(
             "FarmZone.ActiveDependenciesExist",
             "The zone cannot be archived while active dependencies remain. " +
-            $"Active missions: {activeMissionCount}; " +
-            $"open field tasks: {openFieldTaskCount}.");
+            $"Active missions: {activeMissionCount}.");
 }

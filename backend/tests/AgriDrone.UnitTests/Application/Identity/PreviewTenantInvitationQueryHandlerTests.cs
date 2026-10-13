@@ -26,7 +26,7 @@ public sealed class PreviewTenantInvitationQueryHandlerTests
         Assert.True(result.IsSuccess);
         Assert.Equal("a***@example.com", result.Value.MaskedEmail);
         Assert.Equal(fixture.Tenant.Name, result.Value.TenantName);
-        Assert.Equal(TenantMemberRole.TenantAdmin, result.Value.Role);
+        Assert.Equal(TenantMemberRole.Owner, result.Value.Role);
         Assert.Equal(fixture.Invitation.ExpiresAt, result.Value.ExpiresAt);
         Assert.True(result.Value.RequiresAccountCreation);
     }
@@ -101,7 +101,25 @@ public sealed class PreviewTenantInvitationQueryHandlerTests
             result.Error.Code);
     }
 
-    private static Fixture CreateFixture()
+    [Fact]
+    public async Task PreviewRejectsLegacyStaffInvitation()
+    {
+        var fixture = CreateFixture(
+            TenantMemberRole.TenantAdmin,
+            TenantInvitationPurpose.Membership);
+
+        var result = await fixture.Handler.Handle(
+            new PreviewTenantInvitationQuery("plain-token"),
+            CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("TenantInvitation.InvalidOrExpired", result.Error.Code);
+    }
+
+    private static Fixture CreateFixture(
+        TenantMemberRole role = TenantMemberRole.Owner,
+        TenantInvitationPurpose purpose =
+            TenantInvitationPurpose.OwnerProvisioning)
     {
         var tenant = Tenant.Create(
             "TENANT",
@@ -111,8 +129,8 @@ public sealed class PreviewTenantInvitationQueryHandlerTests
         var invitation = TenantInvitation.Create(
             tenant.Id,
             "admin@example.com",
-            TenantMemberRole.TenantAdmin,
-            TenantInvitationPurpose.Membership,
+            role,
+            purpose,
             StubInvitationTokenService.TokenHash,
             Guid.NewGuid(),
             Now.AddHours(1),

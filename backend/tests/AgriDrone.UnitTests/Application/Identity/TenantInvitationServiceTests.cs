@@ -174,6 +174,7 @@ public sealed class TenantInvitationServiceTests
     }
 
     [Fact]
+    [Trait("Category", "BePlanPhase0Characterization")]
     public async Task InviteAsyncCreatesOwnerProvisioningWhenTenantHasNoOwner()
     {
         var fixture = CreateFixture();

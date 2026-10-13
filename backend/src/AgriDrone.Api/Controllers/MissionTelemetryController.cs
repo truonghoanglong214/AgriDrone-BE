@@ -5,7 +5,6 @@ using AgriDrone.SharedInfrastructure.Authorization;
 using AgriDrone.SharedInfrastructure.Http;
 using AgriDrone.SharedKernel.Application
     .Abstractions.Authorization;
-using AgriDrone.SharedKernel.Application.Abstractions.Execution;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -16,8 +15,7 @@ namespace AgriDrone.Api.Controllers;
 [Authorize]
 public sealed class MissionTelemetryController(
     ISender sender,
-    IAuthorizationService authorizationService,
-    IExecutionContext executionContext)
+    ISystemManagerAccessService managerAccessService)
     : ControllerBase
 {
     /// <summary>Nhập telemetry đã chuẩn hóa để tạo đường bay thực tế.</summary>
@@ -28,26 +26,15 @@ public sealed class MissionTelemetryController(
     /// trợ retry an toàn khi client gửi lại cùng payload.
     /// </remarks>
     [HttpPost("api/missions/{missionId:guid}/farms/{farmId:guid}/telemetry/imports")]
+    [Authorize(Policy = AccessAuthorizationPolicies.SystemManager)]
     public async Task<IResult> ImportTelemetry(
         [FromRoute] Guid farmId,
         Guid missionId,
         [FromBody] ImportMissionTelemetryRequest request,
         CancellationToken cancellationToken)
     {
-        if (executionContext.TenantId is not Guid tenantId)
-        {
-            return Results.Unauthorized();
-        }
-
-        var authorization =
-            await authorizationService.AuthorizeAsync(
-                User,
-                new FarmAccessTarget(
-                    tenantId,
-                    farmId),
-                AccessAuthorizationPolicies.FarmManage);
-
-        if (!authorization.Succeeded)
+        var access = await managerAccessService.ResolveFarmAccessAsync(farmId, cancellationToken);
+        if (!access.IsAllowed || access.TenantId is not Guid tenantId || access.FarmId != farmId)
         {
             return Results.Forbid();
         }

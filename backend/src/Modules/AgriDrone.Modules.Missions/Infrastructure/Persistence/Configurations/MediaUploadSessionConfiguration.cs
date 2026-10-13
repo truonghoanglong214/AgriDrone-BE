@@ -94,10 +94,18 @@ public sealed class MediaUploadSessionConfiguration
             .HasMaxLength(64)
             .IsRequired();
 
+        builder.Property(session => session.CapturedAt)
+            .HasColumnName("captured_at")
+            .HasColumnType("timestamp with time zone");
+
         builder.Property(session => session.StorageUri)
             .HasColumnName("storage_uri")
             .HasColumnType("text")
             .IsRequired();
+
+        builder.Property(session => session.MultipartUploadId)
+            .HasColumnName("multipart_upload_id")
+            .HasMaxLength(512);
 
         builder.Property(session => session.Status)
             .HasColumnName("status")
@@ -131,6 +139,16 @@ public sealed class MediaUploadSessionConfiguration
         })
             .IsUnique()
             .HasDatabaseName("uq_upload_sessions_operation");
+
+        builder.HasIndex(session => new
+        {
+            session.TenantId,
+            session.MissionId,
+            session.ExpectedChecksum
+        })
+            .IsUnique()
+            .HasFilter("status IN ('Pending', 'Verifying', 'Completed')")
+            .HasDatabaseName("uq_upload_sessions_active_checksum");
 
         builder.HasIndex(session => session.MediaAssetId)
             .IsUnique()

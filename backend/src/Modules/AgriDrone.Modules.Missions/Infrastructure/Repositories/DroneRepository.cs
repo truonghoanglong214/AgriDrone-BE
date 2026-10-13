@@ -1,28 +1,68 @@
-﻿using AgriDrone.Modules.Missions.Domain.Drones;
-using AgriDrone.Modules.Missions.Domain.Missions;
-using AgriDrone.Modules.Missions
-    .Infrastructure.Persistence;
+using AgriDrone.Modules.Missions.Domain.Drones;
+using AgriDrone.Modules.Missions.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
-
-namespace AgriDrone.Modules.Missions
-    .Infrastructure.Repositories;
+using AgriDrone.Modules.Missions.Domain.Missions;
+namespace AgriDrone.Modules.Missions.Infrastructure.Repositories;
 
 internal sealed class DroneRepository(
-    MissionsDbContext dbContext)
-    : IDroneRepository
+    MissionsDbContext dbContext) : IDroneRepository, AgriDrone.Modules.Missions.Application.Abstractions.Missions.IDroneRegistryUniquenessQuery
 {
     public Task<Drone?> GetByIdAsync(
         Guid droneId,
-        Guid tenantId,
         CancellationToken cancellationToken = default)
     {
         return dbContext.Drones.SingleOrDefaultAsync(
             drone =>
                 drone.Id == droneId &&
-                drone.TenantId == tenantId &&
                 drone.DeletedAt == null,
             cancellationToken);
     }
+
+    public Task<bool> CodeExistsAsync(
+        string code,
+        CancellationToken cancellationToken = default)
+    {
+        return dbContext.Drones.AnyAsync(
+            drone =>
+                drone.Code == code,
+            cancellationToken);
+    }
+
+    public Task<bool> SerialNumberExistsAsync(
+        string serialNumber,
+        CancellationToken cancellationToken = default)
+    {
+        return dbContext.Drones.AnyAsync(
+            drone =>
+                drone.SerialNumber == serialNumber,
+            cancellationToken);
+    }
+
+    public Task<bool> RegistrationNumberExistsAsync(
+        string registrationNumber,
+        CancellationToken cancellationToken = default)
+    {
+        return dbContext.Drones.AnyAsync(
+            drone =>
+                drone.RegistrationNumber == registrationNumber,
+            cancellationToken);
+    }
+
+    public Task<bool> SerialNumberUsedByAnotherDroneAsync(
+        string serialNumber,
+        Guid droneId,
+        CancellationToken cancellationToken = default) =>
+        dbContext.Drones.AnyAsync(
+            drone => drone.Id != droneId && drone.SerialNumber == serialNumber,
+            cancellationToken);
+
+    public Task<bool> RegistrationNumberUsedByAnotherDroneAsync(
+        string registrationNumber,
+        Guid droneId,
+        CancellationToken cancellationToken = default) =>
+        dbContext.Drones.AnyAsync(
+            drone => drone.Id != droneId && drone.RegistrationNumber == registrationNumber,
+            cancellationToken);
 
     public Task<bool> HasBlockingMissionAsync(
     Guid droneId,
@@ -31,47 +71,9 @@ internal sealed class DroneRepository(
         return dbContext.DroneMissions.AnyAsync(
             mission =>
                 mission.DroneId == droneId &&
-                (
-                    mission.Status == MissionStatus.Draft ||
-                    mission.Status == MissionStatus.Scheduled ||
-                    mission.Status == MissionStatus.InFlight
-                ),
-            cancellationToken);
-    }
-    public Task<bool> CodeExistsAsync(
-        Guid tenantId,
-        string code,
-        CancellationToken cancellationToken = default)
-    {
-        return dbContext.Drones.AnyAsync(
-            drone =>
-                drone.TenantId == tenantId &&
-                drone.Code == code,
-            cancellationToken);
-    }
-
-    public Task<bool> SerialNumberExistsAsync(
-        Guid tenantId,
-        string serialNumber,
-        CancellationToken cancellationToken = default)
-    {
-        return dbContext.Drones.AnyAsync(
-            drone =>
-                drone.TenantId == tenantId &&
-                drone.SerialNumber == serialNumber,
-            cancellationToken);
-    }
-
-    public Task<bool> RegistrationNumberExistsAsync(
-        Guid tenantId,
-        string registrationNumber,
-        CancellationToken cancellationToken = default)
-    {
-        return dbContext.Drones.AnyAsync(
-            drone =>
-                drone.TenantId == tenantId &&
-                drone.RegistrationNumber ==
-                    registrationNumber,
+                (mission.Status == MissionStatus.Draft ||
+                 mission.Status == MissionStatus.Scheduled ||
+                 mission.Status == MissionStatus.InFlight),
             cancellationToken);
     }
 

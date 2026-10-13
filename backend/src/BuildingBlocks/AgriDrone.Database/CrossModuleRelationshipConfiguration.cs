@@ -1,16 +1,10 @@
 using AgriDrone.Modules.Farms.Domain.Farms;
+using AgriDrone.Modules.Farms.Domain.Boundaries;
 using AgriDrone.Modules.Farms.Domain.Maps;
 using AgriDrone.Modules.Farms.Domain.Zones;
-using AgriDrone.Modules.FieldTasks.Domain.Assignments;
-using AgriDrone.Modules.FieldTasks.Domain.FieldTasks;
-using AgriDrone.Modules.FieldTasks.Domain.Media;
-using AgriDrone.Modules.FieldTasks.Domain.Updates;
-using AgriDrone.Modules.Harvests.Domain.HarvestBatches;
-using AgriDrone.Modules.Harvests.Domain.PlantHarvests;
-using AgriDrone.Modules.Harvests.Domain.Quality;
-using AgriDrone.Modules.Harvests.Domain.Seasons;
 using AgriDrone.Modules.Identity.Domain.FarmMemberships;
 using AgriDrone.Modules.Identity.Domain.Tenants;
+using AgriDrone.Modules.Identity.Domain.SystemManagers;
 using AgriDrone.Modules.Identity.Domain.Users;
 using AgriDrone.Modules.Identity.Domain.ZoneAssignments;
 using AgriDrone.Modules.Missions.Domain.Drones;
@@ -20,10 +14,14 @@ using AgriDrone.Modules.Missions.Domain.Observations;
 using AgriDrone.Modules.Missions.Domain.Processing;
 using AgriDrone.Modules.Notifications.Domain.Notifications;
 using AgriDrone.Modules.Plants.Domain.Conditions;
+using AgriDrone.Modules.Plants.Domain.Changes;
+using AgriDrone.Modules.Plants.Domain.DiseaseZones;
 using AgriDrone.Modules.Plants.Domain.Mapping;
 using AgriDrone.Modules.Plants.Domain.Plants;
 using AgriDrone.Modules.Plants.Domain.Scans;
 using AgriDrone.Modules.Plants.Domain.Verifications;
+using AgriDrone.Modules.Plants.Domain.Recommendations;
+using AgriDrone.Modules.Surveys.Domain;
 using AgriDrone.SharedInfrastructure.Auditing;
 using Microsoft.EntityFrameworkCore;
 
@@ -36,8 +34,8 @@ internal static class CrossModuleRelationshipConfiguration
         ConfigureIdentityAndFarms(modelBuilder);
         ConfigureMissions(modelBuilder);
         ConfigurePlants(modelBuilder);
-        ConfigureHarvests(modelBuilder);
-        ConfigureFieldTasks(modelBuilder);
+        ConfigureDiseaseZones(modelBuilder);
+        ConfigureSurveys(modelBuilder);
         ConfigureNotificationsAndAudit(modelBuilder);
     }
 
@@ -62,6 +60,32 @@ internal static class CrossModuleRelationshipConfiguration
             .OnDelete(DeleteBehavior.Cascade)
             .HasConstraintName("fk_farm_memberships_farms_same_tenant");
 
+        modelBuilder.Entity<FarmManagerAssignment>()
+            .HasOne<Farm>()
+            .WithMany()
+            .HasForeignKey(assignment => new
+            {
+                assignment.FarmId,
+                assignment.TenantId
+            })
+            .HasPrincipalKey(farm => new { farm.Id, farm.TenantId })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_farm_manager_assignments_farms_same_tenant");
+
+        modelBuilder.Entity<FarmManagerAssignment>()
+            .HasOne<User>()
+            .WithMany()
+            .HasForeignKey(assignment => assignment.AssignedBy)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_farm_manager_assignments_users_assigned_by");
+
+        modelBuilder.Entity<FarmManagerAssignment>()
+            .HasOne<User>()
+            .WithMany()
+            .HasForeignKey(assignment => assignment.EndedBy)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_farm_manager_assignments_users_ended_by");
+
         modelBuilder.Entity<ZoneAssignment>()
             .HasOne<FarmZone>()
             .WithMany()
@@ -83,6 +107,27 @@ internal static class CrossModuleRelationshipConfiguration
             .HasForeignKey(zone => zone.CreatedBy)
             .OnDelete(DeleteBehavior.Restrict)
             .HasConstraintName("fk_farm_zones_users_created_by");
+
+        modelBuilder.Entity<FarmBoundary>()
+            .HasOne<User>()
+            .WithMany()
+            .HasForeignKey(boundary => boundary.SubmittedBy)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_farm_boundaries_users_submitted_by");
+
+        modelBuilder.Entity<FarmBoundary>()
+            .HasOne<User>()
+            .WithMany()
+            .HasForeignKey(boundary => boundary.ReviewedBy)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_farm_boundaries_users_reviewed_by");
+
+        modelBuilder.Entity<BoundaryException>()
+            .HasOne<User>()
+            .WithMany()
+            .HasForeignKey(boundaryException => boundaryException.ReviewedBy)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_boundary_exceptions_users_reviewed_by");
     }
 
     private static void ConfigureMissions(ModelBuilder modelBuilder)
@@ -101,13 +146,6 @@ internal static class CrossModuleRelationshipConfiguration
             .HasForeignKey(mapVersion => mapVersion.ConfirmedBy)
             .OnDelete(DeleteBehavior.Restrict)
             .HasConstraintName("fk_zone_map_versions_users_confirmed_by");
-
-        modelBuilder.Entity<Drone>()
-            .HasOne<Tenant>()
-            .WithMany()
-            .HasForeignKey(drone => drone.TenantId)
-            .OnDelete(DeleteBehavior.Restrict)
-            .HasConstraintName("fk_drones_tenants_tenant_id");
 
         modelBuilder.Entity<DroneMission>()
             .HasOne<Farm>()
@@ -287,6 +325,8 @@ internal static class CrossModuleRelationshipConfiguration
             .OnDelete(DeleteBehavior.SetNull)
             .HasConstraintName("fk_plant_change_events_users_reviewed_by");
 
+        ConfigurePlantInventoryChangeReports(modelBuilder);
+
         modelBuilder.Entity<PlantScan>()
             .HasOne<DroneMission>()
             .WithMany()
@@ -308,14 +348,6 @@ internal static class CrossModuleRelationshipConfiguration
             .HasForeignKey(scan => scan.CreatedBy)
             .OnDelete(DeleteBehavior.SetNull)
             .HasConstraintName("fk_plant_scans_users_created_by");
-
-        modelBuilder.Entity<PlantScan>()
-            .HasOne<FieldTask>()
-            .WithMany()
-            .HasForeignKey(scan => new { scan.SourceTaskId, scan.FarmId })
-            .HasPrincipalKey(fieldTask => new { fieldTask.Id, fieldTask.FarmId })
-            .OnDelete(DeleteBehavior.Restrict)
-            .HasConstraintName("fk_plant_scans_source_task_same_farm");
 
         modelBuilder.Entity<PlantScanMedia>()
             .HasOne<MediaAsset>()
@@ -353,127 +385,130 @@ internal static class CrossModuleRelationshipConfiguration
             .HasConstraintName("fk_scan_verifications_users_user_id");
     }
 
-    private static void ConfigureHarvests(ModelBuilder modelBuilder)
+    private static void ConfigurePlantInventoryChangeReports(ModelBuilder modelBuilder)
     {
-        modelBuilder.Entity<Season>()
+        modelBuilder.Entity<PlantInventoryChangeReport>()
             .HasOne<Farm>()
             .WithMany()
-            .HasForeignKey(season => season.FarmId)
-            .OnDelete(DeleteBehavior.Cascade)
-            .HasConstraintName("fk_seasons_farms_farm_id");
-
-        modelBuilder.Entity<HarvestBatch>()
-            .HasOne<FarmZone>()
-            .WithMany()
-            .HasForeignKey(batch => new { batch.ZoneId, batch.FarmId })
-            .HasPrincipalKey(zone => new { zone.Id, zone.FarmId })
+            .HasForeignKey(report => new { report.FarmId, report.TenantId })
+            .HasPrincipalKey(farm => new { farm.Id, farm.TenantId })
             .OnDelete(DeleteBehavior.Restrict)
-            .HasConstraintName("fk_harvest_batch_zone_same_farm");
+            .HasConstraintName("fk_plant_inventory_change_reports_farms_same_tenant");
 
-        modelBuilder.Entity<HarvestBatch>()
-            .HasOne<User>()
-            .WithMany()
-            .HasForeignKey(batch => batch.CreatedBy)
-            .OnDelete(DeleteBehavior.Restrict)
-            .HasConstraintName("fk_harvest_batches_users_created_by");
+        ConfigurePlantInventoryChangeActor(
+            modelBuilder,
+            nameof(PlantInventoryChangeReport.ReportedByUserId),
+            "fk_plant_inventory_change_reports_users_reported_by");
+        ConfigurePlantInventoryChangeActor(
+            modelBuilder,
+            nameof(PlantInventoryChangeReport.ReviewStartedBy),
+            "fk_plant_inventory_change_reports_users_review_started_by");
+        ConfigurePlantInventoryChangeActor(
+            modelBuilder,
+            nameof(PlantInventoryChangeReport.EvidenceRequestedBy),
+            "fk_plant_inventory_change_reports_users_evidence_requested_by");
+        ConfigurePlantInventoryChangeActor(
+            modelBuilder,
+            nameof(PlantInventoryChangeReport.VerifiedBy),
+            "fk_plant_inventory_change_reports_users_verified_by");
+        ConfigurePlantInventoryChangeActor(
+            modelBuilder,
+            nameof(PlantInventoryChangeReport.RejectedBy),
+            "fk_plant_inventory_change_reports_users_rejected_by");
+        ConfigurePlantInventoryChangeActor(
+            modelBuilder,
+            nameof(PlantInventoryChangeReport.WithdrawnBy),
+            "fk_plant_inventory_change_reports_users_withdrawn_by");
+        ConfigurePlantInventoryChangeActor(
+            modelBuilder,
+            nameof(PlantInventoryChangeReport.AppliedBy),
+            "fk_plant_inventory_change_reports_users_applied_by");
 
-        modelBuilder.Entity<HarvestBatch>()
-            .HasOne<User>()
+        modelBuilder.Entity<PlantInventoryChangeReport>()
+            .HasOne<SurveyOrder>()
             .WithMany()
-            .HasForeignKey(batch => batch.CompletedBy)
+            .HasForeignKey(report => new
+            {
+                report.EvidenceSurveyOrderId,
+                report.TenantId,
+                report.FarmId
+            })
+            .HasPrincipalKey(order => new { order.Id, order.TenantId, order.FarmId })
             .OnDelete(DeleteBehavior.Restrict)
-            .HasConstraintName("fk_harvest_batches_users_completed_by");
+            .HasConstraintName("fk_plant_inventory_change_reports_evidence_order_same_tenant_farm");
 
-        modelBuilder.Entity<PlantHarvestRecord>()
-            .HasOne<Plant>()
+        modelBuilder.Entity<PlantInventoryChangeReport>()
+            .HasOne<DroneMission>()
             .WithMany()
-            .HasForeignKey(record => new { record.PlantId, record.FarmId })
-            .HasPrincipalKey(plant => new { plant.Id, plant.FarmId })
+            .HasForeignKey(report => new { report.EvidenceMissionId, report.FarmId })
+            .HasPrincipalKey(mission => new { mission.Id, mission.FarmId })
             .OnDelete(DeleteBehavior.Restrict)
-            .HasConstraintName("fk_plant_harvest_plant_same_farm");
+            .HasConstraintName("fk_plant_inventory_change_reports_evidence_mission_same_farm");
 
-        modelBuilder.Entity<PlantHarvestRecord>()
-            .HasOne<User>()
+        modelBuilder.Entity<PlantInventoryChangeReport>()
+            .HasOne<FarmBoundary>()
             .WithMany()
-            .HasForeignKey(record => record.RecordedBy)
+            .HasForeignKey(report => new
+            {
+                report.EvidenceFarmBoundaryVersionId,
+                report.TenantId,
+                report.FarmId
+            })
+            .HasPrincipalKey(boundary => new { boundary.Id, boundary.TenantId, boundary.FarmId })
             .OnDelete(DeleteBehavior.Restrict)
-            .HasConstraintName("fk_plant_harvest_records_users_recorded_by");
+            .HasConstraintName("fk_plant_inventory_change_reports_evidence_boundary_same_tenant_farm");
+
+        modelBuilder.Entity<PlantInventoryChangeReport>()
+            .HasOne<FarmBaseMapVersion>()
+            .WithMany()
+            .HasForeignKey(report => new
+            {
+                report.EvidenceFarmBaseMapVersionId,
+                report.TenantId,
+                report.FarmId
+            })
+            .HasPrincipalKey(map => new { map.Id, map.TenantId, map.FarmId })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_plant_inventory_change_reports_evidence_map_same_tenant_farm");
+
+        modelBuilder.Entity<PlantInventoryChangeReport>()
+            .HasOne<FarmBoundary>()
+            .WithMany()
+            .HasForeignKey(report => new
+            {
+                report.AppliedFarmBoundaryVersionId,
+                report.TenantId,
+                report.FarmId
+            })
+            .HasPrincipalKey(boundary => new { boundary.Id, boundary.TenantId, boundary.FarmId })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_plant_inventory_change_reports_applied_boundary_same_tenant_farm");
+
+        modelBuilder.Entity<PlantInventoryChangeReport>()
+            .HasOne<FarmBaseMapVersion>()
+            .WithMany()
+            .HasForeignKey(report => new
+            {
+                report.AppliedFarmBaseMapVersionId,
+                report.TenantId,
+                report.FarmId
+            })
+            .HasPrincipalKey(map => new { map.Id, map.TenantId, map.FarmId })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_plant_inventory_change_reports_applied_map_same_tenant_farm");
     }
 
-    private static void ConfigureFieldTasks(ModelBuilder modelBuilder)
+    private static void ConfigurePlantInventoryChangeActor(
+        ModelBuilder modelBuilder,
+        string foreignKeyProperty,
+        string constraintName)
     {
-        modelBuilder.Entity<FieldTask>()
-            .HasOne<Farm>()
-            .WithMany()
-            .HasForeignKey(fieldTask => fieldTask.FarmId)
-            .OnDelete(DeleteBehavior.Cascade)
-            .HasConstraintName("fk_field_tasks_farms_farm_id");
-
-        modelBuilder.Entity<FieldTask>()
-            .HasOne<Plant>()
-            .WithMany()
-            .HasForeignKey(fieldTask => new { fieldTask.PlantId, fieldTask.FarmId })
-            .HasPrincipalKey(plant => new { plant.Id, plant.FarmId })
-            .OnDelete(DeleteBehavior.Restrict)
-            .HasConstraintName("fk_task_plant_same_farm");
-
-        modelBuilder.Entity<FieldTask>()
-            .HasOne<PlantScan>()
-            .WithMany()
-            .HasForeignKey(fieldTask => new { fieldTask.SourceScanId, fieldTask.FarmId })
-            .HasPrincipalKey(scan => new { scan.Id, scan.FarmId })
-            .OnDelete(DeleteBehavior.Restrict)
-            .HasConstraintName("fk_task_scan_same_farm");
-
-        modelBuilder.Entity<FieldTask>()
+        modelBuilder.Entity<PlantInventoryChangeReport>()
             .HasOne<User>()
             .WithMany()
-            .HasForeignKey(fieldTask => fieldTask.CreatedBy)
+            .HasForeignKey(foreignKeyProperty)
             .OnDelete(DeleteBehavior.Restrict)
-            .HasConstraintName("fk_field_tasks_users_created_by");
-
-        modelBuilder.Entity<TaskAssignment>()
-            .HasOne<User>()
-            .WithMany()
-            .HasForeignKey(assignment => assignment.UserId)
-            .OnDelete(DeleteBehavior.Restrict)
-            .HasConstraintName("fk_task_assignments_users_user_id");
-
-        modelBuilder.Entity<TaskAssignment>()
-            .HasOne<User>()
-            .WithMany()
-            .HasForeignKey(assignment => assignment.AssignedBy)
-            .OnDelete(DeleteBehavior.Restrict)
-            .HasConstraintName("fk_task_assignments_users_assigned_by");
-
-        modelBuilder.Entity<TaskUpdate>()
-            .HasOne<User>()
-            .WithMany()
-            .HasForeignKey(update => update.UserId)
-            .OnDelete(DeleteBehavior.Restrict)
-            .HasConstraintName("fk_task_updates_users_user_id");
-
-        modelBuilder.Entity<TaskUpdate>()
-            .HasOne<PlantScan>()
-            .WithMany()
-            .HasForeignKey(update => new { update.CreatedScanId, update.FarmId })
-            .HasPrincipalKey(scan => new { scan.Id, scan.FarmId })
-            .OnDelete(DeleteBehavior.Restrict)
-            .HasConstraintName("fk_task_updates_created_scan_same_farm");
-
-        modelBuilder.Entity<TaskMedia>()
-            .HasOne<MediaAsset>()
-            .WithMany()
-            .HasForeignKey(media => media.MediaId)
-            .OnDelete(DeleteBehavior.Restrict)
-            .HasConstraintName("fk_task_media_media_assets_media_id");
-
-        modelBuilder.Entity<TaskMedia>()
-            .HasOne<User>()
-            .WithMany()
-            .HasForeignKey(media => media.UploadedBy)
-            .OnDelete(DeleteBehavior.SetNull)
-            .HasConstraintName("fk_task_media_users_uploaded_by");
+            .HasConstraintName(constraintName);
     }
 
     private static void ConfigureNotificationsAndAudit(ModelBuilder modelBuilder)
@@ -528,5 +563,481 @@ internal static class CrossModuleRelationshipConfiguration
             .HasForeignKey(auditLog => auditLog.SourceJobId)
             .OnDelete(DeleteBehavior.SetNull)
             .HasConstraintName("fk_audit_logs_ai_jobs_source_job_id");
+    }
+
+    private static void ConfigureDiseaseZones(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<DiseaseZone>()
+            .HasOne<Farm>()
+            .WithMany()
+            .HasForeignKey(zone => new { zone.FarmId, zone.TenantId })
+            .HasPrincipalKey(farm => new { farm.Id, farm.TenantId })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_disease_zones_farms_same_tenant");
+
+        modelBuilder.Entity<DiseaseZone>()
+            .HasOne<SurveyOrder>()
+            .WithMany()
+            .HasForeignKey(zone => new
+            {
+                zone.SurveyOrderId,
+                zone.TenantId,
+                zone.FarmId
+            })
+            .HasPrincipalKey(order => new
+            {
+                order.Id,
+                order.TenantId,
+                order.FarmId
+            })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_disease_zones_orders_same_tenant_farm");
+
+        modelBuilder.Entity<DiseaseZone>()
+            .HasOne<SurveyResult>()
+            .WithMany()
+            .HasForeignKey(zone => new
+            {
+                zone.SurveyResultId,
+                zone.SurveyOrderId,
+                zone.FarmId
+            })
+            .HasPrincipalKey(result => new
+            {
+                result.Id,
+                result.SurveyOrderId,
+                result.FarmId
+            })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_disease_zones_results_same_order_farm");
+
+        modelBuilder.Entity<DiseaseZone>()
+            .HasOne<FarmBoundary>()
+            .WithMany()
+            .HasForeignKey(zone => new
+            {
+                zone.FarmBoundaryVersionId,
+                zone.TenantId,
+                zone.FarmId
+            })
+            .HasPrincipalKey(boundary => new
+            {
+                boundary.Id,
+                boundary.TenantId,
+                boundary.FarmId
+            })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_disease_zones_boundaries_same_tenant_farm");
+
+        modelBuilder.Entity<DiseaseZone>()
+            .HasOne<FarmBaseMapVersion>()
+            .WithMany()
+            .HasForeignKey(zone => new
+            {
+                zone.FarmBaseMapVersionId,
+                zone.TenantId,
+                zone.FarmId
+            })
+            .HasPrincipalKey(map => new
+            {
+                map.Id,
+                map.TenantId,
+                map.FarmId
+            })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_disease_zones_base_maps_same_tenant_farm");
+
+        modelBuilder.Entity<DiseaseZone>()
+            .HasOne<AiProcessingJob>()
+            .WithMany()
+            .HasForeignKey(zone => zone.SourceJobId)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_disease_zones_ai_jobs_source_job_id");
+
+        modelBuilder.Entity<DiseaseZone>()
+            .HasOne<User>()
+            .WithMany()
+            .HasForeignKey(zone => zone.ReviewedBy)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_disease_zones_users_reviewed_by");
+
+        modelBuilder.Entity<DiseaseZone>()
+            .HasOne<User>()
+            .WithMany()
+            .HasForeignKey(zone => zone.PublishedBy)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_disease_zones_users_published_by");
+
+        modelBuilder.Entity<TreatmentRecommendation>()
+            .HasOne<User>()
+            .WithMany()
+            .HasForeignKey(recommendation => recommendation.CreatedBy)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_treatment_recommendations_users_created_by");
+
+        modelBuilder.Entity<TreatmentRecommendation>()
+            .HasOne<User>()
+            .WithMany()
+            .HasForeignKey(recommendation => recommendation.PublishedBy)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_treatment_recommendations_users_published_by");
+
+        modelBuilder.Entity<TreatmentRecommendation>()
+            .HasOne<User>()
+            .WithMany()
+            .HasForeignKey(recommendation => recommendation.RetiredBy)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_treatment_recommendations_users_retired_by");
+    }
+
+    private static void ConfigureSurveys(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<FarmBoundary>()
+            .HasOne<SurveyRequest>()
+            .WithMany()
+            .HasForeignKey(boundary => new
+            {
+                boundary.SourceSurveyRequestId,
+                boundary.TenantId,
+                boundary.FarmId
+            })
+            .HasPrincipalKey(request => new
+            {
+                request.Id,
+                request.TenantId,
+                request.FarmId
+            })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_farm_boundaries_requests_same_tenant_farm");
+
+        modelBuilder.Entity<SurveyOrder>()
+            .HasOne<FarmBoundary>()
+            .WithMany()
+            .HasForeignKey(order => new
+            {
+                order.FarmBoundaryVersionId,
+                order.TenantId,
+                order.FarmId
+            })
+            .HasPrincipalKey(boundary => new
+            {
+                boundary.Id,
+                boundary.TenantId,
+                boundary.FarmId
+            })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_survey_orders_farm_boundary_same_tenant_farm");
+
+        modelBuilder.Entity<BoundaryException>()
+            .HasOne<SurveyOrder>()
+            .WithMany()
+            .HasForeignKey(boundaryException => new
+            {
+                boundaryException.SurveyOrderId,
+                boundaryException.TenantId,
+                boundaryException.FarmId
+            })
+            .HasPrincipalKey(order => new
+            {
+                order.Id,
+                order.TenantId,
+                order.FarmId
+            })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_boundary_exceptions_orders_same_tenant_farm");
+
+        modelBuilder.Entity<BoundaryException>()
+            .HasOne<DroneMission>()
+            .WithMany()
+            .HasForeignKey(boundaryException => new
+            {
+                boundaryException.MissionId,
+                boundaryException.FarmId
+            })
+            .HasPrincipalKey(mission => new
+            {
+                mission.Id,
+                mission.FarmId
+            })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_boundary_exceptions_missions_same_farm");
+
+        modelBuilder.Entity<SurveyServicePrice>()
+            .HasOne<User>()
+            .WithMany()
+            .HasForeignKey(price => price.CreatedBy)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_survey_service_prices_users_created_by");
+
+        modelBuilder.Entity<SurveyRequest>()
+            .HasOne<Tenant>()
+            .WithMany()
+            .HasForeignKey(request => request.TenantId)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_survey_requests_tenants_tenant_id");
+
+        modelBuilder.Entity<SurveyRequest>()
+            .HasOne<Farm>()
+            .WithMany()
+            .HasForeignKey(request => new { request.FarmId, request.TenantId })
+            .HasPrincipalKey(farm => new { farm.Id, farm.TenantId })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_survey_requests_farms_same_tenant");
+
+        modelBuilder.Entity<SurveyRequest>()
+            .HasOne<User>()
+            .WithMany()
+            .HasForeignKey(request => request.RequestedByUserId)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_survey_requests_users_requested_by");
+
+        modelBuilder.Entity<SurveyRequestReview>()
+            .HasOne<User>()
+            .WithMany()
+            .HasForeignKey(review => review.ReviewedBy)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_survey_request_reviews_users_reviewed_by");
+
+        modelBuilder.Entity<SurveyOrder>()
+            .HasOne<Tenant>()
+            .WithMany()
+            .HasForeignKey(order => order.TenantId)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_survey_orders_tenants_tenant_id");
+
+        modelBuilder.Entity<SurveyOrder>()
+            .HasOne<Farm>()
+            .WithMany()
+            .HasForeignKey(order => new { order.FarmId, order.TenantId })
+            .HasPrincipalKey(farm => new { farm.Id, farm.TenantId })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_survey_orders_farms_same_tenant");
+
+        modelBuilder.Entity<SurveyOrder>()
+            .HasOne<User>()
+            .WithMany()
+            .HasForeignKey(order => order.ScopeConfirmedBy)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_survey_orders_users_scope_confirmed_by");
+
+        modelBuilder.Entity<SurveyOrder>()
+            .HasOne<User>()
+            .WithMany()
+            .HasForeignKey(order => order.PoleCountConfirmedBy)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_survey_orders_users_pole_count_confirmed_by");
+
+        modelBuilder.Entity<SurveyOrder>()
+            .HasOne<User>()
+            .WithMany()
+            .HasForeignKey(order => order.PricingConfirmedBy)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_survey_orders_users_pricing_confirmed_by");
+
+        modelBuilder.Entity<SurveyOrder>()
+            .HasOne<FarmBaseMapVersion>()
+            .WithMany()
+            .HasForeignKey(order => new { order.FarmBaseMapVersionId, order.FarmId })
+            .HasPrincipalKey(map => new { map.Id, map.FarmId })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_survey_orders_farm_base_map_same_farm");
+
+        modelBuilder.Entity<SurveyAppointment>()
+            .HasOne<User>()
+            .WithMany()
+            .HasForeignKey(appointment => appointment.ConfirmedByTenantOwnerId)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_survey_appointments_users_confirmed_by");
+
+        modelBuilder.Entity<SurveyAppointment>()
+            .HasOne<User>()
+            .WithMany()
+            .HasForeignKey(appointment => appointment.ProposedBySystemManagerId)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_survey_appointments_users_proposed_by");
+
+        modelBuilder.Entity<PriceAdjustment>()
+            .HasOne<User>()
+            .WithMany()
+            .HasForeignKey(adjustment => adjustment.RequestedBy)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_price_adjustments_users_requested_by");
+
+        modelBuilder.Entity<PriceAdjustment>()
+            .HasOne<User>()
+            .WithMany()
+            .HasForeignKey(adjustment => adjustment.ReviewedBy)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_price_adjustments_users_reviewed_by");
+
+        modelBuilder.Entity<PriceAdjustment>()
+            .HasOne<User>()
+            .WithMany()
+            .HasForeignKey(adjustment => adjustment.AppliedBy)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_price_adjustments_users_applied_by");
+
+        modelBuilder.Entity<SurveyResult>()
+            .HasOne<User>()
+            .WithMany()
+            .HasForeignKey(result => result.ReviewedBy)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_survey_results_users_reviewed_by");
+
+        modelBuilder.Entity<SurveyResult>()
+            .HasOne<User>()
+            .WithMany()
+            .HasForeignKey(result => result.PublishedBy)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_survey_results_users_published_by");
+
+        modelBuilder.Entity<HarvestReadinessAssessment>()
+            .HasOne<Plant>()
+            .WithMany()
+            .HasForeignKey(assessment => new { assessment.PlantId, assessment.FarmId })
+            .HasPrincipalKey(plant => new { plant.Id, plant.FarmId })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_harvest_readiness_plants_same_farm");
+
+        modelBuilder.Entity<HarvestReadinessAssessment>()
+            .HasOne<DroneMission>()
+            .WithMany()
+            .HasForeignKey(assessment => new { assessment.MissionId, assessment.FarmId })
+            .HasPrincipalKey(mission => new { mission.Id, mission.FarmId })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_harvest_readiness_missions_same_farm");
+
+        modelBuilder.Entity<HarvestReadinessAssessment>()
+            .HasOne<User>()
+            .WithMany()
+            .HasForeignKey(assessment => assessment.ReviewedBy)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_harvest_readiness_users_reviewed_by");
+
+        modelBuilder.Entity<HarvestReadinessAssessment>()
+            .HasOne<AiModelVersion>()
+            .WithMany()
+            .HasForeignKey(assessment => assessment.AiModelVersionId)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_harvest_readiness_assessments_ai_model_version");
+
+        modelBuilder.Entity<HarvestReadinessAssessment>()
+            .HasOne<AiThresholdProfile>()
+            .WithMany()
+            .HasForeignKey(assessment => new
+            {
+                assessment.AiThresholdProfileId,
+                assessment.AiModelVersionId
+            })
+            .HasPrincipalKey(profile => new
+            {
+                profile.Id,
+                profile.ModelVersionId
+            })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName(
+                "fk_harvest_readiness_assessments_threshold_same_model");
+
+        modelBuilder.Entity<HarvestReadinessCriterion>()
+            .HasOne<User>()
+            .WithMany()
+            .HasForeignKey(criterion => criterion.CreatedBy)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName(
+                "fk_harvest_readiness_criteria_users_created_by");
+
+        modelBuilder.Entity<HarvestReadinessCriterion>()
+            .HasOne<User>()
+            .WithMany()
+            .HasForeignKey(criterion => criterion.ValidatedBy)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName(
+                "fk_harvest_readiness_criteria_users_validated_by");
+
+        modelBuilder.Entity<HarvestReadinessCriterion>()
+            .HasOne<User>()
+            .WithMany()
+            .HasForeignKey(criterion => criterion.RetiredBy)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName(
+                "fk_harvest_readiness_criteria_users_retired_by");
+
+        modelBuilder.Entity<AiProcessingJob>()
+            .HasOne<HarvestReadinessCriterion>()
+            .WithMany()
+            .HasForeignKey(job => new
+            {
+                job.HarvestReadinessCriterionId,
+                job.HarvestReadinessCriterionVersionNumber
+            })
+            .HasPrincipalKey(criterion => new
+            {
+                criterion.Id,
+                criterion.VersionNumber
+            })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName(
+                "fk_ai_jobs_harvest_readiness_criterion_version");
+
+        modelBuilder.Entity<FarmBaseMapVersion>()
+            .HasOne<SurveyOrder>()
+            .WithMany()
+            .HasForeignKey(map => new { map.SourceSurveyOrderId, map.TenantId, map.FarmId })
+            .HasPrincipalKey(order => new { order.Id, order.TenantId, order.FarmId })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_farm_base_map_versions_orders_same_tenant_farm");
+
+        modelBuilder.Entity<FarmBaseMapVersion>()
+            .HasOne<User>()
+            .WithMany()
+            .HasForeignKey(map => map.PublishedBy)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_farm_base_map_versions_users_published_by");
+
+        modelBuilder.Entity<DroneMission>()
+            .HasOne<SurveyOrder>()
+            .WithMany()
+            .HasForeignKey(mission => new { mission.SurveyOrderId, mission.TenantId, mission.FarmId })
+            .HasPrincipalKey(order => new { order.Id, order.TenantId, order.FarmId })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_drone_missions_orders_same_tenant_farm");
+
+        modelBuilder.Entity<PreflightChecklistDefinition>()
+            .HasOne<User>()
+            .WithMany()
+            .HasForeignKey(definition => definition.CreatedBy)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_preflight_definitions_users_created_by");
+
+        modelBuilder.Entity<MissionPreflightChecklist>()
+            .HasOne<User>()
+            .WithMany()
+            .HasForeignKey(checklist => checklist.CompletedBy)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_mission_preflight_checklists_users_completed_by");
+
+        modelBuilder.Entity<MissionPlantObservation>()
+            .HasOne<FarmBaseMapVersion>()
+            .WithMany()
+            .HasForeignKey(observation => new { observation.FarmBaseMapVersionId, observation.FarmId })
+            .HasPrincipalKey(map => new { map.Id, map.FarmId })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_observations_farm_base_map_same_farm");
+
+        modelBuilder.Entity<PlantScan>()
+            .HasOne<SurveyOrder>()
+            .WithMany()
+            .HasForeignKey(scan => new { scan.SurveyOrderId, scan.FarmId })
+            .HasPrincipalKey(order => new { order.Id, order.FarmId })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_plant_scans_orders_same_farm");
+
+        modelBuilder.Entity<PlantScan>()
+            .HasOne<SurveyResult>()
+            .WithMany()
+            .HasForeignKey(scan => new { scan.SurveyResultId, scan.SurveyOrderId, scan.FarmId })
+            .HasPrincipalKey(result => new { result.Id, result.SurveyOrderId, result.FarmId })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_plant_scans_results_same_order_farm");
     }
 }

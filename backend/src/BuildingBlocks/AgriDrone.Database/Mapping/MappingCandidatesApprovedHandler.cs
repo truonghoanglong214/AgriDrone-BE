@@ -2,6 +2,7 @@ using System.Text.Json;
 using AgriDrone.IntegrationContracts.Contracts;
 using AgriDrone.IntegrationContracts.Mapping;
 using AgriDrone.IntegrationContracts.Messaging;
+using AgriDrone.IntegrationContracts.Plants;
 using AgriDrone.Modules.Farms.Domain.Maps;
 using AgriDrone.Modules.Plants.Domain.Mapping;
 using AgriDrone.Modules.Plants.Domain.Plants;
@@ -24,12 +25,11 @@ internal sealed class MappingCandidatesApprovedHandler(
     IEffectiveAccessService accessService,
     OutboxMessageFactory outboxMessageFactory,
     IPlantReferenceCache plantReferenceCache,
+    IHealthLevelReferenceQuery healthLevelReferenceQuery,
     IAuditWriter auditWriter,
     TimeProvider timeProvider)
     : IIntegrationMessageHandler<MappingCandidatesApprovedV1>
 {
-    private const string UnknownHealthCode = "UNKNOWN";
-
     public async Task<IntegrationMessageProcessingResult> HandleAsync(
         IntegrationEventEnvelope<MappingCandidatesApprovedV1> envelope,
         CancellationToken cancellationToken)
@@ -48,7 +48,7 @@ internal sealed class MappingCandidatesApprovedHandler(
             IntegrationMessageDisposition.Acknowledge)
         {
             await plantReferenceCache.InvalidateZoneAsync(
-                envelope.TenantId,
+                envelope.TenantId!.Value,
                 envelope.Payload.FarmId,
                 envelope.Payload.ZoneId,
                 cancellationToken);
@@ -153,11 +153,9 @@ internal sealed class MappingCandidatesApprovedHandler(
             return plantValidation;
         }
 
-        var unknownHealthId = await context.HealthLevels
-            .Where(level =>
-                level.Code == UnknownHealthCode && level.IsActive)
-            .Select(level => (Guid?)level.Id)
-            .SingleOrDefaultAsync(cancellationToken);
+        var unknownHealthId =
+            await healthLevelReferenceQuery.GetActiveUnknownIdAsync(
+                cancellationToken);
         if (!unknownHealthId.HasValue)
         {
             return Permanent(
@@ -368,7 +366,7 @@ internal sealed class MappingCandidatesApprovedHandler(
 
         var access = await accessService.CheckZoneAsync(
             actorId,
-            envelope.TenantId,
+            envelope.TenantId!.Value,
             payload.FarmId,
             payload.ZoneId,
             FarmAccessLevel.Manager,
@@ -454,7 +452,7 @@ internal sealed class MappingCandidatesApprovedHandler(
             IntegrationEventDescriptors.ZoneMapPublishedV1,
             Guid.NewGuid(),
             source.CorrelationId,
-            source.TenantId,
+            source.TenantId!.Value,
             source.ActorId,
             publishedAt,
             published);
@@ -491,7 +489,7 @@ internal sealed class MappingCandidatesApprovedHandler(
         });
         auditWriter.AddUserAction(
             context,
-            source.TenantId,
+            source.TenantId!.Value,
             source.Payload.FarmId,
             actorId,
             source.CorrelationId,

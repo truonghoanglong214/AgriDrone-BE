@@ -8,5 +8,6 @@ public sealed record CompleteUploadSessionCommand(
     Guid TenantId,
     Guid FarmId,
     Guid MissionId,
-    Guid UploadSessionId)
+    Guid UploadSessionId,
+    DateTimeOffset? CapturedAt = null)
     : IRequest<Result<CompleteUploadSessionResult>>;

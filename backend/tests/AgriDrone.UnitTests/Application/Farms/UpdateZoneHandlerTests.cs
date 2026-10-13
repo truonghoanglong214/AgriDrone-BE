@@ -1,6 +1,7 @@
 using System.Text.Json;
 using AgriDrone.Modules.Farms.Application.Abstractions.Persistence;
 using AgriDrone.Modules.Farms.Application.Features.UpdateZone;
+using AgriDrone.Modules.Farms.Application.Policies;
 using AgriDrone.Modules.Farms.Domain.Farms;
 using AgriDrone.Modules.Farms.Domain.Zones;
 using AgriDrone.SharedInfrastructure.Auditing;
@@ -42,16 +43,15 @@ public sealed class UpdateZoneHandlerTests
         Assert.Equal(1, fixture.ZoneRepository.UpdateCallCount);
         Assert.Equal(1, fixture.UnitOfWork.SaveCallCount);
         Assert.Equal(1, fixture.AuditWriter.UserActionCallCount);
-        Assert.Equal(FarmAccessLevel.Manager, fixture.AccessService.RequiredAccess);
-        Assert.Equal(fixture.Zone.Id, fixture.AccessService.ZoneId);
+        Assert.Equal(fixture.Farm.Id, fixture.AccessService.FarmId);
     }
 
     [Fact]
     public async Task HandleRejectsActorWithoutZoneManagerAccess()
     {
         var fixture = CreateFixture();
-        fixture.AccessService.Decision = AccessDecision.Deny(
-            AccessDenialReason.ZoneAssignmentNotActive);
+        fixture.AccessService.Decision = SystemManagerFarmAccess.Denied(
+            "The manager assignment is not active.");
 
         var result = await fixture.Handler.Handle(
             CreateCommand(fixture),
@@ -61,6 +61,19 @@ public sealed class UpdateZoneHandlerTests
         Assert.Equal("FarmZone.AccessDenied", result.Error.Code);
         Assert.Equal(0, fixture.ZoneRepository.GetByIdCallCount);
         Assert.Equal(0, fixture.UnitOfWork.SaveCallCount);
+    }
+
+    [Fact]
+    public async Task HandleUsesAssignmentTenantWithoutTenantMembershipContext()
+    {
+        var fixture = CreateFixture(includeTenantContext: false);
+
+        var result = await fixture.Handler.Handle(
+            CreateCommand(fixture),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(1, fixture.UnitOfWork.SaveCallCount);
     }
 
     [Fact]
@@ -142,7 +155,7 @@ public sealed class UpdateZoneHandlerTests
             2.5m,
             fixture.Zone.Version);
 
-    private static Fixture CreateFixture()
+    private static Fixture CreateFixture(bool includeTenantContext = true)
     {
         var tenantId = Guid.NewGuid();
         var actorId = Guid.NewGuid();
@@ -172,14 +185,19 @@ public sealed class UpdateZoneHandlerTests
         var zoneRepository = new FakeFarmZoneRepository(zone);
         var unitOfWork = new FakeFarmUnitOfWork();
         var auditWriter = new FakeAuditWriter();
-        var accessService = new FakeEffectiveAccessService();
+        var accessService = new FakeSystemManagerAccessService(
+            tenantId,
+            farm.Id);
         var handler = new UpdateZoneHandler(
             zoneRepository,
             new FakeFarmRepository(farm),
             unitOfWork,
             auditWriter,
-            new FakeExecutionContext(tenantId, actorId),
+            new FakeExecutionContext(
+                includeTenantContext ? tenantId : null,
+                actorId),
             accessService,
+            new FarmGeometryPolicy(zoneRepository),
             new FixedTimeProvider(Now));
 
         return new Fixture(
@@ -221,7 +239,7 @@ public sealed class UpdateZoneHandlerTests
         FakeFarmZoneRepository ZoneRepository,
         FakeFarmUnitOfWork UnitOfWork,
         FakeAuditWriter AuditWriter,
-        FakeEffectiveAccessService AccessService);
+        FakeSystemManagerAccessService AccessService);
 
     private sealed class FakeFarmZoneRepository(FarmZone zone)
         : IFarmZoneRepository
@@ -352,42 +370,27 @@ public sealed class UpdateZoneHandlerTests
             throw new NotSupportedException();
     }
 
-    private sealed class FakeEffectiveAccessService : IEffectiveAccessService
+    private sealed class FakeSystemManagerAccessService(
+        Guid tenantId,
+        Guid assignedFarmId) : ISystemManagerAccessService
     {
-        public AccessDecision Decision { get; set; } = AccessDecision.Allow();
-        public FarmAccessLevel? RequiredAccess { get; private set; }
-        public Guid? ZoneId { get; private set; }
+        public SystemManagerFarmAccess Decision { get; set; } =
+            SystemManagerFarmAccess.Allowed(
+                tenantId,
+                assignedFarmId,
+                Guid.NewGuid());
+        public Guid? FarmId { get; private set; }
 
-        public Task<AccessDecision> CheckTenantAsync(
-            Guid actorId,
-            Guid tenantId,
-            TenantAccessLevel requiredAccess,
-            CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
-
-        public Task<AccessDecision> CheckFarmAsync(
-            Guid actorId,
-            Guid tenantId,
+        public Task<SystemManagerFarmAccess> ResolveFarmAccessAsync(
             Guid farmId,
-            FarmAccessLevel requiredAccess,
-            CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
-
-        public Task<AccessDecision> CheckZoneAsync(
-            Guid actorId,
-            Guid tenantId,
-            Guid farmId,
-            Guid zoneId,
-            FarmAccessLevel requiredAccess,
             CancellationToken cancellationToken = default)
         {
-            RequiredAccess = requiredAccess;
-            ZoneId = zoneId;
+            FarmId = farmId;
             return Task.FromResult(Decision);
         }
     }
 
-    private sealed class FakeExecutionContext(Guid tenantId, Guid actorId)
+    private sealed class FakeExecutionContext(Guid? tenantId, Guid actorId)
         : IExecutionContext
     {
         public bool IsInitialized => true;

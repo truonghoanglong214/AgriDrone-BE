@@ -2,9 +2,13 @@ namespace AgriDrone.IntegrationContracts.Notifications;
 
 public static class EmailTemplateKeys
 {
-    public const string TenantRegistrationSuccess = "tenant-registration-success";
-
     public const string TenantInvitation = "tenant-invitation";
 
     public const string TenantWelcome = "tenant-welcome";
+
+    public const string SurveyRequestAcknowledgement =
+        "survey-request-acknowledgement";
+
+    public const string SurveyRequestRejected =
+        "survey-request-rejected";
 }

@@ -82,10 +82,10 @@ internal sealed class ScopedExecutionContext
         }
 
         if (snapshot.Source == ExecutionContextSource.RabbitMq &&
-            (!snapshot.TenantId.HasValue || !snapshot.MessageId.HasValue))
+            !snapshot.MessageId.HasValue)
         {
             throw new ArgumentException(
-                "RabbitMQ execution context requires TenantId and MessageId.",
+                "RabbitMQ execution context requires MessageId.",
                 nameof(snapshot));
         }
     }

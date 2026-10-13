@@ -13,6 +13,19 @@ namespace AgriDrone.IntegrationContracts.Messaging.Validation
             IntegrationEventEnvelope<TPayload>? envelope,
             string expectedEventType,
             int supportedSchemaVersion,
+            DateTimeOffset utcNow) =>
+            Validate(
+                envelope,
+                expectedEventType,
+                supportedSchemaVersion,
+                requiresTenantId: true,
+                utcNow);
+
+        public static string? Validate<TPayload>(
+            IntegrationEventEnvelope<TPayload>? envelope,
+            string expectedEventType,
+            int supportedSchemaVersion,
+            bool requiresTenantId,
             DateTimeOffset utcNow)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(expectedEventType);
@@ -49,12 +62,27 @@ namespace AgriDrone.IntegrationContracts.Messaging.Validation
 
             if (envelope.TenantId == Guid.Empty)
             {
+                return "TenantId cannot be an empty GUID when provided.";
+            }
+
+            if (requiresTenantId && !envelope.TenantId.HasValue)
+            {
                 return "TenantId is required.";
             }
 
             if (envelope.ActorId == Guid.Empty)
             {
                 return "ActorId cannot be an empty GUID when provided.";
+            }
+
+            if (envelope.CausationId == Guid.Empty)
+            {
+                return "CausationId cannot be an empty GUID when provided.";
+            }
+
+            if (envelope.SourceSystem is { Length: > IntegrationContractLimits.MaximumSourceSystemLength })
+            {
+                return $"SourceSystem cannot exceed {IntegrationContractLimits.MaximumSourceSystemLength} characters.";
             }
 
             if (envelope.OccurredAt == default)

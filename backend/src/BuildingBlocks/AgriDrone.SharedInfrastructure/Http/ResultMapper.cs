@@ -43,7 +43,7 @@ public static class ResultMapper
                 (StatusCodes.Status400BadRequest, "Request failed"),
 
             ErrorType.Validation =>
-                (StatusCodes.Status400BadRequest, "Validation error"),
+                (StatusCodes.Status422UnprocessableEntity, "Business validation error"),
 
             ErrorType.NotFound =>
                 (StatusCodes.Status404NotFound, "Resource not found"),

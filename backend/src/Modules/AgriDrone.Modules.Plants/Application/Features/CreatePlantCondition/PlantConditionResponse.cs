@@ -16,5 +16,24 @@ namespace AgriDrone.Modules.Plants.Application.Features.CreatePlantCondition
         bool IsActive,
         DateTimeOffset CreatedAt,
         DateTimeOffset? RetiredAt,
-        long Version);
+        long Version)
+    {
+        public static PlantConditionResponse From(PlantCondition condition)
+        {
+            ArgumentNullException.ThrowIfNull(condition);
+
+            return new PlantConditionResponse(
+                condition.Id,
+                condition.Code,
+                condition.Name,
+                condition.ScientificName,
+                condition.ConditionType,
+                condition.Description,
+                condition.RevisionNumber,
+                condition.IsActive,
+                condition.CreatedAt,
+                condition.RetiredAt,
+                condition.Version);
+        }
+    }
 }

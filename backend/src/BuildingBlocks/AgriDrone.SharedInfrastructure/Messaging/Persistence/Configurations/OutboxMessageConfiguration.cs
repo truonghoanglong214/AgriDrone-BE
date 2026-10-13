@@ -20,6 +20,9 @@ public sealed class OutboxMessageConfiguration
                     "ck_outbox_messages_schema_version",
                     "schema_version > 0");
                 tableBuilder.HasCheckConstraint(
+                    "ck_outbox_messages_tenant_scope",
+                    "tenant_id IS NOT NULL OR event_type = 'notification.email-requested.v1'");
+                tableBuilder.HasCheckConstraint(
                     "ck_outbox_messages_attempt_count",
                     "attempt_count >= 0");
                 tableBuilder.HasCheckConstraint(
@@ -56,8 +59,7 @@ public sealed class OutboxMessageConfiguration
 
         builder.Property(message => message.TenantId)
             .HasColumnName("tenant_id")
-            .HasColumnType("uuid")
-            .IsRequired();
+            .HasColumnType("uuid");
 
         builder.Property(message => message.CorrelationId)
             .HasColumnName("correlation_id")

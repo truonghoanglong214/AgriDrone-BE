@@ -68,6 +68,13 @@ internal sealed class AcceptTenantInvitationCommandHandler(
                 TenantInvitationError.InvalidOrExpired());
         }
 
+        if (invitation.Purpose != TenantInvitationPurpose.OwnerProvisioning ||
+            invitation.Role != TenantMemberRole.Owner)
+        {
+            return Result.Failure<AcceptTenantInvitationResponse>(
+                TenantInvitationError.InvalidOrExpired());
+        }
+
         if (invitation.Purpose == TenantInvitationPurpose.OwnerProvisioning &&
             await tenantMembershipRepository.HasActiveOwnerAsync(
                 invitation.TenantId,
@@ -190,14 +197,10 @@ internal sealed class AcceptTenantInvitationCommandHandler(
         string.IsNullOrWhiteSpace(phone) ? null : phone.Trim();
 
     private static string GetRoleDisplayName(TenantMemberRole role) =>
-        role switch
-        {
-            TenantMemberRole.Owner => "Tenant Owner",
-            TenantMemberRole.TenantAdmin => "Tenant Admin",
-            TenantMemberRole.Member => "Tenant Member",
-            _ => throw new ArgumentOutOfRangeException(
+        role == TenantMemberRole.Owner
+            ? "Tenant Owner"
+            : throw new ArgumentOutOfRangeException(
                 nameof(role),
                 role,
-                "Unsupported tenant role.")
-        };
+                "Only TenantOwner invitations are accepted.");
 }
