@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
@@ -233,56 +233,15 @@ namespace AgriDrone.Database.Migrations
 
             migrationBuilder.Sql(
                 """
-                WITH legacy_data AS (
-                    SELECT
-                        a.id AS adjustment_id,
-                        so.survey_service_price_id,
-                        so.currency AS order_currency,
-                        counts.old_pole_count,
-                        counts.new_pole_count,
-                        GREATEST(
-                            0.01,
-                            round(
-                                COALESCE(
-                                    NULLIF(a.old_price, 0) / counts.old_pole_count,
-                                    so.price_per_pole_snapshot,
-                                    0.01),
-                                2)) AS old_price_per_pole,
-                        GREATEST(
-                            0.01,
-                            round(
-                                COALESCE(
-                                    NULLIF(a.new_price, 0) / counts.new_pole_count,
-                                    so.price_per_pole_snapshot,
-                                    0.01),
-                                2)) AS new_price_per_pole
-                    FROM survey.price_adjustments a
-                    JOIN survey.survey_orders so ON so.id = a.survey_order_id
-                    CROSS JOIN LATERAL (
-                        SELECT
-                            GREATEST(
-                                1,
-                                COALESCE(
-                                    so.confirmed_survey_pole_count,
-                                    round(a.old_area_ha)::integer,
-                                    1)) AS old_pole_count,
-                            GREATEST(
-                                1,
-                                COALESCE(
-                                    so.confirmed_survey_pole_count,
-                                    round(a.new_area_ha)::integer,
-                                    1)) AS new_pole_count
-                    ) AS counts
-                )
                 UPDATE survey.price_adjustments AS adjustment
                 SET
                     old_pole_count = legacy.old_pole_count,
                     new_pole_count = legacy.new_pole_count,
                     old_survey_service_price_id = COALESCE(
-                        legacy.survey_service_price_id,
+                        survey_order.survey_service_price_id,
                         gen_random_uuid()),
                     new_survey_service_price_id = COALESCE(
-                        legacy.survey_service_price_id,
+                        survey_order.survey_service_price_id,
                         gen_random_uuid()),
                     old_price_per_pole = legacy.old_price_per_pole,
                     new_price_per_pole = legacy.new_price_per_pole,
@@ -293,7 +252,7 @@ namespace AgriDrone.Database.Migrations
                         legacy.new_pole_count * legacy.new_price_per_pole,
                         2),
                     currency = COALESCE(
-                        NULLIF(btrim(legacy.order_currency), ''),
+                        NULLIF(btrim(survey_order.currency), ''),
                         'VND'),
                     evidence_reference = 'LEGACY_AREA_ADJUSTMENT',
                     reviewed_by = CASE
@@ -348,8 +307,48 @@ namespace AgriDrone.Database.Migrations
                             adjustment.created_at)
                         ELSE NULL
                     END
-                FROM legacy_data AS legacy
-                WHERE adjustment.id = legacy.adjustment_id;
+                FROM survey.survey_orders AS survey_order
+                JOIN survey.price_adjustments AS source_adjustment
+                    ON source_adjustment.survey_order_id = survey_order.id
+                CROSS JOIN LATERAL (
+                    SELECT
+                        GREATEST(
+                            1,
+                            COALESCE(
+                                survey_order.confirmed_survey_pole_count,
+                                round(source_adjustment.old_area_ha)::integer,
+                                1)) AS old_pole_count,
+                        GREATEST(
+                            1,
+                            COALESCE(
+                                survey_order.confirmed_survey_pole_count,
+                                round(source_adjustment.new_area_ha)::integer,
+                                1)) AS new_pole_count
+                ) AS counts
+                CROSS JOIN LATERAL (
+                    SELECT
+                        counts.old_pole_count,
+                        counts.new_pole_count,
+                        GREATEST(
+                            0.01,
+                            round(
+                                COALESCE(
+                                    NULLIF(source_adjustment.old_price, 0) /
+                                        counts.old_pole_count,
+                                    survey_order.price_per_pole_snapshot,
+                                    0.01),
+                                2)) AS old_price_per_pole,
+                        GREATEST(
+                            0.01,
+                            round(
+                                COALESCE(
+                                    NULLIF(source_adjustment.new_price, 0) /
+                                        counts.new_pole_count,
+                                    survey_order.price_per_pole_snapshot,
+                                    0.01),
+                                2)) AS new_price_per_pole
+                ) AS legacy
+                WHERE source_adjustment.id = adjustment.id;
                 """);
 
             migrationBuilder.AlterColumn<string>(

@@ -59,9 +59,10 @@ internal sealed class CreateUploadSessionCommandHandler(
             return Result.Failure<CreateUploadSessionResult>(
                 MediaUploadError.MissionNotOrderBound());
 
-        if (mission.StartedAt is not DateTimeOffset startedAt ||
-            mission.EndedAt is not DateTimeOffset endedAt ||
-            request.CapturedAt < startedAt || request.CapturedAt > endedAt)
+        if (request.CapturedAt is DateTimeOffset capturedAt &&
+            (mission.StartedAt is not DateTimeOffset startedAt ||
+             mission.EndedAt is not DateTimeOffset endedAt ||
+             capturedAt < startedAt || capturedAt > endedAt))
             return Result.Failure<CreateUploadSessionResult>(
                 MediaUploadError.CaptureOutsideFlight());
 

@@ -144,8 +144,10 @@ app.UseExceptionHandler();
 
 if (app.Environment.IsDevelopment())
 {
+    app.UseStaticFiles();
     app.UseSwagger();
-    app.UseSwaggerUI();
+    app.UseSwaggerUI(options =>
+        options.InjectJavascript("/swagger/folder-upload.js"));
 }
 
 if (!app.Environment.IsDevelopment())

@@ -10,4 +10,4 @@ public sealed record CreateMissionMediaUploadSessionRequest(
     long FileSizeBytes,
     string Sha256Checksum,
     uint ExpectedMissionVersion,
-    DateTimeOffset CapturedAt);
+    DateTimeOffset? CapturedAt = null);

@@ -110,18 +110,18 @@ internal sealed class CompleteUploadSessionCommandHandler(
 
         var now = timeProvider.GetUtcNow();
         var captureTime = session.CapturedAt ?? request.CapturedAt;
-        if (captureTime is not DateTimeOffset capturedAt ||
-            (session.CapturedAt.HasValue && request.CapturedAt.HasValue &&
+        if ((session.CapturedAt.HasValue && request.CapturedAt.HasValue &&
              session.CapturedAt != request.CapturedAt) ||
-            capturedAt == default || capturedAt.Offset != TimeSpan.Zero ||
-            mission.StartedAt is not DateTimeOffset startedAt ||
-            mission.EndedAt is not DateTimeOffset endedAt ||
-            capturedAt < startedAt || capturedAt > endedAt)
+            (captureTime is DateTimeOffset capturedAt &&
+             (capturedAt == default || capturedAt.Offset != TimeSpan.Zero ||
+              mission.StartedAt is not DateTimeOffset startedAt ||
+              mission.EndedAt is not DateTimeOffset endedAt ||
+              capturedAt < startedAt || capturedAt > endedAt)))
             return Result.Failure<CompleteUploadSessionResult>(
                 CompleteUploadSessionError.CaptureMetadataMissing());
 
-        if (!session.CapturedAt.HasValue)
-            session.SetCapturedAt(capturedAt, now);
+        if (!session.CapturedAt.HasValue && captureTime.HasValue)
+            session.SetCapturedAt(captureTime.Value, now);
 
         var previousSessionStatus = session.Status;
         var previousMissionStatus = mission.Status;
@@ -257,7 +257,7 @@ internal sealed class CompleteUploadSessionCommandHandler(
             session.MediaAssetId,
             mediaRole,
             now,
-            capturedAt);
+            captureTime);
 
         missionMediaRepository.Add(
             mediaAsset,

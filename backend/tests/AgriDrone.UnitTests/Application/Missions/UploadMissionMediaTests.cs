@@ -37,6 +37,17 @@ public sealed class UploadMissionMediaTests
             .ToLowerInvariant(), first.Value.Sha256Checksum);
     }
 
+    [Fact]
+    public async Task UploadWithoutCaptureTimeKeepsTimestampForLaterProcessing()
+    {
+        var fixture = new Fixture();
+        var result = await fixture.Upload(Png, includeCapture: false);
+
+        Assert.True(result.IsSuccess);
+        Assert.Null(fixture.Session!.CapturedAt);
+        Assert.Equal(1, fixture.WriteCount);
+    }
+
     [Theory]
     [InlineData("")]
     [InlineData("not an image")]
@@ -162,11 +173,13 @@ public sealed class UploadMissionMediaTests
             handler = new(this, this, this, this, this, sender);
         }
 
-        public async Task<Result<CompleteUploadSessionResult>> Upload(byte[] bytes, Guid? tenant = null)
+        public async Task<Result<CompleteUploadSessionResult>> Upload(
+            byte[] bytes, Guid? tenant = null, bool includeCapture = true)
         {
             using var stream = new MemoryStream(bytes);
             return await handler.Handle(new UploadMissionMediaCommand(tenant ?? TenantId!.Value,
-                mission.FarmId, mission.Id, stream, now), CancellationToken.None);
+                mission.FarmId, mission.Id, stream, includeCapture ? now : null),
+                CancellationToken.None);
         }
 
         public Task<DroneMission?> GetByIdAsync(Guid id, Guid tenant, Guid farm,
