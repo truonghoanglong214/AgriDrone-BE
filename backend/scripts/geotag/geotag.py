@@ -6,7 +6,7 @@ import sys
 import argparse
 
 def parse_time(time_str):
-    """Parse flexible datetime strings from flight logs and EXIF metadata."""
+    """Parse datetime strings from CSV and EXIF metadata."""
     if not time_str:
         raise ValueError("Empty time string")
     time_str = time_str.strip().strip('\x00')
@@ -34,9 +34,9 @@ def to_exif_gps(decimal_degree):
     return ((degrees, 1), (minutes, 1), (seconds, 10000))
 
 def main():
-    parser = argparse.ArgumentParser(description="Inject GPS EXIF tags into mission images using drone flight logs.")
+    parser = argparse.ArgumentParser(description="Inject GPS EXIF tags into mission images using flight log CSV.")
     parser.add_argument("image_folder", help="Directory containing drone images (.jpg, .jpeg)")
-    parser.add_argument("log_file", help="CSV file containing flight log with timestamp, lat, lon, alt")
+    parser.add_argument("log_file", help="CSV file containing flight log (timestamp, lat, lon, alt)")
     parser.add_argument("--offset", type=float, default=0.0, help="Time offset in seconds between camera clock and drone clock (offset = camera_time - drone_time)")
     parser.add_argument("--max-diff", type=float, default=3.0, help="Maximum allowed time difference in seconds to match a log point (default: 3.0s)")
 
@@ -52,25 +52,32 @@ def main():
 
     # 1. Parse CSV log file
     log_records = []
+
     with open(args.log_file, "r", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
+        if reader.fieldnames:
+            reader.fieldnames = [fn.strip() for fn in reader.fieldnames]
+
         for row in reader:
             try:
-                # Support standard headers: timestamp, lat/latitude, lon/longitude, alt/altitude
-                raw_time = row.get("timestamp") or row.get("time") or row.get("RecordedAt")
                 raw_lat = row.get("lat") or row.get("latitude") or row.get("Latitude")
                 raw_lon = row.get("lon") or row.get("longitude") or row.get("Longitude")
                 raw_alt = row.get("alt") or row.get("altitude") or row.get("AltitudeM") or "0"
+                raw_time = row.get("timestamp") or row.get("time") or row.get("RecordedAt")
 
-                if not raw_time or not raw_lat or not raw_lon:
+                if not raw_lat or not raw_lon or not raw_time:
                     continue
 
+                lat = float(raw_lat)
+                lon = float(raw_lon)
+                alt = float(raw_alt)
                 dt = parse_time(raw_time)
+
                 log_records.append({
                     "time": dt,
-                    "lat": float(raw_lat),
-                    "lon": float(raw_lon),
-                    "alt": float(raw_alt)
+                    "lat": lat,
+                    "lon": lon,
+                    "alt": alt
                 })
             except Exception:
                 continue
@@ -81,6 +88,7 @@ def main():
 
     # Sort log records by time
     log_records.sort(key=lambda x: x["time"])
+    print(f"Loaded {len(log_records)} GPS points from {os.path.basename(args.log_file)} (Time range: {log_records[0]['time']} -> {log_records[-1]['time']})")
 
     # 2. Process images
     image_files = [f for f in os.listdir(args.image_folder) if f.lower().endswith((".jpg", ".jpeg"))]
@@ -114,13 +122,12 @@ def main():
             continue
 
         # Find closest record taking offset into account
-        # target_drone_time = img_dt - offset
         target_time = img_dt.timestamp() - args.offset
         nearest_log = min(log_records, key=lambda x: abs(x["time"].timestamp() - target_time))
         diff_seconds = abs(nearest_log["time"].timestamp() - target_time)
 
         if diff_seconds > args.max_diff:
-            print(f"Skip {filename}: Nearest log point differs by {diff_seconds:.2f}s (> {args.max_diff}s limit).")
+            print(f"Skip {filename}: Nearest log point differs by {diff_seconds:.2f}s (> {args.max_diff}s limit). Image time: {img_dt}, Nearest GPS time: {nearest_log['time']}")
             fail_count += 1
             continue
 
@@ -150,7 +157,7 @@ def main():
 
     print(f"Completed geotagging: {success_count} succeeded, {fail_count} failed/skipped out of {len(image_files)} images.")
     if success_count == 0 and len(image_files) > 0:
-        print("Warning: Failed to geotag any images. Check timestamp sync or timezone offset.", file=sys.stderr)
+        print("Warning: Failed to geotag any images. Check timestamp sync or offset.", file=sys.stderr)
         sys.exit(2)
 
     sys.exit(0)

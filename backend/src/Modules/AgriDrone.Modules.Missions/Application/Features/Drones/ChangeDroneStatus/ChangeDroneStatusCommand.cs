@@ -2,8 +2,7 @@
 using AgriDrone.SharedKernel.Application;
 using MediatR;
 
-namespace AgriDrone.Modules.Missions.Application
-    .Features.Drones.ChangeDroneStatus;
+namespace AgriDrone.Modules.Missions.Application.Features.Drones.ChangeDroneStatus;
 
 public sealed record ChangeDroneStatusCommand(
     Guid DroneId,

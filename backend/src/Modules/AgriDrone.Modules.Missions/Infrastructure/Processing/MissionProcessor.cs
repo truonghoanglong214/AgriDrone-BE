@@ -16,6 +16,7 @@ internal sealed class MissionProcessor(
     IMissionsUnitOfWork unitOfWork,
     MissionsDbContext dbContext,
     IObjectStorage objectStorage,
+    IObjectStorageWriter objectStorageWriter,
     IGeotagService geotagService,
     TimeProvider timeProvider,
     ILogger<MissionProcessor> logger) : IMissionProcessor
@@ -189,12 +190,41 @@ internal sealed class MissionProcessor(
             }
 
             logger.LogInformation(
-                "Geotagging completed successfully for Mission {MissionId}. Images in {Directory} are ready for NodeODM.",
-                item.MissionId,
-                imagesDirectory);
+                "Geotagging completed for Mission {MissionId}. Uploading geotagged images back to MinIO...",
+                item.MissionId);
 
-            // Bước tiếp theo (NodeODM) sẽ tiếp nhận thư mục imagesDirectory tại đây.
-            // Khi hoàn thành ghép bản đồ và upload file .tif về MinIO, thư mục tạm sẽ được dọn dẹp.
+            // 5. Cập nhật ảnh đã gắn GPS trở lại MinIO
+            foreach (var mediaItem in mediaList)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                var fileName = $"{mediaItem.MediaId:N}.jpg";
+                var localFilePath = Path.Combine(imagesDirectory, fileName);
+
+                if (File.Exists(localFilePath))
+                {
+                    await using var fileStream = File.OpenRead(localFilePath);
+                    await objectStorageWriter.UploadAsync(
+                        mediaItem.Media.Url,
+                        fileStream,
+                        fileStream.Length,
+                        "image/jpeg",
+                        cancellationToken);
+                }
+            }
+
+            // 6. Cập nhật trạng thái Mission và thống kê Geotag
+            mission.UpdateNotes(
+                $"Geotagged: {geotagResult.ProcessedCount} images successfully ({geotagResult.ErrorCount} errors). Ready for NodeODM.");
+
+            mission.MarkAwaitingReview(timeProvider.GetUtcNow());
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+
+            logger.LogInformation(
+                "Mission {MissionId} geotagging completed ({Count} processed, {Errors} errors). Ready for NodeODM.",
+                item.MissionId,
+                geotagResult.ProcessedCount,
+                geotagResult.ErrorCount);
         }
         catch (Exception ex)
         {
@@ -213,5 +243,20 @@ internal sealed class MissionProcessor(
                 logger.LogError(saveEx, "Failed to mark Mission {MissionId} as Failed.", item.MissionId);
             }
         }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(tempDirectory))
+                {
+                    Directory.Delete(tempDirectory, recursive: true);
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Failed to clean up temp directory {Directory}", tempDirectory);
+            }
+        }
     }
 }
+

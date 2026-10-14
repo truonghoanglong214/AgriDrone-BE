@@ -689,6 +689,26 @@ public sealed class DroneMission : AggregateRoot
         ProcessingStatus = ProcessingStatus.ReviewRequired;
         UpdatedAt = changedAt;
     }
+
+    public void StartMapProcessing(DateTimeOffset changedAt)
+    {
+        DomainGuard.Utc(changedAt);
+        if (Status is not (MissionStatus.AwaitingReview or MissionStatus.ReadyForProcessing or MissionStatus.ProcessingFailed))
+        {
+            throw new InvalidOperationException(
+                $"Mission in status '{Status}' cannot start map processing.");
+        }
+
+        Status = MissionStatus.Processing;
+        ProcessingStatus = ProcessingStatus.Processing;
+        UpdatedAt = changedAt;
+    }
+
+    public void UpdateNotes(string? notes)
+    {
+        Notes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim();
+    }
+
     public bool ApplyPublishedZoneMap(
         Guid approvalId,
         Guid mapVersionId,

@@ -1,5 +1,4 @@
-﻿using AgriDrone.Modules.Missions.Application
-    .Features.Missions;
+﻿using AgriDrone.Modules.Missions.Application.Features.Missions;
 
 using AgriDrone.Modules.Missions.Application.Features.Missions.GetMissions;
 using AgriDrone.SharedKernel.Application.Pagination;

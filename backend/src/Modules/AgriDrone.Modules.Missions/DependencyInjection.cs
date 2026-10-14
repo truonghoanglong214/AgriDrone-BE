@@ -22,11 +22,14 @@ using AgriDrone.SharedInfrastructure.Auditing;
 using AgriDrone.SharedInfrastructure.Messaging;
 using AgriDrone.SharedInfrastructure.Messaging.Consumers;
 using AgriDrone.SharedInfrastructure.Persistence;
+using AgriDrone.Modules.Missions.Application.Abstractions.Processing;
+using AgriDrone.Modules.Missions.Infrastructure.Processing;
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+
 
 namespace AgriDrone.Modules.Missions;
 
@@ -156,6 +159,28 @@ public static class DependencyInjection
 
         services.AddScoped<
             IMissionUploadReadinessQueries, MissionUploadReadinessQueries>();
+
+        // Geotagging & NodeODM Processing Services
+        services.Configure<GeotagOptions>(configuration.GetSection(GeotagOptions.SectionName));
+        services.Configure<NodeOdmOptions>(configuration.GetSection(NodeOdmOptions.SectionName));
+        services.Configure<MapPreviewOptions>(configuration.GetSection(MapPreviewOptions.SectionName));
+
+        services.AddSingleton<IMissionProcessingQueue, MissionProcessingQueue>();
+        services.AddScoped<IGeotagService, PythonGeotagService>();
+        services.AddScoped<IMissionProcessor, MissionProcessor>();
+        services.AddHostedService<MissionProcessingBackgroundService>();
+
+        services.AddHttpClient<INodeOdmService, NodeOdmService>((serviceProvider, client) =>
+        {
+            var odmOpts = serviceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<NodeOdmOptions>>().Value;
+            if (Uri.TryCreate(odmOpts.Endpoint, UriKind.Absolute, out var endpointUri))
+            {
+                client.BaseAddress = endpointUri;
+            }
+            client.Timeout = TimeSpan.FromMinutes(odmOpts.TimeoutMinutes);
+        });
+
+        services.AddScoped<IMapPreviewService, MapPreviewService>();
 
         return services;
     }
