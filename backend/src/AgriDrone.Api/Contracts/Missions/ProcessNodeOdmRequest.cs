@@ -1,6 +1,7 @@
 namespace AgriDrone.Api.Contracts.Missions;
 
 public sealed record ProcessNodeOdmRequest(
+    string? CameraLens = null,
     string? FeatureQuality = null,
     int? ResizeTo = null,
     string? PcQuality = null,

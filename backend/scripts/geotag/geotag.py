@@ -24,6 +24,10 @@ def parse_time(time_str):
             return datetime.strptime(time_str, fmt)
         except ValueError:
             continue
+    try:
+        return datetime.fromisoformat(time_str)
+    except Exception:
+        pass
     raise ValueError(f"Unsupported timestamp format: {time_str}")
 
 def to_exif_gps(decimal_degree):
@@ -96,19 +100,64 @@ def main():
         print(f"Warning: No JPG/JPEG images found in {args.image_folder}")
         sys.exit(0)
 
+    sorted_image_files = sorted(image_files)
+
+    # Detect whether DateTimeOriginal is static across images (common in GoPro timelapse/burst mode)
+    use_0th_datetime = False
+    if len(sorted_image_files) >= 2:
+        try:
+            exif0 = piexif.load(os.path.join(args.image_folder, sorted_image_files[0]))
+            exif1 = piexif.load(os.path.join(args.image_folder, sorted_image_files[1]))
+            dto0 = exif0.get("Exif", {}).get(piexif.ExifIFD.DateTimeOriginal)
+            dto1 = exif1.get("Exif", {}).get(piexif.ExifIFD.DateTimeOriginal)
+            dt0th0 = exif0.get("0th", {}).get(piexif.ImageIFD.DateTime)
+            dt0th1 = exif1.get("0th", {}).get(piexif.ImageIFD.DateTime)
+
+            if dto0 and dto1 and dto0 == dto1 and dt0th0 and dt0th1 and dt0th0 != dt0th1:
+                use_0th_datetime = True
+                print("Detected static DateTimeOriginal (GoPro timelapse mode). Using per-frame 0th.DateTime instead.")
+        except Exception:
+            pass
+
+    def extract_time_str(exif):
+        if use_0th_datetime:
+            if "0th" in exif and piexif.ImageIFD.DateTime in exif["0th"]:
+                return exif["0th"][piexif.ImageIFD.DateTime].decode("utf-8", errors="ignore")
+        if "Exif" in exif and piexif.ExifIFD.DateTimeOriginal in exif["Exif"]:
+            return exif["Exif"][piexif.ExifIFD.DateTimeOriginal].decode("utf-8", errors="ignore")
+        if "0th" in exif and piexif.ImageIFD.DateTime in exif["0th"]:
+            return exif["0th"][piexif.ImageIFD.DateTime].decode("utf-8", errors="ignore")
+        return None
+
+    # Auto-detect camera timezone offset when offset is 0.0
+    effective_offset = args.offset
+    if effective_offset == 0.0 and sorted_image_files:
+        for sample_fn in sorted_image_files[:5]:
+            sample_path = os.path.join(args.image_folder, sample_fn)
+            try:
+                sample_exif = piexif.load(sample_path)
+                sample_time_str = extract_time_str(sample_exif)
+                if sample_time_str:
+                    s_dt = parse_time(sample_time_str)
+                    min_diff_0 = min(abs(r["time"].timestamp() - s_dt.timestamp()) for r in log_records)
+                    if min_diff_0 > args.max_diff:
+                        candidate_offset = round((s_dt.timestamp() - log_records[0]["time"].timestamp()) / 1800) * 1800
+                        min_diff_candidate = min(abs(r["time"].timestamp() - (s_dt.timestamp() - candidate_offset)) for r in log_records)
+                        if min_diff_candidate <= args.max_diff:
+                            effective_offset = float(candidate_offset)
+                            print(f"Auto-detected camera timezone offset: {candidate_offset / 3600:+.1f} hours ({effective_offset}s)")
+                            break
+            except Exception:
+                continue
+
     success_count = 0
     fail_count = 0
 
-    for filename in sorted(image_files):
+    for filename in sorted_image_files:
         filepath = os.path.join(args.image_folder, filename)
         try:
             exif_dict = piexif.load(filepath)
-            img_time_str = None
-
-            if "Exif" in exif_dict and piexif.ExifIFD.DateTimeOriginal in exif_dict["Exif"]:
-                img_time_str = exif_dict["Exif"][piexif.ExifIFD.DateTimeOriginal].decode("utf-8", errors="ignore")
-            elif "0th" in exif_dict and piexif.ImageIFD.DateTime in exif_dict["0th"]:
-                img_time_str = exif_dict["0th"][piexif.ImageIFD.DateTime].decode("utf-8", errors="ignore")
+            img_time_str = extract_time_str(exif_dict)
 
             if not img_time_str:
                 print(f"Skip {filename}: No DateTimeOriginal or DateTime found in EXIF.")
@@ -122,7 +171,7 @@ def main():
             continue
 
         # Find closest record taking offset into account
-        target_time = img_dt.timestamp() - args.offset
+        target_time = img_dt.timestamp() - effective_offset
         nearest_log = min(log_records, key=lambda x: abs(x["time"].timestamp() - target_time))
         diff_seconds = abs(nearest_log["time"].timestamp() - target_time)
 
@@ -146,6 +195,14 @@ def main():
         }
 
         exif_dict["GPS"] = gps_ifd
+
+        # Sync DateTimeOriginal and DateTimeDigitized so NodeODM/OpenSfM reads correct per-image timestamps
+        formatted_time = img_dt.strftime("%Y:%m:%d %H:%M:%S").encode("utf-8")
+        if "Exif" not in exif_dict or not isinstance(exif_dict["Exif"], dict):
+            exif_dict["Exif"] = {}
+        exif_dict["Exif"][piexif.ExifIFD.DateTimeOriginal] = formatted_time
+        exif_dict["Exif"][piexif.ExifIFD.DateTimeDigitized] = formatted_time
+
         try:
             exif_bytes = piexif.dump(exif_dict)
             piexif.insert(exif_bytes, filepath)

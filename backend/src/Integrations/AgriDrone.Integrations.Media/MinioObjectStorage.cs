@@ -1,4 +1,4 @@
-﻿using System.Text.RegularExpressions;
+using System.Text.RegularExpressions;
 using AgriDrone.Modules.Missions.Application.Abstractions.Media;
 using Microsoft.Extensions.Options;
 using Minio;
@@ -43,10 +43,9 @@ internal sealed class MinioObjectStorage(
         var safeObjectName =
             SanitizeObjectName(request.ObjectName);
 
-        var objectName =
-            $"tenants/{request.TenantId:D}/" +
-            $"media/{request.MediaAssetId:D}/" +
-            safeObjectName;
+        var objectName = request.MissionId.HasValue
+            ? $"tenants/{request.TenantId:D}/media/{request.MissionId.Value:D}/{safeObjectName}"
+            : $"tenants/{request.TenantId:D}/media/{request.MediaAssetId:D}/{safeObjectName}";
 
         var expiresAt = timeProvider.GetUtcNow()
             .AddMinutes(

@@ -18,6 +18,16 @@
         }
     }
 
+    function getSortedImages(files) {
+        return Array.from(files || [])
+            .filter(file => imageName.test(file.name))
+            .sort((a, b) => {
+                const nameA = a.webkitRelativePath || a.name;
+                const nameB = b.webkitRelativePath || b.name;
+                return nameA.localeCompare(nameB, undefined, { numeric: true, sensitivity: "base" });
+            });
+    }
+
     function batches(files) {
         const result = [];
         let current = [];
@@ -132,9 +142,8 @@
 
         let controller = null;
         picker.input.addEventListener("change", () => {
-            const selected = Array.from(picker.input.files || []);
-            const images = selected.filter(file => imageName.test(file.name));
-            status.textContent = `Đã chọn ${images.length} ảnh trong ${selected.length} file.`;
+            const images = getSortedImages(picker.input.files);
+            status.textContent = `Đã chọn ${images.length} ảnh trong ${picker.input.files?.length || 0} file (đã sắp xếp thứ tự theo tên).`;
         });
         cancel.addEventListener("click", () => controller?.abort());
 
@@ -143,8 +152,7 @@
             const missionId = mission.input.value.trim();
             const accessToken = (token.input.value.trim() || swaggerToken())
                 .replace(/^Bearer\s+/i, "");
-            const selected = Array.from(picker.input.files || []);
-            const images = selected.filter(file => imageName.test(file.name));
+            const images = getSortedImages(picker.input.files);
 
             if (!guid.test(farmId) || !guid.test(missionId)) {
                 status.textContent = "Nhập Farm ID và Mission ID hợp lệ.";

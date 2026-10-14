@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using AgriDrone.IntegrationContracts.Media;
 using AgriDrone.Modules.Missions.Application.Abstractions.Media;
 using AgriDrone.Modules.Missions.Application.Abstractions.Missions;
@@ -117,7 +117,8 @@ internal sealed class CreateUploadSessionCommandHandler(
                     request.MimeType,
                     request.FileSizeBytes,
                     ChecksumAlgorithms.Sha256,
-                    request.Sha256Checksum),
+                    request.Sha256Checksum,
+                    request.MissionId),
                 cancellationToken);
 
         var uploadSession = MediaUploadSession.Create(
@@ -243,7 +244,8 @@ internal sealed class CreateUploadSessionCommandHandler(
                     existing.MimeType,
                     existing.FileSizeBytes,
                     existing.ChecksumAlgorithm,
-                    existing.ExpectedChecksum),
+                    existing.ExpectedChecksum,
+                    existing.MissionId),
                 cancellationToken);
 
         existing.RefreshPendingUpload(

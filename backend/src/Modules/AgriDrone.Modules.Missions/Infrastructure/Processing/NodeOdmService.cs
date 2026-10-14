@@ -24,24 +24,29 @@ internal sealed class NodeOdmService(
             return new NodeOdmTaskCreatedResult(false, null, "No image files provided for NodeODM task.");
         }
 
-        var opt = taskOptions ?? new NodeOdmTaskOptions(
-            _options.FeatureQuality,
-            _options.ResizeTo,
-            _options.PcQuality,
-            _options.MaxConcurrency,
-            _options.FastOrthophoto);
+        var cameraLens = taskOptions?.CameraLens ?? _options.CameraLens;
+        var featureQuality = taskOptions?.FeatureQuality ?? _options.FeatureQuality;
+        var resizeTo = taskOptions?.ResizeTo ?? _options.ResizeTo;
+        var pcQuality = taskOptions?.PcQuality ?? _options.PcQuality;
+        var maxConcurrency = taskOptions?.MaxConcurrency ?? _options.MaxConcurrency;
+        var fastOrthophoto = taskOptions?.FastOrthophoto ?? _options.FastOrthophoto;
 
-        // Build NodeODM options array
-        var optionsArray = new object[]
+        // Build NodeODM options list
+        var optionsList = new List<object>
         {
-            new { name = "feature-quality", value = opt.FeatureQuality },
-            new { name = "resize-to", value = opt.ResizeTo },
-            new { name = "pc-quality", value = opt.PcQuality },
-            new { name = "max-concurrency", value = opt.MaxConcurrency },
-            new { name = "fast-orthophoto", value = opt.FastOrthophoto }
+            new { name = "feature-quality", value = featureQuality },
+            new { name = "resize-to", value = resizeTo },
+            new { name = "pc-quality", value = pcQuality },
+            new { name = "max-concurrency", value = maxConcurrency },
+            new { name = "fast-orthophoto", value = fastOrthophoto }
         };
 
-        var optionsJson = JsonSerializer.Serialize(optionsArray);
+        if (!string.IsNullOrWhiteSpace(cameraLens) && !string.Equals(cameraLens, "auto", StringComparison.OrdinalIgnoreCase))
+        {
+            optionsList.Add(new { name = "camera-lens", value = cameraLens });
+        }
+
+        var optionsJson = JsonSerializer.Serialize(optionsList);
 
         logger.LogInformation(
             "Submitting task to NodeODM at {Endpoint} with {Count} images and options: {Options}",

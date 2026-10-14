@@ -81,63 +81,98 @@ internal static class UploadedMediaIntegrityVerifier
 
     private static bool VerifyJpeg(Stream input, CancellationToken token)
     {
-        if (input.ReadByte() != 0xff || input.ReadByte() != 0xd8) return false;
-        var hasFrame = false;
-        var hasScan = false;
-        var inScan = false;
-        var scanDataBytes = 0;
         var inspected = 0;
+        var first = true;
         while (true)
         {
-            if (++inspected % 65536 == 0) token.ThrowIfCancellationRequested();
-            var value = input.ReadByte();
-            if (value == -1) return false;
-            if (inScan && value != 0xff)
+            if (first)
             {
-                scanDataBytes++;
-                continue;
+                if (input.ReadByte() != 0xff || input.ReadByte() != 0xd8) return false;
             }
-            if (value != 0xff) return false;
-            int marker;
-            do { marker = input.ReadByte(); } while (marker == 0xff);
-            if (marker == -1) return false;
-            if (inScan && (marker == 0x00 || marker is >= 0xd0 and <= 0xd7))
-                continue;
-            inScan = false;
-            if (marker == 0xd9) return hasFrame && hasScan && scanDataBytes > 0;
-            if (marker == 0xd8 || marker == 0x00 || marker is >= 0xd0 and <= 0xd7)
-                return false;
-            if (marker == 0x01) continue;
+            first = false;
+            var hasFrame = false;
+            var hasScan = false;
+            var inScan = false;
+            var scanDataBytes = 0;
+            var completedImage = false;
 
-            var high = input.ReadByte();
-            var low = input.ReadByte();
-            if (high == -1 || low == -1) return false;
-            var length = (high << 8) | low;
-            if (length < 2) return false;
-            if (marker is >= 0xc0 and <= 0xcf && marker is not (0xc4 or 0xc8 or 0xcc))
+            while (!completedImage)
             {
-                if (length < 8) return false;
-                var precision = input.ReadByte();
-                var heightHigh = input.ReadByte();
-                var heightLow = input.ReadByte();
-                var widthHigh = input.ReadByte();
-                var widthLow = input.ReadByte();
-                var components = input.ReadByte();
-                if (precision <= 0 || heightHigh < 0 || heightLow < 0 ||
-                    widthHigh < 0 || widthLow < 0 || components <= 0 ||
-                    (heightHigh | heightLow) == 0 || (widthHigh | widthLow) == 0 ||
-                    length < 8 + 3 * components) return false;
-                hasFrame = true;
-                if (!Skip(input, length - 8, token)) return false;
-                continue;
+                if (++inspected % 65536 == 0) token.ThrowIfCancellationRequested();
+                var value = input.ReadByte();
+                if (value == -1) return false;
+                if (inScan && value != 0xff)
+                {
+                    scanDataBytes++;
+                    continue;
+                }
+                if (value != 0xff) return false;
+                int marker;
+                do { marker = input.ReadByte(); } while (marker == 0xff);
+                if (marker == -1) return false;
+                if (inScan && (marker == 0x00 || marker is >= 0xd0 and <= 0xd7))
+                    continue;
+                inScan = false;
+                if (marker == 0xd9)
+                {
+                    if (!hasFrame || !hasScan || scanDataBytes <= 0) return false;
+                    completedImage = true;
+                    break;
+                }
+                if (marker == 0xd8 || marker == 0x00 || marker is >= 0xd0 and <= 0xd7)
+                    return false;
+                if (marker == 0x01) continue;
+
+                var high = input.ReadByte();
+                var low = input.ReadByte();
+                if (high == -1 || low == -1) return false;
+                var length = (high << 8) | low;
+                if (length < 2) return false;
+                if (marker is >= 0xc0 and <= 0xcf && marker is not (0xc4 or 0xc8 or 0xcc))
+                {
+                    if (length < 8) return false;
+                    var precision = input.ReadByte();
+                    var heightHigh = input.ReadByte();
+                    var heightLow = input.ReadByte();
+                    var widthHigh = input.ReadByte();
+                    var widthLow = input.ReadByte();
+                    var components = input.ReadByte();
+                    if (precision <= 0 || heightHigh < 0 || heightLow < 0 ||
+                        widthHigh < 0 || widthLow < 0 || components <= 0 ||
+                        (heightHigh | heightLow) == 0 || (widthHigh | widthLow) == 0 ||
+                        length < 8 + 3 * components) return false;
+                    hasFrame = true;
+                    if (!Skip(input, length - 8, token)) return false;
+                    continue;
+                }
+                if (marker == 0xda)
+                {
+                    if (!hasFrame || length < 6) return false;
+                    hasScan = true;
+                    inScan = true;
+                }
+                if (!Skip(input, length - 2, token)) return false;
             }
-            if (marker == 0xda)
+
+            var next = input.ReadByte();
+            if (next == -1) return true;
+
+            while (next == 0x00)
             {
-                if (!hasFrame || length < 6) return false;
-                hasScan = true;
-                inScan = true;
+                next = input.ReadByte();
+                if (next == -1) return true;
             }
-            if (!Skip(input, length - 2, token)) return false;
+
+            if (next == 0xff)
+            {
+                var nextMarker = input.ReadByte();
+                while (nextMarker == 0xff) nextMarker = input.ReadByte();
+                if (nextMarker == -1) return true;
+                if (nextMarker == 0xd8) continue; // Start of next JPEG image (MPF)
+                return false;
+            }
+
+            return false;
         }
     }
 

@@ -112,10 +112,17 @@ internal sealed class PythonGeotagService(
                 "Python geotag completed successfully for folder {Folder}.",
                 imagesDirectory);
 
+            var match = System.Text.RegularExpressions.Regex.Match(
+                stdout,
+                @"Completed geotagging:\s*(\d+)\s*succeeded,\s*(\d+)\s*failed");
+
+            var processedCount = match.Success && int.TryParse(match.Groups[1].Value, out var p) ? p : 1;
+            var errorCount = match.Success && int.TryParse(match.Groups[2].Value, out var errCount) ? errCount : 0;
+
             return new GeotagResult(
                 IsSuccess: true,
-                ProcessedCount: 1,
-                ErrorCount: 0,
+                ProcessedCount: processedCount,
+                ErrorCount: errorCount,
                 ErrorMessage: null);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)

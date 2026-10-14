@@ -85,4 +85,28 @@ public sealed class UploadedMediaIntegrityVerifierTests
             await UploadedMediaIntegrityVerifier.VerifyAsync(stream,
                 "image/jpeg", bytes.Length, CancellationToken.None));
     }
+
+    [Fact]
+    public async Task MultiPictureJpegProducesChecksum()
+    {
+        var baseJpeg = Convert.FromBase64String(
+            "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAABAAEDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwDi6KKK+ZP3E//Z");
+        byte[] bytes = [.. baseJpeg, .. baseJpeg];
+        using var stream = new MemoryStream(bytes);
+        var checksum = await UploadedMediaIntegrityVerifier.VerifyAsync(stream,
+            "image/jpeg", bytes.Length, CancellationToken.None);
+        Assert.Equal(Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant(), checksum);
+    }
+
+    [Fact]
+    public async Task RealDroneImageCanBeVerified()
+    {
+        var path = @"D:\capstone\dataset\baymap1\13_10_04\G0174984_1791879976229.JPG";
+        if (!File.Exists(path)) return;
+        using var stream = File.OpenRead(path);
+        var checksum = await UploadedMediaIntegrityVerifier.VerifyAsync(stream,
+            "image/jpeg", stream.Length, CancellationToken.None);
+        Assert.NotNull(checksum);
+        Assert.Equal(64, checksum.Length);
+    }
 }

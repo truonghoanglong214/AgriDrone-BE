@@ -44,18 +44,20 @@ public sealed class MissionOrthophotoController(
 
         NodeOdmTaskOptions? customOptions = null;
         if (request is not null &&
-            (request.FeatureQuality is not null ||
+            (request.CameraLens is not null ||
+             request.FeatureQuality is not null ||
              request.ResizeTo is not null ||
              request.PcQuality is not null ||
              request.MaxConcurrency is not null ||
              request.FastOrthophoto is not null))
         {
             customOptions = new NodeOdmTaskOptions(
-                request.FeatureQuality ?? "lowest",
-                request.ResizeTo ?? 1200,
-                request.PcQuality ?? "lowest",
-                request.MaxConcurrency ?? 4,
-                request.FastOrthophoto ?? true);
+                request.CameraLens,
+                request.FeatureQuality,
+                request.ResizeTo,
+                request.PcQuality,
+                request.MaxConcurrency,
+                request.FastOrthophoto);
         }
 
         var command = new ProcessNodeOdmCommand(

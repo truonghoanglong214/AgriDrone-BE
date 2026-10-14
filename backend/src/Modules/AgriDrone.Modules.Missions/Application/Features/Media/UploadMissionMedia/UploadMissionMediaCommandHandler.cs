@@ -77,7 +77,9 @@ internal sealed class UploadMissionMediaCommandHandler(
             return InvalidFile("The image or video is incomplete or has an invalid container structure.");
         // Operation uniqueness is scoped by tenant/farm/mission in persistence.
         var operationId = new Guid(Convert.FromHexString(checksum).AsSpan(0, 16));
-        var fileName = checksum + UploadedMediaFormat.Extension(mimeType);
+        var fileName = !string.IsNullOrWhiteSpace(request.FileName)
+            ? Path.GetFileName(request.FileName)
+            : checksum + UploadedMediaFormat.Extension(mimeType);
         var existing = await sessions.GetByOperationIdAsync(request.TenantId,
             request.FarmId, request.MissionId, operationId, cancellationToken);
         if (existing is not null && !existing.MatchesRequest(fileName, mimeType,

@@ -1,11 +1,12 @@
 namespace AgriDrone.Modules.Missions.Application.Abstractions.Processing;
 
 public sealed record NodeOdmTaskOptions(
-    string FeatureQuality = "lowest",
-    int ResizeTo = 1200,
-    string PcQuality = "lowest",
-    int MaxConcurrency = 4,
-    bool FastOrthophoto = true);
+    string? CameraLens = null,
+    string? FeatureQuality = null,
+    int? ResizeTo = null,
+    string? PcQuality = null,
+    int? MaxConcurrency = null,
+    bool? FastOrthophoto = null);
 
 public sealed record NodeOdmTaskCreatedResult(
     bool IsSuccess,

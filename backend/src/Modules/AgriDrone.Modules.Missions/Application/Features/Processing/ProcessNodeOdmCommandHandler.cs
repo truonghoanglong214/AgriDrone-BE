@@ -61,6 +61,10 @@ internal sealed class ProcessNodeOdmCommandHandler(
             .Where(mm =>
                 mm.MissionId == request.MissionId &&
                 mm.MediaRole == MissionMediaRole.RawImage)
+            .OrderBy(mm => mm.CapturedAt)
+            .ThenBy(mm => mm.Media.StorageKey)
+            .ThenBy(mm => mm.CreatedAt)
+            .ThenBy(mm => mm.MediaId)
             .ToListAsync(cancellationToken);
 
         if (mediaList.Count == 0)
@@ -91,7 +95,9 @@ internal sealed class ProcessNodeOdmCommandHandler(
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                var fileName = $"{mediaItem.MediaId:N}.jpg";
+                var fileName = !string.IsNullOrWhiteSpace(mediaItem.Media.StorageKey)
+                    ? Path.GetFileName(mediaItem.Media.StorageKey)
+                    : $"{mediaItem.MediaId:N}.jpg";
                 var localFilePath = Path.Combine(tempDir, fileName);
 
                 await objectStorage.ReadAsync(

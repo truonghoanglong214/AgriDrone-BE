@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -187,20 +188,37 @@ internal sealed partial class GetMissionOrthophotoStatusQueryHandler(
         try
         {
             Directory.CreateDirectory(tempDir);
+            var zipPath = Path.Combine(tempDir, "all.zip");
             var tifPath = Path.Combine(tempDir, "orthophoto.tif");
             var jpgPath = Path.Combine(tempDir, "map_preview.jpg");
 
-            // 1. Download orthophoto.tif from NodeODM
-            await using (var stream = await nodeOdmService.DownloadAssetAsync(taskId, "orthophoto.tif", cancellationToken))
+            // 1. Download all.zip from NodeODM (NodeODM bundles all task outputs in all.zip)
+            await using (var stream = await nodeOdmService.DownloadAssetAsync(taskId, "all.zip", cancellationToken))
             {
                 if (stream is null)
                 {
-                    logger.LogError("Failed to download orthophoto.tif from NodeODM for task {TaskId}", taskId);
+                    logger.LogError("Failed to download all.zip from NodeODM for task {TaskId}", taskId);
                     return false;
                 }
 
-                await using var fileStream = File.Create(tifPath);
+                await using var fileStream = File.Create(zipPath);
                 await stream.CopyToAsync(fileStream, cancellationToken);
+            }
+
+            // Extract odm_orthophoto.tif from all.zip
+            using (var archive = ZipFile.OpenRead(zipPath))
+            {
+                var tifEntry = archive.Entries.FirstOrDefault(e =>
+                    e.FullName.EndsWith("odm_orthophoto.tif", StringComparison.OrdinalIgnoreCase) ||
+                    e.FullName.EndsWith("orthophoto.tif", StringComparison.OrdinalIgnoreCase));
+
+                if (tifEntry is null)
+                {
+                    logger.LogError("odm_orthophoto.tif not found in all.zip for task {TaskId}", taskId);
+                    return false;
+                }
+
+                tifEntry.ExtractToFile(tifPath, overwrite: true);
             }
 
             // 2. Run Python script to extract map preview & 4 corners
@@ -222,7 +240,7 @@ internal sealed partial class GetMissionOrthophotoStatusQueryHandler(
             // 3. Upload orthophoto.tif to MinIO
             var tifBytes = await File.ReadAllBytesAsync(tifPath, cancellationToken);
             var tifChecksum = Convert.ToHexString(SHA256.HashData(tifBytes)).ToLowerInvariant();
-            var tifKey = $"tenants/{mission.TenantId:N}/farms/{mission.FarmId:N}/missions/{mission.Id:N}/orthophoto.tif";
+            var tifKey = $"tenants/{mission.TenantId}/media/{mission.Id}/orthophoto.tif";
             var tifUri = $"minio://agridrone-media/{tifKey}";
 
             await using (var tifUploadStream = new MemoryStream(tifBytes))
@@ -248,7 +266,7 @@ internal sealed partial class GetMissionOrthophotoStatusQueryHandler(
             // 4. Upload map_preview.jpg to MinIO
             var jpgBytes = await File.ReadAllBytesAsync(jpgPath, cancellationToken);
             var jpgChecksum = Convert.ToHexString(SHA256.HashData(jpgBytes)).ToLowerInvariant();
-            var jpgKey = $"tenants/{mission.TenantId:N}/farms/{mission.FarmId:N}/missions/{mission.Id:N}/map_preview.jpg";
+            var jpgKey = $"tenants/{mission.TenantId}/media/{mission.Id}/map_preview.jpg";
             var jpgUri = $"minio://agridrone-media/{jpgKey}";
 
             await using (var jpgUploadStream = new MemoryStream(jpgBytes))

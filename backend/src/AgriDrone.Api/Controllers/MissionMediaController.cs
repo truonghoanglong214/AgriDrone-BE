@@ -195,7 +195,8 @@ public sealed class MissionMediaController(
                     tenantId, farmId, missionId, content,
                     request.CapturedAt.Count == 0
                         ? null
-                        : request.CapturedAt[index]), cancellationToken);
+                        : request.CapturedAt[index],
+                    fileName), cancellationToken);
                 if (result.IsFailure)
                 {
                     results.Add(new(index, fileName, "Failed", null,
