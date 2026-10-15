@@ -5,12 +5,6 @@ namespace AgriDrone.Modules.Missions.Application
 
 internal interface IMissionTelemetryRepository
 {
-    Task<BlackboxDecode?> GetDecodeAsync(
-        Guid tenantId, Guid farmId, Guid missionId,
-        string sourceChecksum, CancellationToken cancellationToken = default);
-
-    void AddDecode(BlackboxDecode decode);
-
     Task<MissionTelemetryImport?> GetImportByOperationIdAsync(
         Guid tenantId,
         Guid farmId,
@@ -27,4 +21,9 @@ internal interface IMissionTelemetryRepository
     void Add(
         MissionTelemetryImport telemetryImport,
         IReadOnlyCollection<MissionTelemetryPoint> points);
+
+    Task ReplaceAsync(
+        MissionTelemetryImport telemetryImport,
+        IReadOnlyCollection<MissionTelemetryPoint> points,
+        CancellationToken cancellationToken = default);
 }

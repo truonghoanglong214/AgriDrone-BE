@@ -5,4 +5,5 @@ public sealed record ImportMissionTelemetryRequest(
     string SourceFileName,
     string SourceChecksum,
     uint ExpectedMissionVersion,
-    IReadOnlyList<MissionTelemetryPointRequest>? Points);
+    IReadOnlyList<MissionTelemetryPointRequest>? Points,
+    int? SegmentIndex = null);

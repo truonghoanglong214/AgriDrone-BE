@@ -4,7 +4,4 @@ public sealed record NormalizedTelemetryLog(
     string SourceFileName,
     string SourceChecksum,
     IReadOnlyList<NormalizedTelemetrySegment> Segments,
-    IReadOnlyList<string> Warnings)
-{
-    public Guid? DecodeId { get; init; }
-}
+    IReadOnlyList<string> Warnings);

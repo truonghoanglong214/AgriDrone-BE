@@ -18,13 +18,6 @@ internal static class ImportTelemetryError
             $"Operation '{operationId}' already exists " +
             "with different telemetry information.");
 
-    public static AppError MissionAlreadyImported(
-        Guid existingOperationId) =>
-        AppError.Conflict(
-            "TelemetryImport.MissionAlreadyImported",
-            "The Mission already has telemetry imported by " +
-            $"operation '{existingOperationId}'.");
-
     public static AppError FlightTimelineMissing() =>
         AppError.Conflict(
             "TelemetryImport.FlightTimelineMissing",

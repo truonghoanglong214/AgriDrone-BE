@@ -16,7 +16,7 @@ namespace AgriDrone.UnitTests.Application.Missions;
 public sealed class NormalizeBlackboxPersistenceTests
 {
     [Fact]
-    public async Task SuccessfulDecodeStoresGpsJsonAndRetryReusesRecord()
+    public async Task SuccessfulDecodeReturnsSegmentsWithoutPersistingGps()
     {
         var fixture = new Fixture();
         var first = await fixture.Normalize();
@@ -24,19 +24,13 @@ public sealed class NormalizeBlackboxPersistenceTests
 
         Assert.True(first.IsSuccess);
         Assert.True(second.IsSuccess);
-        Assert.Equal(first.Value.DecodeId, second.Value.DecodeId);
-        Assert.Equal(1, fixture.SaveCount);
-
-        var segment = fixture.Decode!.PointsJson.RootElement
-            .GetProperty("segments")[0];
-        Assert.Equal(3.0m, segment.GetProperty("points")[0]
-            .GetProperty("alt").GetDecimal());
-        Assert.Equal(10.461453, segment.GetProperty("points")[0]
-            .GetProperty("lat").GetDouble());
-        Assert.Equal(106.493968, segment.GetProperty("points")[0]
-            .GetProperty("lon").GetDouble());
-        Assert.Equal("2026-10-13T10:12:44+00:00", segment.GetProperty("points")[0]
-            .GetProperty("timestamp").GetString());
+        Assert.Equal(0, fixture.SaveCount);
+        var point = first.Value.Segments[0].Points[0];
+        Assert.Equal(3.0m, point.AltitudeM);
+        Assert.Equal(10.461453, point.Latitude);
+        Assert.Equal(106.493968, point.Longitude);
+        Assert.Equal(new DateTimeOffset(2026, 10, 13, 10, 12, 44,
+            TimeSpan.Zero), point.RecordedAt);
     }
 
     [Fact]
@@ -57,7 +51,6 @@ public sealed class NormalizeBlackboxPersistenceTests
     {
         private readonly DroneMission mission;
         private readonly NormalizeTelemetryLogCommandHandler handler;
-        public BlackboxDecode? Decode;
         public int SaveCount;
         public bool AllowFarmAccess { get; set; } = true;
         public Guid? TenantId => null;
@@ -74,7 +67,7 @@ public sealed class NormalizeBlackboxPersistenceTests
                 Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
                 Guid.NewGuid(), null, "BLACKBOX-TEST", MissionType.Mapping,
                 null, parameters, null, ActorId!.Value, DateTimeOffset.UtcNow);
-            handler = new(this, this, this, this, this, this, TimeProvider.System);
+            handler = new(this, this, this, this);
         }
 
         public Task<SystemManagerFarmAccess> ResolveFarmAccessAsync(Guid farmId,
@@ -119,14 +112,6 @@ public sealed class NormalizeBlackboxPersistenceTests
             CancellationToken cancellationToken = default) => Task.FromResult(false);
         public void Add(DroneMission value) => throw new NotSupportedException();
 
-        public Task<BlackboxDecode?> GetDecodeAsync(Guid tenantId, Guid farmId,
-            Guid missionId, string sourceChecksum,
-            CancellationToken cancellationToken = default) =>
-            Task.FromResult(Decode is not null &&
-                Decode.TenantId == tenantId && Decode.FarmId == farmId &&
-                Decode.MissionId == missionId &&
-                Decode.SourceChecksum == sourceChecksum ? Decode : null);
-        public void AddDecode(BlackboxDecode value) => Decode = value;
         public Task<MissionTelemetryImport?> GetImportByOperationIdAsync(
             Guid tenantId, Guid farmId, Guid missionId, Guid operationId,
             CancellationToken cancellationToken = default) =>
@@ -137,6 +122,10 @@ public sealed class NormalizeBlackboxPersistenceTests
             throw new NotSupportedException();
         public void Add(MissionTelemetryImport telemetryImport,
             IReadOnlyCollection<MissionTelemetryPoint> points) =>
+            throw new NotSupportedException();
+        public Task ReplaceAsync(MissionTelemetryImport telemetryImport,
+            IReadOnlyCollection<MissionTelemetryPoint> points,
+            CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
         public Task<int> SaveChangesAsync(
             CancellationToken cancellationToken = default)

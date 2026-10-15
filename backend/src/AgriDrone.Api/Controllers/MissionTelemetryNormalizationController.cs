@@ -68,7 +68,6 @@ public sealed class MissionTelemetryNormalizationController(
             HttpContext,
             value => Results.Ok(new
             {
-                value.DecodeId,
                 value.SourceFileName,
                 value.SourceChecksum,
                 value.Warnings,
@@ -94,8 +93,6 @@ public sealed class MissionTelemetryNormalizationController(
                         point.Longitude,
                         point.Latitude,
                         point.AltitudeM,
-                        AltitudeReference =
-                            point.AltitudeReference?.ToString(),
                         point.HeadingDeg,
                         point.SpeedMps,
                         point.HorizontalAccuracyM

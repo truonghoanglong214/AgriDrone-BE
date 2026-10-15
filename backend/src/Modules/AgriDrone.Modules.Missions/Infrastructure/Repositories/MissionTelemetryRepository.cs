@@ -10,20 +10,6 @@ internal sealed class MissionTelemetryRepository(
     MissionsDbContext dbContext)
     : IMissionTelemetryRepository
 {
-    public Task<BlackboxDecode?> GetDecodeAsync(
-        Guid tenantId, Guid farmId, Guid missionId,
-        string sourceChecksum, CancellationToken cancellationToken = default)
-    {
-        return dbContext.BlackboxDecodes.AsNoTracking().SingleOrDefaultAsync(
-            decode => decode.TenantId == tenantId &&
-                      decode.FarmId == farmId &&
-                      decode.MissionId == missionId &&
-                      decode.SourceChecksum == sourceChecksum,
-            cancellationToken);
-    }
-
-    public void AddDecode(BlackboxDecode decode) => dbContext.BlackboxDecodes.Add(decode);
-
     public Task<MissionTelemetryImport?>
         GetImportByOperationIdAsync(
             Guid tenantId,
@@ -51,7 +37,6 @@ internal sealed class MissionTelemetryRepository(
             CancellationToken cancellationToken = default)
     {
         return dbContext.MissionTelemetryImports
-            .AsNoTracking()
             .SingleOrDefaultAsync(
                 telemetryImport =>
                     telemetryImport.TenantId == tenantId &&
@@ -72,5 +57,26 @@ internal sealed class MissionTelemetryRepository(
 
         dbContext.MissionTelemetryPoints.AddRange(
             points);
+    }
+
+    public async Task ReplaceAsync(
+        MissionTelemetryImport telemetryImport,
+        IReadOnlyCollection<MissionTelemetryPoint> points,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(telemetryImport);
+        ArgumentNullException.ThrowIfNull(points);
+
+        await using var transaction = await dbContext.Database
+            .BeginTransactionAsync(cancellationToken);
+
+        await dbContext.MissionTelemetryPoints
+            .Where(point => point.MissionId == telemetryImport.MissionId)
+            .ExecuteDeleteAsync(cancellationToken);
+
+        dbContext.MissionTelemetryPoints.AddRange(points);
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
     }
 }

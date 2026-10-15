@@ -1,4 +1,5 @@
 ﻿using AgriDrone.SharedKernel.Domain;
+using System.Text.Json;
 
 namespace AgriDrone.Modules.Missions.Domain.Telemetry;
 
@@ -22,6 +23,8 @@ public sealed class MissionTelemetryImport : Entity
 
     public int PointCount { get; private set; }
 
+    public JsonDocument? SelectedSegmentJson { get; private set; }
+
     public DateTimeOffset FirstRecordedAt { get; private set; }
 
     public DateTimeOffset LastRecordedAt { get; private set; }
@@ -38,6 +41,7 @@ public sealed class MissionTelemetryImport : Entity
         string sourceFileName,
         string payloadChecksum,
         int pointCount,
+        JsonDocument selectedSegmentJson,
         DateTimeOffset firstRecordedAt,
         DateTimeOffset lastRecordedAt,
         Guid createdBy,
@@ -58,6 +62,18 @@ public sealed class MissionTelemetryImport : Entity
 
         ArgumentException.ThrowIfNullOrWhiteSpace(
             payloadChecksum);
+
+        ArgumentNullException.ThrowIfNull(selectedSegmentJson);
+
+        if (selectedSegmentJson.RootElement.ValueKind != JsonValueKind.Object ||
+            !selectedSegmentJson.RootElement.TryGetProperty("points", out var points) ||
+            points.ValueKind != JsonValueKind.Array ||
+            points.GetArrayLength() != pointCount)
+        {
+            throw new ArgumentException(
+                "Selected segment must contain the imported points.",
+                nameof(selectedSegmentJson));
+        }
 
         var normalizedFileName = sourceFileName.Trim();
         var normalizedChecksum =
@@ -108,11 +124,37 @@ public sealed class MissionTelemetryImport : Entity
             SourceFileName = normalizedFileName,
             PayloadChecksum = normalizedChecksum,
             PointCount = pointCount,
+            SelectedSegmentJson = JsonDocument.Parse(
+                selectedSegmentJson.RootElement.GetRawText()),
             FirstRecordedAt = firstRecordedAt,
             LastRecordedAt = lastRecordedAt,
             CreatedBy = createdBy,
             ImportedAt = importedAt
         };
+    }
+
+    public void ReplaceWith(MissionTelemetryImport replacement)
+    {
+        ArgumentNullException.ThrowIfNull(replacement);
+
+        if (replacement.TenantId != TenantId ||
+            replacement.FarmId != FarmId ||
+            replacement.MissionId != MissionId)
+        {
+            throw new ArgumentException(
+                "Replacement must belong to the same Mission.",
+                nameof(replacement));
+        }
+
+        OperationId = replacement.OperationId;
+        SourceFileName = replacement.SourceFileName;
+        PayloadChecksum = replacement.PayloadChecksum;
+        PointCount = replacement.PointCount;
+        FirstRecordedAt = replacement.FirstRecordedAt;
+        LastRecordedAt = replacement.LastRecordedAt;
+        SelectedSegmentJson = replacement.SelectedSegmentJson;
+        CreatedBy = replacement.CreatedBy;
+        ImportedAt = replacement.ImportedAt;
     }
 
     public bool MatchesPayload(
@@ -135,5 +177,23 @@ public sealed class MissionTelemetryImport : Entity
                    payloadChecksum.Trim(),
                    StringComparison.OrdinalIgnoreCase) &&
                PointCount == pointCount;
+    }
+
+    public bool MatchesPayload(
+        string sourceFileName,
+        string payloadChecksum,
+        int pointCount,
+        JsonDocument selectedSegmentJson)
+    {
+        ArgumentNullException.ThrowIfNull(selectedSegmentJson);
+
+        return MatchesPayload(
+                   sourceFileName,
+                   payloadChecksum,
+                   pointCount) &&
+               SelectedSegmentJson is not null &&
+               JsonElement.DeepEquals(
+                   SelectedSegmentJson.RootElement,
+                   selectedSegmentJson.RootElement);
     }
 }

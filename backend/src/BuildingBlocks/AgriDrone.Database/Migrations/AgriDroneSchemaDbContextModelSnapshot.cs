@@ -3412,6 +3412,10 @@ namespace AgriDrone.Database.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("point_count");
 
+                    b.Property<System.Text.Json.JsonDocument>("SelectedSegmentJson")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("selected_segment_json");
+
                     b.Property<string>("SourceFileName")
                         .IsRequired()
                         .HasMaxLength(255)
@@ -3444,6 +3448,8 @@ namespace AgriDrone.Database.Migrations
                             t.HasCheckConstraint("ck_telemetry_imports_checksum", "payload_checksum ~ '^[0-9a-f]{64}$'");
 
                             t.HasCheckConstraint("ck_telemetry_imports_point_count", "point_count >= 2");
+
+                            t.HasCheckConstraint("ck_telemetry_imports_selected_segment_object", "selected_segment_json IS NULL OR jsonb_typeof(selected_segment_json) = 'object'");
 
                             t.HasCheckConstraint("ck_telemetry_imports_time_range", "last_recorded_at > first_recorded_at");
                         });
