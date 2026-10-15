@@ -135,7 +135,7 @@ public sealed class MissionMediaReadTests
         var fixture = new Fixture();
         fixture.Items.Clear();
         var empty = await fixture.List();
-        var missing = await new GetMissionMediaQueryHandler(fixture, fixture, fixture)
+        var missing = await new GetMissionMediaQueryHandler(fixture, fixture)
             .Handle(new(fixture.FarmId, Guid.NewGuid(), 1, 20, null, null), default);
         Assert.True(empty.IsSuccess);
         Assert.Empty(empty.Value.Items);
@@ -223,7 +223,7 @@ public sealed class MissionMediaReadTests
                 .Handle(new(farmId ?? FarmId, missionId ?? Mission.Id, mediaId ?? Asset.Id), default);
 
         public Task<AgriDrone.SharedKernel.Application.Result<PagedResult<MissionMediaResponse>>> List() =>
-            new GetMissionMediaQueryHandler(this, this, this)
+            new GetMissionMediaQueryHandler(this, this)
                 .Handle(new(FarmId, Mission.Id, 1, 20, null, null), default);
 
         public Task<bool> MissionExistsAsync(
@@ -232,8 +232,8 @@ public sealed class MissionMediaReadTests
 
         public Task<SystemManagerFarmAccess> ResolveFarmAccessAsync(
             Guid farmId, CancellationToken cancellationToken = default) =>
-            Task.FromResult(ManagerAssigned && farmId == FarmId
-                ? SystemManagerFarmAccess.Allowed(Mission.TenantId, FarmId, Guid.NewGuid())
+            Task.FromResult(ManagerAssigned && farmId == FarmId && TenantId.HasValue
+                ? SystemManagerFarmAccess.Allowed(TenantId.Value, FarmId, Guid.NewGuid())
                 : SystemManagerFarmAccess.Denied("Farm is not assigned."));
 
         private IQueryable<MissionMedia> Scope(Guid tenantId, Guid farmId, Guid missionId) =>

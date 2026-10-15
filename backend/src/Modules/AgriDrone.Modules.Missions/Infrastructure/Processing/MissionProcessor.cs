@@ -215,13 +215,13 @@ internal sealed class MissionProcessor(
 
             // 6. Cập nhật trạng thái Mission và thống kê Geotag
             mission.UpdateNotes(
-                $"Geotagged: {geotagResult.ProcessedCount} images successfully ({geotagResult.ErrorCount} errors). Ready for NodeODM.");
+                $"Geotagged: {geotagResult.ProcessedCount} images successfully ({geotagResult.ErrorCount} errors). Ready for Metashape.");
 
             mission.MarkAwaitingReview(timeProvider.GetUtcNow());
             await unitOfWork.SaveChangesAsync(cancellationToken);
 
             logger.LogInformation(
-                "Mission {MissionId} geotagging completed ({Count} processed, {Errors} errors). Ready for NodeODM.",
+                "Mission {MissionId} geotagging completed ({Count} processed, {Errors} errors). Ready for Metashape.",
                 item.MissionId,
                 geotagResult.ProcessedCount,
                 geotagResult.ErrorCount);

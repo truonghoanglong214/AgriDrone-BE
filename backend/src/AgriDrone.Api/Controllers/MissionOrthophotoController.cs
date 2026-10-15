@@ -18,22 +18,23 @@ public sealed class MissionOrthophotoController(
     : ControllerBase
 {
     /// <summary>
-    /// Kích hoạt gửi ảnh đã gắn GPS sang NodeODM để ghép bản đồ (bước riêng biệt do người dùng chủ động gọi).
+    /// Kích hoạt gửi ảnh đã gắn GPS sang Agisoft Metashape Pro để ghép bản đồ (bước riêng biệt do người dùng chủ động gọi).
     /// </summary>
     /// <remarks>
-    /// Mặc định sử dụng bộ cấu hình chống tràn RAM:
-    /// - feature-quality: lowest
-    /// - resize-to: 1200
-    /// - pc-quality: lowest
-    /// - max-concurrency: 4
-    /// - fast-orthophoto: true
+    /// Cấu hình tối ưu cho camera GoPro 5 (Equidistant Fisheye):
+    /// - Camera type: equidistant_fisheye
+    /// - Align Accuracy: medium
+    /// - Generic preselection: true
+    /// - Build Model: Height Field (Tie points)
+    /// - Build Orthomosaic: WGS 84 / EPSG:4326 (Mesh)
+    /// - Xuất GeoTIFF chuẩn LZW và ảnh JPEG phẳng chất lượng 100%.
     /// </remarks>
-    [HttpPost("api/missions/{missionId:guid}/farms/{farmId:guid}/process-nodeodm")]
+    [HttpPost("api/missions/{missionId:guid}/farms/{farmId:guid}/process-metashape")]
     [Authorize(Policy = AccessAuthorizationPolicies.SystemManager)]
-    public async Task<IResult> ProcessNodeOdm(
+    public async Task<IResult> ProcessMetashape(
         [FromRoute] Guid farmId,
         [FromRoute] Guid missionId,
-        [FromBody] ProcessNodeOdmRequest? request,
+        [FromBody] ProcessMetashapeRequest? request,
         CancellationToken cancellationToken)
     {
         var access = await managerAccessService.ResolveFarmAccessAsync(farmId, cancellationToken);
@@ -42,25 +43,19 @@ public sealed class MissionOrthophotoController(
             return Results.Forbid();
         }
 
-        NodeOdmTaskOptions? customOptions = null;
+        MetashapeTaskOptions? customOptions = null;
         if (request is not null &&
-            (request.CameraLens is not null ||
-             request.FeatureQuality is not null ||
-             request.ResizeTo is not null ||
-             request.PcQuality is not null ||
-             request.MaxConcurrency is not null ||
-             request.FastOrthophoto is not null))
+            (request.CameraType is not null ||
+             request.AlignAccuracy is not null ||
+             request.GenericPreselection is not null))
         {
-            customOptions = new NodeOdmTaskOptions(
-                request.CameraLens,
-                request.FeatureQuality,
-                request.ResizeTo,
-                request.PcQuality,
-                request.MaxConcurrency,
-                request.FastOrthophoto);
+            customOptions = new MetashapeTaskOptions(
+                request.CameraType,
+                request.AlignAccuracy,
+                request.GenericPreselection);
         }
 
-        var command = new ProcessNodeOdmCommand(
+        var command = new ProcessMetashapeCommand(
             tenantId,
             farmId,
             missionId,
@@ -70,7 +65,7 @@ public sealed class MissionOrthophotoController(
 
         return result.ToHttpResult(
             HttpContext,
-            value => Results.Ok(new ProcessNodeOdmResponse(
+            value => Results.Ok(new ProcessMetashapeResponse(
                 value.MissionId,
                 value.TaskId,
                 value.Status,
@@ -78,7 +73,7 @@ public sealed class MissionOrthophotoController(
     }
 
     /// <summary>
-    /// Kiểm tra tiến độ ghép bản đồ của NodeODM và lấy ảnh xem trước nhẹ (map_preview.jpg) kèm tọa độ 4 góc GPS khi hoàn thành.
+    /// Kiểm tra tiến độ ghép bản đồ của Metashape và lấy ảnh xem trước nhẹ (map_preview.jpg) kèm tọa độ 4 góc GPS khi hoàn thành.
     /// </summary>
     [HttpGet("api/missions/{missionId:guid}/farms/{farmId:guid}/orthophoto-status")]
     [Authorize(Policy = AccessAuthorizationPolicies.SystemManager)]

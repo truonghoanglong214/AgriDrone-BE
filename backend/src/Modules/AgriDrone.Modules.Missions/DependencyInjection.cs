@@ -160,27 +160,24 @@ public static class DependencyInjection
         services.AddScoped<
             IMissionUploadReadinessQueries, MissionUploadReadinessQueries>();
 
-        // Geotagging & NodeODM Processing Services
+        // Geotagging & Metashape Processing Services
         services.Configure<GeotagOptions>(configuration.GetSection(GeotagOptions.SectionName));
-        services.Configure<NodeOdmOptions>(configuration.GetSection(NodeOdmOptions.SectionName));
-        services.Configure<MapPreviewOptions>(configuration.GetSection(MapPreviewOptions.SectionName));
+        services.Configure<MetashapeOptions>(configuration.GetSection(MetashapeOptions.SectionName));
 
         services.AddSingleton<IMissionProcessingQueue, MissionProcessingQueue>();
         services.AddScoped<IGeotagService, PythonGeotagService>();
         services.AddScoped<IMissionProcessor, MissionProcessor>();
         services.AddHostedService<MissionProcessingBackgroundService>();
 
-        services.AddHttpClient<INodeOdmService, NodeOdmService>((serviceProvider, client) =>
+        services.AddHttpClient<IMetashapeService, MetashapeService>((serviceProvider, client) =>
         {
-            var odmOpts = serviceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<NodeOdmOptions>>().Value;
-            if (Uri.TryCreate(odmOpts.Endpoint, UriKind.Absolute, out var endpointUri))
+            var metashapeOpts = serviceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<MetashapeOptions>>().Value;
+            if (Uri.TryCreate(metashapeOpts.Endpoint, UriKind.Absolute, out var endpointUri))
             {
                 client.BaseAddress = endpointUri;
             }
-            client.Timeout = TimeSpan.FromMinutes(odmOpts.TimeoutMinutes);
+            client.Timeout = TimeSpan.FromMinutes(metashapeOpts.TimeoutMinutes);
         });
-
-        services.AddScoped<IMapPreviewService, MapPreviewService>();
 
         return services;
     }

@@ -93,3 +93,4 @@ Desktop.ini
 # Repository-specific local files
 /Codex-Plan/
 /.github/instructions/codacy.instructions.md
+backend/services/metashape-service/temp/

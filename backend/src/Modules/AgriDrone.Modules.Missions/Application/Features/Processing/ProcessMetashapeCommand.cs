@@ -4,14 +4,14 @@ using MediatR;
 
 namespace AgriDrone.Modules.Missions.Application.Features.Processing;
 
-public sealed record ProcessNodeOdmCommand(
+public sealed record ProcessMetashapeCommand(
     Guid TenantId,
     Guid FarmId,
     Guid MissionId,
-    NodeOdmTaskOptions? CustomOptions = null)
-    : IRequest<Result<ProcessNodeOdmResult>>;
+    MetashapeTaskOptions? CustomOptions = null)
+    : IRequest<Result<ProcessMetashapeResult>>;
 
-public sealed record ProcessNodeOdmResult(
+public sealed record ProcessMetashapeResult(
     Guid MissionId,
     string TaskId,
     string Status,
