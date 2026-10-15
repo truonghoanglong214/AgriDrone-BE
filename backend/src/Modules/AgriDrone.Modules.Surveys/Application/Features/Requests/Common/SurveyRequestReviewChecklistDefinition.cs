@@ -2,7 +2,7 @@ namespace AgriDrone.Modules.Surveys.Application.Features.Requests.Common;
 
 public static class SurveyRequestReviewChecklistDefinition
 {
-    public const string Version = "survey-request-review.v1";
+    public const string Version = "survey-request-review.v2";
 
     public static IReadOnlyList<SurveyRequestReviewChecklistItem> Items { get; } =
     [
@@ -22,6 +22,12 @@ public static class SurveyRequestReviewChecklistDefinition
             "legal-flight-feasible",
             "Preliminary legal and flight feasibility has been reviewed."),
         new(
+            "consent-feasible",
+            "Written data-use consent appears obtainable; this is not verification."),
+        new(
+            "flight-permission-feasible",
+            "Flight permission appears obtainable; this is not verification."),
+        new(
             "eligible-manager-available",
             "An active, available and flight-qualified SystemManager exists.")
     ];
@@ -39,4 +45,6 @@ public sealed record SurveyRequestReviewChecklistInput(
     bool IsLocationSufficient,
     bool IsPreliminaryLegalAndFlightFeasible,
     bool IsEligibleSystemManagerAvailable,
-    string? Notes);
+    string? Notes,
+    bool IsWrittenConsentFeasible = false,
+    bool IsFlightPermissionFeasible = false);

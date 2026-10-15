@@ -21,7 +21,11 @@ public sealed record SurveyOrderReadinessSnapshot(
     bool IsPreflightCompleted,
     bool HasPendingPriceAdjustment,
     bool IsPaymentAmountAndCurrencyMatched,
-    bool SafetyChecksSatisfied)
+    bool SafetyChecksSatisfied,
+    bool HasValidWrittenDataUseConsent = false,
+    bool HasValidFlightPermission = false,
+    bool HasPendingFinancialSettlement = false,
+    bool HasUnapprovedExtraFlight = false)
 {
     public SurveyOrderReadinessSnapshot(
         SurveyOrderStatus OrderStatus,
@@ -61,7 +65,11 @@ public sealed record SurveyOrderReadinessSnapshot(
             IsPreflightCompleted: SafetyChecksSatisfied,
             HasPendingPriceAdjustment,
             IsPaymentAmountAndCurrencyMatched: true,
-            SafetyChecksSatisfied)
+            SafetyChecksSatisfied,
+            HasValidWrittenDataUseConsent: false,
+            HasValidFlightPermission: false,
+            HasPendingFinancialSettlement: false,
+            HasUnapprovedExtraFlight: false)
     {
     }
 }

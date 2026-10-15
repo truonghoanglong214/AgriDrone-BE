@@ -1,4 +1,4 @@
-﻿{
+{
   "openapi": "3.0.4",
   "info": {
     "title": "AgriDrone.Api",
@@ -4652,10 +4652,37 @@
         "tags": [
           "SystemSurveyServices"
         ],
-        "summary": "Lấy catalogue dịch vụ và toàn bộ lịch sử giá.",
+        "summary": "Lấy catalogue dịch vụ và giá theo trụ đang hiệu lực.",
+        "description": "Mỗi service chỉ trả currentPrice tại thời điểm server xử lý. Lịch sử giá\r\nđầy đủ được đọc riêng qua GET /{serviceId}/prices.",
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SystemSurveyServiceApiResponse"
+                  }
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SystemSurveyServiceApiResponse"
+                  }
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SystemSurveyServiceApiResponse"
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -4851,7 +4878,33 @@
         ],
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SurveyServicePriceHistoryApiResponse"
+                  }
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SurveyServicePriceHistoryApiResponse"
+                  }
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SurveyServicePriceHistoryApiResponse"
+                  }
+                }
+              }
+            }
           }
         }
       },
@@ -4859,7 +4912,7 @@
         "tags": [
           "SystemSurveyServices"
         ],
-        "summary": "Tạo price version VND theo trụ; không sửa amount lịch sử.",
+        "summary": "Tạo price version VND có hiệu lực ngay theo giờ UTC của server.",
         "parameters": [
           {
             "name": "serviceId",
@@ -6532,15 +6585,6 @@
             "type": "string",
             "nullable": true
           },
-          "effectiveFrom": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "effectiveTo": {
-            "type": "string",
-            "format": "date-time",
-            "nullable": true
-          },
           "expectedServiceVersion": {
             "type": "integer",
             "format": "int32"
@@ -7147,8 +7191,7 @@
       },
       "PaidSurveyMissionPurpose": {
         "enum": [
-          "PlantHealth",
-          "HarvestReadiness"
+          "PlantHealth"
         ],
         "type": "string"
       },
@@ -7311,8 +7354,7 @@
       },
       "PublicSurveyServiceTypeValue": {
         "enum": [
-          "PLANT_HEALTH",
-          "HARVEST_READINESS"
+          "PLANT_HEALTH"
         ],
         "type": "string"
       },
@@ -8656,6 +8698,54 @@
         ],
         "type": "string"
       },
+      "SurveyServicePriceHistoryApiResponse": {
+        "type": "object",
+        "properties": {
+          "priceVersionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "surveyServiceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "pricePerPole": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "legacyPricePerHa": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "currency": {
+            "type": "string",
+            "nullable": true
+          },
+          "effectiveFrom": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "effectiveTo": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "createdBy": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "isLegacyPerHectarePrice": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
       "SystemManagerAvailabilityStatus": {
         "enum": [
           0,
@@ -8674,6 +8764,78 @@
           "expectedVersion": {
             "type": "integer",
             "format": "int64"
+          }
+        },
+        "additionalProperties": false
+      },
+      "SystemSurveyServiceApiResponse": {
+        "type": "object",
+        "properties": {
+          "surveyServiceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "code": {
+            "type": "string",
+            "nullable": true
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "serviceType": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "nullable": true
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "currentPrice": {
+            "$ref": "#/components/schemas/SystemSurveyServiceCurrentPriceApiResponse"
+          }
+        },
+        "additionalProperties": false
+      },
+      "SystemSurveyServiceCurrentPriceApiResponse": {
+        "type": "object",
+        "properties": {
+          "priceVersionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "amountPerPole": {
+            "type": "number",
+            "format": "double"
+          },
+          "currency": {
+            "type": "string",
+            "nullable": true
+          },
+          "effectiveFrom": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "effectiveTo": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
           }
         },
         "additionalProperties": false

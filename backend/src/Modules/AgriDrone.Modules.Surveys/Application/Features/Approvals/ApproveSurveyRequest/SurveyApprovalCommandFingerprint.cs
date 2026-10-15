@@ -22,6 +22,8 @@ internal static class SurveyApprovalCommandFingerprint
             command.Checklist.IsLocationSufficient,
             command.Checklist.IsPreliminaryLegalAndFlightFeasible,
             command.Checklist.IsEligibleSystemManagerAvailable,
+            command.Checklist.IsWrittenConsentFeasible,
+            command.Checklist.IsFlightPermissionFeasible,
             ChecklistNotes = string.IsNullOrWhiteSpace(command.Checklist.Notes)
                 ? null
                 : command.Checklist.Notes.Trim(),

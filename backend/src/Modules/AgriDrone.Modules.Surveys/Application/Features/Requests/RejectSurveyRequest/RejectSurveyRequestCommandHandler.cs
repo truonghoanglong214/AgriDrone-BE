@@ -168,6 +168,8 @@ internal sealed class RejectSurveyRequestCommandHandler(
             isLocationSufficient = checklist.IsLocationSufficient,
             isPreliminaryLegalAndFlightFeasible =
                 checklist.IsPreliminaryLegalAndFlightFeasible,
+            isWrittenConsentFeasible = checklist.IsWrittenConsentFeasible,
+            isFlightPermissionFeasible = checklist.IsFlightPermissionFeasible,
             isEligibleSystemManagerAvailable =
                 checklist.IsEligibleSystemManagerAvailable,
             notes = string.IsNullOrWhiteSpace(checklist.Notes)

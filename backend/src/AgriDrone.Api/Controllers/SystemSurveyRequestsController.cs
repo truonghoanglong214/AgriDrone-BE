@@ -127,7 +127,9 @@ public sealed class SystemSurveyRequestsController(ISender sender)
                     checklist.IsLocationSufficient,
                     checklist.IsPreliminaryLegalAndFlightFeasible,
                     checklist.IsEligibleSystemManagerAvailable,
-                    checklist.Notes),
+                    checklist.Notes,
+                    checklist.IsWrittenConsentFeasible,
+                    checklist.IsFlightPermissionFeasible),
                 request.ExpectedVersion),
             cancellationToken);
         return result.ToHttpResult(
@@ -186,7 +188,9 @@ public sealed class SystemSurveyRequestsController(ISender sender)
                     checklist.IsLocationSufficient,
                     checklist.IsPreliminaryLegalAndFlightFeasible,
                     checklist.IsEligibleSystemManagerAvailable,
-                    checklist.Notes),
+                    checklist.Notes,
+                    checklist.IsWrittenConsentFeasible,
+                    checklist.IsFlightPermissionFeasible),
                 request.ExpectedVersion!.Value,
                 normalizedKey),
             cancellationToken);

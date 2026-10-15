@@ -50,6 +50,7 @@ public sealed class AcceptSystemManagerInvitationCommandHandlerTests
         Assert.Single(users.Added.UserRoles);
         Assert.Equal(users.Added.Id, profiles.Added!.UserId);
         Assert.Equal(profiles.Added.Id, result.Value.ProfileId);
+        Assert.Equal(profiles.Added.Version, result.Value.ProfileVersion);
         Assert.Equal(1, unitOfWork.SaveChangesCount);
 
         var reusedResult = await handler.Handle(command, CancellationToken.None);

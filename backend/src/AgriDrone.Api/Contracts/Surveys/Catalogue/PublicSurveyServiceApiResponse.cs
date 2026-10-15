@@ -21,8 +21,5 @@ public sealed record PublicIndicativePriceApiResponse(
 public enum PublicSurveyServiceTypeValue
 {
     [JsonStringEnumMemberName("PLANT_HEALTH")]
-    PlantHealth,
-
-    [JsonStringEnumMemberName("HARVEST_READINESS")]
-    HarvestReadiness
+    PlantHealth
 }

@@ -22,5 +22,10 @@ public enum SurveyOrderReadinessFailure
     PrimaryManagerUnavailable,
     PriceAdjustmentPending,
     SafetyChecksNotSatisfied,
-    OrderNotEligible
+    OrderNotEligible,
+    ServiceDisabled,
+    WrittenConsentNotValid,
+    FlightPermissionNotValid,
+    FinancialSettlementPending,
+    ExtraFlightNotApproved
 }

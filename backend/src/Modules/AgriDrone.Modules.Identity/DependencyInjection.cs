@@ -111,6 +111,9 @@ public static class DependencyInjection
         services.AddScoped<ITenantQueries, TenantQueries>();
         services.AddScoped<ITenantMembershipQueries, TenantMembershipQueries>();
         services.AddScoped<
+            ISystemManagerProfileQueries,
+            SystemManagerProfileQueries>();
+        services.AddScoped<
             ITenantOwnerRequestReferenceQuery,
             TenantOwnerRequestReferenceQuery>();
         services.AddScoped<IUserRepository, UserRepository>();

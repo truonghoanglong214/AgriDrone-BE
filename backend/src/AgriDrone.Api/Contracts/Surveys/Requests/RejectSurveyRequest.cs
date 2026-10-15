@@ -13,4 +13,6 @@ public sealed record SurveyRequestReviewChecklistRequest(
     bool IsLocationSufficient,
     bool IsPreliminaryLegalAndFlightFeasible,
     bool IsEligibleSystemManagerAvailable,
-    string? Notes);
+    string? Notes,
+    bool IsWrittenConsentFeasible = false,
+    bool IsFlightPermissionFeasible = false);

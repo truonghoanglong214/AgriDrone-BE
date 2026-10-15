@@ -19,18 +19,6 @@ internal sealed class CreateSurveyServicePriceCommandValidator
                 "VND",
                 StringComparison.OrdinalIgnoreCase))
             .WithMessage("Only VND per-pole prices are supported.");
-        RuleFor(command => command.EffectiveFrom)
-            .Must(IsUtc)
-            .WithMessage("EffectiveFrom must be a non-default UTC timestamp.");
-        RuleFor(command => command.EffectiveTo)
-            .Must(value => !value.HasValue || IsUtc(value.Value))
-            .WithMessage("EffectiveTo must be a UTC timestamp when provided.")
-            .Must((command, effectiveTo) =>
-                !effectiveTo.HasValue || effectiveTo > command.EffectiveFrom)
-            .WithMessage("EffectiveTo must be later than EffectiveFrom.");
         RuleFor(command => command.ExpectedServiceVersion).GreaterThan(0u);
     }
-
-    private static bool IsUtc(DateTimeOffset value) =>
-        value != default && value.Offset == TimeSpan.Zero;
 }

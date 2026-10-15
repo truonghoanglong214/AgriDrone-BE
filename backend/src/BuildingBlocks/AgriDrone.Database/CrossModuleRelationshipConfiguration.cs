@@ -695,20 +695,9 @@ internal static class CrossModuleRelationshipConfiguration
         modelBuilder.Entity<FarmBoundary>()
             .HasOne<SurveyRequest>()
             .WithMany()
-            .HasForeignKey(boundary => new
-            {
-                boundary.SourceSurveyRequestId,
-                boundary.TenantId,
-                boundary.FarmId
-            })
-            .HasPrincipalKey(request => new
-            {
-                request.Id,
-                request.TenantId,
-                request.FarmId
-            })
+            .HasForeignKey(boundary => boundary.SourceSurveyRequestId)
             .OnDelete(DeleteBehavior.Restrict)
-            .HasConstraintName("fk_farm_boundaries_requests_same_tenant_farm");
+            .HasConstraintName("fk_farm_boundaries_requests_source_request_id");
 
         modelBuilder.Entity<SurveyOrder>()
             .HasOne<FarmBoundary>()

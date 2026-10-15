@@ -19,10 +19,17 @@ internal sealed class SurveysDbContext(DbContextOptions<SurveysDbContext> option
         SurveyApprovalIdempotencyRecords =>
         Set<SurveyApprovalIdempotencyRecord>();
     public DbSet<SurveyOrder> SurveyOrders => Set<SurveyOrder>();
+    public DbSet<SurveyCaptureAuthorization> SurveyCaptureAuthorizations =>
+        Set<SurveyCaptureAuthorization>();
     public DbSet<SurveyAppointment> SurveyAppointments => Set<SurveyAppointment>();
     public DbSet<SurveyPayment> SurveyPayments => Set<SurveyPayment>();
     public DbSet<PaymentEvent> PaymentEvents => Set<PaymentEvent>();
     public DbSet<PriceAdjustment> PriceAdjustments => Set<PriceAdjustment>();
+    public DbSet<ScopeAdjustment> ScopeAdjustments => Set<ScopeAdjustment>();
+    public DbSet<AdjustmentSettlement> AdjustmentSettlements =>
+        Set<AdjustmentSettlement>();
+    public DbSet<ExtraFlightRequest> ExtraFlightRequests =>
+        Set<ExtraFlightRequest>();
     public DbSet<SurveyResult> SurveyResults => Set<SurveyResult>();
     public DbSet<HarvestReadinessAssessment> HarvestReadinessAssessments => Set<HarvestReadinessAssessment>();
     public DbSet<HarvestReadinessCriterion> HarvestReadinessCriteria => Set<HarvestReadinessCriterion>();

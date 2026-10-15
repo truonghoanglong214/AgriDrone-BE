@@ -56,8 +56,6 @@ public sealed class PublicSurveyServicesController(ISender sender)
         {
             PublicSurveyServiceType.PlantHealth =>
                 PublicSurveyServiceTypeValue.PlantHealth,
-            PublicSurveyServiceType.HarvestReadiness =>
-                PublicSurveyServiceTypeValue.HarvestReadiness,
             _ => throw new ArgumentOutOfRangeException(
                 nameof(serviceType),
                 serviceType,

@@ -23,7 +23,6 @@ public sealed class SurveyRequestConfiguration : IEntityTypeConfiguration<Survey
                     "(kind = 'EXISTING_FARM_SURVEY'::system.survey_request_kind AND tenant_id IS NOT NULL AND farm_id IS NOT NULL AND requested_by_user_id IS NOT NULL)");
             });
         builder.HasKey(request => request.Id).HasName("pk_survey_requests");
-        builder.HasAlternateKey(request => new { request.Id, request.TenantId, request.FarmId }).HasName("uq_survey_requests_id_tenant_farm");
         builder.Property(request => request.Id).HasColumnName("id").HasColumnType("uuid").HasDefaultValueSql("gen_random_uuid()").ValueGeneratedOnAdd();
         builder.Property(request => request.RequestNumber).HasColumnName("request_number").HasColumnType("character varying(40)").HasMaxLength(40).IsRequired();
         builder.Property(request => request.Kind).HasColumnName("kind").HasColumnType("system.survey_request_kind").IsRequired();

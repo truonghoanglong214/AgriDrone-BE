@@ -233,83 +233,19 @@ namespace AgriDrone.Database.Migrations
 
             migrationBuilder.Sql(
                 """
-                UPDATE survey.price_adjustments AS adjustment
-                SET
-                    old_pole_count = legacy.old_pole_count,
-                    new_pole_count = legacy.new_pole_count,
-                    old_survey_service_price_id = COALESCE(
-                        survey_order.survey_service_price_id,
-                        gen_random_uuid()),
-                    new_survey_service_price_id = COALESCE(
-                        survey_order.survey_service_price_id,
-                        gen_random_uuid()),
-                    old_price_per_pole = legacy.old_price_per_pole,
-                    new_price_per_pole = legacy.new_price_per_pole,
-                    old_final_price = round(
-                        legacy.old_pole_count * legacy.old_price_per_pole,
-                        2),
-                    new_final_price = round(
-                        legacy.new_pole_count * legacy.new_price_per_pole,
-                        2),
-                    currency = COALESCE(
-                        NULLIF(btrim(survey_order.currency), ''),
-                        'VND'),
-                    evidence_reference = 'LEGACY_AREA_ADJUSTMENT',
-                    reviewed_by = CASE
-                        WHEN adjustment.status IN (
-                            'APPROVED'::system.price_adjustment_status,
-                            'REJECTED'::system.price_adjustment_status,
-                            'APPLIED'::system.price_adjustment_status)
-                        THEN COALESCE(
-                            adjustment.approved_by,
-                            adjustment.requested_by)
-                        ELSE NULL
-                    END,
-                    reviewed_at = CASE
-                        WHEN adjustment.status IN (
-                            'APPROVED'::system.price_adjustment_status,
-                            'REJECTED'::system.price_adjustment_status,
-                            'APPLIED'::system.price_adjustment_status)
-                        THEN COALESCE(
-                            adjustment.approved_at,
-                            adjustment.created_at)
-                        ELSE NULL
-                    END,
-                    review_reason = CASE
-                        WHEN adjustment.status IN (
-                            'APPROVED'::system.price_adjustment_status,
-                            'REJECTED'::system.price_adjustment_status,
-                            'APPLIED'::system.price_adjustment_status)
-                        THEN 'Migrated legacy area-based adjustment'
-                        ELSE NULL
-                    END,
-                    review_evidence_reference = CASE
-                        WHEN adjustment.status IN (
-                            'APPROVED'::system.price_adjustment_status,
-                            'REJECTED'::system.price_adjustment_status,
-                            'APPLIED'::system.price_adjustment_status)
-                        THEN 'LEGACY_AREA_ADJUSTMENT'
-                        ELSE NULL
-                    END,
-                    applied_by = CASE
-                        WHEN adjustment.status =
-                            'APPLIED'::system.price_adjustment_status
-                        THEN COALESCE(
-                            adjustment.approved_by,
-                            adjustment.requested_by)
-                        ELSE NULL
-                    END,
-                    applied_at = CASE
-                        WHEN adjustment.status =
-                            'APPLIED'::system.price_adjustment_status
-                        THEN COALESCE(
-                            adjustment.approved_at,
-                            adjustment.created_at)
-                        ELSE NULL
-                    END
-                FROM survey.survey_orders AS survey_order
-                CROSS JOIN LATERAL (
+                WITH legacy_counts AS (
                     SELECT
+                        adjustment.id AS adjustment_id,
+                        adjustment.status,
+                        adjustment.approved_by,
+                        adjustment.requested_by,
+                        adjustment.approved_at,
+                        adjustment.created_at,
+                        adjustment.old_price,
+                        adjustment.new_price,
+                        survey_order.survey_service_price_id,
+                        survey_order.currency,
+                        survey_order.price_per_pole_snapshot,
                         GREATEST(
                             1,
                             COALESCE(
@@ -322,31 +258,109 @@ namespace AgriDrone.Database.Migrations
                                 survey_order.confirmed_survey_pole_count,
                                 round(adjustment.new_area_ha)::integer,
                                 1)) AS new_pole_count
-                ) AS counts
-                CROSS JOIN LATERAL (
+                    FROM survey.price_adjustments AS adjustment
+                    INNER JOIN survey.survey_orders AS survey_order
+                        ON survey_order.id = adjustment.survey_order_id
+                ),
+                legacy AS (
                     SELECT
-                        counts.old_pole_count,
-                        counts.new_pole_count,
+                        legacy_counts.*,
                         GREATEST(
                             0.01,
                             round(
                                 COALESCE(
-                                    NULLIF(adjustment.old_price, 0) /
-                                        counts.old_pole_count,
-                                    survey_order.price_per_pole_snapshot,
+                                    NULLIF(legacy_counts.old_price, 0) /
+                                        legacy_counts.old_pole_count,
+                                    legacy_counts.price_per_pole_snapshot,
                                     0.01),
                                 2)) AS old_price_per_pole,
                         GREATEST(
                             0.01,
                             round(
                                 COALESCE(
-                                    NULLIF(adjustment.new_price, 0) /
-                                        counts.new_pole_count,
-                                    survey_order.price_per_pole_snapshot,
+                                    NULLIF(legacy_counts.new_price, 0) /
+                                        legacy_counts.new_pole_count,
+                                    legacy_counts.price_per_pole_snapshot,
                                     0.01),
                                 2)) AS new_price_per_pole
-                ) AS legacy
-                WHERE survey_order.id = adjustment.survey_order_id;
+                    FROM legacy_counts
+                )
+                UPDATE survey.price_adjustments AS adjustment
+                SET
+                    old_pole_count = legacy.old_pole_count,
+                    new_pole_count = legacy.new_pole_count,
+                    old_survey_service_price_id = COALESCE(
+                        legacy.survey_service_price_id,
+                        gen_random_uuid()),
+                    new_survey_service_price_id = COALESCE(
+                        legacy.survey_service_price_id,
+                        gen_random_uuid()),
+                    old_price_per_pole = legacy.old_price_per_pole,
+                    new_price_per_pole = legacy.new_price_per_pole,
+                    old_final_price = round(
+                        legacy.old_pole_count * legacy.old_price_per_pole,
+                        2),
+                    new_final_price = round(
+                        legacy.new_pole_count * legacy.new_price_per_pole,
+                        2),
+                    currency = COALESCE(
+                        NULLIF(btrim(legacy.currency), ''),
+                        'VND'),
+                    evidence_reference = 'LEGACY_AREA_ADJUSTMENT',
+                    reviewed_by = CASE
+                        WHEN legacy.status IN (
+                            'APPROVED'::system.price_adjustment_status,
+                            'REJECTED'::system.price_adjustment_status,
+                            'APPLIED'::system.price_adjustment_status)
+                        THEN COALESCE(
+                            legacy.approved_by,
+                            legacy.requested_by)
+                        ELSE NULL
+                    END,
+                    reviewed_at = CASE
+                        WHEN legacy.status IN (
+                            'APPROVED'::system.price_adjustment_status,
+                            'REJECTED'::system.price_adjustment_status,
+                            'APPLIED'::system.price_adjustment_status)
+                        THEN COALESCE(
+                            legacy.approved_at,
+                            legacy.created_at)
+                        ELSE NULL
+                    END,
+                    review_reason = CASE
+                        WHEN legacy.status IN (
+                            'APPROVED'::system.price_adjustment_status,
+                            'REJECTED'::system.price_adjustment_status,
+                            'APPLIED'::system.price_adjustment_status)
+                        THEN 'Migrated legacy area-based adjustment'
+                        ELSE NULL
+                    END,
+                    review_evidence_reference = CASE
+                        WHEN legacy.status IN (
+                            'APPROVED'::system.price_adjustment_status,
+                            'REJECTED'::system.price_adjustment_status,
+                            'APPLIED'::system.price_adjustment_status)
+                        THEN 'LEGACY_AREA_ADJUSTMENT'
+                        ELSE NULL
+                    END,
+                    applied_by = CASE
+                        WHEN legacy.status =
+                            'APPLIED'::system.price_adjustment_status
+                        THEN COALESCE(
+                            legacy.approved_by,
+                            legacy.requested_by)
+                        ELSE NULL
+                    END,
+                    applied_at = CASE
+                        WHEN legacy.status =
+                            'APPLIED'::system.price_adjustment_status
+                        THEN COALESCE(
+                            legacy.approved_at,
+                            legacy.created_at)
+                        ELSE NULL
+                    END
+                FROM legacy
+                WHERE legacy.adjustment_id = adjustment.id;
                 """);
 
             migrationBuilder.AlterColumn<string>(

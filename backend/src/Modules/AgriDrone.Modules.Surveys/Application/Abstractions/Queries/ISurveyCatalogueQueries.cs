@@ -10,6 +10,7 @@ internal interface ISurveyCatalogueQueries
             CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<SurveyServiceCatalogueItem>> GetCatalogueAsync(
+        DateTimeOffset evaluatedAt,
         CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<SurveyServicePriceHistoryItem>> GetPriceHistoryAsync(
@@ -52,7 +53,7 @@ internal sealed record SurveyServiceCatalogueItem(
     uint Version,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt,
-    IReadOnlyList<SurveyServicePriceHistoryItem> Prices);
+    EffectiveSurveyServicePrice? CurrentPrice);
 
 internal sealed record SurveyServicePriceHistoryItem(
     Guid PriceVersionId,

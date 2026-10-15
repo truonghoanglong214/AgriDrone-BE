@@ -203,9 +203,7 @@ public sealed class SystemManagerSurveyOrdersController(ISender sender)
             new GetSurveyOrderReadinessQuery(
                 orderId,
                 missionId!.Value,
-                purpose == PaidSurveyMissionPurpose.PlantHealth
-                    ? SurveyOperationPurpose.PlantHealth
-                    : SurveyOperationPurpose.HarvestReadiness),
+                SurveyOperationPurpose.PlantHealth),
             cancellationToken);
         return result.ToHttpResult(
             HttpContext,
@@ -246,6 +244,5 @@ public sealed class SystemManagerSurveyOrdersController(ISender sender)
 [JsonConverter(typeof(JsonStringEnumConverter<PaidSurveyMissionPurpose>))]
 public enum PaidSurveyMissionPurpose
 {
-    PlantHealth,
-    HarvestReadiness
+    PlantHealth
 }

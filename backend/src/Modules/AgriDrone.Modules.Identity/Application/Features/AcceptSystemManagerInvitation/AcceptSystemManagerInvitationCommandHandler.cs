@@ -143,6 +143,7 @@ internal sealed class AcceptSystemManagerInvitationCommandHandler(
             new AcceptSystemManagerInvitationResponse(
                 user.Id,
                 profile.Id,
+                profile.Version,
                 accountCreated));
     }
 

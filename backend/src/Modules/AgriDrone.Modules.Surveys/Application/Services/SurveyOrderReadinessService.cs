@@ -89,6 +89,16 @@ internal sealed class SurveyOrderReadinessService(
                 "SAFETY_CHECKS_NOT_SATISFIED",
             SurveyOrderReadinessFailure.OrderNotEligible =>
                 "ORDER_NOT_ELIGIBLE",
+            SurveyOrderReadinessFailure.ServiceDisabled =>
+                "SERVICE_DISABLED",
+            SurveyOrderReadinessFailure.WrittenConsentNotValid =>
+                "WRITTEN_CONSENT_NOT_VALID",
+            SurveyOrderReadinessFailure.FlightPermissionNotValid =>
+                "FLIGHT_PERMISSION_NOT_VALID",
+            SurveyOrderReadinessFailure.FinancialSettlementPending =>
+                "FINANCIAL_SETTLEMENT_PENDING",
+            SurveyOrderReadinessFailure.ExtraFlightNotApproved =>
+                "EXTRA_FLIGHT_NOT_APPROVED",
             _ => throw new ArgumentOutOfRangeException(nameof(failure))
         };
 }

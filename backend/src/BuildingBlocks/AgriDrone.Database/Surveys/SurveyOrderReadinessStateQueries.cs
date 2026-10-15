@@ -72,7 +72,47 @@ internal sealed class SurveyOrderReadinessStateQueries(NpgsqlDataSource dataSour
                       AND adjustment.status IN (
                         'PENDING'::system.price_adjustment_status,
                         'APPROVED'::system.price_adjustment_status)
-                ) AS has_open_adjustment
+                ) AS has_open_adjustment,
+                EXISTS (
+                    SELECT 1
+                    FROM survey.survey_capture_authorizations AS authorization
+                    WHERE authorization.survey_order_id = survey_order.id
+                      AND authorization.authorization_type =
+                        'WRITTEN_DATA_USE_CONSENT'::system.survey_capture_authorization_type
+                      AND authorization.status =
+                        'VERIFIED'::system.survey_capture_authorization_status
+                      AND authorization.verified_at <= @evaluated_at
+                      AND (authorization.expires_at IS NULL OR
+                           @evaluated_at < authorization.expires_at)
+                      AND authorization.revoked_at IS NULL
+                ) AS has_valid_consent,
+                EXISTS (
+                    SELECT 1
+                    FROM survey.survey_capture_authorizations AS authorization
+                    WHERE authorization.survey_order_id = survey_order.id
+                      AND authorization.authorization_type =
+                        'FLIGHT_PERMISSION'::system.survey_capture_authorization_type
+                      AND authorization.status =
+                        'VERIFIED'::system.survey_capture_authorization_status
+                      AND authorization.verified_at <= @evaluated_at
+                      AND (authorization.expires_at IS NULL OR
+                           @evaluated_at < authorization.expires_at)
+                      AND authorization.revoked_at IS NULL
+                ) AS has_valid_flight_permission
+                , EXISTS (
+                    SELECT 1
+                    FROM survey.adjustment_settlements AS settlement
+                    JOIN survey.price_adjustments AS settlement_adjustment
+                      ON settlement_adjustment.id = settlement.price_adjustment_id
+                    WHERE settlement_adjustment.survey_order_id = survey_order.id
+                      AND settlement.status IN ('Pending', 'Processing', 'Failed')
+                ) AS has_pending_settlement
+                , EXISTS (
+                    SELECT 1
+                    FROM survey.extra_flight_requests AS extra_flight
+                    WHERE extra_flight.survey_order_id = survey_order.id
+                      AND extra_flight.status = 'Pending'
+                ) AS has_unapproved_extra_flight
             FROM survey.survey_orders AS survey_order
             JOIN survey.survey_services AS service
               ON service.id = survey_order.survey_service_id
@@ -136,6 +176,7 @@ internal sealed class SurveyOrderReadinessStateQueries(NpgsqlDataSource dataSour
         command.Parameters.AddWithValue(
             "appointment_purpose",
             appointmentPurpose);
+        command.Parameters.AddWithValue("evaluated_at", evaluatedAt);
 
         await using var reader = await command.ExecuteReaderAsync(
             cancellationToken);
@@ -240,7 +281,13 @@ internal sealed class SurveyOrderReadinessStateQueries(NpgsqlDataSource dataSour
             preflightCompleted,
             reader.GetBoolean(reader.GetOrdinal("has_open_adjustment")),
             paymentMatches,
-            safetySatisfied);
+            safetySatisfied,
+            reader.GetBoolean(reader.GetOrdinal("has_valid_consent")),
+            reader.GetBoolean(reader.GetOrdinal(
+                "has_valid_flight_permission")),
+            reader.GetBoolean(reader.GetOrdinal("has_pending_settlement")),
+            reader.GetBoolean(reader.GetOrdinal(
+                "has_unapproved_extra_flight")));
 
         return Result.Success(new SurveyOrderReadinessState(
             surveyOrderId,

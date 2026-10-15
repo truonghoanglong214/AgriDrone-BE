@@ -48,6 +48,10 @@ internal sealed class ApproveSurveyRequestCommandValidator
             RuleFor(checklist =>
                     checklist.IsEligibleSystemManagerAvailable)
                 .Equal(true);
+            RuleFor(checklist => checklist.IsWrittenConsentFeasible)
+                .Equal(true);
+            RuleFor(checklist => checklist.IsFlightPermissionFeasible)
+                .Equal(true);
             RuleFor(checklist => checklist.Notes)
                 .MaximumLength(4_000)
                 .When(checklist => checklist.Notes is not null);

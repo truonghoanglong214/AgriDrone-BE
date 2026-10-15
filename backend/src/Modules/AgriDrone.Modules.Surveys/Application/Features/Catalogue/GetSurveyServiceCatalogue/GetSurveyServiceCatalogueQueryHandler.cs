@@ -5,7 +5,8 @@ using MediatR;
 namespace AgriDrone.Modules.Surveys.Application.Features.Catalogue.GetSurveyServiceCatalogue;
 
 internal sealed class GetSurveyServiceCatalogueQueryHandler(
-    ISurveyCatalogueQueries catalogueQueries)
+    ISurveyCatalogueQueries catalogueQueries,
+    TimeProvider timeProvider)
     : IRequestHandler<
         GetSurveyServiceCatalogueQuery,
         Result<IReadOnlyList<SurveyServiceCatalogueResponse>>>
@@ -14,7 +15,9 @@ internal sealed class GetSurveyServiceCatalogueQueryHandler(
         GetSurveyServiceCatalogueQuery request,
         CancellationToken cancellationToken)
     {
+        var evaluatedAt = timeProvider.GetUtcNow();
         var catalogue = await catalogueQueries.GetCatalogueAsync(
+            evaluatedAt,
             cancellationToken);
         IReadOnlyList<SurveyServiceCatalogueResponse> response = catalogue
             .Select(service => new SurveyServiceCatalogueResponse(
@@ -27,18 +30,14 @@ internal sealed class GetSurveyServiceCatalogueQueryHandler(
                 service.Version,
                 service.CreatedAt,
                 service.UpdatedAt,
-                service.Prices.Select(price =>
-                        new SurveyServicePriceCatalogueResponse(
-                            price.PriceVersionId,
-                            price.PricePerPole,
-                            price.LegacyPricePerHa,
-                            price.Currency,
-                            price.EffectiveFrom,
-                            price.EffectiveTo,
-                            price.CreatedBy,
-                            price.CreatedAt,
-                            price.IsLegacyPerHectarePrice))
-                    .ToArray()))
+                service.CurrentPrice is null
+                    ? null
+                    : new SurveyServiceCurrentPriceResponse(
+                        service.CurrentPrice.PriceVersionId,
+                        service.CurrentPrice.PricePerPole,
+                        service.CurrentPrice.Currency,
+                        service.CurrentPrice.EffectiveFrom,
+                        service.CurrentPrice.EffectiveTo)))
             .ToArray();
 
         return Result.Success(response);

@@ -21,6 +21,7 @@ internal sealed class ApproveSurveyRequestCommandHandler(
     ISurveyApprovalUnitOfWork unitOfWork,
     ISurveyApprovalRequestRepository requestRepository,
     ISurveyApprovalIdempotencyRepository idempotencyRepository,
+    ISurveyApprovalCaptureAuthorizationRepository authorizationRepository,
     ISurveyApprovalPrerequisiteResolver prerequisiteResolver,
     IEnumerable<ISurveyRequestKindApprovalOrchestrator> orchestrators,
     ISurveyApprovalOutbox approvalOutbox,
@@ -158,6 +159,13 @@ internal sealed class ApproveSurveyRequestCommandHandler(
                 SurveyApprovalError.ConcurrentApproval());
         }
 
+        if (!SurveyServiceMvpPolicy.IsSellable(
+                surveyRequest.SurveyService.ServiceType))
+        {
+            return Result.Failure<ApproveSurveyRequestResponse>(
+                SurveyApprovalError.RequestContextInvalid());
+        }
+
         try
         {
             surveyRequest.EnsureVersion(command.ExpectedVersion);
@@ -234,6 +242,16 @@ internal sealed class ApproveSurveyRequestCommandHandler(
         }
 
         var approval = orchestrationResult.Value;
+        authorizationRepository.Add(
+            SurveyCaptureAuthorization.CreatePending(
+                approval.Order.Id,
+                SurveyCaptureAuthorizationType.WrittenDataUseConsent,
+                approvedAt));
+        authorizationRepository.Add(
+            SurveyCaptureAuthorization.CreatePending(
+                approval.Order.Id,
+                SurveyCaptureAuthorizationType.FlightPermission,
+                approvedAt));
         using var newData = SurveyApprovalAuditSnapshot.CreateAfter(
             surveyRequest,
             review,
@@ -376,7 +394,9 @@ internal sealed class ApproveSurveyRequestCommandHandler(
         checklist.IsServiceAreaSupported &&
         checklist.IsLocationSufficient &&
         checklist.IsPreliminaryLegalAndFlightFeasible &&
-        checklist.IsEligibleSystemManagerAvailable;
+        checklist.IsEligibleSystemManagerAvailable &&
+        checklist.IsWrittenConsentFeasible &&
+        checklist.IsFlightPermissionFeasible;
 
     private static JsonDocument CreateChecklistSnapshot(
         SurveyRequestReviewChecklistInput checklist) =>
@@ -391,6 +411,8 @@ internal sealed class ApproveSurveyRequestCommandHandler(
                 checklist.IsPreliminaryLegalAndFlightFeasible,
             isEligibleSystemManagerAvailable =
                 checklist.IsEligibleSystemManagerAvailable,
+            isWrittenConsentFeasible = checklist.IsWrittenConsentFeasible,
+            isFlightPermissionFeasible = checklist.IsFlightPermissionFeasible,
             notes = string.IsNullOrWhiteSpace(checklist.Notes)
                 ? null
                 : checklist.Notes.Trim()

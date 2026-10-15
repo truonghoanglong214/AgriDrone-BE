@@ -96,6 +96,8 @@ internal static class PostgreSqlEnumMappings
         modelBuilder.HasPostgresEnum<SurveyAppointmentStatus>(DbSchemas.System, "survey_appointment_status", translator);
         modelBuilder.HasPostgresEnum<SurveyPaymentStatus>(DbSchemas.System, "survey_payment_status", translator);
         modelBuilder.HasPostgresEnum<PriceAdjustmentStatus>(DbSchemas.System, "price_adjustment_status", translator);
+        modelBuilder.HasPostgresEnum<SurveyCaptureAuthorizationType>(DbSchemas.System, "survey_capture_authorization_type", translator);
+        modelBuilder.HasPostgresEnum<SurveyCaptureAuthorizationStatus>(DbSchemas.System, "survey_capture_authorization_status", translator);
         modelBuilder.HasPostgresEnum<SurveyResultStatus>(DbSchemas.System, "survey_result_status", translator);
         modelBuilder.HasPostgresEnum<HarvestReadinessReviewStatus>(DbSchemas.System, "harvest_readiness_review_status", translator);
         modelBuilder.HasPostgresEnum<HarvestReadinessCriterionStatus>(DbSchemas.System, "harvest_readiness_criterion_status", translator);
@@ -168,6 +170,8 @@ internal static class PostgreSqlEnumMappings
         dataSourceBuilder.MapEnum<SurveyAppointmentStatus>("system.survey_appointment_status", translator);
         dataSourceBuilder.MapEnum<SurveyPaymentStatus>("system.survey_payment_status", translator);
         dataSourceBuilder.MapEnum<PriceAdjustmentStatus>("system.price_adjustment_status", translator);
+        dataSourceBuilder.MapEnum<SurveyCaptureAuthorizationType>("system.survey_capture_authorization_type", translator);
+        dataSourceBuilder.MapEnum<SurveyCaptureAuthorizationStatus>("system.survey_capture_authorization_status", translator);
         dataSourceBuilder.MapEnum<SurveyResultStatus>("system.survey_result_status", translator);
         dataSourceBuilder.MapEnum<HarvestReadinessReviewStatus>("system.harvest_readiness_review_status", translator);
         dataSourceBuilder.MapEnum<HarvestReadinessCriterionStatus>("system.harvest_readiness_criterion_status", translator);

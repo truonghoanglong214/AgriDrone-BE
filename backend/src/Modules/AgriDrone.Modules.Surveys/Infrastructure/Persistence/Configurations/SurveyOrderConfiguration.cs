@@ -46,6 +46,10 @@ public sealed class SurveyOrderConfiguration : IEntityTypeConfiguration<SurveyOr
                     "final_price IS NULL OR " +
                     "(price_per_pole_snapshot IS NOT NULL AND final_price = round(confirmed_survey_pole_count * price_per_pole_snapshot, 2)) OR " +
                     "(price_per_ha_snapshot IS NOT NULL AND final_price = round(confirmed_survey_area_ha * price_per_ha_snapshot, 2))");
+                table.HasCheckConstraint(
+                    "ck_survey_orders_original_commercial_snapshot",
+                    "(original_final_price IS NULL AND original_survey_service_price_id IS NULL AND original_confirmed_pole_count IS NULL AND original_price_per_pole_snapshot IS NULL) OR " +
+                    "(original_final_price = round(original_confirmed_pole_count * original_price_per_pole_snapshot, 2) AND original_survey_service_price_id IS NOT NULL)");
                 table.HasCheckConstraint("ck_survey_orders_previous_not_self", "previous_compatible_order_id IS NULL OR previous_compatible_order_id <> id");
             });
         builder.HasKey(order => order.Id).HasName("pk_survey_orders");
@@ -74,6 +78,30 @@ public sealed class SurveyOrderConfiguration : IEntityTypeConfiguration<SurveyOr
                     ? PricePerPole.Create(value.Value)
                     : (PricePerPole?)null)
             .HasColumnName("price_per_pole_snapshot")
+            .HasColumnType("numeric(18,2)")
+            .HasPrecision(18, 2);
+        builder.Property(order => order.OriginalSurveyServicePriceId)
+            .HasColumnName("original_survey_service_price_id")
+            .HasColumnType("uuid");
+        builder.Property(order => order.OriginalConfirmedPoleCount)
+            .HasConversion(
+                value => value.HasValue ? value.Value.Value : (int?)null,
+                value => value.HasValue
+                    ? ConfirmedSurveyPoleCount.Create(value.Value)
+                    : (ConfirmedSurveyPoleCount?)null)
+            .HasColumnName("original_confirmed_pole_count")
+            .HasColumnType("integer");
+        builder.Property(order => order.OriginalPricePerPoleSnapshot)
+            .HasConversion(
+                value => value.HasValue ? value.Value.Amount : (decimal?)null,
+                value => value.HasValue
+                    ? PricePerPole.Create(value.Value)
+                    : (PricePerPole?)null)
+            .HasColumnName("original_price_per_pole_snapshot")
+            .HasColumnType("numeric(18,2)")
+            .HasPrecision(18, 2);
+        builder.Property(order => order.OriginalFinalPrice)
+            .HasColumnName("original_final_price")
             .HasColumnType("numeric(18,2)")
             .HasPrecision(18, 2);
         builder.Property(order => order.FarmBoundaryVersionId).HasColumnName("farm_boundary_version_id").HasColumnType("uuid");
