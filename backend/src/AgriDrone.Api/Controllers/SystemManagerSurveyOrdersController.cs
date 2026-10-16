@@ -1,5 +1,4 @@
 using System.ComponentModel.DataAnnotations;
-using System.Text.Json.Serialization;
 using AgriDrone.Api.Contracts.Surveys.Orders;
 using AgriDrone.Api.Contracts.Surveys.Appointments;
 using AgriDrone.Api.Contracts.Surveys.Payments;
@@ -241,7 +240,6 @@ public sealed class SystemManagerSurveyOrdersController(ISender sender)
     }
 }
 
-[JsonConverter(typeof(JsonStringEnumConverter<PaidSurveyMissionPurpose>))]
 public enum PaidSurveyMissionPurpose
 {
     PlantHealth

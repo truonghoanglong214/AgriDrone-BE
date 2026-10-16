@@ -37,7 +37,6 @@ internal sealed class MissionTelemetryRepository(
             CancellationToken cancellationToken = default)
     {
         return dbContext.MissionTelemetryImports
-            .AsNoTracking()
             .SingleOrDefaultAsync(
                 telemetryImport =>
                     telemetryImport.TenantId == tenantId &&
@@ -58,5 +57,26 @@ internal sealed class MissionTelemetryRepository(
 
         dbContext.MissionTelemetryPoints.AddRange(
             points);
+    }
+
+    public async Task ReplaceAsync(
+        MissionTelemetryImport telemetryImport,
+        IReadOnlyCollection<MissionTelemetryPoint> points,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(telemetryImport);
+        ArgumentNullException.ThrowIfNull(points);
+
+        await using var transaction = await dbContext.Database
+            .BeginTransactionAsync(cancellationToken);
+
+        await dbContext.MissionTelemetryPoints
+            .Where(point => point.MissionId == telemetryImport.MissionId)
+            .ExecuteDeleteAsync(cancellationToken);
+
+        dbContext.MissionTelemetryPoints.AddRange(points);
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
     }
 }

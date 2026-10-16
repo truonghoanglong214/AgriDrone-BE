@@ -11,6 +11,13 @@ internal interface IDroneQueries
         DateTimeOffset endAt,
         CancellationToken cancellationToken = default);
 
+    Task<IReadOnlyList<AvailableDroneResponse>> GetAvailableExcludingMissionAsync(
+        DateTimeOffset startAt,
+        DateTimeOffset endAt,
+        Guid excludedMissionId,
+        CancellationToken cancellationToken = default) =>
+        GetAvailableAsync(startAt, endAt, cancellationToken);
+
     Task<IReadOnlyList<DroneRegistryItemResponse>> GetRegistryAsync(
         CancellationToken cancellationToken = default);
 }

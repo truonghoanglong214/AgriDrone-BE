@@ -5,7 +5,6 @@ using AgriDrone.SharedInfrastructure.Authorization;
 using AgriDrone.SharedInfrastructure.Http;
 using AgriDrone.SharedKernel.Application
     .Abstractions.Authorization;
-using AgriDrone.SharedKernel.Application.Abstractions.Execution;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -16,38 +15,27 @@ namespace AgriDrone.Api.Controllers;
 [Authorize]
 public sealed class MissionTelemetryController(
     ISender sender,
-    IAuthorizationService authorizationService,
-    IExecutionContext executionContext)
+    ISystemManagerAccessService managerAccessService)
     : ControllerBase
 {
     /// <summary>Nhập telemetry đã chuẩn hóa để tạo đường bay thực tế.</summary>
     /// <remarks>
     /// Nhận từ 2 đến 50.000 điểm GPS có SequenceNumber và RecordedAt UTC tăng
     /// dần. Các điểm phải nằm trong khoảng StartedAt đến EndedAt của Mission
-    /// đang Uploading. Mỗi Mission chỉ có một telemetry import; OperationId hỗ
-    /// trợ retry an toàn khi client gửi lại cùng payload.
+    /// đang Uploading. Mỗi Mission giữ một telemetry import; request có
+    /// OperationId có thể giữ nguyên khi chọn lại segment trước Finalize;
+    /// cùng payload sẽ trả kết quả cũ, payload khác sẽ thay import hiện tại.
     /// </remarks>
     [HttpPost("api/missions/{missionId:guid}/farms/{farmId:guid}/telemetry/imports")]
+    [Authorize(Policy = AccessAuthorizationPolicies.SystemManager)]
     public async Task<IResult> ImportTelemetry(
         [FromRoute] Guid farmId,
         Guid missionId,
         [FromBody] ImportMissionTelemetryRequest request,
         CancellationToken cancellationToken)
     {
-        if (executionContext.TenantId is not Guid tenantId)
-        {
-            return Results.Unauthorized();
-        }
-
-        var authorization =
-            await authorizationService.AuthorizeAsync(
-                User,
-                new FarmAccessTarget(
-                    tenantId,
-                    farmId),
-                AccessAuthorizationPolicies.FarmManage);
-
-        if (!authorization.Succeeded)
+        var access = await managerAccessService.ResolveFarmAccessAsync(farmId, cancellationToken);
+        if (!access.IsAllowed || access.TenantId is not Guid tenantId || access.FarmId != farmId)
         {
             return Results.Forbid();
         }
@@ -75,7 +63,8 @@ public sealed class MissionTelemetryController(
             request.SourceFileName,
             request.SourceChecksum,
             request.ExpectedMissionVersion,
-            points);
+            points,
+            request.SegmentIndex);
 
         var result = await sender.Send(
             command,

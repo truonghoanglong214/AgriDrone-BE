@@ -18,5 +18,12 @@ internal interface IMediaUploadSessionRepository
         Guid operationId,
         CancellationToken cancellationToken = default);
 
+    Task<MediaUploadSession?> GetActiveByChecksumAsync(
+        Guid tenantId,
+        Guid farmId,
+        Guid missionId,
+        string checksum,
+        CancellationToken cancellationToken = default);
+
     void Add(MediaUploadSession session);
 }

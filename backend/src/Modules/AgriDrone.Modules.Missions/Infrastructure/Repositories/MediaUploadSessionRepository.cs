@@ -49,4 +49,23 @@ internal sealed class MediaUploadSessionRepository(
 
         dbContext.MediaUploadSessions.Add(session);
     }
+
+    public Task<MediaUploadSession?> GetActiveByChecksumAsync(
+        Guid tenantId,
+        Guid farmId,
+        Guid missionId,
+        string checksum,
+        CancellationToken cancellationToken = default)
+    {
+        var normalized = checksum.Trim().ToLowerInvariant();
+        return dbContext.MediaUploadSessions.SingleOrDefaultAsync(
+            session => session.TenantId == tenantId &&
+                       session.FarmId == farmId &&
+                       session.MissionId == missionId &&
+                       session.ExpectedChecksum == normalized &&
+                       (session.Status == MediaUploadSessionStatus.Pending ||
+                        session.Status == MediaUploadSessionStatus.Verifying ||
+                        session.Status == MediaUploadSessionStatus.Completed),
+            cancellationToken);
+    }
 }

@@ -32,6 +32,10 @@ public sealed class MissionTelemetryImportConfiguration
                 table.HasCheckConstraint(
                     "ck_telemetry_imports_time_range",
                     "last_recorded_at > first_recorded_at");
+
+                table.HasCheckConstraint(
+                    "ck_telemetry_imports_selected_segment_object",
+                    "selected_segment_json IS NULL OR jsonb_typeof(selected_segment_json) = 'object'");
             });
 
         builder.HasKey(telemetryImport =>
@@ -85,6 +89,11 @@ public sealed class MissionTelemetryImportConfiguration
                 telemetryImport.PointCount)
             .HasColumnName("point_count")
             .IsRequired();
+
+        builder.Property(telemetryImport =>
+                telemetryImport.SelectedSegmentJson)
+            .HasColumnName("selected_segment_json")
+            .HasColumnType("jsonb");
 
         builder.Property(telemetryImport =>
                 telemetryImport.FirstRecordedAt)

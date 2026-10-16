@@ -24,6 +24,10 @@ internal sealed class ImportTelemetryCommandValidator
         RuleFor(command => command.ExpectedMissionVersion)
             .GreaterThan(0u);
 
+        RuleFor(command => command.SegmentIndex)
+            .GreaterThanOrEqualTo(0)
+            .When(command => command.SegmentIndex.HasValue);
+
         RuleFor(command => command.SourceFileName)
             .Cascade(CascadeMode.Stop)
             .NotEmpty()

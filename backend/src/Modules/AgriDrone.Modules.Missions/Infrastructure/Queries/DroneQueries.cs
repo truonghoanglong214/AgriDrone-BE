@@ -16,7 +16,17 @@ internal sealed class DroneQueries(
         GetAvailableAsync(
             DateTimeOffset startAt,
             DateTimeOffset endAt,
-            CancellationToken cancellationToken = default)
+            CancellationToken cancellationToken = default) =>
+        await GetAvailableInternalAsync(startAt, endAt, null, cancellationToken);
+
+    public Task<IReadOnlyList<AvailableDroneResponse>> GetAvailableExcludingMissionAsync(
+        DateTimeOffset startAt, DateTimeOffset endAt, Guid excludedMissionId,
+        CancellationToken cancellationToken = default) =>
+        GetAvailableInternalAsync(startAt, endAt, excludedMissionId, cancellationToken);
+
+    private async Task<IReadOnlyList<AvailableDroneResponse>> GetAvailableInternalAsync(
+        DateTimeOffset startAt, DateTimeOffset endAt, Guid? excludedMissionId,
+        CancellationToken cancellationToken)
     {
         var startDate =
             DateOnly.FromDateTime(startAt.UtcDateTime);
@@ -29,18 +39,18 @@ internal sealed class DroneQueries(
             .Where(drone =>
                 drone.DeletedAt == null &&
                 drone.Status == DroneStatus.Available &&
-
-                (!drone.RegistrationDate.HasValue ||
-                 drone.RegistrationDate.Value <= startDate) &&
-
-                (!drone.RegistrationExpiryDate.HasValue ||
-                 drone.RegistrationExpiryDate.Value >= endDate) &&
+                drone.RegistrationNumber != null &&
+                drone.RegistrationDate.HasValue &&
+                drone.RegistrationDate.Value <= startDate &&
+                drone.RegistrationExpiryDate.HasValue &&
+                drone.RegistrationExpiryDate.Value >= endDate &&
 
                 (!drone.NextMaintenanceAt.HasValue ||
                  drone.NextMaintenanceAt.Value >= endAt) &&
 
                 !dbContext.DroneMissions.Any(mission =>
                     mission.DroneId == drone.Id &&
+                    (!excludedMissionId.HasValue || mission.Id != excludedMissionId.Value) &&
                     (mission.Status == MissionStatus.Scheduled ||
                      mission.Status == MissionStatus.InFlight) &&
                     mission.ScheduledAt.HasValue &&
@@ -88,7 +98,8 @@ internal sealed class DroneQueries(
                 drone.NextMaintenanceAt,
                 drone.Notes,
                 drone.CreatedAt,
-                drone.UpdatedAt))
+                drone.UpdatedAt,
+                drone.Version))
             .ToListAsync(cancellationToken);
     }
 }

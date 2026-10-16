@@ -1,4 +1,4 @@
-﻿using AgriDrone.Modules.Missions.Domain.Telemetry;
+using AgriDrone.Modules.Missions.Domain.Telemetry;
 
 namespace AgriDrone.Api.Contracts.Missions;
 

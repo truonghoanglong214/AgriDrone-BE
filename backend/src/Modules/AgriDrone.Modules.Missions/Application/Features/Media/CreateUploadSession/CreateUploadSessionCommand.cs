@@ -15,5 +15,6 @@ public sealed record CreateUploadSessionCommand(
     MediaType MediaType,
     long FileSizeBytes,
     string Sha256Checksum,
-    uint ExpectedMissionVersion)
+    uint ExpectedMissionVersion,
+    DateTimeOffset? CapturedAt)
     : IRequest<Result<CreateUploadSessionResult>>;

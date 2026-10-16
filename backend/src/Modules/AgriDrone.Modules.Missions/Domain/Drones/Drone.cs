@@ -1,4 +1,5 @@
 using System.Text.Json;
+using AgriDrone.Modules.Missions.Domain.Missions;
 using AgriDrone.SharedKernel.Domain;
 
 namespace AgriDrone.Modules.Missions.Domain.Drones;
@@ -78,6 +79,8 @@ public sealed class Drone : AggregateRoot
 
     public DateTimeOffset UpdatedAt { get; private set; }
 
+    public uint Version { get; private set; }
+
     public DateTimeOffset? DeletedAt { get; private set; }
 
     public static Drone Create(
@@ -142,6 +145,56 @@ public sealed class Drone : AggregateRoot
             weightKg: weightKg,
             notes: NormalizeOptional(notes),
             createdAt: createdAt);
+    }
+
+    public void UpdateDetails(
+        string name,
+        string? model,
+        string? manufacturer,
+        JsonElement? specifications,
+        string? serialNumber,
+        string? registrationNumber,
+        DateOnly? registrationDate,
+        DateOnly? registrationExpiryDate,
+        decimal? weightKg,
+        string? notes,
+        DateTimeOffset changedAt)
+    {
+        EnsureTimestampIsProvided(changedAt, nameof(changedAt));
+        if (Status == DroneStatus.Retired)
+        {
+            throw new InvalidOperationException("A retired Drone cannot be edited.");
+        }
+
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            throw new ArgumentException("Drone name is required.", nameof(name));
+        }
+
+        if (weightKg.HasValue && weightKg.Value <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(weightKg));
+        }
+
+        if (registrationDate.HasValue && registrationExpiryDate.HasValue &&
+            registrationExpiryDate.Value < registrationDate.Value)
+        {
+            throw new ArgumentException(
+                "Registration expiry date cannot be earlier than registration date.",
+                nameof(registrationExpiryDate));
+        }
+
+        Name = name.Trim();
+        Model = NormalizeOptional(model);
+        Manufacturer = NormalizeOptional(manufacturer);
+        Specifications = CreateSpecificationsSnapshot(specifications);
+        SerialNumber = NormalizeIdentifier(serialNumber);
+        RegistrationNumber = NormalizeIdentifier(registrationNumber);
+        RegistrationDate = registrationDate;
+        RegistrationExpiryDate = registrationExpiryDate;
+        WeightKg = weightKg;
+        Notes = NormalizeOptional(notes);
+        UpdatedAt = changedAt;
     }
 
     public void SendToMaintenance(DateTimeOffset sentAt)
@@ -269,6 +322,26 @@ public sealed class Drone : AggregateRoot
         UpdatedAt = startedAt;
     }
 
+    public bool IsOperationalFor(DateTimeOffset startAt, DateTimeOffset endAt)
+    {
+        DomainGuard.Utc(startAt);
+        DomainGuard.Utc(endAt);
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(endAt, startAt);
+
+        var startDate = DateOnly.FromDateTime(startAt.UtcDateTime);
+        var endDate = DateOnly.FromDateTime(endAt.UtcDateTime);
+        return DeletedAt is null && Status == DroneStatus.Available &&
+               !string.IsNullOrWhiteSpace(RegistrationNumber) &&
+               RegistrationDate is DateOnly registrationDate &&
+               registrationDate <= startDate &&
+               RegistrationExpiryDate is DateOnly registrationExpiryDate &&
+               registrationExpiryDate >= endDate &&
+               (!NextMaintenanceAt.HasValue || NextMaintenanceAt.Value >= endAt);
+    }
+
+    public bool SupportsPurpose(MissionPurpose purpose) =>
+        DroneCapabilityPolicy.Supports(Specifications, purpose);
+
     public void CompleteMission(DateTimeOffset completedAt)
     {
         EnsureTimestampIsProvided(
@@ -313,6 +386,9 @@ public sealed class Drone : AggregateRoot
 
             return emptyDocument.RootElement.Clone();
         }
+
+        if (!DroneCapabilityPolicy.IsValid(specifications.Value))
+            throw new ArgumentException("Specifications must contain only supported capabilities.", nameof(specifications));
 
         return specifications.Value.Clone();
     }

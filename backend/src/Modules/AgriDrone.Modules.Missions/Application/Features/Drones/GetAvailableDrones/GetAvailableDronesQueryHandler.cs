@@ -1,5 +1,6 @@
 ﻿using AgriDrone.Modules.Missions.Application.Abstractions;
 using AgriDrone.Modules.Missions.Application.Errors;
+using AgriDrone.Modules.Missions.Domain.Drones;
 using AgriDrone.SharedKernel.Application;
 using AgriDrone.SharedKernel.Application.Abstractions.Authorization;
 using MediatR;
@@ -34,6 +35,10 @@ internal sealed class GetAvailableDronesQueryHandler(
             request.EndAt,
             cancellationToken);
 
-        return Result.Success(drones);
+        return Result.Success<IReadOnlyList<AvailableDroneResponse>>(
+            request.Purpose is { } purpose
+                ? drones.Where(drone => DroneCapabilityPolicy.Supports(
+                    drone.Specifications, purpose)).ToArray()
+                : drones);
     }
 }

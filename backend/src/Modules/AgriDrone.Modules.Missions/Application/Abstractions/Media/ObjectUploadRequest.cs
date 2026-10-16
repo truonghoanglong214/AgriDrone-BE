@@ -1,4 +1,4 @@
-﻿namespace AgriDrone.Modules.Missions.Application.Abstractions.Media;
+namespace AgriDrone.Modules.Missions.Application.Abstractions.Media;
 
 public sealed record ObjectUploadRequest(
     Guid TenantId,
@@ -7,4 +7,5 @@ public sealed record ObjectUploadRequest(
     string MimeType,
     long FileSizeBytes,
     string ChecksumAlgorithm,
-    string Checksum);
+    string Checksum,
+    Guid? MissionId = null);

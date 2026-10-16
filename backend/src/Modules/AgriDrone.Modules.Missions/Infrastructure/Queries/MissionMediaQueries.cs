@@ -35,7 +35,9 @@ internal sealed class MissionMediaQueries(MissionsDbContext dbContext) : IMissio
         if (mediaRole.HasValue)
             query = query.Where(item => item.MediaRole == mediaRole.Value);
 
-        return query.OrderByDescending(item => item.CreatedAt).ThenBy(item => item.MediaId)
+        return query.OrderBy(item => item.CapturedAt)
+            .ThenBy(item => item.Media.StorageKey)
+            .ThenBy(item => item.CreatedAt)
             .Select(Projection).ToPagedResultAsync(page, cancellationToken);
     }
 

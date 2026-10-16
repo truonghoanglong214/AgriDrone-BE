@@ -8,16 +8,23 @@ namespace AgriDrone.Modules.Missions.Application.Features.Media;
 internal static class MissionUploadReadinessPolicy
 {
     public static int GetAcceptedMediaCount(
-        MissionType missionType,
+        DroneMission mission,
         MissionUploadReadinessSnapshot snapshot)
     {
-        return missionType switch
+        if (mission.Purpose == MissionPurpose.BaselineMapping ||
+            mission.MissionType == MissionType.Mapping)
         {
-            MissionType.Mapping => snapshot.RawImageCount,
-            MissionType.HealthInspection =>
-                snapshot.RawImageCount + snapshot.RawVideoCount,
-            _ => 0
-        };
+            return snapshot.RawImageCount;
+        }
+
+        if (mission.Purpose is MissionPurpose.PlantHealth or
+            MissionPurpose.HarvestReadiness ||
+            mission.MissionType == MissionType.HealthInspection)
+        {
+            return snapshot.RawImageCount + snapshot.RawVideoCount;
+        }
+
+        return 0;
     }
 
     public static IReadOnlyList<AppError> Evaluate(
@@ -39,11 +46,13 @@ internal static class MissionUploadReadinessPolicy
                 FinalizeMissionUploadError.ActiveUploadSessionsExist());
         }
 
-        if (GetAcceptedMediaCount(mission.MissionType, snapshot) < 1)
+        if (GetAcceptedMediaCount(mission, snapshot) < 1)
         {
             errors.Add(
                 FinalizeMissionUploadError.RequiredMediaMissing(
-                    mission.MissionType));
+                    mission.Purpose?.ToString() ??
+                    mission.MissionType?.ToString() ??
+                    "Unknown"));
         }
 
         if (!snapshot.HasTelemetryImport ||

@@ -4,4 +4,6 @@ namespace AgriDrone.Api.Contracts.Drones;
 
 public sealed record ChangeDroneStatusRequest(
     DroneStatus Status,
-    DateTimeOffset? NextMaintenanceAt);
+    DateTimeOffset? NextMaintenanceAt,
+    uint ExpectedVersion,
+    string? Reason = null);

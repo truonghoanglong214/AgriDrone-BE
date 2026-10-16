@@ -1,8 +1,9 @@
-﻿using AgriDrone.Modules.Missions.Application.Abstractions.Media;
+using AgriDrone.Modules.Missions.Application.Abstractions.Media;
 using AgriDrone.Modules.Missions.Application.Abstractions.Missions;
 using AgriDrone.Modules.Missions.Application.Features.Media;
 using AgriDrone.Modules.Missions.Domain.Missions;
 using AgriDrone.SharedKernel.Application;
+using AgriDrone.SharedKernel.Application.Abstractions.Authorization;
 using AgriDrone.SharedKernel.Application.Abstractions.Execution;
 using MediatR;
 
@@ -11,7 +12,7 @@ namespace AgriDrone.Modules.Missions.Application.Features.Media.GetMissionUpload
 internal sealed class GetMissionUploadReadinessQueryHandler(
     IDroneMissionRepository missions,
     IMissionUploadReadinessQueries readinessQueries,
-    IExecutionContext executionContext,
+    ISystemManagerAccessService managerAccessService,
     TimeProvider timeProvider)
     : IRequestHandler<
         GetMissionUploadReadinessQuery,
@@ -21,11 +22,10 @@ internal sealed class GetMissionUploadReadinessQueryHandler(
         GetMissionUploadReadinessQuery request,
         CancellationToken cancellationToken)
     {
-        if (executionContext.TenantId is not Guid tenantId)
-        {
-            return Result.Failure<MissionUploadReadinessResult>(
-                MissionError.CurrentTenantRequired());
-        }
+        var access = await managerAccessService.ResolveFarmAccessAsync(request.FarmId, cancellationToken);
+        if (!access.IsAllowed || access.TenantId is not Guid tenantId || access.FarmId != request.FarmId)
+            return Result.Failure<MissionUploadReadinessResult>(AppError.Forbidden(
+                "MissionUpload.FarmAccessDenied", "The manager is not assigned to this Farm."));
 
         var mission = await missions.GetByIdAsync(
             request.MissionId,

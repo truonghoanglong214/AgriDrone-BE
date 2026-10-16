@@ -1,5 +1,6 @@
 using AgriDrone.Database.Mapping;
 using AgriDrone.Database.Surveys;
+using AgriDrone.IntegrationContracts.Surveys;
 using AgriDrone.IntegrationContracts.Mapping;
 using AgriDrone.IntegrationContracts.Messaging;
 using AgriDrone.Modules.Surveys.Application.Abstractions.Approvals;
@@ -43,6 +44,9 @@ public static class DependencyInjection
             var dataSource = serviceProvider.GetRequiredService<NpgsqlDataSource>();
             AgriDroneSchemaDbContextOptions.Configure(options, dataSource);
         });
+
+        services.AddScoped<ISurveyOrderOperationalContextV3Query,
+            SurveyOrderOperationalContextV3Query>();
 
         return services;
     }

@@ -4,11 +4,14 @@ using AgriDrone.Modules.Missions.Application.Features.Media;
 using AgriDrone.Modules.Missions.Application.Features.Media.GetMissionMedia;
 using AgriDrone.Modules.Missions.Application.Features.Media.GetMissionMediaDetails;
 using AgriDrone.Modules.Missions.Application.Features.Media.GetMissionMediaDownloadUrl;
+using AgriDrone.Modules.Missions.Application.Features.Media.CreateUploadSession;
+using AgriDrone.Modules.Missions.Application.Features.Media.CompleteUploadSession;
+using AgriDrone.Modules.Missions.Application.Features.Media.StartMultipartUpload;
+using AgriDrone.Modules.Missions.Application.Features.Media.GetMultipartPartUrl;
 using AgriDrone.SharedInfrastructure.Http;
 using AgriDrone.SharedKernel.Application.Pagination;
 using AgriDrone.SharedInfrastructure.Authorization;
 using AgriDrone.SharedKernel.Application.Abstractions.Authorization;
-using AgriDrone.SharedKernel.Application.Abstractions.Execution;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -20,20 +23,127 @@ namespace AgriDrone.Api.Controllers;
 [Route("api/missions/{missionId:guid}/farms/{farmId:guid}/media")]
 public sealed class MissionMediaController(
     ISender sender,
-    IAuthorizationService authorizationService,
-    IExecutionContext executionContext,
+    ISystemManagerAccessService managerAccessService,
     ILogger<MissionMediaController> logger) : ControllerBase
 {
     private static readonly Action<ILogger, Guid, int, Exception?> LogTransferFailure =
         LoggerMessage.Define<Guid, int>(LogLevel.Error, new EventId(1, "MediaTransferFailed"),
             "Media upload interrupted for mission {MissionId}, file {Index}");
 
+    /// <summary>Create or renew a direct-to-storage upload session for an assigned manager.</summary>
+    /// <remarks>Tạo hoặc lấy lại phiên upload trực tiếp lên storage bằng OperationId. CapturedAt là tùy chọn; nếu gửi phải là UTC trong khoảng bay. Client dùng UploadUri được trả về để gửi file, sau đó gọi complete; ExpectedMissionVersion kiểm soát thay đổi đồng thời.</remarks>
+    [HttpPost("upload-sessions")]
+    [Authorize(Policy = AccessAuthorizationPolicies.SystemManager)]
+    public async Task<IResult> CreateUploadSession(
+        [FromRoute] Guid farmId, [FromRoute] Guid missionId,
+        [FromBody] CreateMissionMediaUploadSessionRequest request,
+        CancellationToken cancellationToken)
+    {
+        var access = await managerAccessService.ResolveFarmAccessAsync(farmId, cancellationToken);
+        if (!access.IsAllowed || access.TenantId is not Guid tenantId || access.FarmId != farmId)
+            return Results.Forbid();
+
+        var result = await sender.Send(new CreateUploadSessionCommand(
+            tenantId, farmId, missionId, request.OperationId, request.FileName,
+            request.MimeType, request.MediaType, request.FileSizeBytes,
+            request.Sha256Checksum, request.ExpectedMissionVersion,
+            request.CapturedAt), cancellationToken);
+        return result.ToHttpResult(HttpContext, value => Results.Ok(
+            new CreateMissionMediaUploadSessionResponse(
+                value.UploadSessionId, value.MediaAssetId, value.UploadUri.AbsoluteUri,
+                value.ExpiresAt, value.Status.ToString(), value.MissionVersion,
+                value.ReusedOperation)));
+    }
+
+    /// <summary>Create or resume a direct-to-storage multipart upload.</summary>
+    /// <remarks>Tạo hoặc tiếp tục phiên multipart cho file lớn. CapturedAt là tùy chọn. Response cho biết kích thước part và các part đã upload để client tiếp tục sau khi mất kết nối.</remarks>
+    [HttpPost("multipart-upload-sessions")]
+    [Authorize(Policy = AccessAuthorizationPolicies.SystemManager)]
+    public async Task<IResult> StartMultipartUpload(
+        [FromRoute] Guid farmId, [FromRoute] Guid missionId,
+        [FromBody] CreateMissionMediaUploadSessionRequest request,
+        CancellationToken cancellationToken)
+    {
+        var access = await managerAccessService.ResolveFarmAccessAsync(farmId,
+            cancellationToken);
+        if (!access.IsAllowed || access.TenantId is not Guid tenantId ||
+            access.FarmId != farmId)
+            return Results.Forbid();
+
+        var created = await sender.Send(new CreateUploadSessionCommand(
+            tenantId, farmId, missionId, request.OperationId, request.FileName,
+            request.MimeType, request.MediaType, request.FileSizeBytes,
+            request.Sha256Checksum, request.ExpectedMissionVersion,
+            request.CapturedAt),
+            cancellationToken);
+        if (created.IsFailure)
+            return created.ToHttpResult(HttpContext, Results.Ok);
+
+        var started = await sender.Send(new StartMultipartUploadCommand(
+            tenantId, farmId, missionId, created.Value.UploadSessionId),
+            cancellationToken);
+        return started.ToHttpResult(HttpContext, value => Results.Ok(
+            new StartMissionMultipartUploadResponse(
+                value.UploadSessionId, created.Value.MediaAssetId,
+                value.PartSizeBytes, value.PartCount, value.ExpiresAt,
+                value.UploadedParts.Select(part =>
+                    new UploadedPartResponse(part.Number, part.SizeBytes)).ToArray(),
+                created.Value.ReusedOperation, value.ReusedUpload)));
+    }
+
+    /// <summary>Issue a short-lived URL for one multipart part.</summary>
+    /// <remarks>Cấp URL có thời hạn cho một part của upload session thuộc đúng mission. Client gửi dữ liệu part trực tiếp tới storage.</remarks>
+    [HttpGet("upload-sessions/{uploadSessionId:guid}/parts/{partNumber:int}/url")]
+    [Authorize(Policy = AccessAuthorizationPolicies.SystemManager)]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    public async Task<IResult> GetMultipartPartUrl(
+        [FromRoute] Guid farmId, [FromRoute] Guid missionId,
+        [FromRoute] Guid uploadSessionId, [FromRoute] int partNumber,
+        CancellationToken cancellationToken)
+    {
+        var access = await managerAccessService.ResolveFarmAccessAsync(farmId,
+            cancellationToken);
+        if (!access.IsAllowed || access.TenantId is not Guid tenantId ||
+            access.FarmId != farmId)
+            return Results.Forbid();
+        var result = await sender.Send(new GetMultipartPartUrlQuery(
+            tenantId, farmId, missionId, uploadSessionId, partNumber),
+            cancellationToken);
+        return result.ToHttpResult(HttpContext, value => Results.Ok(
+            new MissionMultipartPartUrlResponse(value.PartNumber,
+                value.SizeBytes, value.UploadUri.AbsoluteUri, value.ExpiresAt)));
+    }
+
+    /// <summary>Verify a directly uploaded object and attach it to the mission.</summary>
+    /// <remarks>Kiểm tra object đã upload và hoàn tất media asset cho mission. Có thể gửi capturedAt UTC trong query khi complete, hoặc để trống để xử lý thời gian ảnh ở bước khác. Gọi lại phiên đã hoàn tất trả kết quả dùng lại thay vì tạo media trùng.</remarks>
+    [HttpPost("upload-sessions/{uploadSessionId:guid}/complete")]
+    [Authorize(Policy = AccessAuthorizationPolicies.SystemManager)]
+    public async Task<IResult> CompleteUploadSession(
+        [FromRoute] Guid farmId, [FromRoute] Guid missionId,
+        [FromRoute] Guid uploadSessionId,
+        [FromQuery] DateTimeOffset? capturedAt,
+        CancellationToken cancellationToken)
+    {
+        var access = await managerAccessService.ResolveFarmAccessAsync(farmId, cancellationToken);
+        if (!access.IsAllowed || access.TenantId is not Guid tenantId || access.FarmId != farmId)
+            return Results.Forbid();
+
+        var result = await sender.Send(new CompleteUploadSessionCommand(
+            tenantId, farmId, missionId, uploadSessionId, capturedAt),
+            cancellationToken);
+        return result.ToHttpResult(HttpContext, value => Results.Ok(
+            new CompleteMissionMediaUploadSessionResponse(
+                value.UploadSessionId, value.MediaAssetId, value.Status.ToString(),
+                value.MimeType, value.FileSizeBytes, value.Sha256Checksum,
+                value.ReusedCompletion)));
+    }
+
     /// <summary>Upload một hoặc nhiều ảnh/video trực tiếp cho Mission.</summary>
     /// <remarks>
-    /// Gửi 1–20 file trong trường files. JPEG/PNG tối đa 50 MiB mỗi file;
-    /// MP4/MOV tối đa 5 GiB. Tổng dữ liệu file tối đa 5 GiB mỗi request.
+    /// Gửi file nhỏ trong trường files, tối đa 50 MiB tổng request.
+    /// File lớn và video sử dụng upload-sessions để truyền trực tiếp tới storage.
     /// Backend tính SHA-256, upload MinIO và hoàn tất media.
-    /// Không cần gửi metadata, operationId hay version. Mission phải đã kết thúc
+    /// CapturedAt tùy chọn; nếu gửi thì cần một giá trị UTC cho mỗi file, đúng thứ tự Files. Mission phải đã kết thúc
     /// chuyến bay. Gửi lại cùng nội dung trong cùng Mission trả media đã hoàn tất.
     /// Telemetry và finalize upload được thực hiện qua API riêng.
     /// Xử lý tuần tự; khi một file lỗi, dừng và đánh dấu các file còn lại NotAttempted.
@@ -41,24 +151,29 @@ public sealed class MissionMediaController(
     /// có lỗi. Response chứa kết quả theo index (bắt đầu từ 0) và tên từng file.
     /// </remarks>
     [HttpPost]
+    [Authorize(Policy = AccessAuthorizationPolicies.SystemManager)]
     [Consumes("multipart/form-data")]
-    [RequestSizeLimit(5L * 1024 * 1024 * 1024 + 1024 * 1024)]
-    [RequestFormLimits(MultipartBodyLengthLimit = 5L * 1024 * 1024 * 1024)]
+    [RequestSizeLimit(51L * 1024 * 1024)]
+    [RequestFormLimits(MultipartBodyLengthLimit = 50L * 1024 * 1024)]
     [ProducesResponseType(typeof(IReadOnlyList<UploadMissionMediaItemResponse>), 200)]
     [ProducesResponseType(typeof(IReadOnlyList<UploadMissionMediaItemResponse>), 207)]
     public async Task<IResult> Upload([FromRoute] Guid farmId, [FromRoute] Guid missionId,
         [FromForm] UploadMissionMediaRequest request, CancellationToken cancellationToken)
     {
-        if (executionContext.TenantId is not Guid tenantId)
-            return Results.Unauthorized();
-        var authorization = await authorizationService.AuthorizeAsync(User,
-            new FarmAccessTarget(tenantId, farmId), AccessAuthorizationPolicies.FarmManage);
-        if (!authorization.Succeeded)
+        var access = await managerAccessService.ResolveFarmAccessAsync(
+            farmId,
+            cancellationToken);
+        if (!access.IsAllowed || access.TenantId is not Guid tenantId ||
+            access.FarmId != farmId)
             return Results.Forbid();
 
-        if (request.Files.Sum(file => file.Length) > 5L * 1024 * 1024 * 1024)
+        if (request.Files.Sum(file => file.Length) > 50L * 1024 * 1024)
             return Results.Problem(statusCode: StatusCodes.Status413PayloadTooLarge,
-                detail: "Total file size must not exceed 5 GiB.");
+                detail: "Use upload sessions when total file size exceeds 50 MiB.");
+
+        if (request.CapturedAt.Count != 0 &&
+            request.CapturedAt.Count != request.Files.Count)
+            return Results.BadRequest("Provide no CapturedAt values or one UTC value per file, in file order.");
 
         var results = new List<UploadMissionMediaItemResponse>();
         var stopped = false;
@@ -77,7 +192,11 @@ public sealed class MissionMediaController(
             {
                 await using var content = file.OpenReadStream();
                 var result = await sender.Send(new UploadMissionMediaCommand(
-                    tenantId, farmId, missionId, content), cancellationToken);
+                    tenantId, farmId, missionId, content,
+                    request.CapturedAt.Count == 0
+                        ? null
+                        : request.CapturedAt[index],
+                    fileName), cancellationToken);
                 if (result.IsFailure)
                 {
                     results.Add(new(index, fileName, "Failed", null,
@@ -108,11 +227,12 @@ public sealed class MissionMediaController(
 
     /// <summary>Lấy danh sách media đã hoàn tất của Mission.</summary>
     /// <remarks>
-    /// Yêu cầu FarmManage. Phân trang tối đa 100 phần tử, lọc MediaType/MediaRole.
+    /// Yêu cầu SystemManager đang được phân công Farm. Phân trang tối đa 100 phần tử, lọc MediaType/MediaRole.
     /// Chỉ trả media Active thuộc đúng tenant, farm và mission; không trả storage URI.
     /// Mission tồn tại chưa có media trả trang rỗng; mission không tồn tại trả 404.
     /// </remarks>
     [HttpGet]
+    [Authorize(Policy = AccessAuthorizationPolicies.SystemManager)]
     [ProducesResponseType(typeof(PagedResult<MissionMediaResponse>), StatusCodes.Status200OK)]
     public async Task<IResult> GetMedia(
         [FromRoute] Guid farmId,
@@ -131,10 +251,11 @@ public sealed class MissionMediaController(
 
     /// <summary>Lấy chi tiết media của Mission.</summary>
     /// <remarks>
-    /// Yêu cầu FarmManage. Media phải Active và liên kết với đúng mission/farm/tenant.
+    /// Yêu cầu SystemManager đang được phân công Farm. Media phải Active và liên kết với đúng mission/farm/tenant.
     /// Trả metadata, checksum và thông tin capture; không trả storage URI nội bộ.
     /// </remarks>
     [HttpGet("{mediaId:guid}")]
+    [Authorize(Policy = AccessAuthorizationPolicies.SystemManager)]
     [ProducesResponseType(typeof(MissionMediaResponse), StatusCodes.Status200OK)]
     public async Task<IResult> GetMediaDetails(
         [FromRoute] Guid farmId,
@@ -152,10 +273,11 @@ public sealed class MissionMediaController(
 
     /// <summary>Cấp link xem/tải media có hiệu lực 5 phút.</summary>
     /// <remarks>
-    /// Kiểm tra FarmManage, liên kết media và object trước khi cấp presigned GET URL.
+    /// Kiểm tra quyền SystemManager trên Farm, liên kết media và object trước khi cấp presigned GET URL.
     /// Không cache response. Link đã cấp còn dùng được tới khi hết hạn.
     /// </remarks>
     [HttpGet("{mediaId:guid}/download-url")]
+    [Authorize(Policy = AccessAuthorizationPolicies.SystemManager)]
     [ProducesResponseType(typeof(MissionMediaDownloadResponse), StatusCodes.Status200OK)]
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public async Task<IResult> GetDownloadUrl(
@@ -174,11 +296,7 @@ public sealed class MissionMediaController(
 
     private async Task<IResult?> AuthorizeFarmAsync(Guid farmId)
     {
-        if (executionContext.TenantId is not Guid tenantId)
-            return Results.Unauthorized();
-
-        var authorization = await authorizationService.AuthorizeAsync(
-            User, new FarmAccessTarget(tenantId, farmId), AccessAuthorizationPolicies.FarmManage);
-        return authorization.Succeeded ? null : Results.Forbid();
+        var access = await managerAccessService.ResolveFarmAccessAsync(farmId, HttpContext.RequestAborted);
+        return access.IsAllowed && access.FarmId == farmId ? null : Results.Forbid();
     }
 }

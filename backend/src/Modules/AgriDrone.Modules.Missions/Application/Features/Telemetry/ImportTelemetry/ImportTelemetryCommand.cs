@@ -11,5 +11,6 @@ public sealed record ImportTelemetryCommand(
     string SourceFileName,
     string SourceChecksum,
     uint ExpectedMissionVersion,
-    IReadOnlyList<ImportTelemetryPoint> Points)
+    IReadOnlyList<ImportTelemetryPoint> Points,
+    int? SegmentIndex = null)
     : IRequest<Result<ImportTelemetryResult>>;

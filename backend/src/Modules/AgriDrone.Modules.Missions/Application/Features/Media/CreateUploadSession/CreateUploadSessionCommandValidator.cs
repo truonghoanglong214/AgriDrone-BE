@@ -82,6 +82,12 @@ internal sealed class CreateUploadSessionCommandValidator
             .Matches("^[0-9a-fA-F]{64}$")
             .WithMessage(
                 "Sha256Checksum must contain 64 hexadecimal characters.");
+
+        RuleFor(command => command.CapturedAt)
+            .Must(value => !value.HasValue ||
+                           (value.Value != default &&
+                            value.Value.Offset == TimeSpan.Zero))
+            .WithMessage("When provided, CapturedAt must be a non-default UTC timestamp.");
     }
 
     private static bool IsPlainFileName(

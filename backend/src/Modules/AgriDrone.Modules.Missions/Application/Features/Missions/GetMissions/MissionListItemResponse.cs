@@ -5,10 +5,10 @@ namespace AgriDrone.Modules.Missions.Application.Features.Missions.GetMissions;
 public sealed record MissionListItemResponse(
     Guid Id,
     Guid FarmId,
-    Guid ZoneId,
+    Guid? ZoneId,
     Guid DroneId,
     string MissionCode,
-    MissionType MissionType,
+    MissionType? MissionType,
     MissionStatus Status,
     ProcessingStatus ProcessingStatus,
     DateTimeOffset? ScheduledAt,

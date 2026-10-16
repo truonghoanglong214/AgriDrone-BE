@@ -26,7 +26,7 @@ internal sealed class TransitionMissionCommandValidator
                     MissionStatus.FlightFailed or
                     MissionStatus.Cancelled)
             .WithMessage(
-                "UC02 only supports InFlight, " +
+                "UC03 only supports InFlight, " +
                 "FlightCompleted, FlightFailed and Cancelled.");
 
         RuleFor(command => command.Reason)
@@ -36,5 +36,20 @@ internal sealed class TransitionMissionCommandValidator
                 command.TargetStatus is
                     MissionStatus.FlightFailed or
                     MissionStatus.Cancelled);
+
+        When(command => command.TargetStatus == MissionStatus.FlightFailed, () =>
+        {
+            RuleFor(command => command.IncidentOperationId)
+                .NotNull().NotEqual(Guid.Empty);
+            RuleFor(command => command.IncidentType)
+                .Must(value => value is "SIGNAL_LOSS" or "LOW_BATTERY" or
+                    "INTERRUPTION" or "FLIGHT_FAILURE");
+            RuleFor(command => command.IncidentOutcome)
+                .NotEmpty().MaximumLength(1000);
+            RuleFor(command => command.RecoveryDecision)
+                .Must(value => value is "ABORT" or "RESCHEDULE_REQUIRED");
+            RuleFor(command => command.EvidenceReference)
+                .NotEmpty().MaximumLength(500);
+        });
     }
 }

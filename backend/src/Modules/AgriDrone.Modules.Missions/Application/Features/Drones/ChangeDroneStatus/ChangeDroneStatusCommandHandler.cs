@@ -1,4 +1,4 @@
-﻿using AgriDrone.Modules.Missions.Application.Abstractions.Missions;
+using AgriDrone.Modules.Missions.Application.Abstractions.Missions;
 using AgriDrone.Modules.Missions.Application.Errors;
 using AgriDrone.Modules.Missions.Domain.Drones;
 using AgriDrone.SharedInfrastructure.Auditing;
@@ -12,6 +12,7 @@ namespace AgriDrone.Modules.Missions.Application
 
 internal sealed class ChangeDroneStatusCommandHandler(
     IDroneRepository droneRepository,
+    IDroneMaintenanceRepository maintenanceRepository,
     IAuditWriter auditWriter,
     IExecutionContext executionContext,
     TimeProvider timeProvider,
@@ -38,6 +39,15 @@ internal sealed class ChangeDroneStatusCommandHandler(
         {
             return Result.Failure<ChangeDroneStatusResponse>(
                 DroneError.NotFound(request.DroneId));
+        }
+
+        if (request.ExpectedVersion.HasValue &&
+            request.ExpectedVersion.Value != drone.Version)
+        {
+            return Result.Failure<ChangeDroneStatusResponse>(
+                AppError.Conflict(
+                    "Drone.VersionConflict",
+                    "The Drone was updated by another operation. Reload and retry."));
         }
 
         if (drone.Status == request.TargetStatus)
@@ -70,6 +80,8 @@ internal sealed class ChangeDroneStatusCommandHandler(
         }
 
         var previousStatus = drone.Status;
+        var previousLastMaintenanceAt = drone.LastMaintenanceAt;
+        var previousNextMaintenanceAt = drone.NextMaintenanceAt;
         var changedAt = timeProvider.GetUtcNow();
 
         if (request.TargetStatus == DroneStatus.Available &&
@@ -88,6 +100,30 @@ internal sealed class ChangeDroneStatusCommandHandler(
                 DroneError.InvalidNextMaintenanceTime());
         }
 
+        if (previousStatus == DroneStatus.Maintenance)
+        {
+            var openRecord = await maintenanceRepository.GetOpenAsync(
+                drone.Id, cancellationToken);
+            if (openRecord is null)
+            {
+                openRecord = DroneMaintenanceRecord.Start(
+                    drone.Id, drone.UpdatedAt, null, "LEGACY_MAINTENANCE");
+                maintenanceRepository.Add(openRecord);
+            }
+            openRecord.Close(changedAt, userId, request.TargetStatus,
+                request.NextMaintenanceAt);
+        }
+        else if (request.TargetStatus == DroneStatus.Maintenance)
+        {
+            if (await maintenanceRepository.GetOpenAsync(drone.Id, cancellationToken)
+                is not null)
+                return Result.Failure<ChangeDroneStatusResponse>(
+                    AppError.Conflict("Drone.MaintenanceConflict",
+                        "An open maintenance record already exists."));
+            maintenanceRepository.Add(DroneMaintenanceRecord.Start(
+                drone.Id, changedAt, userId, request.Reason));
+        }
+
         ApplyTransition(
             drone,
             request.TargetStatus,
@@ -97,7 +133,9 @@ internal sealed class ChangeDroneStatusCommandHandler(
         using var oldData =
             JsonSerializer.SerializeToDocument(new
             {
-                Status = previousStatus.ToString()
+                Status = previousStatus.ToString(),
+                LastMaintenanceAt = previousLastMaintenanceAt,
+                NextMaintenanceAt = previousNextMaintenanceAt
             });
 
         using var newData =
@@ -105,7 +143,8 @@ internal sealed class ChangeDroneStatusCommandHandler(
             {
                 Status = drone.Status.ToString(),
                 drone.LastMaintenanceAt,
-                drone.NextMaintenanceAt
+                drone.NextMaintenanceAt,
+                request.Reason
             });
 
         auditWriter.AddSystemAdminAction(
@@ -119,7 +158,23 @@ internal sealed class ChangeDroneStatusCommandHandler(
             newData: newData,
             createdAt: changedAt);
 
-        await unitOfWork.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+        catch (DroneConcurrencyException)
+        {
+            return Result.Failure<ChangeDroneStatusResponse>(
+                AppError.Conflict(
+                    "Drone.VersionConflict",
+                    "The Drone was updated by another operation. Reload and retry."));
+        }
+        catch (DroneMaintenanceConflictException)
+        {
+            return Result.Failure<ChangeDroneStatusResponse>(
+                AppError.Conflict("Drone.MaintenanceConflict",
+                    "Maintenance changed concurrently. Reload and retry."));
+        }
 
         return Result.Success(MapResponse(drone));
     }
@@ -188,6 +243,7 @@ internal sealed class ChangeDroneStatusCommandHandler(
             drone.Status,
             drone.LastMaintenanceAt,
             drone.NextMaintenanceAt,
-            drone.UpdatedAt);
+            drone.UpdatedAt,
+            drone.Version);
     }
 }

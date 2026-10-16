@@ -1,12 +1,16 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using AgriDrone.Modules.Missions.Application
     .Abstractions.Media;
 using AgriDrone.Modules.Missions.Application
     .Abstractions.Missions;
+using AgriDrone.Modules.Missions.Application.Features.Media.StartMultipartUpload;
+using AgriDrone.Modules.Missions.Application.Features.Media.UploadMissionMedia;
+using AgriDrone.Modules.Missions.Application.Features.Media.CreateUploadSession;
 using AgriDrone.Modules.Missions.Domain.Media;
 using AgriDrone.Modules.Missions.Domain.Missions;
 using AgriDrone.SharedInfrastructure.Auditing;
 using AgriDrone.SharedKernel.Application;
+using AgriDrone.SharedKernel.Application.Abstractions.Authorization;
 using AgriDrone.SharedKernel.Application
     .Abstractions.Execution;
 using MediatR;
@@ -19,10 +23,11 @@ internal sealed class CompleteUploadSessionCommandHandler(
     IMediaUploadSessionRepository uploadSessionRepository,
     IMissionMediaRepository missionMediaRepository,
     IObjectStorage objectStorage,
-    IChecksumCalculator checksumCalculator,
+    IMultipartObjectStorage multipartStorage,
     IMissionsUnitOfWork unitOfWork,
     IAuditWriter auditWriter,
     IExecutionContext executionContext,
+    ISystemManagerAccessService managerAccessService,
     TimeProvider timeProvider)
     : IRequestHandler<
         CompleteUploadSessionCommand,
@@ -38,6 +43,13 @@ internal sealed class CompleteUploadSessionCommandHandler(
                 MissionError.CurrentUserRequired());
         }
 
+        var access = await managerAccessService.ResolveFarmAccessAsync(
+            request.FarmId, cancellationToken);
+        if (!access.IsAllowed || access.TenantId != request.TenantId ||
+            access.FarmId != request.FarmId)
+            return Result.Failure<CompleteUploadSessionResult>(AppError.Forbidden(
+                "MediaUpload.FarmAccessDenied", "The manager is not assigned to this Farm."));
+
         var mission = await missionRepository.GetByIdAsync(
             request.MissionId,
             request.TenantId,
@@ -49,6 +61,10 @@ internal sealed class CompleteUploadSessionCommandHandler(
             return Result.Failure<CompleteUploadSessionResult>(
                 MissionError.NotFound(request.MissionId));
         }
+
+        if (mission.SurveyOrderId is null)
+            return Result.Failure<CompleteUploadSessionResult>(
+                MediaUploadError.MissionNotOrderBound());
 
         var session = await uploadSessionRepository.GetByIdAsync(
             request.TenantId,
@@ -67,6 +83,10 @@ internal sealed class CompleteUploadSessionCommandHandler(
         if (session.Status ==
             MediaUploadSessionStatus.Completed)
         {
+            if (request.CapturedAt.HasValue &&
+                request.CapturedAt != session.CapturedAt)
+                return Result.Failure<CompleteUploadSessionResult>(
+                    CompleteUploadSessionError.CaptureMetadataMissing());
             return Result.Success(
                 MapResult(
                     session,
@@ -88,9 +108,23 @@ internal sealed class CompleteUploadSessionCommandHandler(
                     .SessionStatusNotAllowed(session.Status));
         }
 
+        var now = timeProvider.GetUtcNow();
+        var captureTime = session.CapturedAt ?? request.CapturedAt;
+        if ((session.CapturedAt.HasValue && request.CapturedAt.HasValue &&
+             session.CapturedAt != request.CapturedAt) ||
+            (captureTime is DateTimeOffset capturedAt &&
+             (capturedAt == default || capturedAt.Offset != TimeSpan.Zero ||
+              mission.StartedAt is not DateTimeOffset startedAt ||
+              mission.EndedAt is not DateTimeOffset endedAt ||
+              capturedAt < startedAt || capturedAt > endedAt)))
+            return Result.Failure<CompleteUploadSessionResult>(
+                CompleteUploadSessionError.CaptureMetadataMissing());
+
+        if (!session.CapturedAt.HasValue && captureTime.HasValue)
+            session.SetCapturedAt(captureTime.Value, now);
+
         var previousSessionStatus = session.Status;
         var previousMissionStatus = mission.Status;
-        var now = timeProvider.GetUtcNow();
 
         if (session.IsExpiredAt(now))
         {
@@ -100,6 +134,20 @@ internal sealed class CompleteUploadSessionCommandHandler(
             return await SaveFailureAsync(
                 CompleteUploadSessionError.SessionExpired(),
                 cancellationToken);
+        }
+
+        if (session.MultipartUploadId is not null &&
+            await objectStorage.GetInfoAsync(session.StorageUri, cancellationToken) is null)
+        {
+            var parts = (await multipartStorage.ListPartsAsync(session.StorageUri,
+                    session.MultipartUploadId, cancellationToken))
+                .OrderBy(part => part.Number).ToArray();
+            if (!MultipartUploadPolicy.HasExpectedParts(session.FileSizeBytes, parts))
+                return Result.Failure<CompleteUploadSessionResult>(AppError.Validation(
+                    "MediaUpload.IncompleteMultipart",
+                    "Upload all parts with the expected sizes before completion."));
+            await multipartStorage.CompleteAsync(session.StorageUri,
+                session.MultipartUploadId, parts, cancellationToken);
         }
 
         session.BeginVerification(now);
@@ -149,20 +197,21 @@ internal sealed class CompleteUploadSessionCommandHandler(
 
         await objectStorage.ReadAsync(
             session.StorageUri,
-            async (stream, token) =>
-            {
-                actualChecksum =
-                    await checksumCalculator.CalculateAsync(
-                        stream,
-                        session.ChecksumAlgorithm,
-                        token);
-            },
+            async (stream, token) => actualChecksum =
+                await UploadedMediaIntegrityVerifier.VerifyAsync(
+                    stream, session.MimeType, session.FileSizeBytes, token),
             cancellationToken);
 
-        var verifiedChecksum = actualChecksum
-            ?? throw new InvalidOperationException(
-                "Object storage reader did not produce " +
-                "a checksum.");
+        if (actualChecksum is null)
+        {
+            session.FailVerification(now);
+            mission.FailUploading(now);
+            return await SaveFailureAsync(
+                CompleteUploadSessionError.InvalidContent(),
+                cancellationToken);
+        }
+
+        var verifiedChecksum = actualChecksum;
 
         if (!string.Equals(
                 verifiedChecksum,
@@ -207,7 +256,8 @@ internal sealed class CompleteUploadSessionCommandHandler(
             session.MissionId,
             session.MediaAssetId,
             mediaRole,
-            now);
+            now,
+            captureTime);
 
         missionMediaRepository.Add(
             mediaAsset,

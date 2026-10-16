@@ -21,5 +21,8 @@ internal sealed class GetAvailableDronesQueryValidator
             .Must(query => query.EndAt > query.StartAt)
             .WithMessage(
                 "EndAt must be later than StartAt.");
+
+        RuleFor(query => query.Purpose)
+            .Must(purpose => !purpose.HasValue || Enum.IsDefined(purpose.Value));
     }
 }

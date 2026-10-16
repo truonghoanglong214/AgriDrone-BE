@@ -1,11 +1,13 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using AgriDrone.Modules.Missions.Application
     .Abstractions.Media;
 using AgriDrone.Modules.Missions.Application
     .Abstractions.Missions;
+using AgriDrone.Modules.Missions.Application.Abstractions.Processing;
 using AgriDrone.Modules.Missions.Domain.Missions;
 using AgriDrone.SharedInfrastructure.Auditing;
 using AgriDrone.SharedKernel.Application;
+using AgriDrone.SharedKernel.Application.Abstractions.Authorization;
 using AgriDrone.SharedKernel.Application
     .Abstractions.Execution;
 using MediatR;
@@ -19,10 +21,13 @@ internal sealed class FinalizeMissionUploadCommandHandler(
     IMissionsUnitOfWork unitOfWork,
     IAuditWriter auditWriter,
     IExecutionContext executionContext,
+    ISystemManagerAccessService managerAccessService,
+    IMissionProcessingQueue processingQueue,
     TimeProvider timeProvider)
     : IRequestHandler<
         FinalizeMissionUploadCommand,
         Result<FinalizeMissionUploadResult>>
+
 {
     public async Task<Result<FinalizeMissionUploadResult>> Handle(
         FinalizeMissionUploadCommand request,
@@ -33,6 +38,13 @@ internal sealed class FinalizeMissionUploadCommandHandler(
             return Result.Failure<FinalizeMissionUploadResult>(
                 MissionError.CurrentUserRequired());
         }
+
+        var access = await managerAccessService.ResolveFarmAccessAsync(
+            request.FarmId, cancellationToken);
+        if (!access.IsAllowed || access.TenantId != request.TenantId ||
+            access.FarmId != request.FarmId)
+            return Result.Failure<FinalizeMissionUploadResult>(AppError.Forbidden(
+                "MissionUpload.FarmAccessDenied", "The manager is not assigned to this Farm."));
 
         var mission = await missionRepository.GetByIdAsync(
             request.MissionId,
@@ -45,6 +57,11 @@ internal sealed class FinalizeMissionUploadCommandHandler(
             return Result.Failure<FinalizeMissionUploadResult>(
                 MissionError.NotFound(request.MissionId));
         }
+
+        if (mission.SurveyOrderId is null)
+            return Result.Failure<FinalizeMissionUploadResult>(
+                AppError.Conflict("MissionUpload.MissionNotOrderBound",
+                    "Legacy Missions cannot finalize uploads."));
 
         if (mission.Status != MissionStatus.Uploading)
         {
@@ -82,7 +99,7 @@ internal sealed class FinalizeMissionUploadCommandHandler(
 
         var acceptedMediaCount =
         MissionUploadReadinessPolicy.GetAcceptedMediaCount(
-            mission.MissionType,
+            mission,
             readiness);
 
         var previousStatus = mission.Status;
@@ -107,6 +124,10 @@ internal sealed class FinalizeMissionUploadCommandHandler(
             return Result.Failure<FinalizeMissionUploadResult>(
                 FinalizeMissionUploadError.ConcurrentUpdate());
         }
+
+        await processingQueue.EnqueueAsync(
+            new MissionProcessingWorkItem(mission.TenantId, mission.FarmId, mission.Id),
+            cancellationToken);
 
         return Result.Success(
             new FinalizeMissionUploadResult(

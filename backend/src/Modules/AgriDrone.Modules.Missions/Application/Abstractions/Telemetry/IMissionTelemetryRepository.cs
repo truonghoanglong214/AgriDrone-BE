@@ -21,4 +21,9 @@ internal interface IMissionTelemetryRepository
     void Add(
         MissionTelemetryImport telemetryImport,
         IReadOnlyCollection<MissionTelemetryPoint> points);
+
+    Task ReplaceAsync(
+        MissionTelemetryImport telemetryImport,
+        IReadOnlyCollection<MissionTelemetryPoint> points,
+        CancellationToken cancellationToken = default);
 }

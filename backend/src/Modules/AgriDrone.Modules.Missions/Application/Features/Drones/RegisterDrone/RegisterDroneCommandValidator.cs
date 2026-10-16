@@ -32,6 +32,12 @@ internal sealed class RegisterDroneCommandValidator
             .GreaterThan(0)
             .When(command => command.WeightKg.HasValue);
 
+        RuleFor(command => command.Specifications)
+            .Must(specifications => !specifications.HasValue ||
+                specifications.Value.ValueKind is System.Text.Json.JsonValueKind.Null or System.Text.Json.JsonValueKind.Undefined ||
+                AgriDrone.Modules.Missions.Domain.Drones.DroneCapabilityPolicy.IsValid(specifications.Value))
+            .WithMessage("Specifications must use supported capabilities.");
+
         RuleFor(command => command)
             .Must(command =>
                 !command.RegistrationDate.HasValue ||

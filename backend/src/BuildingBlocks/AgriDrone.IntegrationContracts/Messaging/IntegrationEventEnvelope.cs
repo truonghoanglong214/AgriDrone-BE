@@ -1,6 +1,5 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Text;
+using System.Text.Json.Serialization;
 
 namespace AgriDrone.IntegrationContracts.Messaging
 {
@@ -12,5 +11,9 @@ namespace AgriDrone.IntegrationContracts.Messaging
     DateTimeOffset OccurredAt,
     int SchemaVersion,
     string EventType,
-    TPayload Payload);
+    TPayload Payload,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    Guid? CausationId = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    string? SourceSystem = null);
 }

@@ -1,4 +1,5 @@
-﻿using System.Text.Json;
+using System.Globalization;
+using System.Text.Json;
 using AgriDrone.Modules.Missions.Application
     .Abstractions.Missions;
 using AgriDrone.Modules.Missions.Application
@@ -7,6 +8,7 @@ using AgriDrone.Modules.Missions.Domain.Missions;
 using AgriDrone.Modules.Missions.Domain.Telemetry;
 using AgriDrone.SharedInfrastructure.Auditing;
 using AgriDrone.SharedKernel.Application;
+using AgriDrone.SharedKernel.Application.Abstractions.Authorization;
 using AgriDrone.SharedKernel.Application
     .Abstractions.Execution;
 using MediatR;
@@ -19,11 +21,15 @@ internal sealed class ImportTelemetryCommandHandler(
     IMissionsUnitOfWork unitOfWork,
     IAuditWriter auditWriter,
     IExecutionContext executionContext,
+    ISystemManagerAccessService managerAccessService,
     TimeProvider timeProvider)
     : IRequestHandler<
         ImportTelemetryCommand,
         Result<ImportTelemetryResult>>
 {
+    private static readonly JsonSerializerOptions SegmentJsonOptions =
+        new(JsonSerializerDefaults.Web);
+
     public async Task<Result<ImportTelemetryResult>> Handle(
         ImportTelemetryCommand request,
         CancellationToken cancellationToken)
@@ -33,6 +39,13 @@ internal sealed class ImportTelemetryCommandHandler(
             return Result.Failure<ImportTelemetryResult>(
                 MissionError.CurrentUserRequired());
         }
+
+        var access = await managerAccessService.ResolveFarmAccessAsync(
+            request.FarmId, cancellationToken);
+        if (!access.IsAllowed || access.TenantId != request.TenantId ||
+            access.FarmId != request.FarmId)
+            return Result.Failure<ImportTelemetryResult>(AppError.Forbidden(
+                "MissionTelemetry.FarmAccessDenied", "The manager is not assigned to this Farm."));
 
         var mission = await missionRepository.GetByIdAsync(
             request.MissionId,
@@ -46,6 +59,20 @@ internal sealed class ImportTelemetryCommandHandler(
                 MissionError.NotFound(request.MissionId));
         }
 
+        if (mission.SurveyOrderId is null)
+            return Result.Failure<ImportTelemetryResult>(
+                AppError.Conflict("MissionTelemetry.MissionNotOrderBound",
+                    "Legacy Missions cannot accept new telemetry."));
+
+        var orderedInput = request.Points
+            .OrderBy(point => point.SequenceNumber)
+            .ToArray();
+
+        using var selectedSegmentJson =
+            CreateSelectedSegmentJson(
+                request.SegmentIndex,
+                orderedInput);
+
         var existingOperation =
             await telemetryRepository
                 .GetImportByOperationIdAsync(
@@ -55,19 +82,19 @@ internal sealed class ImportTelemetryCommandHandler(
                     request.OperationId,
                     cancellationToken);
 
-        if (existingOperation is not null)
+        if (existingOperation is not null &&
+            (existingOperation.MatchesPayload(
+                 request.SourceFileName,
+                 request.SourceChecksum,
+                 request.Points.Count,
+                 selectedSegmentJson) ||
+             (existingOperation.SelectedSegmentJson is null &&
+              mission.Status != MissionStatus.Uploading &&
+              existingOperation.MatchesPayload(
+                  request.SourceFileName,
+                  request.SourceChecksum,
+                  request.Points.Count))))
         {
-            if (!existingOperation.MatchesPayload(
-                    request.SourceFileName,
-                    request.SourceChecksum,
-                    request.Points.Count))
-            {
-                return Result.Failure<ImportTelemetryResult>(
-                    ImportTelemetryError
-                        .OperationPayloadConflict(
-                            request.OperationId));
-            }
-
             return Result.Success(
                 MapResult(
                     existingOperation,
@@ -100,14 +127,6 @@ internal sealed class ImportTelemetryCommandHandler(
                     request.MissionId,
                     cancellationToken);
 
-        if (existingMissionImport is not null)
-        {
-            return Result.Failure<ImportTelemetryResult>(
-                ImportTelemetryError
-                    .MissionAlreadyImported(
-                        existingMissionImport.OperationId));
-        }
-
         if (mission.StartedAt is not DateTimeOffset startedAt ||
             mission.EndedAt is not DateTimeOffset endedAt)
         {
@@ -115,10 +134,6 @@ internal sealed class ImportTelemetryCommandHandler(
                 ImportTelemetryError
                     .FlightTimelineMissing());
         }
-
-        var orderedInput = request.Points
-            .OrderBy(point => point.SequenceNumber)
-            .ToArray();
 
         if (orderedInput[0].RecordedAt < startedAt ||
             orderedInput[^1].RecordedAt > endedAt)
@@ -159,28 +174,50 @@ internal sealed class ImportTelemetryCommandHandler(
                 request.SourceFileName,
                 request.SourceChecksum,
                 telemetryPoints.Length,
+                selectedSegmentJson,
                 telemetryPoints[0].RecordedAt,
                 telemetryPoints[^1].RecordedAt,
                 actorId,
                 now);
 
+        var previousOperationId =
+            existingMissionImport?.OperationId;
+        var persistedImport =
+            existingMissionImport ?? telemetryImport;
+
+        existingMissionImport?.ReplaceWith(telemetryImport);
+
         mission.SetActualFlightRoute(
             actualFlightRoute,
             now);
 
-        telemetryRepository.Add(
-            telemetryImport,
-            telemetryPoints);
+        if (existingMissionImport is null)
+        {
+            telemetryRepository.Add(
+                telemetryImport,
+                telemetryPoints);
+        }
 
         AddAudit(
-            telemetryImport,
+            persistedImport,
             actorId,
-            now);
+            now,
+            previousOperationId);
 
         try
         {
-            await unitOfWork.SaveChangesAsync(
-                cancellationToken);
+            if (existingMissionImport is null)
+            {
+                await unitOfWork.SaveChangesAsync(
+                    cancellationToken);
+            }
+            else
+            {
+                await telemetryRepository.ReplaceAsync(
+                    existingMissionImport,
+                    telemetryPoints,
+                    cancellationToken);
+            }
         }
         catch (MissionConcurrencyException)
         {
@@ -195,16 +232,46 @@ internal sealed class ImportTelemetryCommandHandler(
 
         return Result.Success(
             MapResult(
-                telemetryImport,
+                persistedImport,
                 mission.Version,
                 reusedOperation: false));
+    }
+
+    internal static JsonDocument CreateSelectedSegmentJson(
+        int? segmentIndex,
+        IReadOnlyList<ImportTelemetryPoint> points)
+    {
+        return JsonSerializer.SerializeToDocument(
+            new
+            {
+                segmentIndex,
+                points = points.Select(point => new
+                {
+                    timestamp = point.RecordedAt
+                        .ToOffset(TimeSpan.FromHours(7))
+                        .ToString(
+                            "yyyy-MM-dd HH:mm:ss",
+                            CultureInfo.InvariantCulture),
+                    lat = Math.Truncate(point.Latitude * 1_000_000d) /
+                        1_000_000d,
+                    lon = Math.Truncate(point.Longitude * 1_000_000d) /
+                        1_000_000d,
+                    alt = point.AltitudeM
+                }).ToArray()
+            },
+            SegmentJsonOptions);
     }
 
     private void AddAudit(
         MissionTelemetryImport telemetryImport,
         Guid actorId,
-        DateTimeOffset importedAt)
+        DateTimeOffset importedAt,
+        Guid? previousOperationId)
     {
+        using var oldData = previousOperationId is Guid operationId
+            ? JsonSerializer.SerializeToDocument(new { OperationId = operationId })
+            : null;
+
         using var newData =
             JsonSerializer.SerializeToDocument(new
             {
@@ -228,8 +295,10 @@ internal sealed class ImportTelemetryCommandHandler(
             entityType:
                 nameof(MissionTelemetryImport),
             entityId: telemetryImport.Id,
-            action: "IMPORT_MISSION_TELEMETRY",
-            oldData: null,
+            action: previousOperationId.HasValue
+                ? "REPLACE_MISSION_TELEMETRY"
+                : "IMPORT_MISSION_TELEMETRY",
+            oldData: oldData,
             newData: newData,
             createdAt: importedAt);
     }

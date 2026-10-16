@@ -1,40 +1,33 @@
 namespace AgriDrone.IntegrationContracts.Surveys;
 
+// Internal synchronous boundary. V1/V2 payloads remain immutable for replay.
 public sealed record SurveyOrderOperationalContextV3(
     Guid SurveyOrderId,
     Guid TenantId,
     Guid FarmId,
     string ServiceCode,
     string ServiceType,
-    string MissionPurpose,
+    string RequestedMissionPurpose,
     string OrderStatus,
     uint OrderVersion,
-    Guid? CurrentFarmBoundaryVersionId,
-    Guid? CurrentFarmBaseMapVersionId,
-    int? EffectiveConfirmedPoleCount,
+    Guid? FarmBoundaryVersionId,
+    Guid? FarmBaseMapVersionId,
+    bool RequiresBaselineMapping,
+    int? ConfirmedSurveyPoleCount,
+    Guid? SurveyServicePriceId,
+    decimal? PricePerPole,
+    string? Currency,
+    decimal? FinalPrice,
+    Guid? AppointmentId,
+    string? AppointmentPurpose,
     DateTimeOffset? AppointmentStartAt,
     DateTimeOffset? AppointmentEndAt,
+    string? AppointmentStatus,
+    Guid? PaymentId,
+    string? PaymentStatus,
     Guid? PrimarySystemManagerId,
-    CaptureAuthorizationStateV3 WrittenDataUseConsent,
-    CaptureAuthorizationStateV3 FlightPermission,
-    bool HasPendingFinancialSettlement,
-    bool HasUnapprovedExtraFlight,
-    bool IsReadyForCapture,
+    Guid? PreviousCompatibleOrderId,
+    bool IsReady,
     IReadOnlyList<string> ReadinessFailures,
-    DateTimeOffset EvaluatedAt);
-
-public sealed record CaptureAuthorizationStateV3(
-    string Status,
-    DateTimeOffset? VerifiedAt,
-    DateTimeOffset? ExpiresAt,
-    DateTimeOffset? RevokedAt,
-    uint Version);
-
-public interface ISurveyOrderOperationalContextV3Query
-{
-    Task<SurveyOrderOperationalContextV3?> GetAsync(
-        Guid surveyOrderId,
-        Guid missionId,
-        string missionPurpose,
-        CancellationToken cancellationToken = default);
-}
+    DateTimeOffset EvaluatedAt,
+    IReadOnlyList<Guid>? ScopeZoneIds = null);
