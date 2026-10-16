@@ -1,5 +1,4 @@
 using System.ComponentModel.DataAnnotations;
-using System.Text.Json.Serialization;
 
 namespace AgriDrone.Api.Contracts.Surveys.Appointments;
 
@@ -11,7 +10,6 @@ public sealed record ProposeSurveyAppointmentRequest(
     Guid? ExpectedCurrentAppointmentId,
     uint? ExpectedCurrentAppointmentVersion);
 
-[JsonConverter(typeof(JsonStringEnumConverter<SurveyAppointmentPurposeValue>))]
 public enum SurveyAppointmentPurposeValue
 {
     BaselineMapping,

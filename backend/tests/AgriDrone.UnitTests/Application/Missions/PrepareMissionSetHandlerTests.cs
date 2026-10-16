@@ -810,7 +810,7 @@ public sealed class PrepareMissionSetHandlerTests
                     null,
                     null,
                     JsonSerializer.Deserialize<JsonElement>(
-                        """{"capabilities":["baseline_mapping","plant_health","harvest_readiness"]}"""),
+                        """{"capabilities":["BASELINE_MAPPING","PLANT_HEALTH","HARVEST_READINESS"]}"""),
                     null,
                     null,
                     null,

@@ -22,7 +22,6 @@ public sealed record GetSurveyRequestsRequest
 // These HTTP-bound enum member names deliberately match the stable query-string
 // tokens so ASP.NET Core's enum model binder accepts the documented values.
 #pragma warning disable CA1707
-[JsonConverter(typeof(JsonStringEnumConverter<SurveyRequestStatusFilterValue>))]
 public enum SurveyRequestStatusFilterValue
 {
     [JsonStringEnumMemberName("SUBMITTED")]
@@ -41,7 +40,6 @@ public enum SurveyRequestStatusFilterValue
     WITHDRAWN
 }
 
-[JsonConverter(typeof(JsonStringEnumConverter<SurveyRequestKindFilterValue>))]
 public enum SurveyRequestKindFilterValue
 {
     [JsonStringEnumMemberName("NEW_CUSTOMER")]

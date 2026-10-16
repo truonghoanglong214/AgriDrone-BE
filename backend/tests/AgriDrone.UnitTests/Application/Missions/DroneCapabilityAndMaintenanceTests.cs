@@ -14,7 +14,7 @@ public sealed class DroneCapabilityAndMaintenanceTests
     public void DroneOnlySupportsDeclaredMissionPurposes()
     {
         var capabilities = JsonSerializer.Deserialize<JsonElement>(
-            """{"capabilities":["baseline_mapping","plant_health"]}""");
+            """{"capabilities":["BASELINE_MAPPING","PLANT_HEALTH"]}""");
         var drone = Drone.Create("CAP-01", "Survey Drone", null, null,
             capabilities, null, null, null, null, null, null, Now);
 
@@ -35,7 +35,7 @@ public sealed class DroneCapabilityAndMaintenanceTests
     public void InvalidCapabilitiesAreRejectedAtRegistration()
     {
         var invalid = JsonSerializer.Deserialize<JsonElement>(
-            """{"capabilities":["plant_health","unknown"]}""");
+            """{"capabilities":["PLANT_HEALTH","unknown"]}""");
         Assert.Throws<ArgumentException>(() => Drone.Create(
             "CAP-03", "Invalid Drone", null, null, invalid,
             null, null, null, null, null, null, Now));

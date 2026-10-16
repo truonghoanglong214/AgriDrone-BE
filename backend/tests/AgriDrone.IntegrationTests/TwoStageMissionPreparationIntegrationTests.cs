@@ -190,7 +190,7 @@ public sealed class TwoStageMissionPreparationIntegrationTests
             Task.FromResult<IReadOnlyList<AvailableDroneResponse>>(
                 [new AvailableDroneResponse(droneId, "UC02", "Drone", null, null,
                     JsonSerializer.Deserialize<JsonElement>(
-                        """{"capabilities":["baseline_mapping","plant_health"]}"""),
+                        """{"capabilities":["BASELINE_MAPPING","PLANT_HEALTH"]}"""),
                     null, null, null, DroneStatus.Available, null)]);
 
         public Task<IReadOnlyList<DroneRegistryItemResponse>> GetRegistryAsync(

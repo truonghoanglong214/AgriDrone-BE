@@ -9,7 +9,6 @@ public sealed record CreatePlantConditionRequest(
     PlantConditionTypeValue ConditionType,
     string? Description);
 
-[JsonConverter(typeof(JsonStringEnumConverter<PlantConditionTypeValue>))]
 public enum PlantConditionTypeValue
 {
     [JsonStringEnumMemberName("DISEASE")]

@@ -84,8 +84,8 @@ public sealed class SystemOwnedDroneAvailabilityTests
         var otherId = Guid.NewGuid();
         droneQueries.Available =
         [
-            Available(capableId, """{"capabilities":["plant_health"]}"""),
-            Available(otherId, """{"capabilities":["baseline_mapping"]}""")
+            Available(capableId, """{"capabilities":["PLANT_HEALTH"]}"""),
+            Available(otherId, """{"capabilities":["BASELINE_MAPPING"]}""")
         ];
         var handler = new GetAvailableDronesQueryHandler(
             droneQueries, new AllowedManagerAccessService(farmId));

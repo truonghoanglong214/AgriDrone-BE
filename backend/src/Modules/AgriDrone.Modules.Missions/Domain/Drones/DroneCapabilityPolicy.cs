@@ -7,9 +7,9 @@ public static class DroneCapabilityPolicy
 {
     public static string RequiredFor(MissionPurpose purpose) => purpose switch
     {
-        MissionPurpose.BaselineMapping => "baseline_mapping",
-        MissionPurpose.PlantHealth => "plant_health",
-        MissionPurpose.HarvestReadiness => "harvest_readiness",
+        MissionPurpose.BaselineMapping => "BASELINE_MAPPING",
+        MissionPurpose.PlantHealth => "PLANT_HEALTH",
+        MissionPurpose.HarvestReadiness => "HARVEST_READINESS",
         _ => throw new ArgumentOutOfRangeException(nameof(purpose))
     };
 
@@ -23,7 +23,9 @@ public static class DroneCapabilityPolicy
         var required = RequiredFor(purpose);
         return capabilities.EnumerateArray().Any(item =>
             item.ValueKind == JsonValueKind.String &&
-            string.Equals(item.GetString(), required, StringComparison.Ordinal));
+            // Accept legacy lowercase values already persisted before the API
+            // contract moved to UPPER_SNAKE_CASE.
+            string.Equals(item.GetString(), required, StringComparison.OrdinalIgnoreCase));
     }
 
     public static bool IsValid(JsonElement specifications)
@@ -39,7 +41,7 @@ public static class DroneCapabilityPolicy
         {
             if (item.ValueKind != JsonValueKind.String ||
                 item.GetString() is not string value ||
-                value is not ("baseline_mapping" or "plant_health" or "harvest_readiness") ||
+                value is not ("BASELINE_MAPPING" or "PLANT_HEALTH" or "HARVEST_READINESS") ||
                 !values.Add(value))
                 return false;
         }

@@ -1,4 +1,5 @@
 using AgriDrone.Api.Legacy;
+using AgriDrone.Api.ModelBinding;
 using AgriDrone.Api.Surveys;
 using AgriDrone.Api.Swagger;
 using AgriDrone.Database;
@@ -21,10 +22,22 @@ using AgriDrone.SharedInfrastructure.Validation;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.OpenApi;
 using System.Reflection;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddControllers();
+builder.Services
+    .AddControllers()
+    .AddMvcOptions(options =>
+        options.ModelBinderProviders.Insert(
+            0,
+            new StringEnumModelBinderProvider()))
+    .AddJsonOptions(options =>
+        options.JsonSerializerOptions.Converters.Add(
+            new JsonStringEnumConverter(
+                JsonNamingPolicy.SnakeCaseUpper,
+                allowIntegerValues: false)));
 
 builder.Services
     .AddOptions<LegacyFeaturesOptions>()

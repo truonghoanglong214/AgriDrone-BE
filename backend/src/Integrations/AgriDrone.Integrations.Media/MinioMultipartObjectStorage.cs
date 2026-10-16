@@ -80,7 +80,7 @@ internal sealed class MinioMultipartObjectStorage : IMultipartObjectStorage, IDi
                 UploadId = uploadId,
                 PartNumberMarker = marker
             }, cancellationToken);
-            parts.AddRange(response.Parts.Select(part =>
+            parts.AddRange((response.Parts ?? []).Select(part =>
                 new MultipartUploadedPart(
                     part.PartNumber ?? throw new InvalidOperationException("Part number missing."),
                     part.Size ?? throw new InvalidOperationException("Part size missing."),

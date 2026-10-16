@@ -17,7 +17,6 @@ public sealed record PublicIndicativePriceApiResponse(
     DateTimeOffset EffectiveFrom,
     DateTimeOffset? EffectiveTo);
 
-[JsonConverter(typeof(JsonStringEnumConverter<PublicSurveyServiceTypeValue>))]
 public enum PublicSurveyServiceTypeValue
 {
     [JsonStringEnumMemberName("PLANT_HEALTH")]

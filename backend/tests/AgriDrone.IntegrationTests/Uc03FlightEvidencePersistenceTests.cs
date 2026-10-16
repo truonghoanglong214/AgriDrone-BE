@@ -64,7 +64,7 @@ public sealed class Uc03FlightEvidencePersistenceTests
                          registration_date, registration_expiry_date)
                     VALUES ('{droneId}', 'UC03-{droneId.ToString("N")[..20]}',
                         'UC03 Drone', jsonb_build_object('capabilities',
-                            jsonb_build_array('baseline_mapping')),
+                            jsonb_build_array('BASELINE_MAPPING')),
                         'UC03-REG', '2026-01-01', '2027-01-01');
                     """, seed);
                 await insert.ExecuteNonQueryAsync();

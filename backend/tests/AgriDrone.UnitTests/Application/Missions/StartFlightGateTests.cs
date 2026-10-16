@@ -298,7 +298,7 @@ public sealed class StartFlightGateTests
         {
             FarmId = Guid.NewGuid();
             using var specifications = JsonDocument.Parse(
-                """{"capabilities":["baseline_mapping","plant_health"]}""");
+                """{"capabilities":["BASELINE_MAPPING","PLANT_HEALTH"]}""");
             Drone = Drone.Create("GATE-DRONE", "Gate Drone", null, null,
                 specifications.RootElement, null, "REG-UC03",
                 new DateOnly(2026, 1, 1), new DateOnly(2027, 1, 1),
