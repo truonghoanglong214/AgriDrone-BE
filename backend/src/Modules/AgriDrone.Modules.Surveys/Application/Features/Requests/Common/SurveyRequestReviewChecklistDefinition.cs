@@ -2,7 +2,7 @@ namespace AgriDrone.Modules.Surveys.Application.Features.Requests.Common;
 
 public static class SurveyRequestReviewChecklistDefinition
 {
-    public const string Version = "survey-request-review.v2";
+    public const string Version = "survey-request-review.v3";
 
     public static IReadOnlyList<SurveyRequestReviewChecklistItem> Items { get; } =
     [
@@ -10,26 +10,11 @@ public static class SurveyRequestReviewChecklistDefinition
             "contact-valid",
             "Contact and applicant information is valid."),
         new(
-            "dragon-fruit-farm",
-            "The proposed or existing Farm is a dragon-fruit farm."),
-        new(
             "service-area-supported",
             "The Farm is within a supported service area."),
         new(
-            "location-sufficient",
-            "The submitted location is sufficient for preliminary review and is not an approved Farm boundary."),
-        new(
             "legal-flight-feasible",
-            "Preliminary legal and flight feasibility has been reviewed."),
-        new(
-            "consent-feasible",
-            "Written data-use consent appears obtainable; this is not verification."),
-        new(
-            "flight-permission-feasible",
-            "Flight permission appears obtainable; this is not verification."),
-        new(
-            "eligible-manager-available",
-            "An active, available and flight-qualified SystemManager exists.")
+            "Preliminary legal and flight feasibility has been reviewed.")
     ];
 }
 
@@ -40,11 +25,6 @@ public sealed record SurveyRequestReviewChecklistItem(
 public sealed record SurveyRequestReviewChecklistInput(
     string Version,
     bool ContactValid,
-    bool IsDragonFruitFarm,
     bool IsServiceAreaSupported,
-    bool IsLocationSufficient,
     bool IsPreliminaryLegalAndFlightFeasible,
-    bool IsEligibleSystemManagerAvailable,
-    string? Notes,
-    bool IsWrittenConsentFeasible = false,
-    bool IsFlightPermissionFeasible = false);
+    string? Notes);

@@ -390,13 +390,8 @@ internal sealed class ApproveSurveyRequestCommandHandler(
         checklist is not null &&
         checklist.Version == SurveyRequestReviewChecklistDefinition.Version &&
         checklist.ContactValid &&
-        checklist.IsDragonFruitFarm &&
         checklist.IsServiceAreaSupported &&
-        checklist.IsLocationSufficient &&
-        checklist.IsPreliminaryLegalAndFlightFeasible &&
-        checklist.IsEligibleSystemManagerAvailable &&
-        checklist.IsWrittenConsentFeasible &&
-        checklist.IsFlightPermissionFeasible;
+        checklist.IsPreliminaryLegalAndFlightFeasible;
 
     private static JsonDocument CreateChecklistSnapshot(
         SurveyRequestReviewChecklistInput checklist) =>
@@ -404,15 +399,9 @@ internal sealed class ApproveSurveyRequestCommandHandler(
         {
             version = checklist.Version,
             contactValid = checklist.ContactValid,
-            isDragonFruitFarm = checklist.IsDragonFruitFarm,
             isServiceAreaSupported = checklist.IsServiceAreaSupported,
-            isLocationSufficient = checklist.IsLocationSufficient,
             isPreliminaryLegalAndFlightFeasible =
                 checklist.IsPreliminaryLegalAndFlightFeasible,
-            isEligibleSystemManagerAvailable =
-                checklist.IsEligibleSystemManagerAvailable,
-            isWrittenConsentFeasible = checklist.IsWrittenConsentFeasible,
-            isFlightPermissionFeasible = checklist.IsFlightPermissionFeasible,
             notes = string.IsNullOrWhiteSpace(checklist.Notes)
                 ? null
                 : checklist.Notes.Trim()

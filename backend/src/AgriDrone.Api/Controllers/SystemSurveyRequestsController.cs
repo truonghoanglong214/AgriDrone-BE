@@ -122,14 +122,9 @@ public sealed class SystemSurveyRequestsController(ISender sender)
                 new SurveyRequestReviewChecklistInput(
                     checklist.Version,
                     checklist.ContactValid,
-                    checklist.IsDragonFruitFarm,
                     checklist.IsServiceAreaSupported,
-                    checklist.IsLocationSufficient,
                     checklist.IsPreliminaryLegalAndFlightFeasible,
-                    checklist.IsEligibleSystemManagerAvailable,
-                    checklist.Notes,
-                    checklist.IsWrittenConsentFeasible,
-                    checklist.IsFlightPermissionFeasible),
+                    checklist.Notes),
                 request.ExpectedVersion),
             cancellationToken);
         return result.ToHttpResult(
@@ -183,14 +178,9 @@ public sealed class SystemSurveyRequestsController(ISender sender)
                 new SurveyRequestReviewChecklistInput(
                     checklist.Version,
                     checklist.ContactValid,
-                    checklist.IsDragonFruitFarm,
                     checklist.IsServiceAreaSupported,
-                    checklist.IsLocationSufficient,
                     checklist.IsPreliminaryLegalAndFlightFeasible,
-                    checklist.IsEligibleSystemManagerAvailable,
-                    checklist.Notes,
-                    checklist.IsWrittenConsentFeasible,
-                    checklist.IsFlightPermissionFeasible),
+                    checklist.Notes),
                 request.ExpectedVersion!.Value,
                 normalizedKey),
             cancellationToken);

@@ -5,13 +5,13 @@ namespace AgriDrone.Api.Contracts.Surveys.Approvals;
 
 public sealed record ApproveSurveyRequest(
     Guid? SelectedSystemManagerProfileId,
-    [property: Required]
-    [property: StringLength(4_000, MinimumLength = 1)]
+    [param: Required]
+    [param: StringLength(4_000, MinimumLength = 1)]
     string Reason,
-    [property: Required]
+    [param: Required]
     SurveyRequestReviewChecklistRequest Checklist,
-    [property: Required]
-    [property: Range(typeof(uint), "1", "4294967295")]
+    [param: Required]
+    [param: Range(typeof(uint), "1", "4294967295")]
     uint? ExpectedVersion);
 
 public sealed record ApproveSurveyRequestApiResponse(

@@ -1,7 +1,9 @@
 using AgriDrone.Api.Contracts.SystemManagers;
+using AgriDrone.Api.Mapping;
 using AgriDrone.Modules.Identity.Application.Features.SystemManagers;
 using AgriDrone.Modules.Identity.Application.Features.SystemManagers.GetSystemManagerProfile;
 using AgriDrone.Modules.Identity.Application.Features.SystemManagers.GetSystemManagerProfiles;
+using AgriDrone.Modules.Identity.Domain.SystemManagers;
 using AgriDrone.SharedInfrastructure.Authorization;
 using AgriDrone.SharedInfrastructure.Http;
 using AgriDrone.SharedKernel.Application.Pagination;
@@ -18,7 +20,7 @@ public sealed class SystemManagersController(ISender sender) : ControllerBase
 {
     /// <summary>Lấy danh sách hồ sơ System Manager và version hiện tại.</summary>
     [HttpGet]
-    [ProducesResponseType<PagedResult<SystemManagerProfileResponse>>(
+    [ProducesResponseType<PagedResult<SystemManagerProfileApiResponse>>(
         StatusCodes.Status200OK)]
     public async Task<IResult> GetProfiles(
         [FromQuery] GetSystemManagersRequest request,
@@ -26,19 +28,22 @@ public sealed class SystemManagersController(ISender sender) : ControllerBase
     {
         var result = await sender.Send(
             new GetSystemManagerProfilesQuery(
-                request.Status,
-                request.Availability,
-                request.QualificationStatus,
+                MapStatus(request.Status),
+                MapAvailability(request.Availability),
+                MapQualificationStatus(request.QualificationStatus),
                 request.PageNumber,
                 request.PageSize),
             cancellationToken);
 
-        return result.ToHttpResult(HttpContext, Results.Ok);
+        return result.ToHttpResult(
+            HttpContext,
+            page => Results.Ok(
+                SystemManagerProfileResponseMapper.ToResponse(page)));
     }
 
     /// <summary>Lấy chi tiết hồ sơ System Manager và version hiện tại.</summary>
     [HttpGet("{profileId:guid}")]
-    [ProducesResponseType<SystemManagerProfileResponse>(
+    [ProducesResponseType<SystemManagerProfileApiResponse>(
         StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IResult> GetProfile(
@@ -49,7 +54,10 @@ public sealed class SystemManagersController(ISender sender) : ControllerBase
             new GetSystemManagerProfileQuery(profileId),
             cancellationToken);
 
-        return result.ToHttpResult(HttpContext, Results.Ok);
+        return result.ToHttpResult(
+            HttpContext,
+            response => Results.Ok(
+                SystemManagerProfileResponseMapper.ToResponse(response)));
     }
 
     [HttpPost]
@@ -62,7 +70,9 @@ public sealed class SystemManagersController(ISender sender) : ControllerBase
             cancellationToken);
         return result.ToHttpResult(
             HttpContext,
-            response => Results.Json(response, statusCode: StatusCodes.Status201Created));
+            response => Results.Json(
+                SystemManagerProfileResponseMapper.ToResponse(response),
+                statusCode: StatusCodes.Status201Created));
     }
 
     /// <summary>Kích hoạt hồ sơ System Manager.</summary>
@@ -72,7 +82,7 @@ public sealed class SystemManagersController(ISender sender) : ControllerBase
     /// mới nhất từ API GET chi tiết để chống cập nhật đồng thời; reason được lưu audit.
     /// </remarks>
     [HttpPut("{profileId:guid}/activate")]
-    [ProducesResponseType<SystemManagerProfileResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<SystemManagerProfileApiResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IResult> Activate(
@@ -86,7 +96,10 @@ public sealed class SystemManagersController(ISender sender) : ControllerBase
                 request.Reason,
                 request.ExpectedVersion),
             cancellationToken);
-        return result.ToHttpResult(HttpContext, Results.Ok);
+        return result.ToHttpResult(
+            HttpContext,
+            response => Results.Ok(
+                SystemManagerProfileResponseMapper.ToResponse(response)));
     }
 
     /// <summary>Đình chỉ hồ sơ System Manager.</summary>
@@ -95,7 +108,7 @@ public sealed class SystemManagersController(ISender sender) : ControllerBase
     /// Unavailable, ngăn manager nhận phân công hoặc vận hành mới. Reason được lưu audit.
     /// </remarks>
     [HttpPut("{profileId:guid}/suspend")]
-    [ProducesResponseType<SystemManagerProfileResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<SystemManagerProfileApiResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IResult> Suspend(
@@ -109,7 +122,10 @@ public sealed class SystemManagersController(ISender sender) : ControllerBase
                 request.Reason,
                 request.ExpectedVersion),
             cancellationToken);
-        return result.ToHttpResult(HttpContext, Results.Ok);
+        return result.ToHttpResult(
+            HttpContext,
+            response => Results.Ok(
+                SystemManagerProfileResponseMapper.ToResponse(response)));
     }
 
     /// <summary>Cập nhật khả năng nhận việc của System Manager.</summary>
@@ -119,7 +135,7 @@ public sealed class SystemManagersController(ISender sender) : ControllerBase
     /// đang Qualified, chưa hết hạn.
     /// </remarks>
     [HttpPut("{profileId:guid}/availability")]
-    [ProducesResponseType<SystemManagerProfileResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<SystemManagerProfileApiResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IResult> UpdateAvailability(
@@ -130,11 +146,14 @@ public sealed class SystemManagersController(ISender sender) : ControllerBase
         var result = await sender.Send(
             new UpdateSystemManagerAvailabilityCommand(
                 profileId,
-                request.Availability,
+                MapAvailability(request.Availability),
                 request.Reason,
                 request.ExpectedVersion),
             cancellationToken);
-        return result.ToHttpResult(HttpContext, Results.Ok);
+        return result.ToHttpResult(
+            HttpContext,
+            response => Results.Ok(
+                SystemManagerProfileResponseMapper.ToResponse(response)));
     }
 
     /// <summary>Cập nhật tình trạng chứng chỉ bay của System Manager.</summary>
@@ -144,7 +163,7 @@ public sealed class SystemManagersController(ISender sender) : ControllerBase
     /// Unavailable.
     /// </remarks>
     [HttpPut("{profileId:guid}/qualification")]
-    [ProducesResponseType<SystemManagerProfileResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<SystemManagerProfileApiResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
@@ -156,12 +175,15 @@ public sealed class SystemManagersController(ISender sender) : ControllerBase
         var result = await sender.Send(
             new UpdateSystemManagerQualificationCommand(
                 profileId,
-                request.Status,
+                MapQualificationStatus(request.Status),
                 request.ExpiresAt,
                 request.Reason,
                 request.ExpectedVersion),
             cancellationToken);
-        return result.ToHttpResult(HttpContext, Results.Ok);
+        return result.ToHttpResult(
+            HttpContext,
+            response => Results.Ok(
+                SystemManagerProfileResponseMapper.ToResponse(response)));
     }
 
     [HttpPost("invitations")]
@@ -180,4 +202,55 @@ public sealed class SystemManagersController(ISender sender) : ControllerBase
                 response,
                 statusCode: StatusCodes.Status201Created));
     }
+
+    private static SystemManagerProfileStatus? MapStatus(
+        SystemManagerProfileStatusValue? status) =>
+        status switch
+        {
+            null => null,
+            SystemManagerProfileStatusValue.ACTIVE =>
+                SystemManagerProfileStatus.Active,
+            SystemManagerProfileStatusValue.SUSPENDED =>
+                SystemManagerProfileStatus.Suspended,
+            _ => throw new ArgumentOutOfRangeException(nameof(status), status, null)
+        };
+
+    private static SystemManagerAvailabilityStatus? MapAvailability(
+        SystemManagerAvailabilityValue? availability) =>
+        availability switch
+        {
+            null => null,
+            SystemManagerAvailabilityValue.AVAILABLE =>
+                SystemManagerAvailabilityStatus.Available,
+            SystemManagerAvailabilityValue.UNAVAILABLE =>
+                SystemManagerAvailabilityStatus.Unavailable,
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(availability),
+                availability,
+                null)
+        };
+
+    private static SystemManagerAvailabilityStatus MapAvailability(
+        SystemManagerAvailabilityValue availability) =>
+        MapAvailability((SystemManagerAvailabilityValue?)availability)!.Value;
+
+    private static FlightQualificationStatus? MapQualificationStatus(
+        FlightQualificationStatusValue? status) =>
+        status switch
+        {
+            null => null,
+            FlightQualificationStatusValue.PENDING =>
+                FlightQualificationStatus.Pending,
+            FlightQualificationStatusValue.QUALIFIED =>
+                FlightQualificationStatus.Qualified,
+            FlightQualificationStatusValue.SUSPENDED =>
+                FlightQualificationStatus.Suspended,
+            FlightQualificationStatusValue.REVOKED =>
+                FlightQualificationStatus.Revoked,
+            _ => throw new ArgumentOutOfRangeException(nameof(status), status, null)
+        };
+
+    private static FlightQualificationStatus MapQualificationStatus(
+        FlightQualificationStatusValue status) =>
+        MapQualificationStatus((FlightQualificationStatusValue?)status)!.Value;
 }

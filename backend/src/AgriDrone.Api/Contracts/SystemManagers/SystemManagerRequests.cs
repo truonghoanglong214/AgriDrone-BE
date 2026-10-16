@@ -1,4 +1,4 @@
-using AgriDrone.Modules.Identity.Domain.SystemManagers;
+using System.Text.Json.Serialization;
 
 namespace AgriDrone.Api.Contracts.SystemManagers;
 
@@ -6,11 +6,11 @@ public sealed record CreateSystemManagerProfileRequest(Guid UserId);
 
 public sealed class GetSystemManagersRequest
 {
-    public SystemManagerProfileStatus? Status { get; init; }
+    public SystemManagerProfileStatusValue? Status { get; init; }
 
-    public SystemManagerAvailabilityStatus? Availability { get; init; }
+    public SystemManagerAvailabilityValue? Availability { get; init; }
 
-    public FlightQualificationStatus? QualificationStatus { get; init; }
+    public FlightQualificationStatusValue? QualificationStatus { get; init; }
 
     public int PageNumber { get; init; } = 1;
 
@@ -22,12 +22,12 @@ public sealed record SystemManagerStateChangeRequest(
     long ExpectedVersion);
 
 public sealed record UpdateSystemManagerAvailabilityRequest(
-    SystemManagerAvailabilityStatus Availability,
+    SystemManagerAvailabilityValue Availability,
     string Reason,
     long ExpectedVersion);
 
 public sealed record UpdateSystemManagerQualificationRequest(
-    FlightQualificationStatus Status,
+    FlightQualificationStatusValue Status,
     DateTimeOffset? ExpiresAt,
     string Reason,
     long ExpectedVersion);
@@ -40,3 +40,41 @@ public sealed record AssignPrimaryFarmManagerRequest(
 public sealed record EndPrimaryFarmManagerAssignmentRequest(
     string Reason,
     long ExpectedVersion);
+
+#pragma warning disable CA1707
+[JsonConverter(typeof(JsonStringEnumConverter<SystemManagerProfileStatusValue>))]
+public enum SystemManagerProfileStatusValue
+{
+    [JsonStringEnumMemberName("ACTIVE")]
+    ACTIVE,
+
+    [JsonStringEnumMemberName("SUSPENDED")]
+    SUSPENDED
+}
+
+[JsonConverter(typeof(JsonStringEnumConverter<SystemManagerAvailabilityValue>))]
+public enum SystemManagerAvailabilityValue
+{
+    [JsonStringEnumMemberName("AVAILABLE")]
+    AVAILABLE,
+
+    [JsonStringEnumMemberName("UNAVAILABLE")]
+    UNAVAILABLE
+}
+
+[JsonConverter(typeof(JsonStringEnumConverter<FlightQualificationStatusValue>))]
+public enum FlightQualificationStatusValue
+{
+    [JsonStringEnumMemberName("PENDING")]
+    PENDING,
+
+    [JsonStringEnumMemberName("QUALIFIED")]
+    QUALIFIED,
+
+    [JsonStringEnumMemberName("SUSPENDED")]
+    SUSPENDED,
+
+    [JsonStringEnumMemberName("REVOKED")]
+    REVOKED
+}
+#pragma warning restore CA1707

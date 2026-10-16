@@ -114,7 +114,12 @@ public static class DependencyInjection
                     serviceProvider.GetRequiredService<NpgsqlDataSource>();
                 options.UseNpgsql(
                     dataSource,
-                    npgsql => npgsql.UseNetTopologySuite());
+                    npgsql =>
+                    {
+                        npgsql.UseNetTopologySuite();
+                        PostgreSqlEnumMappings
+                            .ConfigureSurveyApprovalOptions(npgsql);
+                    });
             });
 
         services.AddScoped<ISurveyApprovalUnitOfWork,

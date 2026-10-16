@@ -163,15 +163,9 @@ internal sealed class RejectSurveyRequestCommandHandler(
         {
             version = checklist.Version,
             contactValid = checklist.ContactValid,
-            isDragonFruitFarm = checklist.IsDragonFruitFarm,
             isServiceAreaSupported = checklist.IsServiceAreaSupported,
-            isLocationSufficient = checklist.IsLocationSufficient,
             isPreliminaryLegalAndFlightFeasible =
                 checklist.IsPreliminaryLegalAndFlightFeasible,
-            isWrittenConsentFeasible = checklist.IsWrittenConsentFeasible,
-            isFlightPermissionFeasible = checklist.IsFlightPermissionFeasible,
-            isEligibleSystemManagerAvailable =
-                checklist.IsEligibleSystemManagerAvailable,
             notes = string.IsNullOrWhiteSpace(checklist.Notes)
                 ? null
                 : checklist.Notes.Trim()
