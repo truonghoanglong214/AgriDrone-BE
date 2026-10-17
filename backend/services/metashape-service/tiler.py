@@ -23,6 +23,7 @@ def slice_geotiff(
     output_dir: str,
     tile_size: int = 640,
     overlap: int = 64,
+    tile_prefix: Optional[str] = None,
     polygon_geojson: Optional[Dict[str, Any]] = None,
     image_format: str = "JPEG",
     quality: int = 90,
@@ -107,18 +108,31 @@ def slice_geotiff(
                         continue
 
                 # Read only this specific window into memory (Windowed Reading)
-                if band_count >= 3:
+                if band_count >= 4:
+                    bands_data = src.read((1, 2, 3, 4), window=win)
+                    img_array = np.dstack([bands_data[0], bands_data[1], bands_data[2]])
+                    alpha_channel = bands_data[3]
+                    # Band 4 is alpha mask: 0 = transparent / nodata, >0 = valid imagery
+                    # Also guard against empty white canvas (255, 255, 255)
+                    is_white = (img_array[:, :, 0] >= 250) & (img_array[:, :, 1] >= 250) & (img_array[:, :, 2] >= 250)
+                    valid_mask = (alpha_channel > 10) & (~is_white)
+                elif band_count == 3:
                     bands_data = src.read((1, 2, 3), window=win)
                     img_array = np.dstack([bands_data[0], bands_data[1], bands_data[2]])
+                    # Check tile is not purely black (0,0,0) or purely white (255,255,255)
+                    is_black = (img_array[:, :, 0] <= 5) & (img_array[:, :, 1] <= 5) & (img_array[:, :, 2] <= 5)
+                    is_white = (img_array[:, :, 0] >= 250) & (img_array[:, :, 1] >= 250) & (img_array[:, :, 2] >= 250)
+                    valid_mask = (~is_black) & (~is_white)
                 elif band_count == 1:
                     band1 = src.read(1, window=win)
                     img_array = np.dstack([band1, band1, band1])
+                    valid_mask = (band1 > 5) & (band1 < 250)
                 else:
                     band1 = src.read(1, window=win)
                     img_array = np.dstack([band1] * 3)
+                    valid_mask = (band1 > 5) & (band1 < 250)
 
-                # Check if tile has valid content (not purely nodata or black)
-                valid_mask = img_array > 0
+                # Check if tile has valid content (not purely nodata, transparent, or white/black border)
                 valid_pixel_ratio = np.mean(valid_mask)
                 if valid_pixel_ratio < min_valid_pixel_ratio:
                     continue
@@ -138,7 +152,8 @@ def slice_geotiff(
                         img_array = np.zeros_like(img_array, dtype=np.uint8)
 
                 ext = "jpg" if image_format.upper() == "JPEG" else "png"
-                tile_filename = f"tile_{tile_index:04d}_r{row_off}_c{col_off}.{ext}"
+                prefix = tile_prefix if tile_prefix else f"tile_{tile_size}"
+                tile_filename = f"{prefix}_{tile_index:04d}_r{row_off}_c{col_off}.{ext}"
                 tile_local_path = os.path.join(output_dir, tile_filename)
 
                 img = Image.fromarray(img_array)
@@ -153,6 +168,7 @@ def slice_geotiff(
 
                 tile_meta = {
                     "tile_index": tile_index,
+                    "tile_size": tile_size,
                     "file_name": tile_filename,
                     "local_path": tile_local_path,
                     "col_off": col_off,
