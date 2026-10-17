@@ -65,4 +65,19 @@ class MinioStorage:
         except Exception:
             return None
 
+    def delete_file(self, object_name: str):
+        clean_key = object_name
+        if "://" in clean_key:
+            parts = clean_key.split("://", 1)[1]
+            if "/" in parts:
+                clean_key = parts.split("/", 1)[1]
+        try:
+            self.client.remove_object(self.bucket, clean_key)
+        except Exception:
+            pass
+
+    def delete_files(self, object_names: list[str]):
+        for obj in object_names:
+            self.delete_file(obj)
+
 minio_storage = MinioStorage()

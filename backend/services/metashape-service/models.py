@@ -13,6 +13,7 @@ class ProcessMetashapeRequest(BaseModel):
     camera_type: str = "equidistant_fisheye"
     align_accuracy: str = "medium"
     generic_preselection: bool = True
+    delete_source_images: bool = True
 
 class ProcessMetashapeResponse(BaseModel):
     mission_id: str
@@ -59,6 +60,7 @@ class MetashapeTaskStatusResponse(BaseModel):
 
 class TileItem(BaseModel):
     tile_index: int
+    tile_size: Optional[int] = None
     col_off: int
     row_off: int
     width: int
@@ -74,14 +76,57 @@ class TileSliceRequest(BaseModel):
     mission_id: str
     tenant_id: str
     tif_storage_key: Optional[str] = None
+    dual_scale: bool = True
     tile_size: int = 640
     overlap: int = 64
     polygon_geojson: Optional[Dict[str, Any]] = None
-    upload_to_minio: bool = True
+    upload_to_minio: bool = False
 
 class TileSliceResponse(BaseModel):
     mission_id: str
     total_tiles: int
-    tile_size: int
-    overlap: int
+    total_tiles_640: Optional[int] = 0
+    total_tiles_1280: Optional[int] = 0
+    dual_scale: bool = True
     tiles: List[TileItem] = Field(default_factory=list)
+
+
+class TreeItem(BaseModel):
+    id: str
+    row: int
+    col: int
+    lat: float
+    lon: float
+    confidence: float = 1.0
+    status: str
+    source: str
+    is_anchor: Optional[bool] = False
+
+
+class YoloDetectMissionRequest(BaseModel):
+    mission_id: str
+    tenant_id: str = "tenant-001"
+    confidence_threshold: float = 0.25
+    row_spacing: float = 2.8
+    col_spacing: float = 2.7
+    anchor_lat: Optional[float] = None
+    anchor_lon: Optional[float] = None
+    custom_angle_deg: Optional[float] = None
+    polygon_geojson: Optional[Dict[str, Any]] = None
+
+
+class YoloDetectMissionResponse(BaseModel):
+    mission_id: str
+    model_name: str
+    total_tiles_scanned: int
+    total_raw_detections: int
+    total_unique_trees: int
+    total_missing_trees: int
+    suggested_row_spacing: Optional[float] = None
+    suggested_col_spacing: Optional[float] = None
+    max_row: int
+    max_col: int
+    csv_download_url: Optional[str] = None
+    active_trees: List[TreeItem] = Field(default_factory=list)
+    missing_trees: List[TreeItem] = Field(default_factory=list)
+
