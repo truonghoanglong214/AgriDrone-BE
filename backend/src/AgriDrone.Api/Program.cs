@@ -98,7 +98,8 @@ builder.Services.AddCors(options =>
         else
         {
             policy
-                .WithOrigins("http://localhost:5173")
+                .WithOrigins("http://localhost:5173",
+                    builder.Configuration["Metashape:BrowserOrigin"] ?? "http://localhost:8000")
                 .AllowCredentials()
                 .AllowAnyHeader()
                 .AllowAnyMethod();

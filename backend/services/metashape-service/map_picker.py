@@ -1,10 +1,12 @@
 import json
+import html
 from typing import Optional
 from minio_storage import minio_storage
 
 def get_map_picker_html(
     mission_id: str = "8d2ba93d-1421-448d-be83-a1034e8c4aab",
     tenant_id: str = "cf637409-fb85-4dfd-8fd3-ae3ea799d635",
+    farm_id: str = "",
     preview_url: Optional[str] = None,
     min_lat: float = 10.4611274,
     max_lat: float = 10.4617541,
@@ -22,6 +24,7 @@ def get_map_picker_html(
 
     center_lat = (min_lat + max_lat) / 2
     center_lon = (min_lon + max_lon) / 2
+    escaped_farm_id = html.escape(farm_id, quote=True)
 
     return f"""<!DOCTYPE html>
 <html lang="vi">
@@ -285,6 +288,9 @@ def get_map_picker_html(
           <button id="btn-download-csv" onclick="downloadCurrentTreesCsv()" class="btn btn-secondary" style="margin-top: 6px; font-size: 11px; display: none; width: 100%; cursor: pointer;">
             📥 Tải File CSV Mới Nhất (Đã chỉnh sửa)
           </button>
+          <input id="plant-gps-farm-id" value="{escaped_farm_id}" placeholder="Farm ID" style="width: 100%; margin-top: 6px;" />
+          <input id="plant-gps-api-url" value="http://localhost:5080" placeholder=".NET API URL" style="width: 100%; margin-top: 6px;" />
+          <input id="plant-gps-token" type="password" placeholder="Manager JWT token" autocomplete="off" style="width: 100%; margin-top: 6px;" />
         </div>
       </div>
     </div>
@@ -541,13 +547,14 @@ def get_map_picker_html(
       addConfirmedTreeMarker(lat, lon, 'Người dùng xác nhận', 1.0, row, col);
     }};
 
-    function downloadCurrentTreesCsv() {{
+    async function downloadCurrentTreesCsv() {{
       if (!activeTreesList || activeTreesList.length === 0) {{
         alert("Chưa có danh sách cây để tải!");
         return;
       }}
 
       let csv = "tree_id,row,col,latitude,longitude,confidence,status,source\\n";
+      const trees = [];
       activeTreesList.forEach((t, i) => {{
         const id = t.id || `tree_r${{t.row || 1}}_c${{t.col || (i+1)}}`;
         const row = t.row || 1;
@@ -555,13 +562,44 @@ def get_map_picker_html(
         const conf = t.confidence !== undefined ? t.confidence : 1.0;
         const status = t.status || 'DETECTED';
         const source = t.source || 'YOLO';
+        trees.push({{ treeId: id, row, col, latitude: t.lat, longitude: t.lon, confidence: conf, status, source }});
         csv += `${{id}},${{row}},${{col}},${{t.lat}},${{t.lon}},${{conf}},${{status}},${{source}}\\n`;
       }});
 
       missingTreesList.forEach(m => {{
         const id = m.id || `missing_r${{m.row}}_c${{m.col}}`;
+        trees.push({{ treeId: id, row: m.row, col: m.col, latitude: m.lat, longitude: m.lon, confidence: 0, status: 'MISSING', source: 'INTERPOLATED_GRID' }});
         csv += `${{id}},${{m.row}},${{m.col}},${{m.lat}},${{m.lon}},0.0,MISSING,INTERPOLATED_GRID\\n`;
       }});
+
+      const withoutGps = trees.filter(t => !Number.isFinite(t.latitude) || !Number.isFinite(t.longitude));
+      if (withoutGps.length > 0) {{
+        alert(`${{withoutGps.length}} cây chưa có GPS hợp lệ. Hãy bổ sung tọa độ trước khi lưu và tải CSV.`);
+        return;
+      }}
+
+      const farmId = document.getElementById('plant-gps-farm-id').value.trim();
+      const apiUrl = document.getElementById('plant-gps-api-url').value.trim().replace(/\\/$/, '');
+      const token = document.getElementById('plant-gps-token').value.trim();
+      if (!farmId || !apiUrl || !token) {{
+        alert('Cần Farm ID, địa chỉ .NET API và Manager JWT token để lưu PostgreSQL.');
+        return;
+      }}
+      const button = document.getElementById('btn-download-csv');
+      button.disabled = true;
+      try {{
+        const response = await fetch(`${{apiUrl}}/api/system-manager/farms/${{encodeURIComponent(farmId)}}/missions/${{encodeURIComponent(missionId)}}/plant-gps`, {{
+          method: 'POST',
+          headers: {{ 'Content-Type': 'application/json', 'Authorization': `Bearer ${{token}}` }},
+          body: JSON.stringify({{ trees }})
+        }});
+        if (!response.ok) throw new Error(`API trả về HTTP ${{response.status}}`);
+      }} catch (error) {{
+        alert(`Không thể lưu dữ liệu cây vào PostgreSQL: ${{error.message}}`);
+        return;
+      }} finally {{
+        button.disabled = false;
+      }}
 
       const blob = new Blob([csv], {{ type: 'text/csv;charset=utf-8;' }});
       const url = URL.createObjectURL(blob);

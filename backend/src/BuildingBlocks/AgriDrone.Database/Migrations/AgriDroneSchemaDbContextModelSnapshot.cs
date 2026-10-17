@@ -3309,66 +3309,6 @@ namespace AgriDrone.Database.Migrations
                         });
                 });
 
-            modelBuilder.Entity("AgriDrone.Modules.Missions.Domain.Telemetry.BlackboxDecode", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
-
-                    b.Property<Guid>("CreatedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("created_by");
-
-                    b.Property<Guid>("FarmId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("farm_id");
-
-                    b.Property<Guid>("MissionId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("mission_id");
-
-                    b.Property<JsonDocument>("PointsJson")
-                        .IsRequired()
-                        .HasColumnType("jsonb")
-                        .HasColumnName("points_json");
-
-                    b.Property<string>("SourceChecksum")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character(64)")
-                        .HasColumnName("source_checksum")
-                        .IsFixedLength();
-
-                    b.Property<string>("SourceFileName")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)")
-                        .HasColumnName("source_file_name");
-
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("tenant_id");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("MissionId", "FarmId");
-
-                    b.HasIndex("MissionId", "SourceChecksum")
-                        .IsUnique()
-                        .HasDatabaseName("uq_blackbox_decodes_mission_checksum");
-
-                    b.HasIndex("MissionId", "TenantId");
-
-                    b.ToTable("blackbox_decodes", "mission", t =>
-                        {
-                            t.HasCheckConstraint("ck_blackbox_decodes_points_object", "jsonb_typeof(points_json) = 'object'");
-                        });
-                });
-
             modelBuilder.Entity("AgriDrone.Modules.Missions.Domain.Telemetry.MissionTelemetryImport", b =>
                 {
                     b.Property<Guid>("Id")
@@ -8294,23 +8234,6 @@ namespace AgriDrone.Database.Migrations
                         .HasConstraintName("fk_ai_threshold_profiles_model_versions_model_id");
 
                     b.Navigation("ModelVersion");
-                });
-
-            modelBuilder.Entity("AgriDrone.Modules.Missions.Domain.Telemetry.BlackboxDecode", b =>
-                {
-                    b.HasOne("AgriDrone.Modules.Missions.Domain.Missions.DroneMission", null)
-                        .WithMany()
-                        .HasForeignKey("MissionId", "FarmId")
-                        .HasPrincipalKey("Id", "FarmId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("AgriDrone.Modules.Missions.Domain.Missions.DroneMission", null)
-                        .WithMany()
-                        .HasForeignKey("MissionId", "TenantId")
-                        .HasPrincipalKey("Id", "TenantId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
                 });
 
             modelBuilder.Entity("AgriDrone.Modules.Missions.Domain.Telemetry.MissionTelemetryImport", b =>

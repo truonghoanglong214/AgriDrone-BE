@@ -123,6 +123,7 @@ def health():
 def map_picker_ui(
     mission_id: str = "8d2ba93d-1421-448d-be83-a1034e8c4aab",
     tenant_id: str = "cf637409-fb85-4dfd-8fd3-ae3ea799d635",
+    farm_id: str = "",
     min_lat: float = 10.4611274,
     max_lat: float = 10.4617541,
     min_lon: float = 106.4936806,
@@ -138,6 +139,7 @@ def map_picker_ui(
     html_content = get_map_picker_html(
         mission_id=mission_id,
         tenant_id=tenant_id,
+        farm_id=farm_id,
         min_lat=min_lat,
         max_lat=max_lat,
         min_lon=min_lon,

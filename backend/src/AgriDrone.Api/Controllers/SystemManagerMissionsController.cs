@@ -7,9 +7,11 @@ using AgriDrone.Modules.Missions.Application.Features.Missions.RescheduleOrderMi
 using AgriDrone.Modules.Missions.Application.Features.Missions.SyncFieldNote;
 using AgriDrone.Modules.Missions.Application.Features.Missions.GetFieldNotes;
 using AgriDrone.Modules.Missions.Domain.Missions;
+using AgriDrone.Modules.Missions.Application.Abstractions.Missions;
 using AgriDrone.SharedInfrastructure.Authorization;
 using AgriDrone.SharedInfrastructure.Http;
 using MediatR;
+using AgriDrone.SharedKernel.Application.Abstractions.Authorization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -18,8 +20,48 @@ namespace AgriDrone.Api.Controllers;
 [ApiController]
 [Route("api/system-manager/farms/{farmId:guid}/missions/{missionId:guid}")]
 [Authorize(Policy = AccessAuthorizationPolicies.SystemManager)]
-public sealed class SystemManagerMissionsController(ISender sender) : ControllerBase
+public sealed class SystemManagerMissionsController(
+    ISender sender,
+    ISystemManagerAccessService managerAccessService,
+    IMissionPlantGpsStore plantGpsStore) : ControllerBase
 {
+    /// <summary>Lưu bản CSV cây hiện tại theo mission trước khi tải xuống.</summary>
+    [HttpPost("plant-gps")]
+    public async Task<IResult> ReplacePlantGps(
+        [FromRoute] Guid farmId, [FromRoute] Guid missionId,
+        [FromBody] ReplaceMissionPlantGpsRequest request,
+        CancellationToken cancellationToken)
+    {
+        var access = await managerAccessService.ResolveFarmAccessAsync(farmId, cancellationToken);
+        if (!access.IsAllowed || access.TenantId is null || access.FarmId != farmId)
+            return Results.Forbid();
+
+        var trees = request.Trees;
+        if (trees is null || trees.Count is < 1 or > 10000 ||
+            trees.Any(tree => string.IsNullOrWhiteSpace(tree.TreeId) || tree.TreeId.Length > 100 ||
+                tree.Row < 1 || tree.Col < 1 ||
+                tree.Latitude is null or < -90 or > 90 ||
+                tree.Longitude is null or < -180 or > 180 ||
+                tree.Confidence is < 0 or > 1 ||
+                tree.Status is not ("DETECTED" or "MISSING") ||
+                string.IsNullOrWhiteSpace(tree.Source) || tree.Source.Length > 100) ||
+            trees.Select(tree => tree.TreeId).Distinct(StringComparer.Ordinal).Count() != trees.Count)
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["trees"] = ["Provide 1–10000 valid, uniquely identified tree rows."]
+            });
+        }
+
+        var rows = trees.Select(tree => new MissionPlantGpsRow(
+            tree.TreeId, tree.Row, tree.Col, tree.Latitude!.Value, tree.Longitude!.Value,
+            tree.Confidence, tree.Status, tree.Source)).ToArray();
+        var saved = await plantGpsStore.ReplaceAsync(access.TenantId.Value,
+            farmId, missionId, rows, cancellationToken);
+        return saved ? Results.Ok(new { missionId, savedCount = rows.Length })
+            : Results.NotFound();
+    }
+
     /// <remarks>Đồng bộ ghi chú hiện trường bằng OperationId để retry an toàn. Có thể ghi loại sự cố, kết quả xử lý, quyết định recovery và tham chiếu bằng chứng; quyết định phải phù hợp trạng thái chuyến bay.</remarks>
     [HttpPost("field-notes")]
     public async Task<IResult> SyncFieldNote(
