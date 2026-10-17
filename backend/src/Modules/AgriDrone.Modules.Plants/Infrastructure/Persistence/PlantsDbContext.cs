@@ -6,6 +6,7 @@ using AgriDrone.Modules.Plants.Domain.Mapping;
 using AgriDrone.Modules.Plants.Domain.Plants;
 using AgriDrone.Modules.Plants.Domain.Scans;
 using AgriDrone.Modules.Plants.Domain.Recommendations;
+using AgriDrone.Modules.Plants.Domain.Guidance;
 using AgriDrone.Modules.Plants.Domain.Verifications;
 using AgriDrone.SharedInfrastructure.Auditing;
 using AgriDrone.SharedInfrastructure.Persistence.Configurations;
@@ -34,6 +35,8 @@ internal sealed class PlantsDbContext(DbContextOptions<PlantsDbContext> options)
 
     public DbSet<TreatmentRecommendation> TreatmentRecommendations =>
         Set<TreatmentRecommendation>();
+
+    public DbSet<SourcedGuidance> SourcedGuidance => Set<SourcedGuidance>();
 
     public DbSet<PlantScan> PlantScans => Set<PlantScan>();
 

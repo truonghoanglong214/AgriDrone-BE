@@ -50,6 +50,8 @@ public sealed class SurveyApprovalDbContext(
         SurveyApprovalIdempotencyRecords =>
         Set<SurveyApprovalIdempotencyRecord>();
     public DbSet<SurveyOrder> SurveyOrders => Set<SurveyOrder>();
+    public DbSet<SurveyCaptureAuthorization> SurveyCaptureAuthorizations =>
+        Set<SurveyCaptureAuthorization>();
     public DbSet<SurveyResult> SurveyResults => Set<SurveyResult>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
@@ -157,6 +159,8 @@ public sealed class SurveyApprovalDbContext(
         modelBuilder.ApplyConfiguration(
             new SurveyApprovalIdempotencyRecordConfiguration());
         modelBuilder.ApplyConfiguration(new SurveyOrderConfiguration());
+        modelBuilder.ApplyConfiguration(
+            new SurveyCaptureAuthorizationConfiguration());
         modelBuilder.ApplyConfiguration(new SurveyResultConfiguration());
         modelBuilder.ApplyConfiguration(new AuditLogConfiguration());
         modelBuilder.ApplyConfiguration(new OutboxMessageConfiguration());

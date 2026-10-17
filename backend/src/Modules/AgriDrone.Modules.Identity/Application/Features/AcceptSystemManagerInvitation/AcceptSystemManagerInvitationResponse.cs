@@ -3,4 +3,5 @@
 public sealed record AcceptSystemManagerInvitationResponse(
     Guid UserId,
     Guid ProfileId,
+    long ProfileVersion,
     bool AccountCreated);

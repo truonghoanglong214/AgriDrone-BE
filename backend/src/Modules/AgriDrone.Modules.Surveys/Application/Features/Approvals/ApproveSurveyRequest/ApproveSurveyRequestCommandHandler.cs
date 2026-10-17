@@ -21,6 +21,7 @@ internal sealed class ApproveSurveyRequestCommandHandler(
     ISurveyApprovalUnitOfWork unitOfWork,
     ISurveyApprovalRequestRepository requestRepository,
     ISurveyApprovalIdempotencyRepository idempotencyRepository,
+    ISurveyApprovalCaptureAuthorizationRepository authorizationRepository,
     ISurveyApprovalPrerequisiteResolver prerequisiteResolver,
     IEnumerable<ISurveyRequestKindApprovalOrchestrator> orchestrators,
     ISurveyApprovalOutbox approvalOutbox,
@@ -158,6 +159,13 @@ internal sealed class ApproveSurveyRequestCommandHandler(
                 SurveyApprovalError.ConcurrentApproval());
         }
 
+        if (!SurveyServiceMvpPolicy.IsSellable(
+                surveyRequest.SurveyService.ServiceType))
+        {
+            return Result.Failure<ApproveSurveyRequestResponse>(
+                SurveyApprovalError.RequestContextInvalid());
+        }
+
         try
         {
             surveyRequest.EnsureVersion(command.ExpectedVersion);
@@ -234,6 +242,16 @@ internal sealed class ApproveSurveyRequestCommandHandler(
         }
 
         var approval = orchestrationResult.Value;
+        authorizationRepository.Add(
+            SurveyCaptureAuthorization.CreatePending(
+                approval.Order.Id,
+                SurveyCaptureAuthorizationType.WrittenDataUseConsent,
+                approvedAt));
+        authorizationRepository.Add(
+            SurveyCaptureAuthorization.CreatePending(
+                approval.Order.Id,
+                SurveyCaptureAuthorizationType.FlightPermission,
+                approvedAt));
         using var newData = SurveyApprovalAuditSnapshot.CreateAfter(
             surveyRequest,
             review,
@@ -372,11 +390,8 @@ internal sealed class ApproveSurveyRequestCommandHandler(
         checklist is not null &&
         checklist.Version == SurveyRequestReviewChecklistDefinition.Version &&
         checklist.ContactValid &&
-        checklist.IsDragonFruitFarm &&
         checklist.IsServiceAreaSupported &&
-        checklist.IsLocationSufficient &&
-        checklist.IsPreliminaryLegalAndFlightFeasible &&
-        checklist.IsEligibleSystemManagerAvailable;
+        checklist.IsPreliminaryLegalAndFlightFeasible;
 
     private static JsonDocument CreateChecklistSnapshot(
         SurveyRequestReviewChecklistInput checklist) =>
@@ -384,13 +399,9 @@ internal sealed class ApproveSurveyRequestCommandHandler(
         {
             version = checklist.Version,
             contactValid = checklist.ContactValid,
-            isDragonFruitFarm = checklist.IsDragonFruitFarm,
             isServiceAreaSupported = checklist.IsServiceAreaSupported,
-            isLocationSufficient = checklist.IsLocationSufficient,
             isPreliminaryLegalAndFlightFeasible =
                 checklist.IsPreliminaryLegalAndFlightFeasible,
-            isEligibleSystemManagerAvailable =
-                checklist.IsEligibleSystemManagerAvailable,
             notes = string.IsNullOrWhiteSpace(checklist.Notes)
                 ? null
                 : checklist.Notes.Trim()

@@ -21,8 +21,14 @@ namespace AgriDrone.Api.Controllers;
 public sealed class SystemSurveyServicesController(ISender sender)
     : ControllerBase
 {
-    /// <summary>Lấy catalogue dịch vụ và toàn bộ lịch sử giá.</summary>
+    /// <summary>Lấy catalogue dịch vụ và giá theo trụ đang hiệu lực.</summary>
+    /// <remarks>
+    /// Mỗi service chỉ trả currentPrice tại thời điểm server xử lý. Lịch sử giá
+    /// đầy đủ được đọc riêng qua GET /{serviceId}/prices.
+    /// </remarks>
     [HttpGet]
+    [ProducesResponseType<IReadOnlyList<SystemSurveyServiceApiResponse>>(
+        StatusCodes.Status200OK)]
     public async Task<IResult> GetCatalogue(
         CancellationToken cancellationToken)
     {
@@ -128,6 +134,8 @@ public sealed class SystemSurveyServicesController(ISender sender)
 
     /// <summary>Lấy lịch sử giá bất biến của một service.</summary>
     [HttpGet("{serviceId:guid}/prices")]
+    [ProducesResponseType<IReadOnlyList<SurveyServicePriceHistoryApiResponse>>(
+        StatusCodes.Status200OK)]
     public async Task<IResult> GetPriceHistory(
         [FromRoute] Guid serviceId,
         CancellationToken cancellationToken)
@@ -151,7 +159,7 @@ public sealed class SystemSurveyServicesController(ISender sender)
                     price.IsLegacyPerHectarePrice))));
     }
 
-    /// <summary>Tạo price version VND theo trụ; không sửa amount lịch sử.</summary>
+    /// <summary>Tạo price version VND có hiệu lực ngay theo giờ UTC của server.</summary>
     [HttpPost("{serviceId:guid}/prices")]
     public async Task<IResult> CreatePrice(
         [FromRoute] Guid serviceId,
@@ -163,8 +171,6 @@ public sealed class SystemSurveyServicesController(ISender sender)
                 serviceId,
                 request.AmountPerPole,
                 request.Currency,
-                request.EffectiveFrom,
-                request.EffectiveTo,
                 request.ExpectedServiceVersion),
             cancellationToken);
         return result.ToHttpResult(
@@ -176,7 +182,6 @@ public sealed class SystemSurveyServicesController(ISender sender)
                     response.AmountPerPole,
                     response.Currency,
                     response.EffectiveFrom,
-                    response.EffectiveTo,
                     response.ClosedPriceVersionId,
                     response.ServiceVersion,
                     response.CreatedAt),
@@ -195,18 +200,14 @@ public sealed class SystemSurveyServicesController(ISender sender)
             service.Version,
             service.CreatedAt,
             service.UpdatedAt,
-            service.Prices.Select(price =>
-                    new SystemSurveyServicePriceApiResponse(
-                        price.PriceVersionId,
-                        price.PricePerPole,
-                        price.LegacyPricePerHa,
-                        price.Currency,
-                        price.EffectiveFrom,
-                        price.EffectiveTo,
-                        price.CreatedBy,
-                        price.CreatedAt,
-                        price.IsLegacyPerHectarePrice))
-                .ToArray());
+            service.CurrentPrice is null
+                ? null
+                : new SystemSurveyServiceCurrentPriceApiResponse(
+                    service.CurrentPrice.PriceVersionId,
+                    service.CurrentPrice.AmountPerPole,
+                    service.CurrentPrice.Currency,
+                    service.CurrentPrice.EffectiveFrom,
+                    service.CurrentPrice.EffectiveTo));
 
     private static SurveyServiceMutationApiResponse MapMutationResponse(
         Guid serviceId,

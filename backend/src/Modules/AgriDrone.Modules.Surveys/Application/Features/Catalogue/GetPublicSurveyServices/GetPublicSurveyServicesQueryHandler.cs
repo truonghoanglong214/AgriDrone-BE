@@ -49,8 +49,6 @@ internal sealed class GetPublicSurveyServicesQueryHandler(
         {
             SurveyServiceType.PlantHealth =>
                 PublicSurveyServiceType.PlantHealth,
-            SurveyServiceType.HarvestReadiness =>
-                PublicSurveyServiceType.HarvestReadiness,
             _ => throw new ArgumentOutOfRangeException(
                 nameof(serviceType),
                 serviceType,

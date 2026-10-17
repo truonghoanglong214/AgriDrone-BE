@@ -8,11 +8,17 @@ public static class SurveyOrderReadinessPolicy
         ArgumentNullException.ThrowIfNull(snapshot);
         var failures = new List<SurveyOrderReadinessFailure>();
 
+        if (snapshot.Purpose == SurveyOperationPurpose.HarvestReadiness)
+        {
+            return new SurveyOrderReadinessDecision(
+                false,
+                [SurveyOrderReadinessFailure.ServiceDisabled]);
+        }
+
         var expectedOrderStatus = snapshot.Purpose switch
         {
             SurveyOperationPurpose.BaselineMapping => SurveyOrderStatus.BaselineReady,
-            SurveyOperationPurpose.PlantHealth or
-            SurveyOperationPurpose.HarvestReadiness =>
+            SurveyOperationPurpose.PlantHealth =>
                 SurveyOrderStatus.ReadyForPaidService,
             _ => throw new ArgumentOutOfRangeException(
                 nameof(snapshot),
@@ -41,12 +47,23 @@ public static class SurveyOrderReadinessPolicy
             failures.Add(SurveyOrderReadinessFailure.ScopeNotConfirmed);
         }
 
+        if (!snapshot.HasValidWrittenDataUseConsent)
+        {
+            failures.Add(
+                SurveyOrderReadinessFailure.WrittenConsentNotValid);
+        }
+
+        if (!snapshot.HasValidFlightPermission)
+        {
+            failures.Add(
+                SurveyOrderReadinessFailure.FlightPermissionNotValid);
+        }
+
         var expectedAppointmentPurpose = snapshot.Purpose switch
         {
             SurveyOperationPurpose.BaselineMapping =>
                 SurveyAppointmentPurpose.BaselineMapping,
-            SurveyOperationPurpose.PlantHealth or
-            SurveyOperationPurpose.HarvestReadiness =>
+            SurveyOperationPurpose.PlantHealth =>
                 SurveyAppointmentPurpose.PaidService,
             _ => throw new ArgumentOutOfRangeException(nameof(snapshot))
         };
@@ -102,10 +119,20 @@ public static class SurveyOrderReadinessPolicy
             failures.Add(SurveyOrderReadinessFailure.SafetyChecksNotSatisfied);
         }
 
-        if (snapshot.Purpose is SurveyOperationPurpose.PlantHealth or
-            SurveyOperationPurpose.HarvestReadiness)
+        if (snapshot.Purpose == SurveyOperationPurpose.PlantHealth)
         {
             EvaluatePaidService(snapshot, failures);
+        }
+
+        if (snapshot.HasPendingFinancialSettlement)
+        {
+            failures.Add(
+                SurveyOrderReadinessFailure.FinancialSettlementPending);
+        }
+
+        if (snapshot.HasUnapprovedExtraFlight)
+        {
+            failures.Add(SurveyOrderReadinessFailure.ExtraFlightNotApproved);
         }
 
         return new SurveyOrderReadinessDecision(failures.Count == 0, failures);

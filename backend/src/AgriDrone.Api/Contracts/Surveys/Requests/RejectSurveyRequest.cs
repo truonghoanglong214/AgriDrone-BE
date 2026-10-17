@@ -8,9 +8,6 @@ public sealed record RejectSurveyRequest(
 public sealed record SurveyRequestReviewChecklistRequest(
     string Version,
     bool ContactValid,
-    bool IsDragonFruitFarm,
     bool IsServiceAreaSupported,
-    bool IsLocationSufficient,
     bool IsPreliminaryLegalAndFlightFeasible,
-    bool IsEligibleSystemManagerAvailable,
     string? Notes);

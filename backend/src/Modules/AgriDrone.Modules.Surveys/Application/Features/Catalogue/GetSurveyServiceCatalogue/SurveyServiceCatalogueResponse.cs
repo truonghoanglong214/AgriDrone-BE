@@ -12,15 +12,11 @@ public sealed record SurveyServiceCatalogueResponse(
     uint Version,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt,
-    IReadOnlyList<SurveyServicePriceCatalogueResponse> Prices);
+    SurveyServiceCurrentPriceResponse? CurrentPrice);
 
-public sealed record SurveyServicePriceCatalogueResponse(
+public sealed record SurveyServiceCurrentPriceResponse(
     Guid PriceVersionId,
-    decimal? PricePerPole,
-    decimal? LegacyPricePerHa,
+    decimal AmountPerPole,
     string Currency,
     DateTimeOffset EffectiveFrom,
-    DateTimeOffset? EffectiveTo,
-    Guid CreatedBy,
-    DateTimeOffset CreatedAt,
-    bool IsLegacyPerHectarePrice);
+    DateTimeOffset? EffectiveTo);

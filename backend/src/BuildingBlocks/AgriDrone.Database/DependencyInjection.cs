@@ -118,7 +118,12 @@ public static class DependencyInjection
                     serviceProvider.GetRequiredService<NpgsqlDataSource>();
                 options.UseNpgsql(
                     dataSource,
-                    npgsql => npgsql.UseNetTopologySuite());
+                    npgsql =>
+                    {
+                        npgsql.UseNetTopologySuite();
+                        PostgreSqlEnumMappings
+                            .ConfigureSurveyApprovalOptions(npgsql);
+                    });
             });
 
         services.AddScoped<ISurveyApprovalUnitOfWork,
@@ -127,6 +132,8 @@ public static class DependencyInjection
             SurveyApprovalRequestRepository>();
         services.AddScoped<ISurveyApprovalIdempotencyRepository,
             SurveyApprovalIdempotencyRepository>();
+        services.AddScoped<ISurveyApprovalCaptureAuthorizationRepository,
+            SurveyApprovalCaptureAuthorizationRepository>();
         services.AddScoped<ISurveyApprovalReferenceQueries,
             SurveyApprovalReferenceQueries>();
         services.AddScoped<ISurveyApprovalProvisioningPort,

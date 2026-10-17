@@ -40,4 +40,10 @@ internal sealed class SurveyServiceRepository(SurveysDbContext context)
         ArgumentNullException.ThrowIfNull(surveyService);
         context.SurveyServices.Add(surveyService);
     }
+
+    public void AddPrice(SurveyServicePrice price)
+    {
+        ArgumentNullException.ThrowIfNull(price);
+        context.SurveyServicePrices.Add(price);
+    }
 }

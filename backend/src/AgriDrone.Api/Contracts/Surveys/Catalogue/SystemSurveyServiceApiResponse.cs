@@ -10,18 +10,14 @@ public sealed record SystemSurveyServiceApiResponse(
     uint Version,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt,
-    IReadOnlyList<SystemSurveyServicePriceApiResponse> Prices);
+    SystemSurveyServiceCurrentPriceApiResponse? CurrentPrice);
 
-public sealed record SystemSurveyServicePriceApiResponse(
+public sealed record SystemSurveyServiceCurrentPriceApiResponse(
     Guid PriceVersionId,
-    decimal? PricePerPole,
-    decimal? LegacyPricePerHa,
+    decimal AmountPerPole,
     string Currency,
     DateTimeOffset EffectiveFrom,
-    DateTimeOffset? EffectiveTo,
-    Guid CreatedBy,
-    DateTimeOffset CreatedAt,
-    bool IsLegacyPerHectarePrice);
+    DateTimeOffset? EffectiveTo);
 
 public sealed record SurveyServiceMutationApiResponse(
     Guid SurveyServiceId,

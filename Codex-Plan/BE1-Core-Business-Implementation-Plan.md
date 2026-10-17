@@ -3,14 +3,15 @@
 > Ngày lập: 2026-09-25  
 > Rebaseline nghiệp vụ và kiến trúc .NET: 2026-10-06  
 > Hợp nhất kế hoạch phase và implementation: 2026-10-07  
-> Nguồn nghiệp vụ cao nhất: `Codex-Plan/Be-Plan.md`  
+> Rebaseline theo Capstone proposal v2: 2026-10-15
+> Nguồn nghiệp vụ cao nhất: `Codex-Plan/Be-Plan-v2.md`
 > Use case nguồn: `Codex-Plan/BE1-Use-Case-Specification.md`  
 > Kế hoạch kỹ thuật hiện hành: tài liệu này trên `backend/AgriDrone.sln`  
-> Phạm vi: phase/status/evidence từ Phase 0–15 và backlog triển khai chi tiết từ Step 0–11.
+> Phạm vi: phase/status/evidence từ Phase 0–15, Step R2 remediation và backlog triển khai chi tiết từ Step 0–11.
 
 **Trạng thái tài liệu:** đây là kế hoạch BE1 duy nhất; phase roadmap, baseline/evidence và implementation backlog đã được hợp nhất tại đây. Các đường dẫn `.cs`, `.csproj`, `DbContext`, EF Core configuration, MediatR/FluentValidation handler và file manifest trong tài liệu này là target implementation hiện hành. Mọi thay đổi tiếp tục trên .NET modular monolith; không có bước port BE1 sang Java/Spring Boot.
 
-Phase 0–6 và Core Step 0 là baseline đã có evidence. Source audit ngày 2026-10-07 xác nhận Core Step 1A runtime wiring chưa hoàn thành. Trước Step 1B phải hoàn thành rebaseline delta 2026-10-06 cho per-pole pricing, purpose-aware readiness, FarmBoundary, Disease Zone/recommendation và owner-reported plant change; sau đó hoàn thành Step 1A rồi tiếp tục Step 1B–Step 11 trực tiếp trên .NET.
+Phase 0–6 và Core Step 0 là baseline đã có evidence. Step 0R–4 đã triển khai theo baseline ngày 2026-10-06, nhưng source audit ngày 2026-10-15 cho thấy code hiện hữu còn `Severity`, `TreatmentRecommendation`, `HarvestReadiness` trong MVP trong khi chưa có `Consent`, `FlightPermission`, `ScopeAdjustment` hoặc `ExtraFlight` capability. Vì vậy **Step R2 là gate bắt buộc đầu tiên**: không tiếp tục Step 5–11 và không đánh dấu phase cũ `Done` trước khi remediation theo `Be-Plan-v2.md` hoàn tất.
 
 ## 1. Mục tiêu
 
@@ -35,15 +36,16 @@ ExistingFarmSurvey
 → SurveyOrder cho Farm hiện hữu + previous compatible order nếu có
 
 Flow chung sau approval
+→ thu thập/xác minh written data-use consent + flight permission
 → SystemManager verify FarmBoundary/scope
 → nếu Farm chưa có base map: Baseline appointment/mission chạy trước payment
 → SystemManager publish base map và confirm active pole count
 → BE1 snapshot PricePerPole + pole count và tính FinalPrice
 → paid-service appointment được confirm/reschedule
-→ TenantOwner initiate payment; provider/SystemAdmin xác nhận hợp lệ
+→ TenantOwner initiate sandbox payment; provider/SystemAdmin xác nhận hợp lệ
 → BE1 mở paid-service readiness gate
 → BE2 thực hiện mission/AI
-→ BE1 review/publish Plant Health/Disease Zones/recommendations hoặc Harvest Readiness result
+→ BE1 review/publish suspected Plant Health findings + Disease Zones + sourced guidance dưới dạng preliminary result
 → TenantOwner xem published map/profile/history và gửi pending plant-change report khi cần
 ```
 
@@ -53,34 +55,55 @@ Không flow nào được xem là hoàn thành nếu còn đường bypass Surve
 
 ### BE1 phải triển khai
 
-- Survey Service, effective-dated PricePerPole, disease/severity/recommendation catalogue và business master data.
+- `PLANT_HEALTH` Survey Service, effective-dated PricePerPole, 2–3 team-labelled suspected-disease classes, confusing/non-disease labels và sourced-guidance catalogue.
 - Ba loại Survey Request và SystemAdmin review.
 - Atomic approval/onboarding/SurveyOrder orchestration.
-- FarmBoundary/scope, Baseline Mapping, confirmed pole-count/price snapshot, appointment, payment và purpose-aware readiness policy.
+- Written data-use consent/flight permission, FarmBoundary/scope, Baseline Mapping, confirmed pole-count/price snapshot, appointment, sandbox payment và purpose-aware readiness policy.
 - Farm/Zone operational verification theo SystemManager assignment.
 - Farm-level base-map publication và persistent Plant identity.
-- Plant Health, Disease Zone/recommendation và Harvest Readiness human review/publication.
+- Plant Health suspected finding, Disease Zone và sourced-guidance human review/publication dưới dạng preliminary result; không severity/diagnosis.
 - TenantOwner plant-inventory change report và manager verification/later-survey evidence workflow.
 - TenantOwner published-only queries, Digital Plant Profile, history và follow-up.
-- Business outbox events, audit và actor-specific work queues.
+- Business outbox events, audit, actor-specific work queues và BE contract cho minimal Manager mobile offline task/checklist/notes sync.
 
 ### BE1 không triển khai trong plan này
 
 - Drone registry, Mission state machine, pre-flight, media, telemetry hoặc AI job orchestration.
 - AI detection, tracking, re-identification algorithm hoặc raw observation storage thuộc BE2.
-- Worker/FieldTask/offline domain sync legacy.
+- Worker/legacy `FieldTask` domain. Tuy nhiên minimal Manager mobile offline work-item/checklist/notes sync là MVP và phải có contract/backend support mới, không khôi phục aggregate legacy.
 - Harvest season, batch, quantity, yield hoặc post-harvest management.
 - Web/mobile UI.
+- Harvest Readiness runtime/API trong MVP; capability này chỉ là Stretch sau gate riêng.
+- Tenant/autonomous flight, in-flight AI, bắt buộc RTK, spraying, cây trồng khác, mọi bệnh thanh long hoặc expert-certified diagnosis.
 
 BE1 vẫn phải cung cấp/tiêu thụ contract rõ ràng để BE2 hoàn tất các phần phụ thuộc.
 
+User actors chỉ gồm Public Applicant, SystemAdmin, SystemManager và TenantOwner. AI module, payment provider và background worker là supporting components; execution context của chúng không được giả mạo user actor.
+
+### 2.1. Traceability từ `Be-Plan-v2.md`
+
+| Requirement v2 | Step sở hữu | Release evidence |
+|---|---|---|
+| Plant Health là paid service duy nhất; Harvest Readiness là Stretch | R2, 1, 2, 8 | Catalogue/request/API negative tests và runtime DI inventory |
+| Free mandatory Baseline cho Farm chưa mapped; paid flight bị chặn trước payment | 4, 5, 6 | Purpose-aware readiness + E2E |
+| Written consent và flight permission trước capture | R2, 3, 4, 5 | Versioned evidence, revoke/expiry tests, BE2 re-check contract |
+| Count × PricePerPole snapshot; difference có payment/refund, không silent repricing | 1, 4 | Immutable original snapshot + adjustment settlement ledger tests |
+| Scope change audit; extra flight chỉ khi justified | R2, 4, 5 | ScopeAdjustment/ExtraFlightRequest audit và negative start tests |
+| GNSS+grid pole identity, near/outside boundary NeedsReview | 5, 6, 27 | PostGIS/contract tests và RQ1 evidence |
+| 2–3 team-labelled suspected diseases; không severity/diagnosis | R2, 1, 7 | V4 no-severity contract, preliminary result và claim-boundary tests |
+| Disease Zone và sourced guidance cần Manager review | 7 | Review/publication transaction + owner published-only query |
+| Một active profile/planted pole; removal/replacement giữ history; new profile cần later-survey evidence | 6, 9 | Unique/concurrency/lifecycle E2E |
+| Manager mobile offline tasks/checklist/notes và upload/sync | R2, 10 | Retry/dedup/conflict/revocation tests; raw-media boundary với BE2 |
+| Compatible completed-survey comparison | 3, 7, 9 | Resolver policy + stored reason + comparison E2E |
+| NFR/RQ1/RQ2 và team-label limitations | 11, 27 | Performance/security/research evidence report |
+
 ## 3. Nguyên tắc thực hiện
 
-1. `Be-Plan.md` và ADR đã Accepted thắng mọi tài liệu legacy khi có xung đột.
+1. `Be-Plan-v2.md` và `BE1-Use-Case-Specification.md` thắng ADR/kế hoạch/code cũ khi có xung đột; ADR cũ phải được supersede, không được dùng để giữ requirement đã bỏ.
 2. Không đánh dấu use case `Done` chỉ vì entity, table hoặc EF configuration đã tồn tại.
 3. Mỗi mutation phải có domain invariant, authorization, persistence, audit và idempotency/concurrency khi cần. Test tương ứng được ghi vào Final Test Backlog và chỉ viết/chạy ở phase kiểm thử cuối.
 4. System actors không phụ thuộc TenantMembership; TenantOwner không nhận quyền system actor.
-5. Client không được gửi trạng thái derived như `ReadyForOperations`, `Payment.Confirmed` hoặc `Official`; readiness phải phân biệt Baseline Mapping với selected paid-service mission.
+5. Client không được gửi trạng thái derived như `ReadyForOperations`, `Payment.Confirmed` hoặc `Published`; readiness phải phân biệt free Baseline Mapping với paid Plant Health mission.
 6. Không gọi controller/module khác qua HTTP nội bộ; dùng explicit application port hoặc specialized cross-module unit of work.
 7. Transaction tạo nhiều aggregate bắt buộc phải có boundary rõ; không nối nhiều `SaveChanges` rồi hy vọng tất cả thành công.
 8. Producer dùng PostgreSQL Outbox; consumer/callback dùng Inbox hoặc deduplication record. RabbitMQ/provider chỉ là transport/source event.
@@ -88,6 +111,11 @@ BE1 vẫn phải cung cấp/tiêu thụ contract rõ ràng để BE2 hoàn tất
 10. TenantOwner query luôn filter ownership và publication state; pending/raw/rejected data không được lộ.
 11. Không sửa migration đã phát hành. Mỗi thay đổi dùng expand → backfill/validate → contract; fresh/upgrade database test được gom và chạy ở phase kiểm thử cuối.
 12. Không khôi phục code/API FieldTasks, Harvests, TenantAdmin/Member hoặc Farm Manager/Worker để giải quyết nhanh dependency mới.
+13. Không có severity trong Plant Health target model/API/event/read model; dữ liệu legacy phải được deprecate/backfill/contract bằng migration mới, không sửa migration cũ.
+14. `HARVEST_READINESS` phải disabled/not sellable và bị từ chối ở public catalogue/request/order/payment/processing trong MVP.
+15. Published Plant Health result luôn mang `Suspected`/`Preliminary` và team-label limitation; “published” chỉ là publication state, không phải expert diagnosis.
+16. Written consent và flight permission là fail-closed flight gate. Verbal/message consent chỉ là preliminary evidence, không mở capture.
+17. MVP chỉ bán `PLANT_HEALTH`; Baseline Mapping là free MissionPurpose, Follow-up là relation và Harvest Readiness là Stretch-disabled.
 
 ## 4. Phase status, baseline và evidence
 
@@ -102,23 +130,44 @@ BE1 vẫn phải cung cấp/tiêu thụ contract rõ ràng để BE2 hoàn tất
 | 4 | Cleanup FieldTasks/Harvests/staff surface | Baseline | Done 2026-09-25, còn external retention gates | Runtime detached; archival data chưa được drop tùy tiện |
 | 5 | Survey/base-map/result database foundation | Step 0 foundation | Done theo snapshot 2026-09-25 | Không bao gồm rebaseline delta 2026-10-06 |
 | 6 | Internal ports, policies và authorization boundary | Step 0/1A foundation | Done 2026-09-25 | Không mở business API mới |
-| 6R | Per-pole, purpose readiness, FarmBoundary, Disease Zone/recommendation, plant-change | Step 0R | **CodeComplete — AwaitingFinalTest** | Code/migration/contract/documentation hoàn tất; chỉ Final Test Phase được chuyển `Done` |
-| 7 | Catalogue/master data và Survey Request | Step 1B–1E, Step 2 | **CodeComplete — AwaitingFinalTest** | Step 1/2 implementation và OpenAPI hoàn tất; submit không provision resource |
-| 8 | Approval/onboarding/SurveyOrder | Step 3 | **CodeComplete — AwaitingFinalTest** | Ba request kinds atomic, retry-safe và đã mở SystemAdmin API/OpenAPI |
-| 9 | Boundary/scope, baseline count, pricing, appointment, payment | Step 4 | **CodeComplete — AwaitingFinalTest** | Purpose-aware readiness không bypass được |
+| R2 | Proposal v2 remediation | Step R2 | **InProgress — foundation compiled 2026-10-15** | Plant Health-only guards, V4 no-severity contract, pending consent/permission, immutable original snapshot và domain/schema seams đã có; settlement/extra-flight application workflows và Final Test còn thiếu |
+| 6R | Per-pole, purpose readiness, FarmBoundary, Disease Zone/guidance, plant-change | Step 0R + R2 | **RebaselineRequired** | Evidence cũ giữ lại; phần severity/expert recommendation/readiness cũ không còn đạt gate |
+| 7 | Plant Health catalogue/master data và Survey Request | Step 1B–1E, Step 2 + R2 | **RebaselineRequired** | Public chỉ thấy Plant Health; request ngoài Plant Health fail closed |
+| 8 | Approval/onboarding/SurveyOrder | Step 3 + R2 | **RebaselineRequired** | Ba request kinds atomic và tạo pending consent/permission checklist |
+| 9 | Consent/permission, boundary/scope, baseline count, pricing, appointment, payment | Step 4 + R2 | **RebaselineRequired** | Readiness có consent/permission và original snapshot/adjustment semantics đúng v2 |
 | 10 | Order-bound Mission/pre-flight | BE2 implementation + Step 5 BE1 boundary | External dependency | BE2 dùng authoritative BE1 context/readiness contract |
 | 11 | Initial Farm base map và persistent Plant identity | Step 6 | NotStarted | Hoàn tất publication V3 atomic, review và count handoff |
-| 12 | Plant Health/Disease Zone/recommendation và Harvest Readiness | Step 7–8 | NotStarted | Chỉ human-reviewed Published result lộ cho owner |
+| 12 | Plant Health/Disease Zone/sourced guidance preliminary result | Step 7 | NotStarted | Chỉ Manager-reviewed suspected/preliminary result lộ cho owner; không severity |
 | 13 | Digital Plant Profile, plant-change workflow, history/follow-up | Step 9–10 | NotStarted | Hoàn tất published-only, same-service và ownership behavior |
 | 14 | Residual cleanup và release preparation | Step 11A–11B | NotStarted | Cleanup/retention/drain và tài liệu sẵn sàng kiểm thử |
 | 15 | Final Test Phase | Step 11C–11E + mục 27 | NotStarted | Viết toàn bộ test còn thiếu, rồi chạy test một lần theo thứ tự release |
 
+### 4.1A. Thứ tự xử lý các phase `RebaselineRequired`
+
+Không xử lý Phase 6R, 7, 8 và 9 song song như bốn backlog độc lập. Thứ tự bắt buộc là:
+
+| Thứ tự | Phase/nhóm việc | Phạm vi phải sửa | Dependency | Exit gate để sang bước sau |
+|---:|---|---|---|---|
+| 0 | R2-A — Freeze và inventory | Khóa Harvest Readiness runtime/API; inventory severity, treatment recommendation, service seed, route, DI, event và schema cũ | Không | Có artifact matrix `remove/rename/compatibility/disabled`; public path không nhận thêm dữ liệu sai v2 |
+| 1 | Phase 6R foundation — R2-B/R2-F | No-severity target model; `SourcedGuidance`; preliminary/team-label semantics; V4 health contract; capture-authorization, adjustment-settlement và extra-flight domain/schema seams | R2-A | Domain/contract/migration expand compile; contract cũ bất biến; downstream có interface ổn định |
+| 2 | Phase 7 — Step 1/2 remediation | Plant Health-only catalogue/master data; disable Harvest Readiness; ba request handlers từ chối service khác; checklist chỉ ghi consent/permission feasibility | Phase 6R foundation | Public/admin/OpenAPI đúng service scope; request path không provision và không nhận Stretch service |
+| 3 | Phase 8 — Step 3 remediation | Approval re-check Plant Health; tạo pending capture-authorization requirement; compatible-order policy có version/reason | Phase 7 | Ba approval flow atomic/retry-safe và không tự mở flight gate |
+| 4 | Phase 9 — Step 4 remediation | Verify/revoke consent/permission; immutable original price/count; ScopeAdjustment; additional payment/refund; ExtraFlightRequest; readiness fail closed | Phase 8 + Phase 6R seams | Baseline/Plant Health readiness đúng v2; payment/refund/extra-flight truy nguyên được và không bypass |
+| 5 | R2 integration gate | Runtime DI/route inventory, OpenAPI, migration upgrade notes, V4 golden contract backlog và negative scenarios | Hoàn tất 1–4 | R2, 6R, 7, 8, 9 chuyển `CodeComplete — AwaitingFinalTest`; chỉ lúc này mới bắt đầu Step 5 |
+
+Quy tắc phạm vi của thứ tự này:
+
+- Phase 6R chỉ khóa foundation và compatibility cho Plant Health result; full ingestion/review/publication vẫn làm ở Step 7 sau Step 6.
+- Step R2 chỉ khóa offline sync contract/schema seam; full Manager mobile sync implementation làm ở Step 10.
+- Step 8 Harvest Readiness không được chen vào chuỗi trên; trong MVP chỉ cần chứng minh disabled/not sellable.
+- Không chuyển phase nào sang `Done` trong chuỗi này; trạng thái `Done` chỉ có sau Final Test Phase.
+
 Quy tắc điều phối:
 
 1. Dùng bảng trên để chọn phase hiện tại; dùng Step tương ứng bên dưới để code.
-2. Không bắt đầu Phase 7 trước khi Phase 6R hoàn thành.
-3. Baseline Mapping có thể chạy trước payment để tạo confirmed pole count; selected paid-service Mission không được chạy trước Phase 9 commercial gate.
-4. Không làm official result Phase 12 trước khi Phase 11 cung cấp current Farm base map và persistent Plant identity.
+2. Hoàn thành Step R2 trước mọi work mới; mọi dấu `[x]` mâu thuẫn v2 phải được mở lại và xác nhận bằng remediation evidence.
+3. Baseline Mapping có thể chạy trước payment để tạo confirmed pole count nhưng vẫn cần written consent/flight permission; paid Plant Health Mission không được chạy trước Phase 9 commercial gate.
+4. Không làm published preliminary result Phase 12 trước khi Phase 11 cung cấp current Farm base map và persistent Plant identity.
 5. Trong các phase code, có thể ghi `CodeComplete — AwaitingFinalTest` khi implementation/migration/documentation đã xong. Chỉ đổi sang `Done` sau Final Test Phase có evidence thực tế; entity/table/interface hoặc build pass đơn lẻ không đủ.
 
 ### 4.2. Baseline đã hoàn thành — giữ lại, không làm lại
@@ -137,7 +186,7 @@ Theo Phase 0–6 và source code hiện tại:
   - Survey Request/review.
   - SurveyOrder.
   - Appointment, Payment, PaymentEvent và PriceAdjustment.
-  - SurveyResult và HarvestReadinessAssessment.
+  - SurveyResult; legacy/Stretch `HarvestReadinessAssessment` có thể còn trong schema nhưng phải bị runtime/API disable ở MVP.
 - [x] Database đã có `survey` schema, `farm_base_map_versions`, order/mission association, mission purpose và pre-flight foundation.
 - [x] `FarmBaseMapVersion`, Farm provisioning seam, Mission order context và mapping publication seam đã được chuẩn bị.
 - [x] Business Phase 5 migration theo snapshot 2026-09-25 và fresh/upgrade PostgreSQL verification đã có evidence; không bao gồm rebaseline delta 2026-10-06.
@@ -179,10 +228,11 @@ Khảo sát source tại thời điểm lập plan cho thấy:
 | Survey domain | Aggregate đã sở hữu transition rules, stable domain error codes, version guard và các value object nền tảng | Bổ sung factory/invariant theo từng use case ở Step 1–9; không tạo lại central state-machine/error file |
 | Surveys persistence | `SurveysDbContext`, module UoW, SurveyService repository, catalogue query service, audit/outbox và health check đã được runtime đăng ký | Repository/query theo các use case sau, compiled/batch query khi có evidence cần thiết |
 | API | Đã reference và gọi `AddSurveysModule`; chưa có Survey controllers/contracts mục tiêu | Public, SystemAdmin, SystemManager, TenantOwner và payment callback endpoints |
-| IntegrationContracts | V1/V2 baseline được giữ bất biến; V3 target cho mapping/health được chốt lại ở Step 0R | Kết nối producer/consumer thật ở Step 4, 6, 7 và 8; theo dõi drain V1/V2 |
+| IntegrationContracts | V1/V2 baseline được giữ bất biến; V3 mapping/health hiện còn severity/recommendation assumptions | Phát hành revision contract không severity, có uncertainty/team-label/guidance provenance; không dùng Harvest Readiness contract trong MVP |
 | Approval | Có internal provisioning ports | Atomic cross-module approval orchestration và retry recovery |
-| Results | Có SurveyResult/Readiness schema | Health association/import, review/correction/publication handlers và published-only queries |
+| Results | Có SurveyResult/legacy Readiness schema | Plant Health association/import, review/correction/preliminary publication handlers; disable Stretch readiness surface |
 | Owner portal queries | Chưa có target read models | Farm map, plant count, profile timeline, survey history, same-service comparison |
+| Proposal-v2 gaps | Source audit 2026-10-15: production source còn nhiều `Severity`, `TreatmentRecommendation`, `HarvestReadiness` references; chưa có `Consent`, `FlightPermission`, `ExtraFlight`, `ScopeAdjustment` capability | Step R2 inventory chính xác, migration/compatibility plan và implementation trước Step 5 |
 
 Step 1A runtime wiring đã hoàn thành ngày 2026-10-08. Step 1B–1E gồm public catalogue, SystemAdmin catalogue, versioned pricing và business master data đạt `CodeComplete — AwaitingFinalTest` ngày 2026-10-09; Phase 7 tiếp tục từ Step 2 Survey Request.
 
@@ -204,6 +254,9 @@ AgriDrone.Modules.Surveys/
       Orders/
       Appointments/
       Payments/
+      Authorizations/
+      Adjustments/
+      MobileSync/
       Results/
       Queries/
     Errors/
@@ -230,8 +283,8 @@ AgriDrone.Api/
 AgriDrone.IntegrationContracts/
   Surveys/
   Mapping/V2/ và Mapping/V3/
-  Health/V2/ và Health/V3/
-  HarvestReadiness/V2/
+  Health/V2/, Health/V3/ compatibility và Health/V4/ target
+  HarvestReadiness/V2/  # compatibility only; không đăng ký MVP producer/consumer/API
 
 AgriDrone.Database/
   Cross-module DbContext/UoW cho approval, map publication và result publication
@@ -242,12 +295,14 @@ Tên file/controller có thể điều chỉnh theo convention hiện tại, nh�
 
 ## 7. Thứ tự triển khai bắt buộc
 
-Trước Step 1B bên dưới, hoàn thành Step 0R để điều chỉnh baseline cũ theo `Be-Plan.md` ngày 2026-10-06. Sau đó tiếp tục tuần tự trên solution .NET hiện tại.
+Baseline Step 0R–4 đã được viết theo proposal cũ. Từ 2026-10-15 phải chạy Step R2 trước, sau đó mới tiếp tục tuần tự trên solution .NET hiện tại.
 
 ```text
 Step 0  Khóa contract, state machine, transaction và security conventions
    ↓
 Step 0R Rebaseline per-pole/boundary/Disease Zone/recommendation/plant-change
+   ↓
+Step R2 Proposal-v2 remediation: Plant Health-only/no severity/consent/adjustment/offline
    ↓
 Step 1  Runtime Surveys module + UC03 Catalogue/Master Data
    ↓
@@ -261,9 +316,7 @@ Step 5  UC07 Farm/Zone operational verification + BE2 readiness boundary
    ↓
 Step 6  UC08 Farm base map review/publication V3 (Phase 11)
    ↓
-Step 7  UC09 Plant Health official result (Phase 12)
-   ↓
-Step 8  UC10 Harvest Readiness official result (Phase 12)
+Step 7  UC09 Plant Health published preliminary result (Phase 12)
    ↓
 Step 9  UC11 Digital Plant Profile/History/Follow-up (Phase 13)
    ↓
@@ -273,6 +326,8 @@ Step 11 Residual cleanup + E2E/release gate (Phase 14–15)
 ```
 
 BE2 có thể phát triển order-bound Mission song song sau khi Step 4 chốt contract. BE1 không bắt đầu Step 6 trước khi mission/order/base-map context V3 đã ổn định về schema và semantics; contract test được thực hiện ở Final Test Phase.
+
+Step 8 được giữ số để trace lịch sử nhưng là **Stretch capability gate**, không nằm trên critical path và không được triển khai/kích hoạt trong MVP.
 
 ---
 
@@ -319,9 +374,9 @@ Chốt ba boundary trước khi viết handler:
    - Plants + PlantChangeEvents.
    - Audit + Outbox.
 3. `ISurveyResultPublicationUnitOfWork`:
-   - Inbox/imported pending findings/assessments.
+   - Inbox/imported pending suspected findings; Harvest Readiness assessment không thuộc MVP target path.
    - SurveyResult + review history.
-   - Derived current Plant health khi publish Plant Health.
+   - Derived latest-reviewed Plant Health state khi publish preliminary Plant Health result.
    - SurveyOrder status.
    - Audit + Outbox.
 
@@ -329,15 +384,15 @@ Chốt ba boundary trước khi viết handler:
 - [x] Specialized DbContext chỉ map bảng cần thiết; `AgriDroneSchemaDbContext` vẫn chỉ phục vụ migration/design-time.
 - [x] Viết rollback integration test skeleton trước handler orchestration.
 
-### 8.4. V2 contracts với BE2
+### 8.4. Versioned contracts với BE2
 
 - [x] Chốt `SurveyOrderOperationalContext`/readiness query contract.
 - [x] Chốt current Farm base-map và Plant reference snapshot contract.
 - [x] Chốt `BaselineMappingCandidatesApprovedV2`.
 - [x] Chốt `FarmBaseMapPublishedV2`.
 - [x] Chốt `HealthObservationsReadyV2`.
-- [x] Chốt Harvest Readiness pending handoff V2.
-- [x] Chốt official result/review state V2 để BE2 complete Mission.
+- [x] Giữ Harvest Readiness pending handoff V2 làm compatibility artifact; không đăng ký producer/consumer trong MVP.
+- [x] Chốt publication/review state để BE2 complete Mission; Step R2 phải sửa wording thành reviewed preliminary và không chứa severity/diagnosis claim.
 - [x] Mỗi event có MessageId, schema version, occurred-at, correlation/causation, SurveyOrderId, FarmId, source Mission/Job và context đặc thù.
 - [x] Golden JSON và validation tests cho V1/V2 song song.
 
@@ -352,21 +407,82 @@ Chốt ba boundary trước khi viết handler:
 
 ### 8.4A. Step 0R — Rebaseline delta bắt buộc trước Step 1B
 
-`Be-Plan.md` ngày 2026-10-06 thay đổi các assumption nền. Các mục dưới đây là việc mới, không được thừa hưởng dấu `[x]` của Step 0 cũ:
+`Be-Plan.md` ngày 2026-10-06 từng thay đổi các assumption nền. Evidence của Step 0R được giữ làm lịch sử, nhưng phần mâu thuẫn với `Be-Plan-v2.md` phải được supersede bởi Step R2:
 
 Decision baseline đã được Product chốt ngày 2026-10-07 tại `docs/adr/0007-per-pole-pricing-and-purpose-aware-readiness.md` đến `docs/adr/0011-v3-survey-mapping-health-contracts.md`; field-level baseline nằm tại `docs/domain/be1-step0r-locked-contract.md`. Các ADR này khóa thiết kế nhưng không đồng nghĩa implementation/migration/test đã hoàn thành.
 
 - [x] Thêm domain/value objects `PricePerPole`, `ConfirmedSurveyPoleCount` và price formula; approximate area chỉ còn dùng cho request feasibility/scope.
 - [x] Viết expand/backfill/contract migration mới cho per-pole pricing; giữ adapter/read path legacy rõ ràng và không sửa migration Phase 5.
-- [x] Thay một readiness chung bằng decision theo `MissionPurpose`: Baseline Mapping không yêu cầu payment; Plant Health/Harvest Readiness bắt buộc count/price snapshot + payment.
+- [x] Thay một readiness chung bằng decision theo `MissionPurpose`: Baseline Mapping không yêu cầu payment; paid Plant Health bắt buộc count/price snapshot + payment. Harvest Readiness branch phải bị disable ở Step R2.
 - [x] Thêm approved FarmBoundary version/verification/audit và boundary-exception state `OutOfBoundary/NeedsReview`.
-- [x] Thêm aggregate/schema/ports cho proposed/approved Disease Zone và expert-validated treatment recommendation catalogue.
+- [x] Thêm aggregate/schema/ports cho proposed/approved Disease Zone và treatment recommendation catalogue theo baseline cũ; Step R2 phải chuyển target semantics thành sourced guidance không severity/không expert claim.
 - [x] Thêm `PlantInventoryChangeReport` state machine cho owner report → manager verification → later-survey evidence (đối với cây mới) → applied/rejected.
-- [x] Mở rộng mapping/result publication boundaries để commit confirmed active-pole count, Disease Zone/recommendation provenance và plant-change decision đúng transaction.
-- [x] Triển khai V3 payload cho boundary exception, proposed Disease Zone, recommendation selection, confirmed pole count và plant-change evidence; giữ V2 bất biến. Golden JSON được viết ở Final Test Phase.
+- [x] Mở rộng mapping/result publication boundaries để commit confirmed active-pole count, Disease Zone/guidance provenance và plant-change decision đúng transaction.
+- [x] Triển khai V3 payload theo baseline cũ; Step R2 phải phát hành revision mới không severity và có suspected class, uncertainty, dataset/annotation-rule, sourced-guidance provenance. Giữ payload đã phát hành bất biến.
 - [x] Cập nhật stable error codes, OpenAPI intent, ADR và glossary; không để assumption cũ “payment trước mọi flight” hoặc “price per hectare” tồn tại trong target path.
 
 Các test Step 0R chưa viết được chuyển xuống mục 27. Step 0R đạt `CodeComplete — AwaitingFinalTest` khi code/migration/contract hoàn tất; chỉ đạt `Done` sau Final Test Phase.
+
+### 8.4B. Step R2 — Proposal-v2 remediation gate (bắt buộc làm ngay)
+
+Step này sửa baseline/code đã hoàn thành nhưng không còn đúng nghiệp vụ. Không được đánh dấu bằng cách đổi tài liệu hoặc feature flag đơn thuần; phải có code, migration, OpenAPI, contract và test backlog tương ứng.
+
+#### R2-A — Freeze và inventory
+
+- [x] Tạm chặn activation/request/order/payment/processing mới cho `HARVEST_READINESS`; public catalogue chỉ trả `PLANT_HEALTH`.
+- [x] Lập inventory source/schema/API/event/seed chứa `Severity`, fixed health levels, `TreatmentRecommendation`, `HarvestReadiness`, wording `Official`/diagnosis-like.
+- [x] Với từng artifact, ghi quyết định `remove`, `rename`, `compatibility-read-only` hoặc `Stretch-disabled`; không xóa migration/data lịch sử.
+- [ ] Supersede ADR/glossary/OpenAPI cũ đang coi hai service, severity hoặc expert-validated recommendation là target.
+
+#### R2-B — Plant Health model và claim boundary
+
+- [ ] Chỉ cho phép 2–3 suspected-disease classes được chọn theo dataset/annotation-rule version của nhóm; confusing/non-disease cases gồm tối thiểu sunburn/scarring.
+- [ ] Bỏ severity khỏi target command/response/entity/event/query/index/validation. Nếu cột legacy đang non-null, dùng expand → backfill neutral marker/read adapter → contract; neutral marker không được lộ qua target API.
+- [x] Chuyển `TreatmentRecommendation` target semantics sang `SourcedGuidance`: mapping theo suspected class, source/reference, wording, version/lifecycle/effective window; không mapping theo severity và không gắn `expert-validated` khi không có evidence.
+- [ ] Published result bắt buộc có `ResultNature = Preliminary`, suspected wording, team-labelled limitation, uncertainty/limitations và provenance tới dataset/annotation rules/model/threshold/media/reviewer.
+- [ ] Derived state nếu cần phải đặt tên `LatestReviewedPlantHealth`, không dùng field/response khiến người đọc hiểu là diagnosis hoặc “official health”.
+
+#### R2-C — Consent và flight permission
+
+- [x] Tạo versioned `SurveyCaptureAuthorization` hoặc hai record tương đương cho written data-use consent và flight permission: status, evidence reference, issued/verified/expiry/revoked time, verifier, reason và optimistic version.
+- [x] Approval Step 3 chỉ tạo checklist/requirement pending; không tự coi request approval là flight permission.
+- [ ] SystemAdmin/SystemManager action verify/revoke phải authorize rõ và ghi audit/outbox.
+- [x] `SurveyOrderReadinessSnapshot` và BE2 operational contract thêm consent/permission status + expiry. Mọi Baseline/Plant Health capture fail closed nếu thiếu, expired hoặc revoked.
+
+#### R2-D — Scope/count adjustment, refund và extra flight
+
+- [x] Bổ sung `ScopeAdjustment` (hoặc mở rộng PriceAdjustment bằng typed reason) để giữ before/after scope/count, evidence, reviewer và ảnh hưởng tài chính.
+- [x] Không ghi đè `OriginalConfirmedPoleCount`, `OriginalPricePerPoleSnapshot`, `OriginalFinalPrice`. Giá hiệu lực sau điều chỉnh được tính từ immutable adjustment ledger/read model.
+- [x] Tạo `AdjustmentSettlement` liên kết adjustment với `AdditionalPayment` hoặc `Refund`, lưu amount/currency/provider reference/status/idempotency key.
+- [ ] Chênh lệch tăng tạo additional sandbox payment; chênh lệch giảm gọi refund port idempotent và lưu refund record/provider event. Pending/failed financial settlement đóng paid-flight gate theo policy.
+- [ ] Tạo `ExtraFlightRequest` với Order/Farm/Mission link, reason (`InsufficientData` hoặc `ApprovedScopeChange`), requester, approver, evidence, cost impact và state/version. Domain/schema seam đã có; application command và BE2 start re-check còn thiếu.
+
+#### R2-E — Khóa Manager offline contract/schema seam; implementation đầy đủ ở Step 10
+
+- [x] Không khôi phục `FieldTask` legacy. Chốt read model/contract `ManagerMobileWorkItem`, versioned checklist và note draft/commit theo assigned Order/Farm.
+- [x] Chốt sync command mang client operation ID, base version, captured-at và payload hash; server phải deduplicate, trả per-item outcome/conflict và không silently overwrite khi triển khai ở Step 10.
+- [x] Cached work item có assignment/authorization expiry; offline completion/checklist không tự mở flight gate. Flight start vẫn re-check authoritative state.
+- [x] Raw-media chunk upload/transport thuộc BE2; BE1 chỉ sở hữu business work item/checklist/notes và sync audit.
+
+#### R2-F — Contract/migration/release gate
+
+- [x] Phát hành contract revision mới cho Plant Health, readiness và result publication; không sửa payload V2/V3 đã phát hành tại chỗ.
+- [ ] OpenAPI không còn public Harvest Readiness option, severity field, expert-diagnosis wording hoặc owner endpoint xem pending/raw result.
+- [x] Fresh migration + upgrade snapshot giữ được lịch sử cũ nhưng target write/read path không sinh dữ liệu severity/Harvest Readiness mới.
+- [ ] Cập nhật Final Test Backlog: catalogue Plant Health-only, no-severity contract, preliminary disclaimer, consent revoke/expiry, immutable original snapshot, payment/refund, extra-flight và offline retry/conflict.
+
+Checkpoint implementation 2026-10-15:
+
+- [x] Runtime guard Plant Health-only tại domain activation/create, public catalogue query, ba submit handler, approval và paid-readiness API; Harvest Readiness lịch sử không bị drop.
+- [x] Thêm `PlantHealthAnalysisReadyV4`, `SourcedGuidance`, `SurveyOrderOperationalContextV3` và Manager mobile sync contract không có severity.
+- [x] Approval tạo atomic hai `SurveyCaptureAuthorization` Pending; SystemAdmin có verify/revoke có evidence, optimistic version và audit.
+- [x] Readiness Baseline/Plant Health fail closed khi consent/permission missing, expired hoặc revoked; Harvest Readiness trả `SERVICE_DISABLED`.
+- [x] Thêm immutable `OriginalSurveyServicePriceId`, `OriginalConfirmedPoleCount`, `OriginalPricePerPoleSnapshot`, `OriginalFinalPrice`; adjustment chỉ thay effective snapshot.
+- [x] Thêm domain/schema seam `ScopeAdjustment`, `AdjustmentSettlement`, `ExtraFlightRequest` và readiness blocker tương ứng.
+- [x] Migration expand/backfill `R2ProposalV2Remediation` và inventory `docs/domain/be1-r2-legacy-artifact-inventory.md`; EF báo không còn pending model change.
+- [ ] Còn lại trước khi đóng R2: application/API/outbox đầy đủ cho scope adjustment, additional payment/refund và extra-flight; V4 ingestion/publication; authoritative V3 query adapter; OpenAPI runtime snapshot đầy đủ; Final Test backlog.
+
+**Exit gate Step R2:** build compile; runtime/OpenAPI route inventory đúng; Plant Health-only enforced server-side; readiness fail closed với consent/permission; original price/count bất biến; no-severity/preliminary contracts đã version hóa; Stretch/legacy data chỉ còn compatibility-read-only. Chỉ sau gate này mới tiếp tục Step 5.
 
 ### 8.5. Cách sử dụng hướng dẫn từ Step 1 đến Step 11
 
@@ -404,10 +520,10 @@ Ma trận vị trí code theo Step:
 | 4 | `Features/Orders/`, `Appointments/`, `Payments/` | Payment adapter/callback, readiness query |
 | 5 | Farms operational features + Surveys integration port | PostGIS queries, BE2 operational-context adapter |
 | 6 | Mapping publication handler/policy | V2 consumer, Inbox, mapping publication UoW |
-| 7 | `Features/Results/PlantHealth/` | Plant Health V3 consumer, result publication UoW |
-| 8 | `Features/Results/HarvestReadiness/` | Readiness V2 consumer, result publication UoW |
+| 7 | `Features/Results/PlantHealth/` | Plant Health V4 consumer, preliminary-result publication UoW |
+| 8 | Không có MVP feature folder | Stretch-disabled; compatibility inventory do Step R2 quản lý |
 | 9 | `Features/Queries/` và Plant amendment features | Published-only read queries, cache/index |
-| 10 | `Features/WorkQueues/` | Notification consumers, audit/observability |
+| 10 | `Features/WorkQueues/`, `Features/MobileSync/` | Notification consumers, audit/observability và offline sync |
 | 11 | Không thêm business feature mới | Cleanup, migration, E2E và runbook |
 
 Một phase code chỉ được đánh dấu `[x]` cho phần implementation khi có đủ behavior, persistence và authorization; trạng thái tổng thể là `CodeComplete — AwaitingFinalTest`. Chỉ Final Test Phase mới xác nhận `Done`. Interface/skeleton hoặc build pass đơn lẻ chỉ được xem là đang làm.
@@ -450,8 +566,8 @@ Ví dụ cách đọc blueprint cho feature `CreateSurveyServicePrice` — đây
 
 | File | Thành phần phải có bên trong |
 |---|---|
-| `CreateSurveyServicePriceCommand.cs` | `ServiceId`, `PricePerPole`, `Currency`, `EffectiveFrom`, `EffectiveTo`, `ExpectedVersion`; request trả `CreateSurveyServicePriceResponse` |
-| `CreateSurveyServicePriceCommandValidator.cs` | ServiceId khác rỗng; price dương; currency đúng 3 ký tự; `EffectiveTo > EffectiveFrom`; chỉ kiểm tra shape |
+| `CreateSurveyServicePriceCommand.cs` | `ServiceId`, `PricePerPole`, `Currency`, `ExpectedVersion`; request trả `CreateSurveyServicePriceResponse`; thời điểm hiệu lực do server cấp |
+| `CreateSurveyServicePriceCommandValidator.cs` | ServiceId khác rỗng; price dương; currency đúng 3 ký tự; expected version dương; chỉ kiểm tra shape |
 | `CreateSurveyServicePriceCommandHandler.cs` | Dependencies: execution context, service repository, catalogue/overlap query, UoW, time provider, audit, outbox; `Handle` theo bảy khối chuẩn; gọi domain method/factory thay vì set property |
 | `CreateSurveyServicePriceResponse.cs` | PriceVersionId, ServiceId, amount/currency, effective window, created time và service version mới; không trả entity/navigation |
 | `ISurveyServiceRepository.cs` | Method load service cho mutation và add/attach price version theo aggregate design; không có paging/public query |
@@ -488,10 +604,35 @@ Các tên dưới đây là responsibility target; nếu repo đã có type tư�
 | `[Tạo/Sửa]` | `FARMS/Domain/Boundaries/FarmBoundary.cs` | Version, approval, reviewer/evidence và active boundary invariant |
 | `[Tạo]` | `FARMS/Domain/Boundaries/BoundaryException.cs` | OutOfBoundary/NeedsReview/corrected decision và provenance |
 | `[Tạo]` | `SURVEYS/Domain/Results/DiseaseZone.cs` | Proposed/reviewed/published zone geometry + membership version |
-| `[Tạo]` | `PLANTS/Domain/Conditions/TreatmentRecommendation.cs` | Expert catalogue theo disease/severity, version/lifecycle/advisory metadata |
+| `[Legacy/Superseded]` | `PLANTS/Domain/Recommendations/TreatmentRecommendation.cs` | Không dùng làm target disease+severity model; Step R2 chuyển sang sourced guidance và giữ adapter lịch sử nếu cần |
 | `[Tạo]` | `PLANTS/Domain/Changes/PlantInventoryChangeReport.cs` | Owner report, manager review, later-survey evidence và applied/rejected state |
 | `[Sửa/Tạo]` | EF configurations + `<timestamp>_RebaselinePerPoleBoundaryResults.cs` | Expand migration; backfill/contract tách riêng theo dữ liệu thực |
-| `[Tạo/Sửa]` | `CONTRACTS/Mapping/BaselineMappingCandidatesReadyV3.cs`, `FarmBaseMapPublishedV3.cs`, `CONTRACTS/Health/PlantHealthAnalysisReadyV3.cs` | Pending mapping/health/zone/recommendation/boundary data và published confirmed count; giữ V2 immutable; golden tests nằm ở mục 27 |
+| `[Tạo/Sửa]` | `CONTRACTS/Mapping/BaselineMappingCandidatesReadyV3.cs`, `FarmBaseMapPublishedV3.cs`, `CONTRACTS/Health/PlantHealthAnalysisReadyV3.cs` | Baseline cũ giữ immutable; Step R2 phát hành revision không severity, có uncertainty/team-label/guidance provenance |
+
+#### File manifest Step R2
+
+Tên file dưới đây là target responsibility; đối chiếu source để sửa/reuse đúng type, không tạo song song hai aggregate cùng nghĩa:
+
+| Thao tác | File/capability | Trách nhiệm |
+|---|---|---|
+| `[Sửa]` | `SURVEYS/Domain/Catalogue/SurveyService.cs`, seed/catalogue queries/handlers | Chỉ `PLANT_HEALTH` sellable trong MVP; Harvest Readiness disabled/not public |
+| `[Sửa/compat]` | `SURVEYS/Domain/HarvestReadiness/*`, `Domain/Results/HarvestReadinessAssessment.cs`, repositories/queries/configurations | Không đăng ký runtime/API/consumer trong MVP; giữ schema/read compatibility nếu migration lịch sử cần |
+| `[Tạo]` | `PLANTS/Domain/Guidance/SourcedGuidance.cs` và repository/configuration/query | Guidance theo suspected class + source/version; không severity/expert claim |
+| `[Sửa/compat]` | `PLANTS/Domain/Recommendations/TreatmentRecommendation*` | Read adapter/migration source lịch sử; target mutation/public response chuyển sang `SourcedGuidance` |
+| `[Sửa]` | `PLANTS/Domain/Conditions/PlantCondition.cs` và health-level/seed/readiness code | 2–3 team-labelled suspected classes + confusing cases; bỏ severity khỏi target path |
+| `[Tạo]` | `SURVEYS/Domain/Authorizations/SurveyCaptureAuthorization.cs` | Written consent + flight permission evidence/status/expiry/revocation/version |
+| `[Tạo]` | `.../Features/Authorizations/VerifySurveyCaptureAuthorization/`, `RevokeSurveyCaptureAuthorization/` | Authorized mutation, audit/outbox và readiness invalidation |
+| `[Tạo]` | `SURVEYS/Domain/Adjustments/ScopeAdjustment.cs` | Immutable before/after scope/count, reason/evidence, financial impact và approval |
+| `[Tạo]` | `SURVEYS/Domain/Adjustments/AdjustmentSettlement.cs` | Additional-payment/refund ledger, amount/currency/provider reference/status/idempotency |
+| `[Tạo]` | `SURVEYS/Domain/Flights/ExtraFlightRequest.cs` | Justification/approval/cost impact/re-check state; không sở hữu Mission execution |
+| `[Sửa]` | `SURVEYS/Domain/Orders/SurveyOrder.cs`, `SurveyOrderReadinessSnapshot.cs`, `SurveyOrderReadinessPolicy.cs` | Original snapshot immutable; consent/permission + settlement + extra-flight gates |
+| `[Thiết kế ở R2; tạo ở Step 10]` | `SURVEYS/Application/Features/MobileSync/*`, query/persistence ports | Work-item/checklist/notes offline sync, client operation dedup và conflict result |
+| `[Thiết kế ở R2; tạo ở Step 10]` | `API/Controllers/SystemManagerMobileSyncController.cs` và contracts | Pull assigned work; push checklist/note operations; không raw-media upload |
+| `[Tạo]` | `CONTRACTS/Health/V4/PlantHealthAnalysisReadyV4.cs` | Suspected class/location, uncertainty, dataset/annotation/model/media provenance; không severity |
+| `[Tạo]` | `CONTRACTS/Surveys/V3/SurveyOrderOperationalContextV3.cs` hoặc next free version | Consent/permission expiry, purpose-aware readiness và immutable commercial references |
+| `[Tạo]` | next free version của SurveyResult publication/review event | `ResultNature=Preliminary`, suspected/team-label limitation, review/publication state; không diagnosis/severity |
+| `[Tạo]` | `DB/Migrations/<timestamp>_ProposalV2BusinessRebaseline*` | Expand/backfill/compatibility indexes/constraints; không sửa migration đã phát hành |
+| `[Cập nhật]` | `docs/openapi/be1-surveys.openapi.json`, ADR/glossary/operations report | Plant Health-only, preliminary result, Stretch disabled và R2 evidence |
 
 #### File manifest Step 1
 
@@ -515,15 +656,10 @@ Domain/error files cần sửa hoặc tạo:
 |---|---|---|
 | `[Sửa]` | `SURVEYS/Domain/Catalogue/SurveyService.cs` | Factory nếu cho phép create; activate; mark experimental; retire; update metadata; lifecycle invariants |
 | `[Sửa]` | `SURVEYS/Domain/Catalogue/SurveyServicePrice.cs` | Factory cho price version; amount/currency/effective-window invariants; không có method sửa amount lịch sử |
-| `[Tạo]` | `SURVEYS/Domain/Catalogue/HarvestReadinessCriterion.cs` | Criteria code/version, lifecycle, granularity, effective window và metadata công bố |
-| `[Tạo]` | `SURVEYS/Domain/Catalogue/HarvestReadinessCriterionStatus.cs` | Experimental, Validated, Retired |
-| `[Tạo]` | `SURVEYS/Domain/Catalogue/HarvestReadinessGranularity.cs` | Chỉ các granularity đã được domain chốt |
-| `[Tạo]` | `SURVEYS/Domain/Catalogue/IHarvestReadinessCriterionRepository.cs` | Lookup/version mutation cho criteria catalogue |
-| `[Tạo]` | `SURVEYS/Infrastructure/Persistence/Configurations/HarvestReadinessCriterionConfiguration.cs` | Mapping/index/unique/effective-window constraints của criteria |
-| `[Tạo]` | `SURVEYS/Infrastructure/Persistence/Repositories/HarvestReadinessCriterionRepository.cs` | EF implementation của criteria repository |
+| `[Compatibility only]` | `SURVEYS/Domain/HarvestReadiness/*` và persistence/query liên quan | Không phát triển thêm hoặc đăng ký public runtime trong MVP; chỉ giữ lịch sử/Stretch-disabled |
 | `[Giữ/Sửa nếu thiếu version rule]` | `PLANTS/Domain/Conditions/PlantCondition.cs` | Disease/non-disease catalogue tiếp tục thuộc Plants; không tạo bản sao trong Surveys |
-| `[Tạo/Sửa]` | `PLANTS/Domain/Conditions/TreatmentRecommendation.cs` | Expert-validated advisory catalogue; disease/severity/version mapping, không free-form AI advice |
-| `[Tạo]` | `PLANTS/Infrastructure/Persistence/Configurations/TreatmentRecommendationConfiguration.cs` | Unique/version/effective-window/lifecycle constraints |
+| `[Tạo/Sửa]` | `PLANTS/Domain/Guidance/SourcedGuidance.cs` | Sourced guidance theo suspected-class/version/source; không severity và không expert claim |
+| `[Tạo]` | `PLANTS/Infrastructure/Persistence/Configurations/SourcedGuidanceConfiguration.cs` | Unique/version/effective-window/lifecycle/source constraints |
 | `[Giữ/Sửa nếu thiếu query]` | `PLANTS/Application/Features/GetActivePlantConditions/` | Public/internal condition catalogue read path hiện hữu |
 | `[Tạo]` | `SURVEYS/Application/Errors/SurveyServiceError.cs` | NotFound, NotPubliclyAvailable, InvalidLifecycle, ActivePriceRequired, PriceWindowOverlap |
 
@@ -544,7 +680,7 @@ API files:
 
 | Thao tác | File | Nội dung |
 |---|---|---|
-| `[Tạo]` | `API/Contracts/Surveys/Catalogue/CreateSurveyServicePriceRequest.cs` | Amount, currency, effective-from/to, expected service version nếu policy dùng |
+| `[Tạo]` | `API/Contracts/Surveys/Catalogue/CreateSurveyServicePriceRequest.cs` | Amount, currency và expected service version; không nhận effective-from/to từ client |
 | `[Tạo]` | `API/Contracts/Surveys/Catalogue/UpdateSurveyServiceMetadataRequest.cs` | Name/description và expected version |
 | `[Tạo]` | `API/Contracts/Surveys/Catalogue/ChangeSurveyServiceStatusRequest.cs` | Expected version và reason; không nhận status tùy ý |
 | `[Tạo]` | `API/Controllers/PublicSurveyServicesController.cs` | Chỉ GET public catalogue |
@@ -629,6 +765,9 @@ Domain/persistence files:
 | `[Tạo]` | `SURVEYS/Domain/Appointments/ISurveyAppointmentRepository.cs` |
 | `[Tạo]` | `SURVEYS/Domain/Payments/ISurveyPaymentRepository.cs` |
 | `[Tạo]` | `SURVEYS/Domain/Payments/IPriceAdjustmentRepository.cs` |
+| `[Tạo]` | `SURVEYS/Domain/Authorizations/ISurveyCaptureAuthorizationRepository.cs` |
+| `[Tạo]` | `SURVEYS/Domain/Adjustments/IScopeAdjustmentRepository.cs` |
+| `[Tạo]` | `SURVEYS/Domain/Flights/IExtraFlightRequestRepository.cs` |
 | `[Tạo]` | `SURVEYS/Infrastructure/Persistence/Repositories/SurveyOrderRepository.cs` |
 | `[Tạo]` | `SURVEYS/Infrastructure/Persistence/Repositories/SurveyAppointmentRepository.cs` |
 | `[Tạo]` | `SURVEYS/Infrastructure/Persistence/Repositories/SurveyPaymentRepository.cs` |
@@ -669,12 +808,20 @@ Feature folders và exact files:
 | `.../Features/Payments/ApprovePriceAdjustment/` | `ApprovePriceAdjustmentCommand.cs`, `ApprovePriceAdjustmentCommandValidator.cs`, `ApprovePriceAdjustmentCommandHandler.cs`, `ApprovePriceAdjustmentResponse.cs` |
 | `.../Features/Payments/RejectPriceAdjustment/` | `RejectPriceAdjustmentCommand.cs`, `RejectPriceAdjustmentCommandValidator.cs`, `RejectPriceAdjustmentCommandHandler.cs`, `RejectPriceAdjustmentResponse.cs` |
 | `.../Features/Orders/GetSurveyOrderReadiness/` | `GetSurveyOrderReadinessQuery.cs`, `GetSurveyOrderReadinessQueryHandler.cs`, `SurveyOrderReadinessResponse.cs` |
+| `.../Features/Authorizations/VerifySurveyCaptureAuthorization/` | command, validator, handler, response; evidence/expiry/version bắt buộc |
+| `.../Features/Authorizations/RevokeSurveyCaptureAuthorization/` | command, validator, handler, response; revoke đóng readiness ngay |
+| `.../Features/Adjustments/RequestScopeAdjustment/` | command, validator, handler, response; before/after scope/count và evidence |
+| `.../Features/Adjustments/ReviewScopeAdjustment/` | approve/reject command, validator, handler, response; tạo financial consequence |
+| `.../Features/Adjustments/InitiateAdjustmentRefund/` | command, validator, handler, response; gọi sandbox refund port idempotent và không sửa original snapshot |
+| `.../Features/Flights/RequestExtraFlight/` | command, validator, handler, response; reason/evidence/cost impact |
+| `.../Features/Flights/ReviewExtraFlight/` | approve/reject command, validator, handler, response; không tự tạo Mission |
 
 Với các dòng bắt đầu `.../Features`, prefix đầy đủ là `SURVEYS/Application/Features`.
 
 Payment adapter/API files:
 
 - `[Tạo] SURVEYS/Application/Abstractions/Payments/ISurveyPaymentGateway.cs`
+- `[Sửa] ISurveyPaymentGateway`: thêm idempotent sandbox refund operation cho approved negative Adjustment; không cho controller tự chọn amount.
 - `[Tạo] SURVEYS/Application/Abstractions/Payments/PaymentSessionResult.cs`
 - `[Tạo] SURVEYS/Infrastructure/Payments/SurveyPaymentGateway.cs`
 - `[Tạo] SURVEYS/Infrastructure/Payments/SurveyPaymentProviderOptions.cs`
@@ -693,6 +840,13 @@ Payment adapter/API files:
 - `[Tạo] API/Contracts/Surveys/Payments/ReconcileSurveyPaymentRequest.cs`
 - `[Tạo] API/Contracts/Surveys/Payments/RequestPriceAdjustmentRequest.cs`
 - `[Tạo] API/Contracts/Surveys/Payments/ReviewPriceAdjustmentRequest.cs`
+- `[Tạo] API/Contracts/Surveys/Authorizations/VerifySurveyCaptureAuthorizationRequest.cs`
+- `[Tạo] API/Contracts/Surveys/Authorizations/RevokeSurveyCaptureAuthorizationRequest.cs`
+- `[Tạo] API/Contracts/Surveys/Adjustments/RequestScopeAdjustmentRequest.cs`
+- `[Tạo] API/Contracts/Surveys/Adjustments/ReviewScopeAdjustmentRequest.cs`
+- `[Tạo] API/Contracts/Surveys/Adjustments/InitiateAdjustmentRefundRequest.cs`
+- `[Tạo] API/Contracts/Surveys/Flights/RequestExtraFlightRequest.cs`
+- `[Tạo] API/Contracts/Surveys/Flights/ReviewExtraFlightRequest.cs`
 
 #### File manifest Step 5
 
@@ -765,14 +919,14 @@ Ingestion và feature folders:
 
 | Folder/file | Files hoặc trách nhiệm |
 |---|---|
-| `SURVEYS/Infrastructure/Messaging/PlantHealthAnalysisReadyV3Consumer.cs` | Transport validation cho findings/zones/recommendations/boundary exceptions; V2 consumer chỉ drain |
+| `SURVEYS/Infrastructure/Messaging/PlantHealthAnalysisReadyV4Consumer.cs` | Transport validation cho suspected findings/zones/sourced-guidance/boundary exceptions/uncertainty; V2/V3 chỉ drain |
 | `.../Features/Results/PlantHealth/ImportPlantHealthObservations/` | `ImportPlantHealthObservationsCommand.cs`, validator, handler, response |
 | `.../Features/Results/PlantHealth/GetPlantHealthReviewQueue/` | query, validator, handler, `PlantHealthReviewQueueItemResponse.cs` |
 | `.../Features/Results/PlantHealth/ReviewPlantHealthFinding/` | command, validator, handler, response |
 | `.../Features/Results/PlantHealth/ReviewPlantHealthFindingBatch/` | command, validator, handler, response |
 | `.../Features/Results/PlantHealth/GetDiseaseZoneReviewQueue/` | query, validator, handler, zone geometry/membership response |
 | `.../Features/Results/PlantHealth/ReviewDiseaseZone/` | command, validator, handler, response; giữ original/corrected geometry |
-| `.../Features/Results/PlantHealth/SelectTreatmentRecommendation/` | command, validator, handler, response; resolve catalogue disease/severity/version |
+| `.../Features/Results/PlantHealth/SelectSourcedGuidance/` | command, validator, handler, response; resolve guidance theo suspected class/source/version, không severity |
 | `.../Features/Results/PlantHealth/ApprovePlantHealthSurveyResult/` | command, validator, handler, response |
 | `.../Features/Results/PlantHealth/PublishPlantHealthSurveyResult/` | command, validator, handler, response |
 | `.../Features/Results/PlantHealth/GetPublishedPlantHealthResult/` | query, validator, handler, response |
@@ -785,41 +939,14 @@ API files:
 - `[Tạo] API/Contracts/Surveys/Results/ReviewPlantHealthFindingRequest.cs`
 - `[Tạo] API/Contracts/Surveys/Results/ReviewPlantHealthFindingBatchRequest.cs`
 - `[Tạo] API/Contracts/Surveys/Results/ReviewDiseaseZoneRequest.cs`
-- `[Tạo] API/Contracts/Surveys/Results/SelectTreatmentRecommendationRequest.cs`
+- `[Tạo] API/Contracts/Surveys/Results/SelectSourcedGuidanceRequest.cs`
 - `[Tạo] API/Contracts/Surveys/Results/PublishSurveyResultRequest.cs`
 
 Nếu pending health finding tiếp tục dùng các entity `ConditionDetection`/`ConditionDetectionReview` hiện có, chỉ bổ sung Order/Farm/base-map/source association và repository/query cần thiết; không tạo entity duplicate trong Surveys. Quyết định reuse này phải được ghi trong migration/ADR trước khi tạo schema mới.
 
-#### File manifest Step 8
+#### File manifest Step 8 (Stretch-disabled)
 
-Domain/master-data files:
-
-| Thao tác | File | Nội dung |
-|---|---|---|
-| `[Giữ/Sửa]` | `SURVEYS/Domain/Catalogue/HarvestReadinessCriterion.cs` | Dùng criteria catalogue đã tạo ở Step 1; chỉ bổ sung behavior khi review/publication thực sự cần |
-| `[Giữ]` | `SURVEYS/Domain/Catalogue/HarvestReadinessCriterionStatus.cs` | Không tạo enum trạng thái thứ hai trong Results |
-| `[Giữ]` | `SURVEYS/Domain/Catalogue/HarvestReadinessGranularity.cs` | Assessment snapshot đúng granularity catalogue |
-| `[Giữ]` | `SURVEYS/Domain/Catalogue/IHarvestReadinessCriterionRepository.cs` | Reuse repository contract Step 1 |
-| `[Sửa]` | `SURVEYS/Domain/Results/HarvestReadinessAssessment.cs` | Original/corrected assessment, evidence, source và review behavior |
-| `[Giữ]` | `SURVEYS/Infrastructure/Persistence/Configurations/HarvestReadinessCriterionConfiguration.cs` | Mapping đã hoàn thành ở Step 1 |
-| `[Giữ]` | `SURVEYS/Infrastructure/Persistence/Repositories/HarvestReadinessCriterionRepository.cs` | Reuse implementation Step 1 |
-| `[Tạo]` | `SURVEYS/Application/Abstractions/Queries/IHarvestReadinessResultQueries.cs` | Review queue, detail, published output, comparison |
-| `[Tạo]` | `SURVEYS/Infrastructure/Queries/HarvestReadinessResultQueries.cs` | Scoped published/pending projections |
-
-Ingestion/features:
-
-| Folder/file | Files hoặc trách nhiệm |
-|---|---|
-| `SURVEYS/Infrastructure/Messaging/HarvestReadinessAssessmentsReadyV2Consumer.cs` | V2 transport adapter |
-| `.../Features/Results/HarvestReadiness/ImportHarvestReadinessAssessments/` | command, validator, handler, response |
-| `.../Features/Results/HarvestReadiness/GetHarvestReadinessReviewQueue/` | query, validator, handler, queue-item response |
-| `.../Features/Results/HarvestReadiness/ReviewHarvestReadinessAssessment/` | command, validator, handler, response |
-| `.../Features/Results/HarvestReadiness/ApproveHarvestReadinessSurveyResult/` | command, validator, handler, response |
-| `.../Features/Results/HarvestReadiness/PublishHarvestReadinessSurveyResult/` | command, validator, handler, response |
-| `.../Features/Results/HarvestReadiness/GetPublishedHarvestReadinessResult/` | query, validator, handler, response |
-| `.../Features/Results/HarvestReadiness/GetHarvestReadinessComparison/` | query, validator, handler, response |
-
-API request files đặt tại `API/Contracts/Surveys/Results/`: `ReviewHarvestReadinessAssessmentRequest.cs` và `PublishHarvestReadinessResultRequest.cs`. Các action dùng chung `SystemManagerSurveyResultsController.cs`; không tạo controller chứa cả admin catalogue/payment logic.
+Không tạo thêm domain, consumer, feature, controller hoặc API contract Harvest Readiness trong MVP. Các file hiện hữu được inventory ở Step R2 và chỉ giữ compatibility-read-only/disabled. Nếu sau này capability gate được phê duyệt, lập một implementation plan/ADR riêng với criteria, dataset/ground-truth protocol, evaluation evidence, feature flag, authorization, payment, review và contract tests; không mở lại bằng cách đăng ký các class cũ vào DI.
 
 #### File manifest Step 9
 
@@ -867,9 +994,13 @@ API files:
 | `SURVEYS/Infrastructure/Queries/SurveyWorkQueueQueries.cs` | SQL/projection/paging; security predicate trong query |
 | `SURVEYS/Infrastructure/Messaging/SurveyNotificationEventConsumer.cs` | Inbox/dedup và dispatch notification |
 | `SURVEYS/Infrastructure/Messaging/SurveyNotificationDeduplication.cs` | Stable dedup-key builder; không gửi email |
+| `SURVEYS/Application/Features/MobileSync/GetManagerMobileWorkItems/` | Assigned work-item/checklist/note snapshot với cursor/version/authorization expiry |
+| `SURVEYS/Application/Features/MobileSync/PushManagerMobileOperations/` | Batch operation command/handler/response; dedup client operation ID và per-item conflict |
+| `SURVEYS/Infrastructure/Persistence/ManagerMobileSyncOperation.cs` | Operation ID, payload hash, base version, captured/received time và immutable outcome |
 | `API/Controllers/SystemSurveyWorkQueueController.cs` | Admin queue route |
 | `API/Controllers/SystemManagerSurveyWorkQueueController.cs` | Manager queue route |
 | `API/Controllers/TenantOwnerSurveyWorkQueueController.cs` | Owner queue route |
+| `API/Controllers/SystemManagerMobileSyncController.cs` | Pull/push mobile business data; không nhận raw media |
 | `docs/operations/be1-survey-operations-runbook.md` | Redrive/reconciliation/recovery procedures |
 
 Không tạo `SurveyAuditService.cs` chứa logic của mọi use case. Dùng audit port hiện hữu; mỗi handler tự cung cấp action/resource/reason/before-after phù hợp nghiệp vụ của nó.
@@ -898,10 +1029,10 @@ Không làm toàn bộ Step 1 trong một lần. Thực hiện lần lượt the
 | Phase | Mục tiêu | Kết quả phải nhìn thấy |
 |---|---|---|
 | 1A — Runtime foundation | Làm cho module Surveys được API khởi tạo và truy cập database đúng boundary | Module được đăng ký DI, migration model hợp lệ, health check chạy |
-| 1B — Public catalogue | Cho khách hàng đọc hai dịch vụ đang nhận yêu cầu | Public query chỉ trả service hợp lệ và giá hiện hành |
+| 1B — Public catalogue | Cho khách hàng đọc Plant Health service đang nhận yêu cầu | Public query chỉ trả Plant Health và giá/trụ tham khảo hiện hành |
 | 1C — SystemAdmin catalogue | Cho SystemAdmin xem lịch sử và điều khiển lifecycle service | Có query admin, activate/experimental/retire và audit |
 | 1D — Versioned per-pole pricing | Quản lý PricePerPole theo thời gian, không sửa lịch sử | Tạo price version mới, ngăn overlap, resolve đúng giá tại một thời điểm |
-| 1E — Business master data | Khóa disease/severity/recommendation/criteria version phục vụ result | Result tham chiếu đúng version bất biến, kể cả version đã retire |
+| 1E — Business master data | Khóa 2–3 suspected-class/annotation-rule/sourced-guidance version | Result tham chiếu đúng version/source bất biến, kể cả version đã retire; không severity |
 
 #### Phase 1A — Runtime foundation: cần viết gì
 
@@ -931,10 +1062,11 @@ Luồng đọc catalogue phải chạy như sau:
 
 1. Nhận thời điểm hiện tại từ `TimeProvider`, không lấy thời gian do client gửi.
 2. Đọc service có trạng thái được phép nhận yêu cầu công khai.
-3. Với mỗi service, resolve đúng price version có `EffectiveFrom <= now` và `EffectiveTo > now` hoặc chưa có `EffectiveTo`.
-4. Loại service đã retire, service chưa active hoặc service không có giá hiện hành theo policy.
-5. Map sang public response; không trả internal status, audit field, reviewer hoặc dữ liệu cấu hình AI.
-6. Sắp xếp ổn định để OpenAPI/consumer không nhận thứ tự ngẫu nhiên.
+3. Enforce server-side `ServiceType == PLANT_HEALTH`; `HARVEST_READINESS` dù còn record active từ baseline cũ cũng không được trả trong MVP.
+4. Với service, resolve đúng price version có `EffectiveFrom <= now` và `EffectiveTo > now` hoặc chưa có `EffectiveTo`.
+5. Loại service đã retire, chưa active hoặc không có giá hiện hành theo policy.
+6. Map sang public response; không trả internal status, audit field, reviewer hoặc dữ liệu cấu hình AI.
+7. Sắp xếp ổn định để OpenAPI/consumer không nhận thứ tự ngẫu nhiên.
 
 Tạo một feature folder riêng, ví dụ `Application/Features/Catalogue/GetPublicSurveyServices/`, gồm query, handler và response. API contract và controller đặt ở `AgriDrone.Api`, không đặt DTO HTTP trong Domain.
 
@@ -944,6 +1076,7 @@ Mỗi action là một use case/folder riêng:
 
 - Xem danh sách và lịch sử service/price, bao gồm experimental và retired.
 - Kích hoạt service chỉ khi metadata bắt buộc và policy giá đã thỏa mãn.
+- Trong MVP, activate command chỉ cho `PLANT_HEALTH`; `HARVEST_READINESS` trả stable capability-disabled error cho tới UC10 gate.
 - Đưa service về experimental khi capability chưa đủ điều kiện công bố chính thức.
 - Retire service để chặn request mới nhưng vẫn đọc được order/result lịch sử.
 - Cập nhật tên/mô tả chỉ khi policy cho phép; không làm thay đổi snapshot đã lưu ở order/result.
@@ -954,11 +1087,11 @@ Mỗi mutation phải có command, validator, handler, domain method, applicatio
 
 Không xây API “sửa giá hiện tại”. Nghiệp vụ đúng là tạo một phiên bản giá mới:
 
-1. SystemAdmin gửi service, giá, currency và thời điểm hiệu lực.
-2. Validator kiểm tra cú pháp; Domain/Application kiểm tra giá dương, currency được hỗ trợ và cửa sổ thời gian hợp lệ.
+1. SystemAdmin gửi service, giá, currency và expected service version; không gửi thời điểm hiệu lực.
+2. Validator kiểm tra cú pháp; Domain/Application kiểm tra giá dương và currency được hỗ trợ.
 3. Handler khóa/đọc các price version liên quan trong transaction.
-4. Kiểm tra không overlap với bất kỳ version nào của cùng service.
-5. Nếu thay thế giá hiện hành, đóng `EffectiveTo` của version cũ theo policy rồi thêm version mới; không sửa amount của version cũ.
+4. Handler lấy một mốc `now` duy nhất từ `TimeProvider.GetUtcNow()` làm `EffectiveFrom`; version mới để `EffectiveTo = null` cho tới khi bị thay thế.
+5. Kiểm tra không overlap với bất kỳ version nào của cùng service. Nếu thay thế giá hiện hành, đóng `EffectiveTo` của version cũ bằng đúng mốc `now` rồi thêm version mới; không sửa amount của version cũ.
 6. Ghi audit trước/sau và commit một lần.
 7. Order về sau chỉ lưu `PricePerPole` snapshot từ version được resolve sau khi có confirmed pole count; order cũ không bị cập nhật theo catalogue.
 
@@ -966,14 +1099,14 @@ Feature nên tách thành `CreateSurveyServicePrice`, `GetSurveyServicePriceHist
 
 #### Phase 1E — Business master data: phạm vi cần viết
 
-- Tách catalogue bệnh/tổn thương, health level, expert-validated treatment recommendation và harvest-readiness criteria khỏi cấu hình model AI.
-- Recommendation mapping theo disease + severity, có version/lifecycle/effective window và advisory disclaimer; không nhận free-form treatment do AI sinh.
+- Tách 2–3 suspected-disease classes, confusing/non-disease labels, annotation rules và sourced guidance khỏi cấu hình model AI.
+- Guidance mapping theo suspected class, source/reference và version/lifecycle/effective window; không severity, không free-form AI advice và không expert claim nếu thiếu evidence.
 - Mỗi definition có code ổn định, version, lifecycle status, effective window và metadata hiển thị.
 - Order/job/result lưu ID hoặc version snapshot đã dùng, không chỉ lưu label hiện hành.
 - Retire definition chỉ chặn sử dụng mới; history vẫn resolve được.
-- Chưa đủ bằng chứng cho Harvest Readiness thì giữ `Experimental`; không trả wording khiến người dùng hiểu là đã validated.
+- Harvest Readiness metadata hiện hữu là compatibility/Stretch-disabled; không xuất hiện ở public catalogue hoặc flow MVP.
 
-Đầu ra Step 1 phải trả lời được ba câu hỏi bằng query: “dịch vụ nào đang bán?”, “giá nào áp dụng tại thời điểm X?” và “một kết quả cũ đã dùng criteria version nào?”. Test xác nhận được viết ở Final Test Phase.
+Đầu ra Step 1 phải trả lời được ba câu hỏi bằng query: “dịch vụ nào đang bán?”, “giá nào áp dụng tại thời điểm X?” và “một kết quả cũ đã dùng suspected-class/annotation-rule/guidance version nào?”. Test xác nhận được viết ở Final Test Phase.
 
 ### 9.1. Runtime wiring
 
@@ -990,19 +1123,19 @@ Feature nên tách thành `CreateSurveyServicePrice`, `GetSurveyServicePriceHist
 - [x] Không sửa amount/currency hoặc delete price version đã được order tham chiếu; chỉ cho phép đóng `EffectiveTo` một lần khi tạo replacement version.
 - [x] Public query resolve đúng service/price đang nhận request tại thời điểm query.
 - [x] SystemAdmin query vẫn đọc được retired/history version.
-- [x] Chỉ seed `PLANT_HEALTH`, `HARVEST_READINESS`; không seed Follow-up/Baseline Mapping.
+- [ ] R2 remediation: chỉ seed/activate `PLANT_HEALTH`; disable/retire public `HARVEST_READINESS`; không seed Follow-up/Baseline Mapping.
 
 ### 9.3. Business master data
 
-- [x] Giữ fixed health levels và PlantCondition lifecycle hiện hữu.
-- [x] Chốt disease/non-disease catalogue version cho selected diseases, sunburn và mechanical damage.
-- [x] Thêm expert-validated treatment recommendation catalogue và mapping disease + severity có version/provenance.
+- [ ] R2 remediation: bỏ fixed severity/health levels khỏi Plant Health target API/event/read model; giữ legacy read compatibility khi cần.
+- [ ] Chốt đúng 2–3 team-labelled suspected-disease classes, annotation rules và confusing cases gồm sunburn/scarring.
+- [ ] Thay expert/disease+severity treatment mapping bằng sourced guidance theo suspected class + source/version/provenance.
 - [x] Quản lý AI model/threshold reference dùng cho audit/result provenance mà không đưa inference runtime vào BE1.
-- [x] Thêm/hoàn thiện metadata cho Harvest Readiness criteria version, assessment granularity và `Experimental/Validated` status.
-- [x] Tách business criteria khỏi BE2 AI model/threshold configuration.
+- [ ] R2 remediation: Harvest Readiness criteria/runtime/API disabled trong MVP; chỉ giữ compatibility artifact.
+- [x] Tách Plant Health business class/annotation/guidance semantics khỏi BE2 AI model/threshold configuration.
 - [x] Result/job snapshot reference đúng version; retired definition vẫn resolve cho history.
 
-Checkpoint Step 1: **CodeComplete — AwaitingFinalTest** ngày 2026-10-09. Evidence triển khai tại `docs/operations/be1-step1e-business-master-data-report.md`; test xác nhận vẫn thuộc Final Test Phase.
+Checkpoint Step 1 ngày 2026-10-09 là evidence của baseline cũ và hiện mang trạng thái **RebaselineRequired**. Chỉ khôi phục `CodeComplete — AwaitingFinalTest` sau khi Step R2 chứng minh Plant Health-only, no-severity, sourced-guidance và Stretch-disabled bằng code/OpenAPI/migration evidence.
 
 ### 9.4. API đề xuất
 
@@ -1010,12 +1143,17 @@ Checkpoint Step 1: **CodeComplete — AwaitingFinalTest** ngày 2026-10-09. Evid
 GET  /api/public/survey-services
 
 GET  /api/system-admin/survey-services
+GET  /api/system-admin/survey-services/{serviceId}/prices
 POST /api/system-admin/survey-services/{serviceId}/prices
 POST /api/system-admin/survey-services/{serviceId}/activate
 POST /api/system-admin/survey-services/{serviceId}/retire
 ```
 
-Các mutation catalogue phải dùng SystemAdmin policy; public endpoint chỉ trả trường an toàn và indicative current price.
+`GET /api/system-admin/survey-services` chỉ trả `currentPrice` đang hiệu lực cho
+mỗi service; lịch sử immutable được tách riêng tại
+`GET /api/system-admin/survey-services/{serviceId}/prices`. Các mutation catalogue
+phải dùng SystemAdmin policy; public endpoint chỉ trả trường an toàn và indicative
+current price.
 
 ### Tests Step 1
 
@@ -1024,8 +1162,8 @@ Chưa viết/chạy trong Step 1. Toàn bộ backlog kiểm thử của Step 1 �
 ### Definition of Done Step 1
 
 - Surveys module chạy runtime và sẵn sàng cho DI/application/persistence test ở Final Test Phase.
-- Public catalogue ổn định cho Step 2.
-- Master-data version đủ để snapshot vào Order/Job/Result.
+- Public catalogue server-side chỉ trả Plant Health với indicative PricePerPole.
+- Master-data version đủ để snapshot suspected class/annotation rules/model/guidance source vào Order/Job/Result và không có severity target field.
 
 ---
 
@@ -1066,7 +1204,7 @@ Phase 2B; test evidence vẫn được tập trung ở Final Test Phase theo k�
 
 #### Phase 2B — NewCustomer intake: luồng nghiệp vụ
 
-1. Public actor chọn một service đang nhận request.
+1. Public actor chỉ được chọn `PLANT_HEALTH`; server từ chối mọi service khác dù client biết ID legacy.
 2. Nhập applicant/contact, thông tin Farm dự kiến, approximate area, map location/coordinates, estimated pole count nếu biết, khoảng thời gian mong muốn và ghi chú.
 3. Handler chuẩn hóa email/phone/text, tạo value objects cần thiết và gọi factory `CreateNewCustomer`.
 4. Factory bắt buộc applicant/farm fields và cấm TenantId, FarmId, RequestedByUserId.
@@ -1106,7 +1244,7 @@ header mapping vẫn thuộc contract/security hardening Phase 2F.
 1. Route nhận FarmId.
 2. Query Farm reference ở server để tìm TenantId và trạng thái Farm.
 3. Xác nhận actor là active TenantOwner của Tenant đó.
-4. Xác nhận Farm active và service có thể áp dụng.
+4. Xác nhận Farm active và service là active `PLANT_HEALTH`.
 5. Factory lưu TenantId, FarmId và RequestedByUserId; không nhận các giá trị này từ body.
 6. Chưa chọn previous compatible order tại intake; Step 3 sẽ resolve lại trong transaction approval.
 
@@ -1127,6 +1265,7 @@ Tách thành các use case `GetSurveyRequestInbox`, `GetSurveyRequestDetail`, `S
 
 - Inbox có filter status/kind/service/date, paging và sort ổn định.
 - Detail trả request snapshot, map/estimated-count inputs, checklist version và dữ liệu tham chiếu cần review; không trả secret và không coi applicant geometry là approved FarmBoundary.
+- Checklist ghi khả năng thu thập written data-use consent và flight permission; đây là feasibility check, không phải permission đã verified.
 - Start review dùng expected version và chỉ cho phép `Submitted -> UnderReview`.
 - Reject bắt buộc reason + checklist snapshot, append một review record và transition domain.
 - Audit và notification outbox nằm cùng transaction với transition.
@@ -1183,6 +1322,7 @@ Final Test Phase.
 - [x] Supported service area.
 - [x] Farm location/candidate boundary đủ để thẩm định sơ bộ; approval không tự biến nó thành approved FarmBoundary.
 - [x] Preliminary legal/flight feasibility.
+- [ ] R2 remediation: checklist tách rõ `ConsentFeasibility`/`FlightPermissionFeasibility`; không map verbal/message evidence thành verified authorization.
 - [x] Active + available + flight-qualified SystemManager tồn tại.
 - [x] Checklist version/snapshot được lưu cùng review.
 - [x] Reject bắt buộc reason; approve validation được chuẩn bị nhưng chưa expose trước Step 3.
@@ -1210,6 +1350,7 @@ Chưa viết/chạy trong Step 2. Toàn bộ backlog kiểm thử của Step 2 �
 ### Definition of Done Step 2
 
 - Public/TenantOwner có entry point đúng nghiệp vụ.
+- Server chỉ nhận Plant Health request trong MVP; Harvest Readiness ID legacy bị từ chối ở cả ba submit handler.
 - SystemAdmin có inbox/start-review/reject hoàn chỉnh.
 - Không có đường provision resource trước approval.
 - Implementation gate Phase 7 và OpenAPI snapshot hoàn tất; test evidence bổ sung ở Final Test Phase.
@@ -1238,6 +1379,7 @@ Application cần các port/query rõ trách nhiệm:
 - Provision Tenant, Farm và Owner invitation qua internal port; không gọi HTTP controller nội bộ.
 - Resolve current published Farm base map.
 - Resolve previous compatible order theo Farm + service.
+- Tạo pending written-consent/flight-permission requirements; approval không tự verify chúng.
 - Ghi audit và outbox trong transaction approval.
 
 Mỗi port cần mô tả input/output và lỗi ổn định. Không bắt đầu handler approve khi một port vẫn trả EF entity của module khác hoặc chưa có contract rõ ràng.
@@ -1287,8 +1429,9 @@ Handler chung có thể điều phối, nhưng logic mỗi kind phải được 
 2. Provision Tenant.
 3. Provision Farm thuộc Tenant vừa tạo.
 4. Tạo SurveyOrder và primary assignment.
-5. Tạo TenantOwner invitation, không tạo password hay active account.
-6. Append approved review, transition request, ghi audit/outbox rồi commit.
+5. Tạo pending consent/flight-permission checklist cho Order/Farm.
+6. Tạo TenantOwner invitation, không tạo password hay active account.
+7. Append approved review, transition request, ghi audit/outbox rồi commit.
 
 `ExistingTenantNewFarm`:
 
@@ -1296,15 +1439,17 @@ Handler chung có thể điều phối, nhưng logic mỗi kind phải được 
 2. Không tạo Tenant/User/membership/invitation.
 3. Provision Farm trong đúng Tenant.
 4. Tạo order và primary assignment.
-5. Transition/audit/outbox rồi commit.
+5. Tạo pending consent/flight-permission checklist.
+6. Transition/audit/outbox rồi commit.
 
 `ExistingFarmSurvey`:
 
 1. Revalidate Farm active và ownership.
 2. Kiểm tra hoặc chọn primary manager theo policy; không âm thầm thay assignment.
 3. Không tạo Tenant/Farm/invitation.
-4. Resolve previous compatible published/completed order cùng service.
+4. Resolve previous compatible completed/published Plant Health order cùng Farm/service bằng versioned compatibility policy; nếu class/annotation/base-map identity semantics không so sánh an toàn thì để null và lưu reason.
 5. Tạo order rồi transition/audit/outbox và commit.
+6. Tạo/reuse authorization requirement cho Order; không reuse consent/permission hết hạn hoặc khác scope.
 
 Checkpoint 2026-10-10: Phase 3C đạt `CodeComplete — AwaitingFinalTest`.
 `ApproveSurveyRequestCommandHandler` chạy toàn bộ read-lock, version check,
@@ -1323,6 +1468,7 @@ vẫn thuộc Phase 3D; HTTP/OpenAPI vẫn thuộc Phase 3E. Evidence tại
 
 - `RequiresBaselineMapping` lấy từ current published Farm base map + confirmed active-pole inventory, không lấy từ client hay lịch sử mission.
 - Order bắt đầu ở `PendingBoundaryVerification`; chưa có confirmed pole count hoặc price snapshot.
+- Order bắt đầu với capture authorization chưa verified; approval không mở flight gate.
 - OrderNumber sinh ở server và unique.
 - Approval command mang expected request version và idempotency key.
 - Retry cùng command trả cùng kết quả; payload khác với cùng key trả conflict.
@@ -1394,6 +1540,7 @@ Step 3 chỉ đạt `CodeComplete — AwaitingFinalTest` trước phase cuối. 
 - [x] Tạo SurveyOrder.
 - [x] Resolve previous compatible order theo cùng Farm + cùng Service + completed/published gần nhất.
 - [x] Service khác không được dùng làm previous order.
+- [ ] R2 remediation: compatibility policy kiểm tra base-map/Plant identity và class/annotation semantics; lưu policy version/reason, không chỉ chọn nearest same-service.
 
 ### 11.5. Order initialization
 
@@ -1402,6 +1549,7 @@ Step 3 chỉ đạt `CodeComplete — AwaitingFinalTest` trước phase cuối. 
 - [x] Initial status `PendingBoundaryVerification`.
 - [x] Unique Request→ApprovedOrder và unique OrderNumber.
 - [x] Không snapshot price ở approval; price chỉ được snapshot sau approved boundary/scope và authoritative confirmed pole count ở Step 4.
+- [ ] R2 remediation: tạo pending consent/permission requirements trong approval transaction; không đánh dấu verified nếu chưa có evidence.
 
 ### 11.6. Transaction implementation
 
@@ -1426,22 +1574,34 @@ Chưa viết/chạy trong Step 3. Toàn bộ backlog kiểm thử của Step 3 �
 
 - Ba request kinds approve end-to-end và atomic.
 - Mọi Farm/Order mới truy nguyên được request/reviewer/assignment.
+- Mọi Order có capture-authorization requirement và không thể bay chỉ vì request đã Approved.
 - Invitation accept/login cũ vẫn hoạt động.
 - Direct public Tenant/Farm/owner provisioning route không còn trong MVP OpenAPI.
 
 ---
 
-## 12. Step 4 — UC06 Boundary/scope, baseline count, pricing, appointment, payment và readiness (Phase 9)
+## 12. Step 4 — UC06 Consent/permission, boundary/scope, baseline, pricing, appointment, payment và readiness (Phase 9)
 
 ### 12.0. Chia phase và cách triển khai Step 4
 
 | Phase | Nghiệp vụ | Trạng thái/order outcome |
 |---|---|---|
+| 4A0 — Capture authorization | Verify written consent và flight permission | Có evidence/version/expiry; thiếu hoặc revoke thì fail closed |
 | 4A — Verify boundary/scope | Manager xác minh FarmBoundary, Zone và scope | Có approved boundary/scope version |
 | 4B — Baseline appointment/readiness | Với Farm chưa mapped, manager đề xuất lịch baseline | Baseline có thể ready mà chưa payment |
 | 4C — Confirm pole count/pricing | Publish baseline hoặc kiểm chứng inventory hiện hữu rồi snapshot giá/trụ | Có count + PricePerPole + FinalPrice bất biến |
 | 4D — Paid appointment/payment | Owner xác nhận lịch paid service và thanh toán | Payment chỉ Confirmed từ trusted evidence |
 | 4E — Adjustment/purpose-aware readiness | Xử lý adjustment/reconciliation và tổng hợp gate cho BE2 | Paid service chỉ ready khi đủ commercial gate |
+
+#### Phase 4A0 — Written consent và flight permission
+
+Tạo use case riêng để verify/revoke capture authorization. Record phải phân biệt data-use consent với flight permission, giữ evidence reference, scope/Farm, verifier, issued/verified/expiry/revoked time, reason và expected version. Không lưu binary document trực tiếp nếu media/document service đã cung cấp protected reference.
+
+- Request approval hoặc appointment confirmation không tự tạo verified authorization.
+- Verbal/message consent chỉ được lưu như preliminary note; readiness không coi là hợp lệ.
+- Authorization phải còn hiệu lực cho đúng Farm/scope/flight window khi prepare và ngay trước start.
+- Revoke/expire sau khi payment confirmed vẫn đóng mọi capture gate; không tự refund nếu chưa qua adjustment/cancellation policy.
+- Audit/outbox cùng transaction; BE2 chỉ nhận status/reference tối thiểu, không nhận PII/document body.
 
 #### Phase 4A — Verify FarmBoundary và scope
 
@@ -1520,7 +1680,7 @@ Producer atomic initial-map publication vẫn được nối ở Step 6C qua
 
 Tách các use case appointment theo purpose: `ProposeSurveyAppointment`, `ConfirmSurveyAppointment`, `RequestSurveyAppointmentReschedule`, và nếu policy cho phép thì `CancelSurveyAppointment`/`ReproposeSurveyAppointment`.
 
-- Manager chỉ đề xuất paid-service appointment sau confirmed count/price.
+- Manager chỉ đề xuất paid-service appointment cho `PLANT_HEALTH` sau confirmed count/price; service khác fail capability-disabled.
 - Owner authorization derive qua order → Farm → Tenant; không tin TenantId body.
 - Mỗi lần reschedule tạo history/version hoặc entity mới; không mất cửa sổ cũ.
 - Chỉ một current appointment cho mỗi order + purpose; database constraint bảo vệ race.
@@ -1529,8 +1689,9 @@ Tách các use case appointment theo purpose: `ProposeSurveyAppointment`, `Confi
 Tách adapter provider khỏi nghiệp vụ Surveys:
 
 - Application định nghĩa port tạo payment session và xác thực provider event cần thiết.
-- Infrastructure/Payments chứa provider adapter, options và signature verification.
+- Infrastructure/Payments chứa sandbox provider adapter, options và signature verification; live-payment mode không thuộc MVP và phải fail startup/feature gate nếu bật nhầm.
 - Feature `InitiateSurveyPayment` chỉ lấy amount/currency từ order snapshot; owner không gửi số tiền authoritative.
+- `InitiateSurveyPayment` re-check Order service là `PLANT_HEALTH`; không thu payment cho Baseline hoặc Stretch-disabled service.
 - Callback endpoint nhận raw provider identifiers, xác thực signature/timestamp trước khi gọi application handler.
 - `ProcessPaymentEvent` claim dedup theo provider + reference + event ID, lưu immutable `PaymentEvent`, rồi mới transition payment.
 - ACK callback chỉ sau commit; invalid signature không được ghi nhận như successful event.
@@ -1566,25 +1727,26 @@ Tạo use case riêng cho request/approve/reject/apply price adjustment và admi
 
 Tạo một application query/service duy nhất xây `SurveyOrderReadinessSnapshot` từ `MissionPurpose` và trạng thái hiện hành:
 
-1. Mọi purpose: approved boundary/scope, purpose appointment confirmed/còn hiệu lực, active qualified assignment, drone/schedule/pre-flight/safety hợp lệ.
+1. Mọi purpose: written consent + flight permission verified/còn hiệu lực/đúng scope, approved boundary/scope, purpose appointment confirmed/còn hiệu lực, active qualified assignment, drone/schedule/pre-flight/safety hợp lệ.
 2. `BaselineMapping`: Order thật sự requires baseline và chưa có initial map trái policy; không yêu cầu count/price/payment.
-3. `PlantHealth`/`HarvestReadiness`: current base map + confirmed pole count/price snapshot + payment đúng amount/currency và Confirmed.
-4. Không có pending adjustment, refund/chargeback hoặc trạng thái order cấm purpose tương ứng.
+3. `PlantHealth`: current base map + confirmed pole count/price snapshot + sandbox payment đúng amount/currency và Confirmed.
+4. Không có pending scope/price adjustment, unsettled additional payment/refund, unapproved extra flight hoặc trạng thái order cấm purpose tương ứng.
 
 Service gọi domain policy để nhận decision/failure codes, sau đó mới transition order nếu đủ điều kiện. Expose decision qua integration port cho BE2; BE2 không tự copy logic này.
 
+Mọi `MissionPurpose` ngoài `BaselineMapping` và `PlantHealth` phải fail closed trong MVP; không dùng default branch coi purpose lạ là paid service hợp lệ.
+
 Danh sách scenario phải được bổ sung vào Final Test Backlog trong lúc code; chỉ viết test sau khi các phase implementation kết thúc. Final Test Phase phải có ít nhất một test cho mỗi failure code và một test state thay đổi sau khi readiness vừa được đọc.
 
-Checkpoint 2026-10-12: Phase 4E và toàn bộ Step 4 đạt
-`CodeComplete — AwaitingFinalTest`. PriceAdjustment dùng lifecycle append-only
+Checkpoint 2026-10-12 là evidence baseline cũ; Step 4 hiện **RebaselineRequired** tới khi R2 hoàn tất. PriceAdjustment dùng lifecycle append-only
 `Pending → Approved/Rejected` và `Approved → Applied` với optimistic version,
-reason/evidence, audit và `survey.price-adjustment-changed.v1` Outbox. Apply mới
-cập nhật pole-count/price snapshot và đưa confirmed Payment lệch snapshot về
-`AdjustmentRequired`; SystemAdmin reconciliation chỉ Confirmed khi provider
+reason/evidence, audit và `survey.price-adjustment-changed.v1` Outbox. R2 không được
+ghi đè original pole-count/price snapshot; apply tạo effective financial view/ledger
+và đưa confirmed Payment lệch giá về `AdjustmentRequired`; SystemAdmin reconciliation chỉ Confirmed khi provider
 reference cùng amount/currency evidence khớp snapshot hiện hành. Callback đã hỗ
 trợ `payment.refunded`/`payment.chargeback`, giữ PaymentEvent bất biến và đóng
 Order gate nếu flight chưa bắt đầu. `ISurveyOrderReadinessService` là port duy
-nhất cho Baseline Mapping, Plant Health và Harvest Readiness; implementation đọc
+nhất cho Baseline Mapping và Plant Health; implementation đọc
 lại Order/map/appointment/payment/adjustment/manager/Mission/Drone/pre-flight từ
 database rồi gọi domain policy. Migration/evidence tại
 `20261012024731_Phase9CommercialAdjustmentReadiness` và
@@ -1602,6 +1764,7 @@ database rồi gọi domain policy. Migration/evidence tại
 
 - [x] Tạo/confirm/reschedule appointment có purpose `BaselineMapping` khi Order requires baseline.
 - [x] Baseline readiness không yêu cầu Payment nhưng vẫn yêu cầu boundary/scope, manager, drone/schedule/pre-flight/safety.
+- [ ] R2 remediation: Baseline và Plant Health đều yêu cầu written consent + flight permission hợp lệ; payment chỉ áp dụng Plant Health.
 - [x] Initial map publication hoặc authoritative mapped inventory cung cấp `ConfirmedSurveyPoleCount` + source version; producer publication thực tế tiếp tục ở Step 6C.
 - [x] Resolve effective service price và lưu PriceVersionId, PricePerPoleSnapshot, ConfirmedSurveyPoleCount, Currency, FinalPrice.
 - [x] Dùng duy nhất per-pole money policy; approximate area không tham gia công thức.
@@ -1634,13 +1797,16 @@ database rồi gọi domain policy. Migration/evidence tại
 - [x] Pending/Approved chưa apply adjustment đóng readiness gate.
 - [x] Approve/reject/apply adjustment có separate authorization, expected version và audit.
 - [x] Refund/chargeback đóng gate cho flight chưa bắt đầu.
+- [ ] R2 remediation: thêm ScopeAdjustment/typed reason; giữ immutable `OriginalConfirmedPoleCount`, `OriginalPricePerPoleSnapshot`, `OriginalFinalPrice`.
+- [ ] Chênh tăng tạo additional sandbox payment; chênh giảm tạo refund; ledger liên kết adjustment/payment/refund và không silent repricing.
+- [ ] ExtraFlightRequest chỉ cho `InsufficientData`/`ApprovedScopeChange`, có evidence/approval/cost impact và readiness re-check.
 
 ### 12.6. Purpose-aware readiness service/contract
 
 - [x] Tạo application service build `SurveyOrderReadinessSnapshot` từ MissionPurpose + database state hiện hành.
 - [x] Không persist `ReadyForOperations` từ payload; Order status thương mại chỉ đổi từ trusted payment/reconciliation và readiness vẫn re-check authoritative state.
 - [x] Expose internal query/port cho BE2 prepare/start flight.
-- [x] Decision trả stable failures: boundary, scope, appointment/purpose, count-price, payment, manager, adjustment, eligibility và safety.
+- [ ] R2 remediation: decision trả stable failures cho consent, flight permission, boundary, scope, appointment/purpose, count-price, payment/refund, manager, adjustment, extra-flight, eligibility và safety.
 - [x] Re-check manager assignment/qualification thời điểm query.
 - Scenario missing payment/Baseline Mapping/paid-service đã chuyển xuống mục 27.2.
 
@@ -1649,8 +1815,12 @@ database rồi gọi domain policy. Migration/evidence tại
 ```text
 GET  /api/system-manager/survey-orders/{orderId}/boundary-scope
 POST /api/system-manager/survey-orders/{orderId}/boundary-scope/verify
+POST /api/system-manager/survey-orders/{orderId}/capture-authorizations/verify
+POST /api/system-manager/survey-orders/{orderId}/capture-authorizations/revoke
 POST /api/system-manager/survey-orders/{orderId}/pole-count/confirm
 POST /api/system-manager/survey-orders/{orderId}/appointments
+POST /api/system-manager/survey-orders/{orderId}/scope-adjustments
+POST /api/system-manager/survey-orders/{orderId}/extra-flights
 GET  /api/system-manager/survey-orders/{orderId}/readiness/baseline-mapping?missionId={missionId}
 
 POST /api/tenant-owner/survey-orders/{orderId}/appointments/{appointmentId}/confirm
@@ -1660,6 +1830,9 @@ POST /api/tenant-owner/survey-orders/{orderId}/payments
 POST /api/integrations/payments/{provider}/callbacks
 POST /api/system-admin/survey-payments/{paymentId}/reconcile
 POST /api/system-admin/survey-orders/{orderId}/price-adjustments/{adjustmentId}/approve
+POST /api/system-admin/survey-orders/{orderId}/scope-adjustments/{adjustmentId}/review
+POST /api/system-admin/survey-orders/{orderId}/scope-adjustments/{adjustmentId}/refund
+POST /api/system-admin/survey-orders/{orderId}/extra-flights/{extraFlightId}/review
 ```
 
 ### Tests Step 4
@@ -1668,9 +1841,10 @@ Chưa viết/chạy trong Step 4. Toàn bộ backlog kiểm thử của Step 4 �
 
 ### Definition of Done Step 4
 
-- Flow chạy từ boundary verification → Baseline (nếu cần) → confirmed pole count/pricing → paid appointment/payment → ready for paid service.
+- Flow chạy từ consent/permission → boundary verification → free Baseline (nếu cần) → confirmed pole count/pricing → paid appointment/sandbox payment → ready for Plant Health.
 - BE2 nhận authoritative readiness decision và failure reasons.
 - Không actor/client nào tự set payment/order ready.
+- Original count/price snapshot không đổi; mọi difference truy được adjustment → additional payment/refund; extra flight có approval/evidence.
 - Exit gate Phase 9 đạt trên PostgreSQL thực.
 
 ---
@@ -1711,12 +1885,13 @@ Geometry phải được thiết kế để kiểm chứng trên PostgreSQL/Post
 
 #### Phase 5C — Contract operational context cho BE2
 
-Implement port đã khóa ở Step 0 với read model tối thiểu: OrderId, FarmId, service type, approved FarmBoundary/scope version, confirmed pole count/price state, purpose-aware readiness decision, baseline requirement, current base-map version và assignment summary.
+Implement versioned port với read model tối thiểu: OrderId, FarmId, Plant Health service type, consent/flight-permission status+expiry, approved FarmBoundary/scope version, original/effective count-price references, adjustment/refund/extra-flight gate, purpose-aware readiness decision, baseline requirement, current base-map version và assignment summary.
 
 - Contract trả ID/value snapshot, không trả navigation property hoặc EF entity.
 - Plant/base-map references có version và stable ordering.
 - Không trả PII, payment provider payload, invitation token hoặc internal audit.
 - BE2 phải gọi readiness port tại prepare/start; không cache decision vô thời hạn.
+- BE2 không được log/forward consent document body; chỉ dùng minimal authorization decision/reference.
 
 Chốt schema/semantics ở cả producer và consumer side trước khi cho BE2 tích hợp; contract test được viết/chạy ở Final Test Phase.
 
@@ -1737,7 +1912,7 @@ Archive query phải tổng hợp dependency từ active order, mission, current
 
 ### 13.2. Work context cho BE2
 
-- [ ] Query Order operational context gồm OrderId, FarmId, service type, MissionPurpose, RequiresBaselineMapping, current base-map reference, approved boundary/scope, confirmed pole count/price state và manager assignment summary.
+- [ ] Query Order operational context gồm OrderId, FarmId, service type, MissionPurpose, consent/permission status+expiry, RequiresBaselineMapping, current base-map reference, approved boundary/scope, original/effective count-price state, settlement/extra-flight gate và manager assignment summary.
 - [ ] Contract không trả secrets/payment payload hoặc EF entity.
 - [ ] BE2 không được tự suy readiness từ copy trạng thái; phải dùng Step 4 decision.
 - [ ] Plant reference/base-map query có version và stable ordering.
@@ -1821,7 +1996,7 @@ Mỗi decision phải có tên nghiệp vụ riêng; test tương ứng được
 - `Unmatched/Ambiguous`: không tự tạo Plant chính thức.
 - `MissingObservation`: không tự retire Plant.
 
-Repeat Plant Health/Harvest Readiness chỉ tham chiếu current map và Plant IDs; không tạo FarmBaseMapVersion mới. Sửa map sau initial publication đi qua BaseMapAmendment có reason/reviewer/audit.
+Repeat Plant Health chỉ tham chiếu current map và Plant IDs; không tạo FarmBaseMapVersion mới. Sửa map sau initial publication đi qua BaseMapAmendment có reason/reviewer/audit. Stretch capability tương lai nếu được duyệt cũng phải reuse map theo rule này.
 
 #### Phase 6E — File/evidence cần có
 
@@ -1885,30 +2060,30 @@ Chưa viết/chạy trong Step 6. Toàn bộ backlog kiểm thử của Step 6 �
 
 ---
 
-## 15. Step 7 — UC09 Plant Health review và official result (Phase 12)
+## 15. Step 7 — UC09 Plant Health review và published preliminary result (Phase 12)
 
 ### 15.0. Chia phase và cách triển khai Step 7
 
 | Phase | Nghiệp vụ | Dữ liệu được phép thay đổi |
 |---|---|---|
-| 7A — Health/zone ingestion | Import AI observations và proposed Disease Zones | Chỉ pending/provenance |
-| 7B — Human review | Manager correct/approve/reject finding/zone/recommendation | Review history, chưa đổi current health |
-| 7C — Result approval | Khóa một official candidate result | SurveyResult/review state |
-| 7D — Atomic publication | Publish result và cập nhật current health | Official result + derived current state |
+| 7A — Health/zone ingestion | Import suspected observations và proposed Disease Zones/guidance | Chỉ pending/provenance; không severity |
+| 7B — Human review | Manager correct/approve/reject suspected finding/zone/guidance | Review history, chưa đổi latest-reviewed state |
+| 7C — Result approval | Khóa một reviewed preliminary candidate | SurveyResult/review state |
+| 7D — Atomic publication | Publish preliminary result và cập nhật latest-reviewed state | Published preliminary result + derived state |
 | 7E — Completion/output | Thông báo BE2 và owner published view | Outbox/read model |
 
 #### Phase 7A — Import health observations
 
-Tạo V2 consumer và application feature riêng. Handler phải:
+Tạo V4 consumer và application feature riêng; V2/V3 chỉ compatibility/drain. Handler phải:
 
 1. Validate event/service là Plant Health.
 2. Resolve Order, Mission, Farm và base-map version.
 3. Kiểm tra source observation/job version và provenance.
 4. Claim Inbox/dedup theo message và source observation version.
-5. Import resolved items thành immutable pending findings.
-6. Import proposed Disease Zones, memberships/geometry và recommendation selection dưới dạng pending với model/threshold/catalogue provenance.
+5. Import items thành immutable pending suspected findings, chỉ cho 2–3 configured team-labelled classes; không nhận/lưu severity target field.
+6. Import proposed Disease Zones, memberships/geometry và sourced-guidance suggestion dưới dạng pending với dataset/annotation-rule/model/threshold/catalogue provenance.
 7. Giữ ambiguous/unmatched/boundary-exception items ở trạng thái cần xử lý; không gán bừa vào Plant/Farm.
-8. Không cập nhật current Plant health và không publish zone/recommendation trong ingestion.
+8. Không cập nhật `LatestReviewedPlantHealth` và không publish zone/guidance trong ingestion.
 
 Nếu reprocess cùng source với model/output version mới, tạo version mới và liên kết supersedes; không overwrite AI output cũ.
 
@@ -1918,50 +2093,50 @@ Tách use case đọc queue, review một finding và review batch. Authorizatio
 
 Mỗi quyết định review phải lưu:
 
-- AI original label/severity/evidence/model version.
+- AI original suspected class/location/confidence/uncertainty/evidence/model/dataset/annotation-rule version; không severity.
 - Corrected value nếu có.
 - Decision approve/reject.
 - Reviewer, reviewed time, reason và expected version.
 - Reference tới Order/Farm/Plant/source observation.
-- Disease Zone original/corrected geometry + member findings, và recommendation catalogue/version được chọn theo disease/severity.
+- Disease Zone original/corrected geometry + member findings, và sourced-guidance source/version được chọn theo suspected class.
 
-Domain validation phải phân biệt Healthy, disease, sunburn, mechanical damage và severity allowed combinations. Recommendation phải đến từ expert-validated catalogue; không lưu free-form AI treatment advice làm official. Hai reviewer cùng sửa finding/zone phải nhận conflict, không last-write-wins.
+Domain validation phải giới hạn class theo configured team-labelled set và xử lý confusing cases như sunburn/scarring, lighting, occlusion dưới dạng non-disease/ambiguous theo annotation rules. Guidance phải đến từ sourced/versioned catalogue; không lưu free-form AI advice hoặc expert claim. Hai reviewer cùng sửa finding/zone phải nhận conflict, không last-write-wins.
 
 #### Phase 7C — Approve result candidate
 
-Feature `ApprovePlantHealthSurveyResult` kiểm tra mọi required finding, Disease Zone, boundary exception và recommendation selection đã có final review decision, không còn unresolved blocking item và order đúng state. Handler tạo/transition `SurveyResult` sang Approved nhưng vẫn chưa lộ cho TenantOwner và chưa cập nhật current health.
+Feature `ApprovePlantHealthSurveyResult` kiểm tra mọi required finding, Disease Zone, boundary exception và guidance selection đã có final review decision, không còn unresolved blocking item và order đúng state. Handler tạo/transition `SurveyResult` sang Approved với `ResultNature = Preliminary` nhưng vẫn chưa lộ cho TenantOwner và chưa cập nhật latest-reviewed state.
 
 #### Phase 7D — Atomic publication
 
 Implement `ISurveyResultPublicationUnitOfWork` cho Plant Health. Một commit bao gồm:
 
 - SurveyResult Published và publication metadata.
-- Official finding/review references.
-- Approved Disease Zone geometry/membership và treatment-recommendation catalogue provenance.
-- Derived current health/condition của Plant theo ordering rule.
+- Reviewed suspected-finding/review references, team-label limitation và uncertainty/limitations.
+- Approved Disease Zone geometry/membership và sourced-guidance source/version provenance.
+- Derived latest-reviewed Plant Health state theo ordering rule; không gọi là diagnosis/current official health.
 - SurveyOrder transition.
 - Audit.
-- Official outcome + notification outbox.
+- Preliminary publication outcome + notification outbox.
 
-Khi áp dụng current health, so sánh observed/effective time và publication/version; result cũ đến muộn không được ghi đè state mới. Tạo failure seam cho rollback scenario giữa quá trình cập nhật nhiều Plant; test được viết ở Final Test Phase.
+Khi áp dụng latest-reviewed state, so sánh observed/effective time và publication/version; result cũ đến muộn không được ghi đè state mới. Tạo failure seam cho rollback scenario giữa quá trình cập nhật nhiều Plant; test được viết ở Final Test Phase.
 
 #### Phase 7E — API và output cần viết
 
-- SystemManager pending findings/Disease Zones query, review/correction actions, recommendation selection, approve result và publish result.
+- SystemManager pending findings/Disease Zones query, review/correction actions, sourced-guidance selection, approve result và publish result.
 - TenantOwner result query chỉ đọc Published.
-- Event cho BE2 biết official review/publication outcome để complete Mission theo contract.
+- Event cho BE2 biết reviewed preliminary publication outcome để complete Mission theo contract.
 - Notification event cho owner sau commit.
-- Previous comparison resolver chỉ chọn published Plant Health order cùng Farm/service.
+- Previous comparison resolver chỉ chọn compatible completed/published Plant Health order cùng Farm/service và lưu compatibility reason.
 
-Đóng Step 7 khi có thể truy từ official result về reviewer, AI source, Mission, Order, Farm, Plant và base-map version mà không đọc raw table tùy tiện.
+Đóng Step 7 khi published result luôn mang suspected/preliminary/team-labelled limitation và có thể truy về reviewer, dataset/annotation/model/media source, Mission, Order, Farm, Plant và base-map version.
 
-### 15.1. Plant Health V3 ingestion
+### 15.1. Plant Health V4 ingestion
 
-- [ ] Consumer nhận `PlantHealthAnalysisReadyV3`; `HealthObservationsReadyV2` chỉ compatibility/drain.
+- [ ] Consumer nhận `PlantHealthAnalysisReadyV4`; V2/V3 chỉ compatibility/drain và không được map severity vào target model.
 - [ ] Validate service là Plant Health, Order/Mission/Farm/base-map version và source provenance.
 - [ ] Inbox/idempotency theo message + source observation/version.
-- [ ] Import resolved observations thành pending findings; không đổi Plant current health.
-- [ ] Import proposed Disease Zones/recommendation selection/boundary exceptions dưới dạng pending, giữ full provenance.
+- [ ] Import observations thành pending suspected findings; không đổi latest-reviewed Plant Health state.
+- [ ] Import proposed Disease Zones/sourced-guidance suggestion/boundary exceptions dưới dạng pending, giữ full provenance và uncertainty.
 - [ ] Ambiguous/unmatched item không được biến thành resolved finding.
 - [ ] Reprocess tạo output/finding version mới, không overwrite provenance.
 
@@ -1970,8 +2145,8 @@ Khi áp dụng current health, so sánh observed/effective time và publication/
 - [ ] Assigned SystemManager query pending queue theo Order/Farm.
 - [ ] Review/correct/approve/reject item hoặc batch theo policy.
 - [ ] Review/correct/approve/reject Disease Zone geometry/memberships; unresolved boundary exception chặn publication.
-- [ ] Chọn/xác nhận recommendation từ expert-validated disease + severity catalogue; không nhận free-form advice.
-- [ ] Validate condition/Healthy/severity và sunburn/mechanical damage semantics.
+- [ ] Chọn/xác nhận sourced guidance theo suspected class + source/version; không nhận free-form advice hoặc expert claim.
+- [ ] Validate đúng 2–3 team-labelled suspected classes, annotation rules và confusing cases; contract/domain không có severity.
 - [ ] Mọi correction giữ AI original value, corrected value, reviewer, reason và evidence.
 - [ ] Optimistic concurrency ngăn hai reviewer commit đè nhau.
 
@@ -1979,10 +2154,10 @@ Khi áp dụng current health, so sánh observed/effective time và publication/
 
 - [ ] Tạo SurveyResult `PendingReview` cho Order.
 - [ ] Chỉ approve khi required findings đã resolved.
-- [ ] Publish atomically official findings, approved Disease Zones, recommendation provenance, review history, derived current health, Order status, audit và Outbox.
-- [ ] Current health update theo observed/effective ordering rule; older result không được silently ghi đè newer official state.
-- [ ] Phát official result/review state V2 cho BE2 và notification event.
-- [ ] Follow-up comparison dùng previous published Plant Health order.
+- [ ] Publish atomically reviewed preliminary findings, approved Disease Zones, sourced-guidance provenance, disclaimer/limitations, review history, latest-reviewed state, Order status, audit và Outbox.
+- [ ] Latest-reviewed state update theo observed/effective ordering rule; older result không được silently ghi đè newer state.
+- [ ] Phát reviewed preliminary publication/review event cho BE2 và notification event.
+- [ ] Follow-up comparison dùng previous compatible completed/published Plant Health order và lưu compatibility reason.
 
 ### 15.4. API mục tiêu
 
@@ -2001,93 +2176,38 @@ Chưa viết/chạy trong Step 7. Toàn bộ backlog kiểm thử của Step 7 �
 
 ### Definition of Done Step 7
 
-- Plant Health đi từ V2 raw handoff tới Official Result đã publish.
+- Plant Health đi từ V4 pending handoff tới published reviewed preliminary result.
 - BE2 chỉ complete Mission sau publication outcome phù hợp.
-- TenantOwner chỉ thấy published findings, approved Disease Zones và catalogue-based advisory recommendations.
+- TenantOwner chỉ thấy published suspected findings, approved Disease Zones và sourced guidance; response không có severity và luôn có preliminary/team-label disclaimer.
 
 ---
 
-## 16. Step 8 — UC10 Harvest Readiness review và official result (Phase 12)
+## 16. Step 8 — UC10 Harvest Readiness capability gate (Stretch, ngoài MVP)
 
-### 16.0. Chia phase và cách triển khai Step 8
+Step 8 không nằm trên critical path và không được triển khai/kích hoạt trong plan MVP này. Code/schema hiện hữu chỉ được giữ ở trạng thái compatibility-read-only/disabled sau inventory Step R2.
 
-| Phase | Mục tiêu | Gate |
-|---|---|---|
-| 8A — Domain evidence gate | Chốt criteria/granularity/claim | Chưa chốt thì chỉ được Experimental |
-| 8B — V2 ingestion | Import assessment/evidence bất biến | Không dùng Harvest legacy |
-| 8C — Human review | Correct/approve/reject với provenance | Pending không lộ owner |
-| 8D — Publication | Publish official readiness result | Atomic result/order/audit/outbox |
-| 8E — Comparison and wording | Hiển thị đúng confidence/capability status | Không gắn validated claim sai |
+### 16.1. Gate để lập kế hoạch Stretch riêng
 
-#### Phase 8A — Viết domain specification trước code
+Chỉ tạo implementation plan mới khi đồng thời có:
 
-Tạo một tài liệu/versioned definition nêu rõ:
+- [ ] MVP S1–S5 và Plant Health release gate đã hoàn tất.
+- [ ] Product/lecturer phê duyệt Stretch scope bằng văn bản.
+- [ ] Criteria, observable indicators, granularity và limitation được version hóa.
+- [ ] Labelled dataset/ground-truth protocol, evaluation target và evidence được chốt.
+- [ ] API/UI wording, human-review, authorization, payment, comparison và contract design riêng được review.
+- [ ] Feature flag/rollback plan bảo đảm không ảnh hưởng Plant Health MVP.
 
-- Criteria code/version và lifecycle `Experimental/Validated/Retired`.
-- Observable indicators nào được dùng và đơn vị/allowed values.
-- Granularity là Farm, Zone hay Plant; không tự giả định.
-- Cách diễn giải AI assessment/confidence.
-- Evidence tối thiểu để reviewer ra quyết định.
-- Ground-truth/evaluation protocol và điều kiện promote sang Validated.
+### 16.2. MVP enforcement
 
-Application phải snapshot criteria version vào assessment/result. Nếu product/domain owner chưa chốt các mục trên, chỉ xây ingestion/review framework và trả wording Experimental.
+- [ ] `HARVEST_READINESS` không xuất hiện trong public catalogue.
+- [ ] Ba request handlers, approval, order/payment, BE2 ingestion và publication đều từ chối service này khi Stretch flag chưa được phê duyệt.
+- [ ] Không đăng ký Harvest Readiness consumer/controller/endpoint ở runtime MVP.
+- [ ] Bỏ toàn bộ Step 8 không làm fail MVP E2E, Definition of Done hoặc demo.
+- [ ] Không dùng Plant Health result/model/previous order để dựng tạm Harvest Readiness.
 
-#### Phase 8B — Ingestion
+### Definition of Done Step 8 trong MVP
 
-Consumer V2 thực hiện envelope/Inbox validation giống Step 7, sau đó kiểm tra Order service là Harvest Readiness, Farm/Mission đúng context, granularity phù hợp criteria version và evidence đủ định dạng.
-
-Lưu AI assessment, confidence, visible indicators, evidence, model/criteria version và source provenance dưới dạng immutable pending assessment. Không tham chiếu hoặc tái tạo `HarvestBatch`, `PlantHarvestRecord`, quality grade, yield hay quantity.
-
-#### Phase 8C — Human review
-
-Tạo queue/detail/review use cases riêng. Manager có thể giữ nguyên, correct hoặc reject assessment theo policy. Luôn lưu original + corrected values, reason, reviewer, time và version. Nếu granularity không phải Plant thì API/read model không được ép PlantId giả.
-
-#### Phase 8D — Approve và publish
-
-Tách approve khỏi publish như Plant Health. Approve kiểm tra assessment coverage/resolution; publish dùng result publication UoW để commit SurveyResult, official assessment references, Order status, audit và outbox. Harvest Readiness không cập nhật Plant current-health field của Plant Health.
-
-#### Phase 8E — Comparison và API
-
-- Previous compatible resolver chỉ chọn published Harvest Readiness result cùng Farm và cùng criteria-compatible policy.
-- Public/owner response luôn kèm criteria version, granularity và Experimental/Validated status.
-- Plant Health order không được dùng làm comparison; contract/E2E verification nằm ở mục 27.
-- Production code không phụ thuộc Harvests legacy; architecture verification nằm ở mục 27.
-- Pending/rejected assessment không xuất hiện trong owner query.
-
-### 16.1. Pre-implementation domain gate
-
-- [ ] Chốt criteria version.
-- [ ] Chốt observable indicators.
-- [ ] Chốt assessment granularity; không mặc định per-Plant nếu domain study chưa xác nhận.
-- [ ] Chốt ground-truth/dataset/evaluation protocol và evidence requirements.
-- [ ] Chốt điều kiện chuyển `Experimental → Validated`.
-
-Nếu các mục trên chưa chốt, chỉ triển khai framework/pending model; không công bố capability đã validated.
-
-### 16.2. Ingestion/review
-
-- [ ] Consumer/handler nhận pending Readiness handoff V2.
-- [ ] Validate Order service, Farm, Mission, criteria/model version và granularity.
-- [ ] Import immutable AI assessment/evidence vào SurveyResult pending.
-- [ ] Assigned SystemManager correct/approve/reject; giữ original/corrected values.
-- [ ] Không tham chiếu HarvestBatch, PlantHarvestRecord, HarvestQualityGrade, quantity hoặc yield.
-
-### 16.3. Publication/follow-up
-
-- [ ] Publish official Harvest Readiness result qua result publication UoW.
-- [ ] Response/public metadata phản ánh đúng `Experimental/Validated`.
-- [ ] Previous compatible chỉ là published Harvest Readiness order cùng Farm.
-- [ ] Phát official outcome cho BE2 và notification.
-
-### Tests Step 8
-
-Chưa viết/chạy trong Step 8. Toàn bộ backlog kiểm thử của Step 8 đã chuyển xuống mục 27.2.
-
-### Definition of Done Step 8
-
-- Harvest Readiness chạy end-to-end như một Survey Service riêng.
-- Không tái tạo Harvest Management.
-- Official result có criteria/model/evidence/reviewer provenance.
+Step 8 đạt yêu cầu MVP khi capability được chứng minh là disabled/not sellable và không thể bị gọi qua API/event path. End-to-end Harvest Readiness không phải deliverable hay acceptance criterion.
 
 ---
 
@@ -2119,12 +2239,12 @@ Mọi query phải áp ownership ngay trong database predicate. Không tải res
 - Query current Published FarmBaseMapVersion; draft/superseded không lộ trừ history được policy cho phép.
 - Trả plant count nhất quán với cùng map version.
 - Plant list có paging, Zone/map filters và stable ordering.
-- Plant detail trả identity/lifecycle/current official summaries, không trả raw AI observation.
+- Plant detail trả identity/lifecycle/latest reviewed preliminary summaries, không trả raw AI observation hoặc diagnosis wording.
 - Response luôn mang map/result version cần thiết để client nhận biết snapshot.
 
 #### Phase 9C — Unified Digital Plant Profile timeline
 
-Xây read model hợp nhất từ PlantChangeEvent, official Plant Health, official Harvest Readiness và published media references. Mỗi timeline item có event type, effective/observed time, published time, source Order/Mission/result và version.
+Xây read model hợp nhất từ PlantChangeEvent, published preliminary Plant Health và published media references. Stretch result chỉ được thêm sau UC10 gate riêng. Mỗi timeline item có event type, effective/observed time, published time, source Order/Mission/result và version.
 
 Định nghĩa ordering/tie-breaker rõ ràng, ví dụ effective time rồi published time rồi stable ID. Query không được tạo N+1 khi lấy nhiều media/result summary.
 
@@ -2136,6 +2256,7 @@ Tách `ReportPlantRemoved`, `ReportPlantReplaced`, `ReportNewPlant`, `ReviewPlan
 - Submit chỉ tạo pending report; không retire/replace/create Plant và không sửa published map.
 - Assigned/qualified manager review, correct hoặc reject với reason/evidence/expected version.
 - Removal/replacement đã verify đổi lifecycle state nhưng giữ profile/history; replacement tạo ID mới + relation chỉ khi evidence/policy cho phép.
+- Database constraint/policy bảo đảm mỗi planted pole chỉ có tối đa một active Digital Plant Profile tại một thời điểm, kể cả concurrent apply.
 - `NewlyAdded` cần candidate quan sát ở later survey và manager approval trước khi tạo Digital Plant Profile mới.
 - Relocation do verified survey evidence giữ Plant ID; mọi thay đổi geometry/published map đi qua BaseMapAmendment.
 - Concurrent/replayed report/review/apply phải idempotent và audit append-only.
@@ -2150,9 +2271,9 @@ Tách `ReportPlantRemoved`, `ReportPlantReplaced`, `ReportNewPlant`, `ReviewPlan
 - [ ] Current published Farm map và plant count.
 - [ ] Plant list theo Farm/Zone/map với pagination/spatial filters cần thiết.
 - [ ] Digital Plant Profile detail.
-- [ ] Timeline hợp nhất PlantChangeEvent, official health, readiness và published media references.
+- [ ] Timeline hợp nhất PlantChangeEvent, reviewed preliminary health và published media references; luôn giữ suspected/team-label disclaimer.
 - [ ] Survey history theo Farm/service.
-- [ ] Follow-up comparison từ stored `PreviousCompatibleOrderId`.
+- [ ] Follow-up comparison từ stored `PreviousCompatibleOrderId`, chỉ khi same Farm/service + completed/published + compatibility policy pass; hiển thị compatibility basis.
 
 ### 17.2. Plant lifecycle/amendment
 
@@ -2160,6 +2281,7 @@ Tách `ReportPlantRemoved`, `ReportPlantReplaced`, `ReportNewPlant`, `ReviewPlan
 - [ ] Assigned SystemManager review/correct/approve/reject report theo assignment và expected version.
 - [ ] Report không mutate official Plant; `NewlyAdded` chỉ tạo profile sau later-survey candidate + manager approval.
 - [ ] Relocate giữ ID; replace tạo ID mới + link cây cũ.
+- [ ] Unique/concurrency rule ngăn hai active profiles cho cùng planted pole.
 - [ ] Mọi mutation có reason/audit và BaseMapAmendment khi ảnh hưởng published map.
 - [ ] Không hard-delete Plant/profile/history.
 
@@ -2199,7 +2321,7 @@ Chưa viết/chạy trong Step 9. Toàn bộ backlog kiểm thử của Step 9 �
 
 ---
 
-## 18. Step 10 — UC12 Work queues, notifications và audit completion
+## 18. Step 10 — UC12 Work queues, notifications, audit và Manager offline sync
 
 ### 18.0. Chia phase và cách triển khai Step 10
 
@@ -2210,13 +2332,14 @@ Chưa viết/chạy trong Step 9. Toàn bộ backlog kiểm thử của Step 9 �
 | 10C — Notifications | Event, template, dedup, retry | Business commit không phụ thuộc email |
 | 10D — Audit completeness | Mutation matrix và append-only audit | Truy được ai/làm gì/khi nào/vì sao |
 | 10E — Observability/runbook | Metrics, traces, redrive/recovery | Vận hành được failure/replay |
+| 10F — Manager offline sync | Pull work/checklist, push notes/completion với dedup/conflict | Retry không nhân đôi, stale write không ghi đè |
 
 #### Phase 10A — Lập inventory trước khi viết query
 
 Tạo bảng actor → queue item → source state → action route:
 
-- SystemAdmin: submitted/under-review requests, manager eligibility exceptions, payment mismatch/reconciliation, failed publication/integration.
-- SystemManager: assigned orders chờ boundary/scope, Baseline/paid appointment, baseline-count review, boundary exceptions, findings/Disease Zones, plant-change reports và publication actions.
+- SystemAdmin: submitted/under-review requests, manager eligibility exceptions, consent/permission exceptions, payment/refund mismatch/reconciliation, scope/extra-flight approval và failed publication/integration.
+- SystemManager: assigned orders chờ consent/permission, boundary/scope, Baseline/paid appointment, baseline-count review, boundary exceptions, findings/Disease Zones/guidance, plant-change reports và preliminary publication actions.
 - TenantOwner: requests, Baseline/paid appointment confirmation/reschedule, payment action, plant-change report status và newly published results.
 
 Mỗi queue item phải chỉ ra action tiếp theo và resource version; không trả deep link mà endpoint đích không re-authorize.
@@ -2239,6 +2362,15 @@ Lập mutation matrix cho Steps 1–9. Mỗi mutation trọng yếu phải ghi a
 
 Thêm metric/trace theo RequestId, OrderId, FarmId, MissionId, message ID và correlation khi phù hợp. Viết runbook cho notification redrive, outbox stuck, inbox poison message, payment reconciliation và publication retry. Replay/dedup test được viết ở Final Test Phase.
 
+#### Phase 10F — Minimal Manager offline sync
+
+- Pull chỉ trả work-item thuộc current assignment, checklist version, note snapshot, resource version và authorization expiry.
+- Push nhận batch operation có client operation ID, payload hash, base version và captured-at; lưu immutable operation outcome để retry trả cùng kết quả.
+- Mỗi item trả `Applied`, `Duplicate`, `Conflict`, `Forbidden` hoặc `Expired`; batch không silently overwrite stale note/checklist.
+- Assignment/permission bị revoke làm sync mutation fail; cached data phải có expiry/purge hint.
+- Offline checklist completion không mở readiness hoặc tự start flight. BE2 vẫn re-check authoritative readiness trước flight.
+- Raw media upload/sync thuộc BE2; endpoint BE1 không nhận binary imagery/telemetry.
+
 Step này được thực hiện tăng dần trong Steps 1–9, sau đó có gate hoàn thiện riêng.
 
 ### 18.1. Work queues
@@ -2255,8 +2387,9 @@ Step này được thực hiện tăng dần trong Steps 1–9, sau đó có gat
 - [ ] Baseline/paid-service appointment proposed/reschedule/confirmed.
 - [ ] Payment action/state/reconciliation.
 - [ ] Review required.
-- [ ] Boundary exception, Disease Zone/recommendation và plant-change decision.
-- [ ] Official result published.
+- [ ] Consent/permission, scope adjustment, additional payment/refund và extra-flight decision.
+- [ ] Boundary exception, Disease Zone/sourced-guidance và plant-change decision.
+- [ ] Reviewed preliminary result published.
 - [ ] Stable dedup key, template variables tối thiểu và deep link phải authorize lại.
 
 ### 18.3. Audit/observability
@@ -2265,7 +2398,7 @@ Step này được thực hiện tăng dần trong Steps 1–9, sau đó có gat
 - [ ] Assignment/reassignment.
 - [ ] FarmBoundary/scope, confirmed-pole-count/PricePerPole snapshot và PriceAdjustment.
 - [ ] Appointment/payment/reconciliation.
-- [ ] AI correction, Disease Zone/recommendation review và publication.
+- [ ] AI correction, Disease Zone/sourced-guidance review, preliminary publication và offline sync conflict.
 - [ ] Plant lifecycle/base-map amendment.
 - [ ] Log/metric có RequestId, OrderId, TenantId, FarmId, MissionId, correlation và actor khi phù hợp.
 - [ ] Không log password, invitation token, provider secret hoặc raw PII không cần thiết.
@@ -2278,6 +2411,7 @@ Chưa viết/chạy trong Step 10. Toàn bộ backlog kiểm thử của Step 10
 
 - Mỗi actor có work queue đủ để vận hành luồng mà không truy cập database/manual API tùy tiện.
 - Business event, delivery và audit truy vết được end-to-end.
+- Manager mobile offline work/checklist/notes retry-safe, conflict-aware và không mở rộng assignment/flight permission.
 
 ---
 
@@ -2310,7 +2444,7 @@ Không xóa migration cũ, audit, Inbox/Outbox hoặc historical published evide
 
 #### Phase 11C — Viết test tập trung
 
-Sau khi Step 0R–10 đã `CodeComplete — AwaitingFinalTest`, viết toàn bộ test còn thiếu theo backlog mục 27. Không chạy full suite trong lúc đang tạo từng nhóm test; chỉ dùng build/compile để phát hiện lỗi cú pháp và reference.
+Sau khi Step R2 và các Step 0R–10 thuộc MVP đã `CodeComplete — AwaitingFinalTest`, viết toàn bộ test còn thiếu theo backlog mục 27. Không chạy full suite trong lúc đang tạo từng nhóm test; chỉ dùng build/compile để phát hiện lỗi cú pháp và reference.
 
 #### Phase 11D — Release verification
 
@@ -2349,31 +2483,35 @@ Các lệnh chạy test và release gates chưa hoàn thành đã chuyển xuố
 | Submit New Farm/Existing Farm request | Không | Không | Không | Có, đúng tenant/farm |
 | Review/approve/reject request | Không | Có | Không | Không |
 | Quản lý manager/assignment | Không | Có | Không | Không |
+| Verify/revoke consent và flight permission | Không | Oversight/revoke | Có, assigned theo policy | Cung cấp/xem status thuộc own Farm |
 | Verify FarmBoundary/scope | Không | Support only | Có, assigned | Xem |
 | Confirm active pole count/price input | Không | Support only | Có, assigned | Xem |
 | Propose Baseline/paid appointment | Không | Support only | Có, assigned | Không |
 | Confirm/request reschedule | Không | Support only | Không | Có |
 | Initiate payment | Không | Support only | Không | Có |
 | Confirm/reconcile payment | Không | Reconcile có evidence | Không | Không |
+| Request/review scope adjustment và extra flight | Không | Review/approve | Request có evidence, assigned | Xem financial impact |
 | Review/publish AI result | Không | Oversight only | Có, assigned | Không |
-| Review Disease Zone/recommendation | Không | Oversight only | Có, assigned | Không |
+| Review Disease Zone/sourced guidance | Không | Oversight only | Có, assigned | Không |
 | Submit plant inventory change report | Không | Support | Không | Có, own Farm |
 | Verify/apply plant inventory change | Không | Oversight | Có, assigned | Không |
 | Xem raw/draft/pending AI | Không | Theo operations policy | Có, assigned | Không |
 | Xem published map/result/profile | Không | Support | Có, assigned | Có, own tenant |
+| Pull/push mobile work/checklist/notes | Không | Không | Có, assigned/versioned | Không |
 
 Architecture/API tests khóa ma trận này được viết ở Final Test Phase; implementation không được chỉ dựa vào UI ẩn nút.
 
 ## 21. Migration strategy theo step
 
-1. Step 0R: expand/backfill/contract migration cho per-pole pricing, FarmBoundary, Disease Zone/recommendation và PlantInventoryChangeReport; không sửa migration Phase 5.
-2. Step 1–2: chỉ migration nhỏ cho field/constraint thực sự thiếu; không gộp commercial/result changes.
-3. Step 3: migration/index cho approval idempotency, unique Request→Order và orchestration recovery nếu cần.
-4. Step 4: migration riêng cho purpose appointment/payment/count-price adjustment/history còn thiếu.
-5. Step 6: V2 base-map/Plant/count association contract migration sau backfill/validation.
-6. Step 7–8: result/review/Disease Zone/recommendation provenance association migration theo từng service.
-7. Step 9: plant-change workflow và index/read-model optimization migration có benchmark chứng minh.
-8. Step 11: contract/drop migration chỉ sau inventory, retention approval và upgrade test.
+1. Step 0R: giữ migration lịch sử cho per-pole pricing, FarmBoundary, Disease Zone/recommendation và PlantInventoryChangeReport; không sửa migration Phase 5.
+2. Step R2: expand/backfill/compatibility migration cho no-severity target, sourced guidance, capture authorization, immutable original commercial snapshot, ScopeAdjustment, ExtraFlightRequest và mobile sync operation. Không drop legacy columns/tables trước inventory/retention/upgrade evidence.
+3. Step 1–2: chỉ migration nhỏ cho field/constraint thực sự thiếu; không gộp commercial/result changes.
+4. Step 3: migration/index cho approval idempotency, unique Request→Order và authorization-requirement creation nếu cần.
+5. Step 4: migration riêng cho purpose appointment/payment/refund/adjustment/history còn thiếu.
+6. Step 6: base-map/Plant/count association contract migration sau backfill/validation.
+7. Step 7: preliminary result/review/Disease Zone/sourced-guidance provenance association migration.
+8. Step 9–10: plant-change/mobile-sync và index/read-model optimization migration có benchmark chứng minh.
+9. Step 11: contract/drop migration chỉ sau inventory, retention approval và upgrade test.
 
 Mỗi migration phải có:
 
@@ -2390,7 +2528,7 @@ Chiến lược và toàn bộ backlog test chưa viết đã được chuyển 
 
 1. `surveys: add runtime module wiring and repositories`
 2. `surveys: rebaseline per-pole pricing boundary and purpose readiness`
-3. `surveys: expose service catalogue recommendation master data and versioned pricing`
+3. `surveys: enforce plant-health-only catalogue and versioned pricing`
 4. `surveys: add public and tenant-owner request intake`
 5. `surveys: add system-admin request review and rejection`
 6. `surveys: add atomic request approval orchestration`
@@ -2399,13 +2537,14 @@ Chiến lược và toàn bộ backlog test chưa viết đã được chuyển 
 9. `surveys: add paid appointment payment reconciliation and adjustments`
 10. `surveys: expose purpose-aware order readiness contract`
 11. `mapping: add farm base-map v2 count publication`
-12. `surveys: add plant-health disease-zone recommendation review and publication`
-13. `surveys: add harvest-readiness ingestion review and publication`
+12. `surveys: add consent permission scope adjustment refund and extra-flight gates`
+13. `surveys: add plant-health suspected finding disease-zone sourced-guidance preliminary publication`
 14. `plants: add owner inventory-change workflow profile timeline and follow-up queries`
-15. `surveys: complete actor work queues notifications and audit`
-16. `cleanup: retire replaced routes and drained v1 consumers`
-17. `tests: add deferred unit architecture contract integration and e2e suites`
-18. `release: run final migration security performance and e2e gates`
+15. `surveys: add manager offline work-item checklist notes sync`
+16. `surveys: complete actor work queues notifications and audit`
+17. `cleanup: retire replaced routes and drained consumers`
+18. `tests: add deferred unit architecture contract integration and e2e suites`
+19. `release: run final migration security performance and e2e gates`
 
 Không gộp approval, payment, mapping và result publication vào một PR lớn. Mỗi PR code phải ghi rõ migration/rollback scope và test scenarios vào mục 27; test implementation được gom ở PR 17 và chỉ chạy full suite ở PR 18.
 
@@ -2413,9 +2552,9 @@ Không gộp approval, payment, mapping và result publication vào một PR l�
 
 ### Sprint A — Phase 7 entry point
 
-1. Step 0R per-pole/boundary/readiness/Disease Zone/recommendation/change-report delta.
+1. Step R2 proposal-v2 remediation: Plant Health-only, no severity, preliminary/guidance semantics, consent/permission và legacy Stretch disable.
 2. Surveys runtime wiring.
-3. Catalogue/PricePerPole/recommendation master data.
+3. Catalogue/PricePerPole/suspected-class/sourced-guidance master data.
 4. Survey Request submit/start-review/reject.
 
 ### Sprint B — Phase 8 onboarding
@@ -2427,9 +2566,9 @@ Không gộp approval, payment, mapping và result publication vào một PR l�
 
 ### Sprint C — Phase 9 commercial gate
 
-9. FarmBoundary/scope và Baseline appointment/readiness.
+9. Consent/permission, FarmBoundary/scope và Baseline appointment/readiness.
 10. Map/count handoff và PricePerPole snapshot.
-11. Paid appointment/payment/callback/reconciliation/adjustment.
+11. Paid appointment/sandbox payment/callback/reconciliation/scope-price adjustment/additional payment-refund/extra flight.
 12. Purpose-aware readiness contract và BE2 integration boundary.
 
 ### Sprint D — Phase 11 mapping V3
@@ -2441,15 +2580,15 @@ Không gộp approval, payment, mapping và result publication vào một PR l�
 
 ### Sprint E — Phase 12 results
 
-17. Plant Health/Disease Zone/recommendation ingestion/review/publication.
-18. Harvest Readiness criteria gate/ingestion/review/publication.
-19. BE2 Mission completion coordination.
+17. Plant Health suspected finding/Disease Zone/sourced-guidance ingestion/review/preliminary publication.
+18. BE2 Mission completion coordination.
+19. Chứng minh Harvest Readiness disabled/not sellable trong MVP.
 
 ### Sprint F — Phase 13–15 product completion
 
 20. Owner published-only portal queries.
 21. Owner plant-change workflow, profile/history/follow-up.
-22. Work queues/notification/audit completion.
+22. Work queues/notification/audit và Manager offline sync completion.
 23. Residual cleanup và release runbook.
 
 ### Sprint G — Final Test Phase
@@ -2460,13 +2599,18 @@ Không gộp approval, payment, mapping và result publication vào một PR l�
 
 ## 25. Công việc nên bắt đầu ngay
 
-Step 0R–4 đã đạt `CodeComplete — AwaitingFinalTest`. Thứ tự tiếp theo:
+Step 0R–4 có evidence baseline cũ nhưng đang `RebaselineRequired`. Thứ tự thực thi ngay:
 
-1. Nối producer initial-map publication ở Step 6C vào
+1. R2-A: freeze Harvest Readiness và hoàn tất artifact inventory.
+2. Rebaseline Phase 6R: target domain/contract/migration seams không severity, dùng sourced guidance và preliminary semantics.
+3. Rebaseline Phase 7: Plant Health-only catalogue/master data/request guards.
+4. Rebaseline Phase 8: approval tạo pending consent/permission requirement và compatible-order policy đúng.
+5. Rebaseline Phase 9: consent/permission, immutable original snapshot, adjustment settlement/refund, extra flight và readiness.
+6. Chạy R2 integration gate; cập nhật R2/6R/7/8/9 thành `CodeComplete — AwaitingFinalTest` khi có đủ code/migration/OpenAPI/evidence.
+7. Bắt đầu Step 5: nối BE2 prepare/start vào authoritative readiness port và bắt buộc truyền MissionPurpose/re-check ngay trước flight; không cache snapshot.
+8. Nối producer initial-map publication ở Step 6C vào
    `SurveyOrder.RecordBaselinePublication`; không nhận authoritative count từ client.
-2. Nối BE2 prepare/start vào authoritative readiness port ở Step 5C và bắt buộc
-   truyền MissionPurpose/re-check ngay trước flight; không cache snapshot 4B.
-3. Không bắt đầu paid-service mission/result flow trước khi boundary → baseline →
+9. Không bắt đầu paid Plant Health mission/result flow trước khi consent/permission → boundary → baseline →
    count → price → appointment/payment dependency đã hoàn chỉnh về code và
    contract; integration test xác nhận ở Final Test Phase.
 
@@ -2480,11 +2624,14 @@ Chỉ đánh dấu kế hoạch `Done` khi:
 - [ ] UC00–UC12 trong `BE1-Use-Case-Specification.md` đạt DoD tương ứng.
 - [ ] Ba request kinds và flow chung chạy end-to-end.
 - [ ] Không có public/tenant path tạo trực tiếp Tenant/Farm/Mission/Drone.
-- [ ] Purpose-aware gate không thể bypass: Baseline cần boundary/appointment/manager/safety; paid service cần thêm count-price/payment.
+- [ ] Purpose-aware gate không thể bypass: mọi flight cần consent/permission + boundary/appointment/manager/safety; paid Plant Health cần thêm count-price/payment.
 - [ ] Initial Farm bắt buộc có Baseline Mapping; repeat survey không rebuild map.
 - [ ] Persistent Plant IDs và same-service follow-up được chứng minh.
-- [ ] Plant Health, Disease Zones/recommendations và Harvest Readiness đều human-reviewed/published, giữ provenance và không dùng chung sai domain model.
+- [ ] Plant Health suspected findings, Disease Zones và sourced guidance đều human-reviewed/published preliminary, không severity/diagnosis và giữ full provenance.
+- [ ] Harvest Readiness disabled/not sellable; việc không triển khai UC10 không làm fail MVP.
 - [ ] Owner plant-change report không mutate profile; removal/replacement giữ history và new plant cần later-survey evidence.
+- [ ] Original price/count snapshot bất biến; scope/count difference có audit + additional payment/refund; extra flight có reason/approval.
+- [ ] Manager offline work/checklist/notes sync retry-safe, conflict-aware và không tự mở flight gate.
 - [ ] TenantOwner chỉ xem published map/profile/result/history thuộc Tenant mình.
 - [ ] Replay/concurrency/cross-tenant/failure paths pass.
 - [ ] Fresh/upgrade EF Core migrations, pending-model check và schema ownership/drift gates pass cho solution .NET.
@@ -2496,7 +2643,7 @@ Chỉ đánh dấu kế hoạch `Done` khi:
 
 ### 27.1. Quy tắc thực hiện
 
-1. Step 0R–10 ưu tiên hoàn tất domain/application/infrastructure/API/migration/documentation và chỉ ghi thêm scenario vào mục này.
+1. Step R2 và Step 0R–10 thuộc MVP ưu tiên hoàn tất domain/application/infrastructure/API/migration/documentation và chỉ ghi thêm scenario vào mục này; Step 8 chỉ chứng minh Stretch-disabled.
 2. Không tạo test mới và không chạy `dotnet test`, test filter, migration test, contract test hay E2E trong các phase code còn lại.
 3. Các test đã có và đã được đánh dấu `[x]` được giữ nguyên, không viết lại. Chúng chỉ được chạy lại trong lần chạy cuối.
 4. Khi toàn bộ phase code đạt `CodeComplete — AwaitingFinalTest`, viết tất cả test còn thiếu theo thứ tự: unit → architecture → contract → integration/migration → E2E/security/performance.
@@ -2511,20 +2658,31 @@ Trade-off đã chấp nhận: cách này giảm số lần chạy test lặp l�
 #### Step 0R — chỉ phần chưa có test
 
 - [ ] PlantInventoryChangeReport state machine: owner report → manager verification → later-survey evidence → applied/rejected.
-- [ ] Mapping/result publication boundary cho confirmed active-pole count, Disease Zone/recommendation provenance và plant-change decision.
-- [ ] V3 golden JSON cho boundary exception, proposed Disease Zone, recommendation selection, confirmed pole count và plant-change evidence; V2 vẫn bất biến.
+- [ ] Mapping/result publication boundary cho confirmed active-pole count, Disease Zone/legacy recommendation provenance và plant-change decision; R2 target dùng sourced guidance.
+- [ ] V3 golden JSON được giữ compatibility bất biến; target V4 tests thuộc Step R2.
 - [ ] Stable errors/OpenAPI assumptions không còn price-per-hectare hoặc payment-before-every-flight trong target path.
 - [ ] Architecture test pending/raw artifacts không thể đi vào TenantOwner read model.
 
-Không viết lại các unit/migration tests 0R-1 đến 0R-4 đã có cho per-pole, purpose readiness, FarmBoundary, DiseaseZone và TreatmentRecommendation.
+Không viết lại test lịch sử 0R; bổ sung R2 tests chứng minh target path không còn phụ thuộc TreatmentRecommendation/severity semantics.
+
+#### Step R2 — Proposal-v2 remediation
+
+- [ ] Public/admin catalogue chỉ `PLANT_HEALTH` sellable; Harvest Readiness record legacy không thể list/request/order/pay/process/publish khi Stretch flag chưa approved.
+- [ ] Domain/API/OpenAPI/golden JSON V4 không có severity; payload có suspected/preliminary, uncertainty, team-label limitation, dataset/annotation-rule/model/media provenance.
+- [ ] Sourced guidance resolve đúng suspected class + source/version; free-form advice, severity mapping và unsupported expert claim bị từ chối.
+- [ ] Written consent/flight permission missing, expired, revoked, wrong Farm/scope/window đều fail readiness cho Baseline và Plant Health.
+- [ ] Original count/price/final price bất biến qua adjustment; chênh tăng/giảm truy được additional payment/refund ledger.
+- [ ] Scope adjustment và ExtraFlightRequest cần evidence/approval; retry/concurrency không nhân đôi và unapproved extra flight không start.
+- [ ] Mobile pull/push dedup client operation ID; stale base version trả conflict; revoked assignment/permission deny; retry không nhân đôi note/checklist completion.
+- [ ] Fresh/upgrade migration giữ historical data nhưng target writes không sinh severity hoặc Harvest Readiness business data mới.
 
 #### Step 1 — Catalogue/Master Data
 
-- [ ] Chỉ hai service MVP xuất hiện trong public catalogue.
+- [ ] Chỉ `PLANT_HEALTH` xuất hiện trong public catalogue; price là indicative PricePerPole.
 - [ ] Retired/không có active price không nhận request mới theo policy.
 - [ ] Effective price windows không overlap, kể cả hai request đồng thời.
-- [ ] Historical price/criteria/label không đổi sau retire/version mới.
-- [ ] Published finding chỉ resolve recommendation đúng disease/severity/version; free-form recommendation bị từ chối.
+- [ ] Historical price/class/annotation-rule/guidance source không đổi sau retire/version mới.
+- [ ] Published finding chỉ resolve sourced guidance đúng suspected-class/source/version; không severity và free-form guidance bị từ chối.
 - [ ] Money precision/rounding trên PostgreSQL khớp ADR-0003.
 - [ ] Authorization SystemAdmin allow, actor khác deny.
 - [ ] API/controller chỉ gọi application handler, không inject `SurveysDbContext` hoặc repository trực tiếp.
@@ -2535,9 +2693,11 @@ Không viết lại các unit/migration tests 0R-1 đến 0R-4 đã có cho per-
 - [ ] Public submit không tạo Tenant/Farm/Order/assignment/invitation.
 - [ ] TenantOwner chỉ submit trong Tenant/Farm của mình; tenant A gửi tenant B và membership vừa vô hiệu hóa đều bị chặn.
 - [ ] Ba request kinds validate đúng required/forbidden fields.
+- [ ] Cả ba submit handler từ chối service khác `PLANT_HEALTH`, kể cả ID legacy hợp lệ.
 - [ ] Duplicate idempotency key cùng caller scope trả cùng request; khác caller scope không collision.
 - [ ] Concurrent start-review chỉ một transition thắng.
 - [ ] Reject lưu reason/checklist/audit và notification outbox.
+- [ ] Review checklist chỉ ghi consent/permission feasibility; không tạo verified authorization từ verbal/message evidence.
 - [ ] ExistingFarmSurvey chống ID enumeration/cross-tenant.
 - [ ] PII không xuất hiện trong structured logs snapshot.
 
@@ -2546,15 +2706,17 @@ Không viết lại các unit/migration tests 0R-1 đến 0R-4 đã có cho per-
 - [ ] NewCustomer tạo đúng năm nhóm resource, không tạo account/password active.
 - [ ] ExistingTenantNewFarm không tạo Tenant/User/Owner mới.
 - [ ] ExistingFarmSurvey chỉ tạo Order.
-- [ ] Previous compatible order cùng service/farm và đúng thứ tự thời gian.
+- [ ] Previous compatible order cùng service/farm, completed/published, policy-version compatible và đúng thứ tự thời gian; incompatible result trả null + reason.
 - [ ] Retry/concurrent approve không nhân đôi bất kỳ resource nào.
 - [ ] Chèn lỗi sau idempotency claim/Tenant/Farm/assignment/invitation/outbox phải rollback request Approved và mọi resource trước đó.
 - [ ] Manager invalid/unavailable/expired qualification bị reject.
 - [ ] `RequiresBaselineMapping` đúng với current published Farm base map.
 - [ ] HTTP authorization/response đúng cho approval endpoint.
+- [ ] Approval tạo pending capture-authorization requirement nhưng không mở flight gate.
 
 #### Step 4 — Boundary, pricing, payment và readiness
 
+- [ ] Verify/revoke written consent và flight permission có evidence/version/audit; missing/expired/revoked/wrong-scope đóng cả Baseline và Plant Health gate.
 - [ ] Assigned/unassigned/expired manager verify boundary/scope và confirm count allow-deny.
 - [ ] Stale expected Order/boundary version và concurrent boundary replacement chỉ một commit thắng.
 - [ ] Published base map thiếu authoritative confirmed pole count fail closed; client không thể tự đổi `RequiresBaselineMapping`.
@@ -2562,7 +2724,7 @@ Không viết lại các unit/migration tests 0R-1 đến 0R-4 đã có cho per-
 - [ ] Stale current base-map/Order version, missing map và concurrent count-price confirmation chỉ một commit thắng.
 - [ ] Active Plant ngoài approved boundary/active Zone, zero inventory hoặc map/source không khớp baseline requirement phải fail closed.
 - [ ] Không có hoặc có nhiều effective per-pole price phải fail; client không thể gửi count, unit price, currency hoặc final price.
-- [ ] Giá catalogue hoặc inventory đổi sau confirmation không silent-recalculate immutable Order snapshot.
+- [ ] Giá catalogue hoặc inventory đổi sau confirmation không silent-recalculate immutable original Order snapshot.
 - [ ] Stale expected Order/appointment version và concurrent Baseline proposal chỉ một current appointment thắng.
 - [ ] TenantOwner khác Tenant bị từ chối confirm/reschedule; reschedule mở lại baseline gate và re-proposal giữ nguyên revision cũ.
 - [ ] Baseline readiness yêu cầu Mission liên kết đúng purpose/window, Drone available, manager active/available/qualified và completed safe pre-flight nhưng không yêu cầu Payment.
@@ -2577,12 +2739,15 @@ Không viết lại các unit/migration tests 0R-1 đến 0R-4 đã có cho per-
 - [ ] Không có owner endpoint/command mark-confirmed và Baseline Mapping không tạo/đòi Payment.
 - [ ] Adjustment request chỉ assigned/current-qualified manager được tạo; unit price/currency/final price resolve phía server và race chỉ một Pending/Approved record thắng.
 - [ ] Stale Order/Adjustment/Payment version làm approve/reject/apply fail; reject không mutate Order và apply chỉ dùng snapshot đã approve.
-- [ ] Apply sau Confirmed payment đưa Payment lệch giá về AdjustmentRequired, giữ old/new snapshot cùng audit/Outbox và không silent-recalculate.
+- [ ] Apply sau Confirmed payment giữ original snapshot bất biến, tạo effective adjustment ledger, đưa settlement lệch giá về AdjustmentRequired và không silent-recalculate.
+- [ ] Chênh tăng chỉ clear gate sau additional sandbox payment; chênh giảm tạo/dedup refund và giữ provider evidence.
+- [ ] ScopeAdjustment wrong Farm/stale version/concurrent review fail; before/after scope/count, reason và evidence không bị ghi đè.
+- [ ] ExtraFlightRequest thiếu reason/evidence/approval hoặc readiness re-check không thể tạo/start Mission; duplicate retry không tạo extra flight trùng.
 - [ ] SystemAdmin reconciliation thiếu provider reference/reason/evidence hoặc amount/currency lệch current Order không thể Confirmed.
 - [ ] Duplicate/concurrent refund/chargeback callback idempotent, giữ PaymentEvent và chỉ đóng Order gate khi paid flight chưa bắt đầu.
 - [ ] Appointment cancel/reschedule, refund/chargeback và pending adjustment đóng gate.
 - [ ] Direct readiness/handler invocation không bypass rule.
-- [ ] Baseline không payment vẫn pass; Plant Health/Harvest Readiness thiếu payment phải fail.
+- [ ] Baseline không payment vẫn pass nhưng thiếu consent/permission phải fail; Plant Health thiếu payment phải fail; Harvest Readiness luôn disabled trong MVP.
 - [ ] Mỗi readiness failure code có ít nhất một test; state đổi sau khi snapshot được đọc phải được re-check.
 - [ ] Concurrent boundary/count/appointment/payment mutations trả conflict đúng.
 
@@ -2610,34 +2775,33 @@ Không viết lại các unit/migration tests 0R-1 đến 0R-4 đã có cho per-
 
 #### Step 7 — Plant Health result
 
-- [ ] Pending/rejected raw finding không đổi current health và không lọt owner query.
-- [ ] Pending/rejected Disease Zone/recommendation không lọt owner query.
+- [ ] Pending/rejected raw finding không đổi latest-reviewed state và không lọt owner query.
+- [ ] Pending/rejected Disease Zone/sourced guidance không lọt owner query.
 - [ ] Disease Zone correction giữ original geometry/membership; outside-boundary zone không publish.
-- [ ] Recommendation sai disease/severity/version hoặc free-form advice bị từ chối.
+- [ ] Guidance sai suspected-class/source/version, free-form advice, severity field hoặc expert claim không evidence bị từ chối.
 - [ ] Wrong/unassigned manager deny; duplicate ingestion không tạo finding trùng.
 - [ ] Concurrent review/publication chỉ một commit thắng.
-- [ ] Failure giữa quá trình cập nhật nhiều Plant rollback result/current health/audit/outbox.
-- [ ] Result cũ đến muộn không ghi đè current health mới hơn.
-- [ ] Full provenance query được; follow-up không dùng Readiness order.
+- [ ] Failure giữa quá trình cập nhật nhiều Plant rollback result/latest-reviewed state/audit/outbox.
+- [ ] Result cũ đến muộn không ghi đè latest-reviewed state mới hơn.
+- [ ] Owner response luôn có suspected/preliminary + team-labelled limitation, không severity/diagnosis wording.
+- [ ] Full dataset/annotation/model/media/reviewer provenance query được; follow-up chỉ dùng compatible completed/published Plant Health.
 
-#### Step 8 — Harvest Readiness result
+#### Step 8 — Harvest Readiness Stretch-disabled
 
-- [ ] Granularity contract đúng criteria version.
-- [ ] Plant Health order không được dùng làm previous comparison.
-- [ ] Experimental result không mang validated claim.
-- [ ] Duplicate/reprocessed assessment giữ version/provenance.
-- [ ] Architecture/source test không có production dependency sang Harvests legacy.
-- [ ] TenantOwner không đọc pending assessment.
+- [ ] Public/admin-as-public catalogue, request, approval, order/payment, consumer và publication paths đều không cho dùng Harvest Readiness trong MVP.
+- [ ] Runtime DI không đăng ký Harvest Readiness consumer/controller; legacy schema/read adapter không tạo business writes mới.
+- [ ] Bỏ toàn bộ Step 8 vẫn pass MVP build/E2E/DoD.
 
 #### Step 9 — Digital Plant Profile
 
 - [ ] Wrong TenantOwner không suy ra được resource tồn tại.
 - [ ] Draft map/pending/rejected result không xuất hiện.
 - [ ] Cùng Plant ID xuất hiện qua nhiều survey; relocate/replace semantics và timeline order đúng.
+- [ ] Concurrent replacement/new-profile apply không tạo hai active Digital Plant Profiles cho cùng planted pole.
 - [ ] Owner report không trực tiếp tạo/retire/replace Plant; retry không tạo report trùng.
 - [ ] New-plant report thiếu later-survey evidence không thể tạo Digital Plant Profile.
 - [ ] Removed/replaced profile cũ vẫn truy được trong history với lifecycle state đúng.
-- [ ] Comparison chỉ dùng same Farm + same service + published/completed result.
+- [ ] Comparison chỉ dùng same Farm + same service + compatible + published/completed result và trả compatibility basis.
 - [ ] Cache failure fallback database và không mở rộng visibility.
 - [ ] Performance target đạt với dataset gần quy mô thực tế, không N+1.
 
@@ -2648,6 +2812,8 @@ Không viết lại các unit/migration tests 0R-1 đến 0R-4 đã có cho per-
 - [ ] Deep link re-authorize.
 - [ ] Work queue không lộ cross-tenant/unassigned data.
 - [ ] Audit append-only và before/after/reason đầy đủ cho mutation trọng yếu.
+- [ ] Mobile pull chỉ trả assigned/unexpired work; push retry trả cùng outcome, stale base version conflict và không silently overwrite.
+- [ ] Revoked assignment/permission chặn sync mutation; offline checklist không mở readiness; BE1 endpoint không nhận raw media.
 
 ### 27.3. Backlog test kỹ thuật, contract và migration
 
@@ -2669,7 +2835,7 @@ Architecture tests:
 Contract tests:
 
 - [ ] Golden JSON V1/V2/V3 theo drain policy.
-- [ ] BE1↔BE2 purpose-aware readiness, base map/count, boundary exception, health/Disease Zone, readiness-result và completion events.
+- [ ] BE1↔BE2 purpose-aware readiness gồm consent/permission, base map/count, boundary exception, Plant Health V4/Disease Zone/guidance và preliminary completion events.
 - [ ] Payment provider callback signature/dedup contract.
 
 Migration/integration tests trên PostgreSQL/PostGIS thật:
@@ -2692,20 +2858,30 @@ Các file E2E cần tạo/cập nhật:
 - [ ] `backend/tests/AgriDrone.IntegrationTests/E2E/NewCustomerSurveyFlowTests.cs`.
 - [ ] `backend/tests/AgriDrone.IntegrationTests/E2E/ExistingTenantNewFarmSurveyFlowTests.cs`.
 - [ ] `backend/tests/AgriDrone.IntegrationTests/E2E/RepeatPlantHealthSurveyFlowTests.cs`.
-- [ ] `backend/tests/AgriDrone.IntegrationTests/E2E/RepeatHarvestReadinessSurveyFlowTests.cs`.
+- [ ] `backend/tests/AgriDrone.IntegrationTests/E2E/HarvestReadinessDisabledTests.cs`.
+- [ ] `backend/tests/AgriDrone.IntegrationTests/E2E/SurveyAdjustmentExtraFlightFlowTests.cs`.
+- [ ] `backend/tests/AgriDrone.IntegrationTests/E2E/ManagerOfflineSyncTests.cs`.
 - [ ] `backend/tests/AgriDrone.IntegrationTests/E2E/SurveyFailureReplaySecurityTests.cs`.
 - [ ] `backend/tests/AgriDrone.ArchitectureTests/LegacyEndpointSafetyTests.cs`.
 
 Không gom các flow vào một file `SurveyTests.cs`.
 
-- [ ] E2E-01 NewCustomer: request → approval atomic → invitation → boundary/Baseline → map/Plant/count → per-pole pricing/payment → selected service → result/Disease Zone/recommendation → owner portal/change report.
+- [ ] E2E-01 NewCustomer: Plant Health request → approval atomic → invitation → written consent/flight permission → boundary/free Baseline → map/Plant/count → per-pole pricing/sandbox payment → Plant Health → review → preliminary result/Disease Zone/sourced guidance → owner portal/change report.
 - [ ] E2E-02 ExistingTenantNewFarm: không tạo Tenant/User/Owner dư, tạo đúng Farm/Order/assignment rồi chạy flow chuẩn.
 - [ ] E2E-03 Repeat Plant Health: không rebuild base map, reuse Plant IDs, previous comparison là published Plant Health gần nhất.
-- [ ] E2E-04 Repeat Harvest Readiness: không dùng Plant Health làm previous, không tạo Harvest legacy, wording Experimental/Validated đúng.
+- [ ] E2E-04 MVP scope: Harvest Readiness không list/request/order/pay/process/publish được và không ảnh hưởng MVP DoD.
 - [ ] E2E-05 Failure/replay/security: approval/payment/event retry, concurrency, cross-tenant/unassigned/unqualified actor, revoked readiness dependencies và published-only visibility.
+- [ ] E2E-06 Adjustment/extra flight: original snapshot bất biến; difference tạo additional payment/refund; extra flight thiếu approval/re-check bị chặn.
+- [ ] E2E-07 Manager offline: cached assigned work/checklist/notes, interrupted retry không nhân đôi, stale conflict không overwrite và revoked scope bị từ chối.
 - [ ] E2E plant inventory change: owner report không mutate profile; new plant cần later-survey evidence; lifecycle/history được giữ.
 - [ ] Security: tenant isolation, assignment revocation, stale token/context, ID enumeration, webhook signature/replay và secret/PII logging.
-- [ ] Performance: queue paging, current map, Plant list, profile timeline, comparison, media summary và large-batch publication.
+- [ ] Security acceptance: toàn bộ cross-tenant read/mutation matrix phải fail theo 404/403 convention; không chỉ kiểm tra UI visibility.
+- [ ] Performance: log p95 read API (pilot target `≤ 2 s`) và upload-to-review (pilot target `≤ 30 min/session`) cùng hardware/data-size/error context; target chỉ finalize sau pilot.
+- [ ] RQ1 evidence: held-out pole-count error (pilot target `≤ 10%`), boundary cases, match error/identity switches, GNSS-only vs GNSS+grid trên paired repeat flights.
+- [ ] RQ2 evidence: per-class precision/recall/F1 và macro-F1 (pilot target `≥ 0.70`) cho đúng 2–3 team-labelled classes; proposed vs standard detector trên cùng held-out split.
+- [ ] Dataset: 70/20/10 split theo plot/plant/session/original capture sequence, augmentation Train-only, ba seeds cùng split/hardware, versioned dataset/annotation/scripts/logs.
+- [ ] Claim boundary: metrics chỉ đo agreement với team labels; report uncertainty/confounders/single-orchard limitation và không có severity metric/expert diagnosis claim.
+- [ ] Flight safety evidence: written consent, flight legality/permission, pre-flight checklist và failsafe references đều present/còn hiệu lực trước capture; revoke/expiry fail closed.
 
 Không mock domain authorization/readiness/publication trong E2E happy/failure gates.
 

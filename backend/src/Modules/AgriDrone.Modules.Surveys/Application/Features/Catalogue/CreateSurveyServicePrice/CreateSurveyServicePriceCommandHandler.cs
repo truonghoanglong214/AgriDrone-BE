@@ -47,11 +47,6 @@ internal sealed class CreateSurveyServicePriceCommandHandler(
         }
 
         var now = timeProvider.GetUtcNow();
-        if (request.EffectiveFrom < now)
-        {
-            return Result.Failure<CreateSurveyServicePriceResponse>(
-                SurveyServiceError.PriceEffectiveFromInPast());
-        }
 
         if (!string.Equals(
                 request.Currency?.Trim(),
@@ -79,9 +74,16 @@ internal sealed class CreateSurveyServicePriceCommandHandler(
                     "A retired survey service cannot receive a new price."));
         }
 
+        if (!SurveyServiceMvpPolicy.IsSellable(service.ServiceType))
+        {
+            return Result.Failure<CreateSurveyServicePriceResponse>(
+                SurveyServiceError.InvalidLifecycle(
+                    "Only Plant Health can receive an MVP price version."));
+        }
+
         var priceAtNewStart = service.Prices
             .Where(price => price.PricePerPole.HasValue &&
-                            price.IsEffectiveAt(request.EffectiveFrom))
+                            price.IsEffectiveAt(now))
             .ToArray();
         if (priceAtNewStart.Length > 1)
         {
@@ -90,7 +92,7 @@ internal sealed class CreateSurveyServicePriceCommandHandler(
         }
 
         var priceToClose = priceAtNewStart.SingleOrDefault();
-        if (priceToClose?.EffectiveFrom == request.EffectiveFrom)
+        if (priceToClose?.EffectiveFrom == now)
         {
             return Result.Failure<CreateSurveyServicePriceResponse>(
                 SurveyServiceError.PriceWindowOverlap());
@@ -99,8 +101,8 @@ internal sealed class CreateSurveyServicePriceCommandHandler(
         var hasOtherOverlap = await catalogueQueries
             .HasOverlappingPerPolePriceAsync(
                 service.Id,
-                request.EffectiveFrom,
-                request.EffectiveTo,
+                now,
+                effectiveTo: null,
                 priceToClose?.Id,
                 cancellationToken);
         if (hasOtherOverlap)
@@ -113,8 +115,8 @@ internal sealed class CreateSurveyServicePriceCommandHandler(
             service.Id,
             PricePerPole.Create(request.AmountPerPole),
             CurrencyCode.Vnd,
-            request.EffectiveFrom,
-            request.EffectiveTo,
+            now,
+            effectiveTo: null,
             actorId,
             now);
 
@@ -127,7 +129,7 @@ internal sealed class CreateSurveyServicePriceCommandHandler(
 
         try
         {
-            priceToClose?.CloseAt(request.EffectiveFrom);
+            priceToClose?.CloseAt(now);
         }
         catch (SurveyDomainException exception)
         {
@@ -163,6 +165,11 @@ internal sealed class CreateSurveyServicePriceCommandHandler(
                         price,
                         now,
                         request.ExpectedServiceVersion);
+                    // The price already has a generated Guid. Merely attaching it
+                    // through the collection makes EF treat the detached child as
+                    // Modified, which produces an UPDATE of a row that does not yet
+                    // exist and is surfaced as a concurrency conflict.
+                    repository.AddPrice(price);
                     auditWriter.AddSystemAdminAction(
                         unitOfWork,
                         actorId,
@@ -206,7 +213,6 @@ internal sealed class CreateSurveyServicePriceCommandHandler(
             price.PricePerPole!.Value.Amount,
             price.Currency,
             price.EffectiveFrom,
-            price.EffectiveTo,
             priceToClose?.Id,
             service.Version,
             price.CreatedAt));

@@ -7,7 +7,5 @@ public sealed record CreateSurveyServicePriceCommand(
     Guid SurveyServiceId,
     decimal AmountPerPole,
     string Currency,
-    DateTimeOffset EffectiveFrom,
-    DateTimeOffset? EffectiveTo,
     uint ExpectedServiceVersion)
     : IRequest<Result<CreateSurveyServicePriceResponse>>;

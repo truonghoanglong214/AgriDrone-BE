@@ -17,6 +17,5 @@ public sealed record PublicIndicativePriceResponse(
 
 public enum PublicSurveyServiceType
 {
-    PlantHealth,
-    HarvestReadiness
+    PlantHealth
 }

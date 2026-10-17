@@ -74,6 +74,10 @@ public sealed class SurveyOrder : AggregateRoot
     public Guid? SurveyServicePriceId { get; private set; }
     public ConfirmedSurveyPoleCount? ConfirmedSurveyPoleCount { get; private set; }
     public PricePerPole? PricePerPoleSnapshot { get; private set; }
+    public Guid? OriginalSurveyServicePriceId { get; private set; }
+    public ConfirmedSurveyPoleCount? OriginalConfirmedPoleCount { get; private set; }
+    public PricePerPole? OriginalPricePerPoleSnapshot { get; private set; }
+    public decimal? OriginalFinalPrice { get; private set; }
     public Guid? FarmBoundaryVersionId { get; private set; }
     public Guid? FarmBaseMapVersionId { get; private set; }
     public SurveyPoleCountSource? PoleCountSource { get; private set; }
@@ -350,6 +354,11 @@ public sealed class SurveyOrder : AggregateRoot
         PricePerPoleSnapshot = validatedPrice;
         Currency = currency.Value;
         FinalPrice = finalPrice.Amount;
+        CaptureOriginalCommercialSnapshot(
+            surveyServicePriceId,
+            ConfirmedSurveyPoleCount.Value,
+            validatedPrice,
+            finalPrice.Amount);
         PricingConfirmedBy = confirmedBy;
         PricingConfirmedAt = confirmedAt;
         ApplyTransition(SurveyOrderStatus.AwaitingPaidAppointment, confirmedAt);
@@ -421,6 +430,11 @@ public sealed class SurveyOrder : AggregateRoot
         PricePerPoleSnapshot = validatedPrice;
         Currency = currency.Value;
         FinalPrice = finalPrice.Amount;
+        CaptureOriginalCommercialSnapshot(
+            surveyServicePriceId,
+            validatedPoleCount,
+            validatedPrice,
+            finalPrice.Amount);
         PricingConfirmedBy = confirmedBy;
         PricingConfirmedAt = confirmedAt;
         ApplyTransition(SurveyOrderStatus.AwaitingPaidAppointment, confirmedAt);
@@ -494,6 +508,23 @@ public sealed class SurveyOrder : AggregateRoot
         }
 
         Version++;
+    }
+
+    private void CaptureOriginalCommercialSnapshot(
+        Guid surveyServicePriceId,
+        ConfirmedSurveyPoleCount poleCount,
+        PricePerPole pricePerPole,
+        decimal finalPrice)
+    {
+        if (OriginalFinalPrice.HasValue)
+        {
+            return;
+        }
+
+        OriginalSurveyServicePriceId = surveyServicePriceId;
+        OriginalConfirmedPoleCount = poleCount;
+        OriginalPricePerPoleSnapshot = pricePerPole;
+        OriginalFinalPrice = finalPrice;
     }
 
     public void StartPaidService(DateTimeOffset occurredAt) =>

@@ -7,22 +7,24 @@
 ## Implemented boundary
 
 - `POST /api/system-admin/survey-services/{serviceId}/prices` creates a new
-  positive VND `PricePerPole` version with a UTC effective window.
+  positive VND `PricePerPole` version that takes effect immediately at server
+  UTC time. The client does not supply `EffectiveFrom` or `EffectiveTo`.
 - `GET /api/system-admin/survey-services/{serviceId}/prices` returns immutable
   per-pole and legacy per-hectare price history for administration and support.
 - The command requires an authenticated SystemAdmin actor and the expected
   survey-service `xmin` version.
-- A replacement closes the one open price window at the new version's
-  `EffectiveFrom`, flushes that closure, then inserts the new version in the
-  same database transaction and commit. Historical amounts are never edited;
-  any failure rolls the closure back with the insertion and audit record.
+- A replacement uses one `TimeProvider.GetUtcNow()` value to close the current
+  open price window and open the new version, flushes that closure, then inserts
+  the new version in the same database transaction and commit. Historical
+  amounts are never edited; any failure rolls the closure back with the
+  insertion and audit record.
 - Application overlap detection provides an early stable conflict response;
   PostgreSQL exclusion constraint `ex_survey_service_prices_no_overlap` remains
   the race-condition authority and maps to `SurveyService.PriceWindowOverlap`.
 - Audit data captures the previous current window and the newly created version,
   including the closed price identifier.
-- Retired services reject new price versions. Retroactive effective starts are
-  rejected against server time.
+- Retired services reject new price versions. New prices always start at server
+  time and remain open until a later replacement closes them.
 
 ## Migration
 

@@ -11,4 +11,6 @@ internal interface ISurveyServiceRepository
         CancellationToken cancellationToken = default);
 
     void Add(SurveyService surveyService);
+
+    void AddPrice(SurveyServicePrice price);
 }

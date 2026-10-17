@@ -33,9 +33,24 @@ route có hai header timestamp/signature, payload identity/event/amount/currency
 không có Bearer security requirement; chữ ký vẫn được kiểm tra trước application
 handler. Phase 4E bổ sung request/review/apply PriceAdjustment append-only,
 SystemAdmin payment reconciliation và paid-service readiness theo MissionPurpose.
+SystemAdmin survey-service catalogue chỉ nhúng `currentPrice` đang hiệu lực; lịch
+sử giá đầy đủ có response riêng tại `/{serviceId}/prices`.
+`POST /api/system-admin/survey-services/{serviceId}/prices` chỉ nhận amount,
+currency và expected service version; backend tự đặt thời điểm hiệu lực UTC hiện
+tại và để version mở cho tới lần thay giá tiếp theo.
 Callback nhận thêm refund/chargeback nhưng vẫn giữ PaymentEvent bất biến; owner
 không có contract xác nhận payment trực tiếp. Snapshot được sinh từ
 `GET /swagger/v1/swagger.json`
+
+R2 (2026-10-15) khóa public catalogue và paid-readiness purpose chỉ còn
+`PLANT_HEALTH`. `HARVEST_READINESS` vẫn tồn tại trong database/contract cũ để
+đọc lịch sử nhưng không còn là public request option. Capture authorization
+được quản trị qua:
+
+- `PUT /api/system-admin/survey-orders/{orderId}/capture-authorizations/{type}/verify`
+- `PUT /api/system-admin/survey-orders/{orderId}/capture-authorizations/{type}/revoke`
+
+`type` chỉ nhận `WRITTEN_DATA_USE_CONSENT` hoặc `FLIGHT_PERMISSION`.
 của API Development đang chạy với startup migration/core-master-data validation
 tạm tắt bằng environment override; giá trị mặc định của ứng dụng vẫn bật các
 startup gate này.

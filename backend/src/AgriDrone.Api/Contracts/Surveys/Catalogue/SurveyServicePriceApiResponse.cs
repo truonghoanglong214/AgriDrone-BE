@@ -6,7 +6,6 @@ public sealed record CreateSurveyServicePriceApiResponse(
     decimal AmountPerPole,
     string Currency,
     DateTimeOffset EffectiveFrom,
-    DateTimeOffset? EffectiveTo,
     Guid? ClosedPriceVersionId,
     uint ServiceVersion,
     DateTimeOffset CreatedAt);

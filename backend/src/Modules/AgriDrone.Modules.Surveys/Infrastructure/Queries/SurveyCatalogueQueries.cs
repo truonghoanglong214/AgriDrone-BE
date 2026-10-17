@@ -18,8 +18,9 @@ internal sealed class SurveyCatalogueQueries(SurveysDbContext context)
         var services = await context.SurveyServices
             .AsNoTracking()
             .Where(service =>
-                service.Status == SurveyServiceStatus.Active ||
-                service.Status == SurveyServiceStatus.Experimental)
+                service.ServiceType == SurveyServiceType.PlantHealth &&
+                (service.Status == SurveyServiceStatus.Active ||
+                 service.Status == SurveyServiceStatus.Experimental))
             .OrderBy(service => service.Code)
             .Select(service => new ServiceRow(
                 service.Id,
@@ -89,8 +90,12 @@ internal sealed class SurveyCatalogueQueries(SurveysDbContext context)
     }
 
     public async Task<IReadOnlyList<SurveyServiceCatalogueItem>>
-        GetCatalogueAsync(CancellationToken cancellationToken = default)
+        GetCatalogueAsync(
+            DateTimeOffset evaluatedAt,
+            CancellationToken cancellationToken = default)
     {
+        EnsureUtc(evaluatedAt, nameof(evaluatedAt));
+
         var services = await context.SurveyServices
             .AsNoTracking()
             .OrderBy(service => service.Code)
@@ -106,15 +111,46 @@ internal sealed class SurveyCatalogueQueries(SurveysDbContext context)
                 service.UpdatedAt))
             .ToListAsync(cancellationToken);
 
-        var prices = await LoadPricesAsync(
-            surveyServiceId: null,
-            cancellationToken);
-        var pricesByService = prices
-            .GroupBy(price => price.SurveyServiceId)
-            .ToDictionary(
-                group => group.Key,
-                group => (IReadOnlyList<SurveyServicePriceHistoryItem>)
-                    group.Select(ToHistoryItem).ToArray());
+        if (services.Count == 0)
+        {
+            return [];
+        }
+
+        var serviceIds = services.Select(service => service.Id).ToArray();
+        var effectivePrices = await context.SurveyServicePrices
+            .AsNoTracking()
+            .Where(price =>
+                serviceIds.Contains(price.SurveyServiceId) &&
+                price.PricePerPole != null &&
+                price.Currency == "VND" &&
+                price.EffectiveFrom <= evaluatedAt &&
+                (!price.EffectiveTo.HasValue ||
+                 evaluatedAt < price.EffectiveTo.Value))
+            .OrderBy(price => price.SurveyServiceId)
+            .ThenByDescending(price => price.EffectiveFrom)
+            .ThenByDescending(price => price.Id)
+            .Select(price => new PriceRow(
+                price.Id,
+                price.SurveyServiceId,
+                price.PricePerPole,
+                price.PricePerHa,
+                price.Currency,
+                price.EffectiveFrom,
+                price.EffectiveTo,
+                price.CreatedBy,
+                price.CreatedAt))
+            .ToListAsync(cancellationToken);
+
+        EnsureAtMostOneEffectivePrice(effectivePrices, evaluatedAt);
+        var currentPricesByService = effectivePrices.ToDictionary(
+            price => price.SurveyServiceId,
+            price => new EffectiveSurveyServicePrice(
+                price.Id,
+                price.SurveyServiceId,
+                price.PricePerPole!.Value.Amount,
+                price.Currency,
+                price.EffectiveFrom,
+                price.EffectiveTo));
 
         return services.Select(service => new SurveyServiceCatalogueItem(
                 service.Id,
@@ -126,7 +162,7 @@ internal sealed class SurveyCatalogueQueries(SurveysDbContext context)
                 service.Version,
                 service.CreatedAt,
                 service.UpdatedAt,
-                pricesByService.GetValueOrDefault(service.Id) ?? []))
+                currentPricesByService.GetValueOrDefault(service.Id)))
             .ToArray();
     }
 

@@ -6,8 +6,10 @@
 
 ## Implemented boundary
 
-- `GET /api/system-admin/survey-services` returns all service states and price
-  history, including experimental and retired services.
+- `GET /api/system-admin/survey-services` returns all service states, including
+  experimental and retired services, with only the effective per-pole
+  `currentPrice`. Immutable price history is exposed separately through
+  `GET /api/system-admin/survey-services/{serviceId}/prices`.
 - Separate use cases implement metadata update, activation, marking a service
   experimental and retirement.
 - Every mutation requires an authenticated SystemAdmin actor, an expected

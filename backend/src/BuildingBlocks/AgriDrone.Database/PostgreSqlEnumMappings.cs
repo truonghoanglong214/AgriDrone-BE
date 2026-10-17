@@ -25,6 +25,7 @@ using AgriDrone.SharedInfrastructure.Auditing;
 using AgriDrone.SharedKernel.Domain;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
+using Npgsql.EntityFrameworkCore.PostgreSQL.Infrastructure;
 
 namespace AgriDrone.Database;
 
@@ -96,6 +97,8 @@ internal static class PostgreSqlEnumMappings
         modelBuilder.HasPostgresEnum<SurveyAppointmentStatus>(DbSchemas.System, "survey_appointment_status", translator);
         modelBuilder.HasPostgresEnum<SurveyPaymentStatus>(DbSchemas.System, "survey_payment_status", translator);
         modelBuilder.HasPostgresEnum<PriceAdjustmentStatus>(DbSchemas.System, "price_adjustment_status", translator);
+        modelBuilder.HasPostgresEnum<SurveyCaptureAuthorizationType>(DbSchemas.System, "survey_capture_authorization_type", translator);
+        modelBuilder.HasPostgresEnum<SurveyCaptureAuthorizationStatus>(DbSchemas.System, "survey_capture_authorization_status", translator);
         modelBuilder.HasPostgresEnum<SurveyResultStatus>(DbSchemas.System, "survey_result_status", translator);
         modelBuilder.HasPostgresEnum<HarvestReadinessReviewStatus>(DbSchemas.System, "harvest_readiness_review_status", translator);
         modelBuilder.HasPostgresEnum<HarvestReadinessCriterionStatus>(DbSchemas.System, "harvest_readiness_criterion_status", translator);
@@ -106,6 +109,7 @@ internal static class PostgreSqlEnumMappings
     {
         var translator = UpperSnakeCaseNameTranslator.Instance;
 
+        dataSourceBuilder.UseNetTopologySuite();
         dataSourceBuilder.MapEnum<UserStatus>("system.user_status", translator);
         dataSourceBuilder.MapEnum<SystemManagerProfileStatus>("system.system_manager_profile_status", translator);
         dataSourceBuilder.MapEnum<SystemManagerAvailabilityStatus>("system.system_manager_availability_status", translator);
@@ -168,9 +172,58 @@ internal static class PostgreSqlEnumMappings
         dataSourceBuilder.MapEnum<SurveyAppointmentStatus>("system.survey_appointment_status", translator);
         dataSourceBuilder.MapEnum<SurveyPaymentStatus>("system.survey_payment_status", translator);
         dataSourceBuilder.MapEnum<PriceAdjustmentStatus>("system.price_adjustment_status", translator);
+        dataSourceBuilder.MapEnum<SurveyCaptureAuthorizationType>("system.survey_capture_authorization_type", translator);
+        dataSourceBuilder.MapEnum<SurveyCaptureAuthorizationStatus>("system.survey_capture_authorization_status", translator);
         dataSourceBuilder.MapEnum<SurveyResultStatus>("system.survey_result_status", translator);
         dataSourceBuilder.MapEnum<HarvestReadinessReviewStatus>("system.harvest_readiness_review_status", translator);
         dataSourceBuilder.MapEnum<HarvestReadinessCriterionStatus>("system.harvest_readiness_criterion_status", translator);
         dataSourceBuilder.MapEnum<HarvestReadinessGranularity>("system.harvest_readiness_granularity", translator);
+    }
+
+    public static void ConfigureSurveyApprovalOptions(
+        NpgsqlDbContextOptionsBuilder optionsBuilder)
+    {
+        var translator = UpperSnakeCaseNameTranslator.Instance;
+
+        optionsBuilder.MapEnum<UserStatus>(
+            "user_status", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<SystemManagerProfileStatus>(
+            "system_manager_profile_status", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<SystemManagerAvailabilityStatus>(
+            "system_manager_availability_status", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<FlightQualificationStatus>(
+            "flight_qualification_status", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<TenantMemberRole>(
+            "tenant_member_role", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<TenantInvitationStatus>(
+            "tenant_invitation_status", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<TenantInvitationPurpose>(
+            "tenant_invitation_purpose", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<GeneralStatus>(
+            "general_status", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<FarmBaseMapStatus>(
+            "farm_base_map_status", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<SurveyServiceType>(
+            "survey_service_type", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<SurveyServiceStatus>(
+            "survey_service_status", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<SurveyRequestKind>(
+            "survey_request_kind", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<SurveyRequestStatus>(
+            "survey_request_status", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<SurveyReviewDecision>(
+            "survey_review_decision", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<SurveyOrderStatus>(
+            "survey_order_status", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<SurveyPoleCountSource>(
+            "survey_pole_count_source", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<SurveyCaptureAuthorizationType>(
+            "survey_capture_authorization_type", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<SurveyCaptureAuthorizationStatus>(
+            "survey_capture_authorization_status", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<SurveyResultStatus>(
+            "survey_result_status", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<AuditActorType>(
+            "audit_actor_type", DbSchemas.System, translator);
     }
 }

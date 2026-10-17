@@ -226,6 +226,13 @@ public sealed class SurveyRequest : AggregateRoot
                 nameof(surveyService));
         }
 
+        if (!SurveyServiceMvpPolicy.IsSellable(surveyService.ServiceType))
+        {
+            throw new ArgumentException(
+                "Only Plant Health accepts survey requests in the MVP.",
+                nameof(surveyService));
+        }
+
         if (idempotency == default)
         {
             throw new ArgumentException(

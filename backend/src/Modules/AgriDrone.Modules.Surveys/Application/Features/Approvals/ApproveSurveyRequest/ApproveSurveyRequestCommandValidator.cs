@@ -36,17 +36,10 @@ internal sealed class ApproveSurveyRequestCommandValidator
                     $"Checklist version must be '{SurveyRequestReviewChecklistDefinition.Version}'.");
             RuleFor(checklist => checklist.ContactValid)
                 .Equal(true);
-            RuleFor(checklist => checklist.IsDragonFruitFarm)
-                .Equal(true);
             RuleFor(checklist => checklist.IsServiceAreaSupported)
-                .Equal(true);
-            RuleFor(checklist => checklist.IsLocationSufficient)
                 .Equal(true);
             RuleFor(checklist =>
                     checklist.IsPreliminaryLegalAndFlightFeasible)
-                .Equal(true);
-            RuleFor(checklist =>
-                    checklist.IsEligibleSystemManagerAvailable)
                 .Equal(true);
             RuleFor(checklist => checklist.Notes)
                 .MaximumLength(4_000)

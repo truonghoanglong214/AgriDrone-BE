@@ -55,6 +55,13 @@ public sealed class SurveyService : AggregateRoot
     public void Activate(DateTimeOffset activatedAt, uint expectedVersion)
     {
         EnsureVersion(expectedVersion);
+        if (!SurveyServiceMvpPolicy.IsSellable(ServiceType))
+        {
+            throw new SurveyDomainException(
+                SurveyServiceDomainErrorCodes.InvalidLifecycleTransition,
+                "This survey service is disabled for the MVP commercial surface.");
+        }
+
         EnsureTransition(
             Status == SurveyServiceStatus.Experimental,
             SurveyServiceStatus.Active);

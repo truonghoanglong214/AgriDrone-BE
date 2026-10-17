@@ -87,6 +87,7 @@ internal sealed class SubmitNewCustomerSurveyRequestCommandHandler(
             request.SurveyServiceId,
             cancellationToken);
         if (service is null ||
+            service.ServiceType != SurveyServiceType.PlantHealth ||
             service.Status is not SurveyServiceStatus.Active and
                 not SurveyServiceStatus.Experimental)
         {
