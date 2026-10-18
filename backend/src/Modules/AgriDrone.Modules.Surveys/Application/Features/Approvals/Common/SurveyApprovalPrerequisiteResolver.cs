@@ -107,7 +107,8 @@ internal sealed class SurveyApprovalPrerequisiteResolver(
             CurrentPrimaryAssignment: null,
             FarmBaseline: null,
             RequiresBaselineMapping: true,
-            PreviousCompatibleOrder: null));
+            OrderCompatibility:
+                SurveyApprovalOrderCompatibilityPolicy.ForNewFarm()));
     }
 
     private async Task<Result<SurveyApprovalPrerequisites>>
@@ -154,7 +155,8 @@ internal sealed class SurveyApprovalPrerequisiteResolver(
             CurrentPrimaryAssignment: null,
             FarmBaseline: null,
             RequiresBaselineMapping: true,
-            PreviousCompatibleOrder: null));
+            OrderCompatibility:
+                SurveyApprovalOrderCompatibilityPolicy.ForNewFarm()));
     }
 
     private async Task<Result<SurveyApprovalPrerequisites>>
@@ -227,12 +229,15 @@ internal sealed class SurveyApprovalPrerequisiteResolver(
             tenantId,
             farmId,
             cancellationToken);
-        var previousOrder = await referenceQueries
-            .GetPreviousCompatibleOrderForApprovalAsync(
+        var previousOrderCandidate = await referenceQueries
+            .GetPreviousOrderCandidateForApprovalAsync(
                 tenantId,
                 farmId,
                 request.SurveyServiceId,
                 cancellationToken);
+        var compatibility = SurveyApprovalOrderCompatibilityPolicy.Evaluate(
+            baseline,
+            previousOrderCandidate);
 
         return Result.Success(new SurveyApprovalPrerequisites(
             service,
@@ -243,7 +248,7 @@ internal sealed class SurveyApprovalPrerequisiteResolver(
             baseline,
             SurveyApprovalBaselineRequirementResolver
                 .RequiresBaselineMapping(baseline),
-            previousOrder));
+            compatibility));
     }
 
     private async Task<Result<SurveyApprovalManagerReference>>

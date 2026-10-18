@@ -2,6 +2,7 @@ namespace AgriDrone.Api.Contracts.Surveys.Requests;
 
 public sealed record SubmitNewCustomerSurveyRequest(
     Guid SurveyServiceId,
+    string TenantCode,
     string ApplicantName,
     string ApplicantEmail,
     string ApplicantPhone,

@@ -71,7 +71,7 @@ public sealed class Phase6BoundaryTests
     }
 
     [Fact]
-    public void Phase6DoesNotPublishSurveyBusinessControllers()
+    public void SurveyControllersDoNotDependDirectlyOnPersistenceTypes()
     {
         var surveyControllers = typeof(FarmController).Assembly
             .GetTypes()
@@ -79,7 +79,18 @@ public sealed class Phase6BoundaryTests
             .Where(type => type.Name.Contains("Survey", StringComparison.Ordinal))
             .ToArray();
 
-        Assert.Empty(surveyControllers);
+        Assert.NotEmpty(surveyControllers);
+        Assert.All(surveyControllers, controller =>
+        {
+            var constructorDependencies = controller.GetConstructors()
+                .SelectMany(constructor => constructor.GetParameters())
+                .Select(parameter => parameter.ParameterType)
+                .ToArray();
+
+            Assert.DoesNotContain(constructorDependencies, dependency =>
+                dependency.Name.Contains("DbContext", StringComparison.Ordinal) ||
+                dependency.Name.Contains("Repository", StringComparison.Ordinal));
+        });
     }
 
     [Fact]

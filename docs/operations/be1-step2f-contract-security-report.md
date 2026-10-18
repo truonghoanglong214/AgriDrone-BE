@@ -1,5 +1,10 @@
 # BE1 Step 2F — Contract and security hardening report
 
+> Superseded for the R2 target contract by
+> `be1-step2-r2-rebaseline-report.md` (2026-10-18). This report is retained as
+> evidence of the original Step 2F checkpoint; the aggregated runtime now also
+> contains the later Step 3 approve endpoint.
+
 Date: 2026-10-10
 
 Status: **CodeComplete — AwaitingFinalTest**

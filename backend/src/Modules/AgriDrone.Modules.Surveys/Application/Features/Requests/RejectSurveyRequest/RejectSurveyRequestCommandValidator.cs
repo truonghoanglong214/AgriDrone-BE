@@ -24,9 +24,14 @@ internal sealed class RejectSurveyRequestCommandValidator
         public SurveyRequestReviewChecklistInputValidator()
         {
             RuleFor(checklist => checklist.Version)
-            .Equal(SurveyRequestReviewChecklistDefinition.Version)
-            .WithMessage(
-                $"Checklist version must be '{SurveyRequestReviewChecklistDefinition.Version}'.");
+                .Equal(SurveyRequestReviewChecklistDefinition.Version)
+                .WithMessage(
+                    $"Checklist version must be '{SurveyRequestReviewChecklistDefinition.Version}'.");
+            RuleFor(checklist => checklist.Answers)
+                .NotNull()
+                .Must(SurveyRequestReviewChecklistDefinition.HasExactAnswers)
+                .WithMessage(
+                    "Checklist answers must contain exactly the current checklist item codes.");
             RuleFor(checklist => checklist.Notes)
                 .MaximumLength(4_000)
                 .When(checklist => checklist.Notes is not null);

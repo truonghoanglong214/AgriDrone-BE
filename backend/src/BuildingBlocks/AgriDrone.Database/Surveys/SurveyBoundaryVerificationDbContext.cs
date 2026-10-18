@@ -5,6 +5,7 @@ using AgriDrone.Modules.Farms.Domain.Maps;
 using AgriDrone.Modules.Farms.Domain.Zones;
 using AgriDrone.Modules.Farms.Infrastructure.Persistence.Configurations;
 using AgriDrone.Modules.Surveys.Application.Abstractions.Orders;
+using AgriDrone.Modules.Surveys.Application.Abstractions.BoundaryCapture;
 using AgriDrone.Modules.Surveys.Domain;
 using AgriDrone.Modules.Surveys.Infrastructure.Persistence.Configurations;
 using AgriDrone.SharedInfrastructure.Auditing;
@@ -32,6 +33,10 @@ public sealed class SurveyBoundaryVerificationDbContext(
     public DbSet<FarmBaseMapVersion> FarmBaseMapVersions =>
         Set<FarmBaseMapVersion>();
     public DbSet<SurveyOrder> SurveyOrders => Set<SurveyOrder>();
+    public DbSet<SurveyAppointment> SurveyAppointments => Set<SurveyAppointment>();
+    public DbSet<BoundaryCaptureSession> BoundaryCaptureSessions => Set<BoundaryCaptureSession>();
+    public DbSet<BoundaryCaptureSample> BoundaryCaptureSamples => Set<BoundaryCaptureSample>();
+    public DbSet<BaselineRoutePlanReference> BaselineRoutePlanReferences => Set<BaselineRoutePlanReference>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
 
@@ -118,6 +123,10 @@ public sealed class SurveyBoundaryVerificationDbContext(
         modelBuilder.ApplyConfiguration(new FarmBoundaryConfiguration());
         modelBuilder.ApplyConfiguration(new FarmBaseMapVersionConfiguration());
         modelBuilder.ApplyConfiguration(new SurveyOrderConfiguration());
+        modelBuilder.ApplyConfiguration(new SurveyAppointmentConfiguration());
+        modelBuilder.ApplyConfiguration(new BoundaryCaptureSessionConfiguration());
+        modelBuilder.ApplyConfiguration(new BoundaryCaptureSampleConfiguration());
+        modelBuilder.ApplyConfiguration(new BaselineRoutePlanReferenceConfiguration());
         modelBuilder.ApplyConfiguration(new AuditLogConfiguration());
         modelBuilder.ApplyConfiguration(new OutboxMessageConfiguration());
 
@@ -126,7 +135,6 @@ public sealed class SurveyBoundaryVerificationDbContext(
             .Ignore(order => order.SurveyService)
             .Ignore(order => order.SurveyServicePrice)
             .Ignore(order => order.PreviousCompatibleOrder)
-            .Ignore(order => order.Appointments)
             .Ignore(order => order.Payments);
         modelBuilder.Entity<FarmBaseMapVersion>()
             .Ignore(map => map.ZoneMapVersions);
@@ -134,7 +142,6 @@ public sealed class SurveyBoundaryVerificationDbContext(
         modelBuilder.Ignore<SurveyRequest>();
         modelBuilder.Ignore<SurveyService>();
         modelBuilder.Ignore<SurveyServicePrice>();
-        modelBuilder.Ignore<SurveyAppointment>();
         modelBuilder.Ignore<SurveyPayment>();
     }
 }

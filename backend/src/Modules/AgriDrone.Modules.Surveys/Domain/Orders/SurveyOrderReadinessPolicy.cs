@@ -37,6 +37,32 @@ public static class SurveyOrderReadinessPolicy
             failures.Add(SurveyOrderReadinessFailure.BaselineMappingNotRequired);
         }
 
+        if (snapshot.Purpose == SurveyOperationPurpose.BaselineMapping)
+        {
+            if (!snapshot.HasFinalizedBoundaryCapture)
+            {
+                failures.Add(
+                    SurveyOrderReadinessFailure.BoundaryCaptureNotFinalized);
+            }
+
+            if (!snapshot.HasApprovedBaselineRoute)
+            {
+                failures.Add(
+                    SurveyOrderReadinessFailure.BaselineRouteNotApproved);
+            }
+
+            if (!snapshot.IsBaselineRouteCurrent)
+            {
+                failures.Add(SurveyOrderReadinessFailure.BaselineRouteStale);
+            }
+
+            if (!snapshot.IsBaselineRouteWithinSafetyInset)
+            {
+                failures.Add(
+                    SurveyOrderReadinessFailure.BaselineRouteOutsideSafetyInset);
+            }
+        }
+
         if (!snapshot.HasApprovedFarmBoundary)
         {
             failures.Add(SurveyOrderReadinessFailure.BoundaryNotApproved);

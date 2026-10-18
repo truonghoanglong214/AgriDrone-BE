@@ -6,6 +6,7 @@ using AgriDrone.Modules.Surveys.Application.Abstractions.Persistence;
 using AgriDrone.Modules.Surveys.Domain;
 using AgriDrone.SharedKernel.Application.Abstractions;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Routing;
 using Xunit;
 
 namespace AgriDrone.ArchitectureTests;
@@ -110,13 +111,17 @@ public sealed class Be1CorePhase0ArchitectureTests
     }
 
     [Fact]
-    public void PhaseZeroDoesNotOpenSurveyHttpSurface()
+    public void PlantHealthCatalogDoesNotExposeLegacyHealthLevelRoute()
     {
-        var surveyControllers = typeof(FarmController).Assembly
-            .GetTypes()
-            .Where(type => typeof(ControllerBase).IsAssignableFrom(type))
-            .Where(type => type.Name.Contains("Survey", StringComparison.Ordinal));
+        var routes = typeof(PlantCatalogController).GetMethods()
+            .SelectMany(method => method
+                .GetCustomAttributes()
+                .OfType<HttpMethodAttribute>())
+            .Select(attribute => attribute.Template)
+            .Where(template => template is not null)
+            .ToArray();
 
-        Assert.Empty(surveyControllers);
+        Assert.DoesNotContain("health-levels", routes);
+        Assert.Contains("plant-health", routes);
     }
 }

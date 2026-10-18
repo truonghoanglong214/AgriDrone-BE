@@ -12,6 +12,7 @@ public sealed record SurveyRequestDetailResponse(
     Guid? TenantId,
     Guid? FarmId,
     Guid? RequestedByUserId,
+    string? TenantCode,
     Guid SurveyServiceId,
     string SurveyServiceCode,
     string SurveyServiceName,

@@ -49,6 +49,7 @@ internal sealed class SurveyRequestIdempotencyResolver(
             new SurveyRequestAcknowledgementResponse(
                 existing.Id,
                 existing.RequestNumber,
+                existing.TenantCode,
                 existing.Kind,
                 existing.Status,
                 existing.CreatedAt));

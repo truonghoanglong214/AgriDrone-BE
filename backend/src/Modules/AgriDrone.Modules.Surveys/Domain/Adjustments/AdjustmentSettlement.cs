@@ -46,4 +46,58 @@ public sealed class AdjustmentSettlement : Entity
             UpdatedAt = createdAt
         };
     }
+
+    public void MarkProcessing(string? providerReference, DateTimeOffset updatedAt, uint expectedVersion)
+    {
+        EnsureVersion(expectedVersion);
+        if (Status != AdjustmentSettlementStatus.Pending)
+        {
+            throw new InvalidOperationException("Only pending settlements can move to processing.");
+        }
+
+        DomainGuard.Utc(updatedAt);
+        Status = AdjustmentSettlementStatus.Processing;
+        ProviderReference = providerReference?.Trim();
+        UpdatedAt = updatedAt;
+        Version++;
+    }
+
+    public void Confirm(string? providerReference, DateTimeOffset confirmedAt, uint expectedVersion)
+    {
+        EnsureVersion(expectedVersion);
+        if (Status != AdjustmentSettlementStatus.Pending && Status != AdjustmentSettlementStatus.Processing)
+        {
+            throw new InvalidOperationException("Only pending or processing settlements can be confirmed.");
+        }
+
+        DomainGuard.Utc(confirmedAt);
+        Status = AdjustmentSettlementStatus.Confirmed;
+        ProviderReference = providerReference?.Trim() ?? ProviderReference;
+        UpdatedAt = confirmedAt;
+        Version++;
+    }
+
+    public void Fail(string failureReason, DateTimeOffset failedAt, uint expectedVersion)
+    {
+        EnsureVersion(expectedVersion);
+        if (Status != AdjustmentSettlementStatus.Pending && Status != AdjustmentSettlementStatus.Processing)
+        {
+            throw new InvalidOperationException("Only pending or processing settlements can fail.");
+        }
+
+        DomainGuard.Utc(failedAt);
+        ArgumentException.ThrowIfNullOrWhiteSpace(failureReason);
+        Status = AdjustmentSettlementStatus.Failed;
+        FailureReason = failureReason.Trim();
+        UpdatedAt = failedAt;
+        Version++;
+    }
+
+    private void EnsureVersion(uint expectedVersion)
+    {
+        if (Version != expectedVersion)
+        {
+            throw new InvalidOperationException("Adjustment settlement version conflict.");
+        }
+    }
 }

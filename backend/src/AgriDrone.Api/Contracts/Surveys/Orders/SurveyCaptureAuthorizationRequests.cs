@@ -3,14 +3,14 @@ using System.ComponentModel.DataAnnotations;
 namespace AgriDrone.Api.Contracts.Surveys.Orders;
 
 public sealed record VerifySurveyCaptureAuthorizationRequest(
-    [property: Required, StringLength(1000, MinimumLength = 1)]
+    [param: Required, StringLength(1000, MinimumLength = 1)]
     string EvidenceReference,
     DateTimeOffset IssuedAt,
     DateTimeOffset? ExpiresAt,
     uint ExpectedVersion);
 
 public sealed record RevokeSurveyCaptureAuthorizationRequest(
-    [property: Required, StringLength(2000, MinimumLength = 1)]
+    [param: Required, StringLength(2000, MinimumLength = 1)]
     string Reason,
     uint ExpectedVersion);
 

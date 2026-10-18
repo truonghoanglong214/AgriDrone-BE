@@ -11,6 +11,7 @@ internal sealed record SurveyRequestSubmissionSnapshot(
     Guid? FarmId,
     Guid? RequestedByUserId,
     Guid SurveyServiceId,
+    string? TenantCode,
     string ApplicantName,
     string ApplicantEmail,
     string ApplicantPhone,
@@ -31,6 +32,7 @@ internal sealed record SurveyRequestSubmissionSnapshot(
         Guid? farmId,
         Guid? requestedByUserId,
         Guid surveyServiceId,
+        string? tenantCode,
         string applicantName,
         string applicantEmail,
         string applicantPhone,
@@ -51,6 +53,15 @@ internal sealed record SurveyRequestSubmissionSnapshot(
         EnsureOptionalId(tenantId, nameof(tenantId));
         EnsureOptionalId(farmId, nameof(farmId));
         EnsureOptionalId(requestedByUserId, nameof(requestedByUserId));
+        var normalizedTenantCode = kind switch
+        {
+            SurveyRequestKind.NewCustomer =>
+                NormalizeTenantCode(tenantCode),
+            _ when tenantCode is null => null,
+            _ => throw new ArgumentException(
+                "Tenant code can only be supplied for a new customer request.",
+                nameof(tenantCode))
+        };
 
         return new SurveyRequestSubmissionSnapshot(
             kind,
@@ -58,6 +69,7 @@ internal sealed record SurveyRequestSubmissionSnapshot(
             farmId,
             requestedByUserId,
             surveyServiceId,
+            normalizedTenantCode,
             NormalizeRequired(applicantName, nameof(applicantName)),
             NormalizeRequired(applicantEmail, nameof(applicantEmail))
                 .ToLowerInvariant(),
@@ -85,6 +97,7 @@ internal sealed record SurveyRequestSubmissionSnapshot(
             request.FarmId,
             request.RequestedByUserId,
             request.SurveyServiceId,
+            request.TenantCode,
             request.ApplicantName,
             request.ApplicantEmail,
             request.ApplicantPhone,
@@ -110,6 +123,20 @@ internal sealed record SurveyRequestSubmissionSnapshot(
 
     private static string? NormalizeOptional(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static string NormalizeTenantCode(string? value)
+    {
+        var normalized = NormalizeRequired(value!, nameof(value))
+            .ToUpperInvariant();
+        if (normalized.Length > 50)
+        {
+            throw new ArgumentException(
+                "Tenant code cannot exceed 50 characters.",
+                nameof(value));
+        }
+
+        return normalized;
+    }
 
     private static string NormalizePhone(string value)
     {
@@ -189,6 +216,7 @@ internal readonly record struct SurveyRequestSubmissionFingerprint
             FormatId(snapshot.FarmId),
             FormatId(snapshot.RequestedByUserId),
             snapshot.SurveyServiceId.ToString("D"),
+            includesApplicantPayload ? snapshot.TenantCode : null,
             includesApplicantPayload ? snapshot.ApplicantName : null,
             includesApplicantPayload ? snapshot.ApplicantEmail : null,
             includesApplicantPayload ? snapshot.ApplicantPhone : null,
@@ -235,6 +263,7 @@ internal readonly record struct SurveyRequestSubmissionFingerprint
         string? FarmId,
         string? RequestedByUserId,
         string SurveyServiceId,
+        string? TenantCode,
         string? ApplicantName,
         string? ApplicantEmail,
         string? ApplicantPhone,

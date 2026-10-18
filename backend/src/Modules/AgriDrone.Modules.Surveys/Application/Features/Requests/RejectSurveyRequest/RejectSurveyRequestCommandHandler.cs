@@ -162,10 +162,8 @@ internal sealed class RejectSurveyRequestCommandHandler(
         JsonSerializer.SerializeToDocument(new
         {
             version = checklist.Version,
-            contactValid = checklist.ContactValid,
-            isServiceAreaSupported = checklist.IsServiceAreaSupported,
-            isPreliminaryLegalAndFlightFeasible =
-                checklist.IsPreliminaryLegalAndFlightFeasible,
+            answers = SurveyRequestReviewChecklistDefinition
+                .CanonicalizeAnswers(checklist.Answers),
             notes = string.IsNullOrWhiteSpace(checklist.Notes)
                 ? null
                 : checklist.Notes.Trim()

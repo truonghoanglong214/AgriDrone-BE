@@ -52,6 +52,7 @@ internal sealed class SubmitNewCustomerSurveyRequestCommandHandler(
                 farmId: null,
                 requestedByUserId: null,
                 request.SurveyServiceId,
+                request.TenantCode,
                 request.ApplicantName,
                 request.ApplicantEmail,
                 request.ApplicantPhone,
@@ -114,6 +115,7 @@ internal sealed class SubmitNewCustomerSurveyRequestCommandHandler(
                 requestNumberGenerator.Create(),
                 service,
                 request.Idempotency,
+                submission.TenantCode!,
                 submission.ApplicantName,
                 submission.ApplicantEmail,
                 submission.ApplicantPhone,
@@ -140,6 +142,7 @@ internal sealed class SubmitNewCustomerSurveyRequestCommandHandler(
         using var auditData = JsonSerializer.SerializeToDocument(new
         {
             surveyRequest.RequestNumber,
+            surveyRequest.TenantCode,
             surveyRequest.Kind,
             surveyRequest.Status,
             surveyRequest.SurveyServiceId
@@ -215,6 +218,14 @@ internal sealed class SubmitNewCustomerSurveyRequestCommandHandler(
             return Result.Failure<SubmitNewCustomerSurveyRequestResponse>(
                 SurveyRequestError.RequestNumberConflict());
         }
+        catch (DbUpdateException exception)
+            when (exception.IsUniqueConstraintViolation(
+                SurveyRequestPersistenceConstraints.ActiveTenantCode))
+        {
+            return Result.Failure<SubmitNewCustomerSurveyRequestResponse>(
+                SurveyRequestError.TenantCodeUnavailable(
+                    surveyRequest.TenantCode!));
+        }
 
         return Result.Success(MapResponse(surveyRequest));
     }
@@ -240,6 +251,7 @@ internal sealed class SubmitNewCustomerSurveyRequestCommandHandler(
         new(
             request.Id,
             request.RequestNumber,
+            request.TenantCode!,
             request.Kind,
             request.Status,
             request.CreatedAt);
@@ -249,6 +261,7 @@ internal sealed class SubmitNewCustomerSurveyRequestCommandHandler(
         new(
             response.Id,
             response.RequestNumber,
+            response.TenantCode!,
             response.Kind,
             response.Status,
             response.CreatedAt);

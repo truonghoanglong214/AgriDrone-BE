@@ -3,12 +3,12 @@ using System.ComponentModel.DataAnnotations;
 namespace AgriDrone.Api.Contracts.Surveys.Orders;
 
 public sealed record ConfirmSurveyOrderPoleCountRequest(
-    [property: Required] Guid? ExpectedFarmBaseMapVersionId,
-    [property: Required]
-    [property: StringLength(1000, MinimumLength = 1)]
+    [param: Required] Guid? ExpectedFarmBaseMapVersionId,
+    [param: Required]
+    [param: StringLength(1000, MinimumLength = 1)]
     string EvidenceReference,
-    [property: Required]
-    [property: Range(typeof(uint), "1", "4294967295")]
+    [param: Required]
+    [param: Range(typeof(uint), "1", "4294967295")]
     uint? ExpectedOrderVersion);
 
 public sealed record ConfirmSurveyOrderPoleCountApiResponse(

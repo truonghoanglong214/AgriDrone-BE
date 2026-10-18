@@ -11,7 +11,7 @@ public static class PlantsInitializationExtensions
     {
         await using var scope = serviceProvider.CreateAsyncScope();
         var validator = scope.ServiceProvider
-            .GetRequiredService<HealthLevelSeedValidator>();
+            .GetRequiredService<PlantHealthMasterDataValidator>();
         var result = await validator.ValidateAsync(cancellationToken);
 
         if (!result.IsValid)

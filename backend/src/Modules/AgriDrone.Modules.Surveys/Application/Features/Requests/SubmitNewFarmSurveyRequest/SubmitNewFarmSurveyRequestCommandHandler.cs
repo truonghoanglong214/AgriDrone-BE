@@ -78,6 +78,7 @@ internal sealed class SubmitNewFarmSurveyRequestCommandHandler(
                 farmId: null,
                 requestedByUserId: actorId,
                 request.SurveyServiceId,
+                tenantCode: null,
                 owner.FullName,
                 owner.Email,
                 owner.Phone!,

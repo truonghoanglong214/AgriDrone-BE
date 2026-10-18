@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Text.Json;
 using AgriDrone.Modules.Surveys.Domain;
+using NetTopologySuite.Geometries;
 using Xunit;
 
 namespace AgriDrone.UnitTests.Domain.Surveys;
@@ -22,10 +23,43 @@ public sealed class SurveyStateMachineTests
         bool expected) =>
         Assert.Equal(expected, SurveyRequest.CanTransition(from, to));
 
+    [Fact]
+    public void NewCustomerRequestUsesRegisteredTenantCode()
+    {
+        var service = SurveyService.Create(
+            "PLANT_HEALTH",
+            "Plant health",
+            "Plant health survey",
+            SurveyServiceType.PlantHealth,
+            Now);
+
+        var request = SurveyRequest.CreateNewCustomer(
+            "SR-001",
+            service,
+            RequestIdempotency.Create("public:test", "request-1"),
+            " acme-vn ",
+            "Acme Company",
+            "owner@acme.test",
+            "+84901234567",
+            "Acme Farm",
+            "Test address",
+            10m,
+            new Point(106.7, 10.8) { SRID = 4326 },
+            estimatedPoleCount: 100,
+            preferredStartAt: null,
+            preferredEndAt: null,
+            notes: null,
+            createdAt: Now);
+
+        Assert.Equal("ACME-VN", request.TenantCode);
+    }
+
     [Theory]
     [InlineData(SurveyOrderStatus.PendingBoundaryVerification, SurveyOrderStatus.AwaitingBaselineAppointment, true)]
     [InlineData(SurveyOrderStatus.PendingBoundaryVerification, SurveyOrderStatus.AwaitingPricing, true)]
-    [InlineData(SurveyOrderStatus.AwaitingBaselineAppointment, SurveyOrderStatus.BaselineReady, true)]
+    [InlineData(SurveyOrderStatus.AwaitingBaselineAppointment, SurveyOrderStatus.AwaitingBoundaryCapture, true)]
+    [InlineData(SurveyOrderStatus.AwaitingBaselineAppointment, SurveyOrderStatus.BaselineReady, false)]
+    [InlineData(SurveyOrderStatus.AwaitingBoundaryCapture, SurveyOrderStatus.BaselineReady, true)]
     [InlineData(SurveyOrderStatus.BaselineReady, SurveyOrderStatus.BaselineInProgress, true)]
     [InlineData(SurveyOrderStatus.BaselineInProgress, SurveyOrderStatus.AwaitingBaselineReview, true)]
     [InlineData(SurveyOrderStatus.AwaitingBaselineReview, SurveyOrderStatus.AwaitingPricing, true)]
@@ -82,7 +116,8 @@ public sealed class SurveyStateMachineTests
             (nameof(SurveyRequest.Version), 4u));
 
         request.StartReview(Now.AddMinutes(1));
-        using var checklist = JsonDocument.Parse("{\"managerEligible\":true}");
+        using var checklist = JsonDocument.Parse(
+            "{\"version\":\"survey-request-review.v5\",\"managerEligible\":true}");
         request.Approve(checklist, "Eligible", Guid.NewGuid(), Now.AddMinutes(2));
 
         Assert.Equal(SurveyRequestStatus.Approved, request.Status);
@@ -98,7 +133,8 @@ public sealed class SurveyStateMachineTests
         var request = Create<SurveyRequest>(
             (nameof(SurveyRequest.Status), SurveyRequestStatus.Submitted),
             (nameof(SurveyRequest.UpdatedAt), Now));
-        using var checklist = JsonDocument.Parse("{}");
+        using var checklist = JsonDocument.Parse(
+            "{\"version\":\"survey-request-review.v5\"}");
 
         var exception = Assert.Throws<SurveyDomainException>(() =>
             request.Approve(checklist, "Eligible", Guid.NewGuid(), Now.AddMinutes(1)));
@@ -118,17 +154,27 @@ public sealed class SurveyStateMachineTests
             Guid.NewGuid(),
             requiresBaselineMapping: true,
             previousCompatibleOrderId: null,
+            previousOrderCompatibilityPolicyVersion: "test.v1",
+            previousOrderCompatibilityReason: "NO_PREVIOUS_PUBLISHED_ORDER",
             createdAt: Now);
 
-        order.VerifyBoundaryAndScopeForUnmappedFarm(
+        var boundaryId = Guid.NewGuid();
+        var captureId = Guid.NewGuid();
+        order.MarkBaselineAppointmentConfirmed(Now.AddMinutes(1));
+        order.RecordBoundaryCapture(
+            captureId,
+            boundaryId,
             Guid.NewGuid(),
+            Now.AddMinutes(2));
+        order.ApproveBaselineRoute(
             Guid.NewGuid(),
-            Now.AddMinutes(1));
-        order.MarkBaselineAppointmentConfirmed(Now.AddMinutes(2));
-        order.StartBaselineMapping(Now.AddMinutes(3));
+            captureId,
+            boundaryId,
+            Now.AddMinutes(3));
+        order.StartBaselineMapping(Now.AddMinutes(4));
 
         var exception = Assert.Throws<SurveyDomainException>(() =>
-            order.Cancel(Now.AddMinutes(4)));
+            order.Cancel(Now.AddMinutes(5)));
 
         Assert.Equal(SurveyOrderDomainErrorCodes.InvalidTransition, exception.Code);
         Assert.Equal(SurveyOrderStatus.BaselineInProgress, order.Status);
@@ -140,7 +186,9 @@ public sealed class SurveyStateMachineTests
         var ownerId = Guid.NewGuid();
         var appointment = Create<SurveyAppointment>(
             (nameof(SurveyAppointment.Status), SurveyAppointmentStatus.Proposed),
-            (nameof(SurveyAppointment.UpdatedAt), Now));
+            (nameof(SurveyAppointment.UpdatedAt), Now),
+            (nameof(SurveyAppointment.ProposedStartAt), Now.AddMinutes(10)),
+            (nameof(SurveyAppointment.ProposedEndAt), Now.AddMinutes(30)));
 
         appointment.Confirm(ownerId, Now.AddMinutes(1));
         appointment.RequestReschedule("Weather", Now.AddMinutes(2));
@@ -228,6 +276,8 @@ public sealed class SurveyStateMachineTests
             Guid.NewGuid(),
             requiresBaselineMapping: true,
             previousCompatibleOrderId: null,
+            previousOrderCompatibilityPolicyVersion: "test.v1",
+            previousOrderCompatibilityReason: "NO_PREVIOUS_PUBLISHED_ORDER",
             createdAt: Now);
 
         Assert.Throws<ArgumentException>(() =>

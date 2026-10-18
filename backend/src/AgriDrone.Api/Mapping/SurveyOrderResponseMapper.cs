@@ -1,13 +1,44 @@
 using AgriDrone.Api.Contracts.Surveys.Orders;
 using AgriDrone.Modules.Surveys.Application.Features.Orders.GetSurveyOrderBoundaryScope;
+using AgriDrone.Modules.Surveys.Application.Features.Orders.GetAssignedSurveyOrders;
 using AgriDrone.Modules.Surveys.Application.Features.Orders.ConfirmSurveyOrderPoleCount;
 using AgriDrone.Modules.Surveys.Application.Features.Orders.VerifySurveyOrderBoundaryAndScope;
 using AgriDrone.Modules.Surveys.Domain;
+using AgriDrone.SharedKernel.Application.Pagination;
 
 namespace AgriDrone.Api.Mapping;
 
 internal static class SurveyOrderResponseMapper
 {
+    public static PagedResult<AssignedSurveyOrderApiResponse> ToResponse(
+        PagedResult<AssignedSurveyOrderResponse> page) =>
+        new(
+            page.Items.Select(response => new AssignedSurveyOrderApiResponse(
+                    response.SurveyOrderId,
+                    response.OrderNumber,
+                    response.TenantId,
+                    response.FarmId,
+                    response.FarmCode,
+                    response.FarmName,
+                    response.SurveyServiceId,
+                    response.SurveyServiceCode,
+                    response.SurveyServiceName,
+                    MapStatus(response.Status),
+                    response.OrderVersion,
+                    response.RequiresBaselineMapping,
+                    response.FarmBoundaryVersionId,
+                    response.BoundaryCaptureSessionId,
+                    response.BaselineRoutePlanId,
+                    response.CurrentAppointmentId,
+                    response.CurrentAppointmentVersion,
+                    response.CurrentAppointmentStatus?.ToString().ToUpperInvariant(),
+                    response.CreatedAt,
+                    response.UpdatedAt))
+                .ToArray(),
+            page.PageNumber,
+            page.PageSize,
+            page.TotalCount);
+
     public static GetSurveyOrderBoundaryScopeApiResponse ToResponse(
         GetSurveyOrderBoundaryScopeResponse response) =>
         new(
@@ -97,6 +128,8 @@ internal static class SurveyOrderResponseMapper
                 "PENDING_BOUNDARY_VERIFICATION",
             SurveyOrderStatus.AwaitingBaselineAppointment =>
                 "AWAITING_BASELINE_APPOINTMENT",
+            SurveyOrderStatus.AwaitingBoundaryCapture =>
+                "AWAITING_BOUNDARY_CAPTURE",
             SurveyOrderStatus.BaselineReady => "BASELINE_READY",
             SurveyOrderStatus.BaselineInProgress => "BASELINE_IN_PROGRESS",
             SurveyOrderStatus.AwaitingBaselineReview =>

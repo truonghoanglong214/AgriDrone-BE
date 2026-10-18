@@ -5,6 +5,7 @@ namespace AgriDrone.Modules.Surveys.Application.Features.Requests.SubmitNewCusto
 public sealed record SubmitNewCustomerSurveyRequestResponse(
     Guid Id,
     string RequestNumber,
+    string TenantCode,
     SurveyRequestKind Kind,
     SurveyRequestStatus Status,
     DateTimeOffset CreatedAt);

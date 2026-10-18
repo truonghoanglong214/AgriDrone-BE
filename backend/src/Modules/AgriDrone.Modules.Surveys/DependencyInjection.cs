@@ -8,6 +8,7 @@ using AgriDrone.Modules.Surveys.Application.Abstractions.Requests;
 using AgriDrone.Modules.Surveys.Application.Services;
 using AgriDrone.Modules.Surveys.Application.Features.Approvals.Common;
 using AgriDrone.Modules.Surveys.Application.Features.Approvals.ApproveSurveyRequest;
+using AgriDrone.Modules.Surveys.Application.Abstractions.Adjustments;
 using AgriDrone.Modules.Surveys.Domain;
 using AgriDrone.Modules.Surveys.Infrastructure.Approvals;
 using AgriDrone.Modules.Surveys.Infrastructure.Health;
@@ -121,11 +122,12 @@ public static class DependencyInjection
         services.AddScoped<ISurveyServiceRepository, SurveyServiceRepository>();
         services.AddScoped<ISurveyCaptureAuthorizationRepository,
             SurveyCaptureAuthorizationRepository>();
-        services.AddScoped<IHarvestReadinessCriterionRepository, HarvestReadinessCriterionRepository>();
+        services.AddScoped<IScopeAdjustmentRepository, ScopeAdjustmentRepository>();
+        services.AddScoped<IAdjustmentSettlementRepository, AdjustmentSettlementRepository>();
+        services.AddScoped<IExtraFlightRequestRepository, ExtraFlightRequestRepository>();
         services.AddScoped<ISurveyRequestRepository, SurveyRequestRepository>();
         services.AddScoped<ISurveyIntegrationOutbox, SurveyIntegrationOutbox>();
         services.AddScoped<ISurveyCatalogueQueries, SurveyCatalogueQueries>();
-        services.AddScoped<IHarvestReadinessCriterionQueries, HarvestReadinessCriterionQueries>();
         services.AddScoped<ISurveyRequestQueries, SurveyRequestQueries>();
         services.AddScoped<ISurveyRequestIdempotencyResolver, SurveyRequestIdempotencyResolver>();
         services.AddOptions<SurveyPaymentProviderOptions>()

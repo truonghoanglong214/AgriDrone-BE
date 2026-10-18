@@ -19,6 +19,10 @@ public interface ISurveyAppointmentSchedulingRepository
         CancellationToken cancellationToken = default);
 
     void Add(SurveyAppointment appointment);
+
+    Task InvalidateBaselineFieldWorkflowAsync(
+        Guid surveyOrderId,
+        CancellationToken cancellationToken = default);
 }
 
 public sealed record SurveyAppointmentManagerState(

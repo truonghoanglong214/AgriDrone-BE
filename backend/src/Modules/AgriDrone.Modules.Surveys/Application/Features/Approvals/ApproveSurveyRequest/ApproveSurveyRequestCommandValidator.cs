@@ -34,13 +34,15 @@ internal sealed class ApproveSurveyRequestCommandValidator
                 .Equal(SurveyRequestReviewChecklistDefinition.Version)
                 .WithMessage(
                     $"Checklist version must be '{SurveyRequestReviewChecklistDefinition.Version}'.");
-            RuleFor(checklist => checklist.ContactValid)
-                .Equal(true);
-            RuleFor(checklist => checklist.IsServiceAreaSupported)
-                .Equal(true);
-            RuleFor(checklist =>
-                    checklist.IsPreliminaryLegalAndFlightFeasible)
-                .Equal(true);
+            RuleFor(checklist => checklist.Answers)
+                .Cascade(CascadeMode.Stop)
+                .NotNull()
+                .Must(SurveyRequestReviewChecklistDefinition.HasExactAnswers)
+                .WithMessage(
+                    "Checklist answers must contain exactly the current checklist item codes.")
+                .Must(SurveyRequestReviewChecklistDefinition.AreAllAnswersConfirmed)
+                .WithMessage(
+                    "Every approval checklist answer must be confirmed.");
             RuleFor(checklist => checklist.Notes)
                 .MaximumLength(4_000)
                 .When(checklist => checklist.Notes is not null);

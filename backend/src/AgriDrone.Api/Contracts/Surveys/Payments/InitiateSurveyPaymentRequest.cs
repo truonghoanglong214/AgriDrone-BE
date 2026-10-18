@@ -3,8 +3,8 @@ using System.ComponentModel.DataAnnotations;
 namespace AgriDrone.Api.Contracts.Surveys.Payments;
 
 public sealed record InitiateSurveyPaymentRequest(
-    [property: Required]
-    [property: Range(typeof(uint), "1", "4294967295")]
+    [param: Required]
+    [param: Range(typeof(uint), "1", "4294967295")]
     uint? ExpectedOrderVersion);
 
 public sealed record InitiateSurveyPaymentApiResponse(

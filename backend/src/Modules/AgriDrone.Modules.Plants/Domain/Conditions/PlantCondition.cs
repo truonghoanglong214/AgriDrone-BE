@@ -19,7 +19,11 @@ public sealed class PlantCondition : Entity
         int revisionNumber,
         bool isActive,
         DateTimeOffset createdAt,
-        long version)
+        long version,
+        PlantHealthLabelKind? plantHealthLabelKind = null,
+        string? datasetVersion = null,
+        string? annotationRuleVersion = null,
+        string? teamLabelLimitation = null)
     {
         Id = id;
         Code = code;
@@ -32,6 +36,10 @@ public sealed class PlantCondition : Entity
         CreatedAt = createdAt;
         UpdatedAt = createdAt;
         Version = version;
+        PlantHealthLabelKind = plantHealthLabelKind;
+        DatasetVersion = datasetVersion;
+        AnnotationRuleVersion = annotationRuleVersion;
+        TeamLabelLimitation = teamLabelLimitation;
     }
 
     public string Code { get; private set; } = null!;
@@ -43,6 +51,14 @@ public sealed class PlantCondition : Entity
     public ConditionType ConditionType { get; private set; }
 
     public string? Description { get; private set; }
+
+    public PlantHealthLabelKind? PlantHealthLabelKind { get; private set; }
+
+    public string? DatasetVersion { get; private set; }
+
+    public string? AnnotationRuleVersion { get; private set; }
+
+    public string? TeamLabelLimitation { get; private set; }
 
     public int RevisionNumber { get; private set; }
 
@@ -68,7 +84,11 @@ public sealed class PlantCondition : Entity
         string? scientificName,
         ConditionType conditionType,
         string? description,
-        DateTimeOffset createdAt)
+        DateTimeOffset createdAt,
+        PlantHealthLabelKind? plantHealthLabelKind = null,
+        string? datasetVersion = null,
+        string? annotationRuleVersion = null,
+        string? teamLabelLimitation = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(code);
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
@@ -82,6 +102,14 @@ public sealed class PlantCondition : Entity
                 "Condition type is not supported.");
         }
 
+        var targetMetadata = NormalizePlantHealthMetadata(
+            code,
+            conditionType,
+            plantHealthLabelKind,
+            datasetVersion,
+            annotationRuleVersion,
+            teamLabelLimitation);
+
         return new PlantCondition
         (
             Guid.NewGuid(),
@@ -93,7 +121,11 @@ public sealed class PlantCondition : Entity
             1,
             true,
             createdAt,
-            1
+            1,
+            targetMetadata.LabelKind,
+            targetMetadata.DatasetVersion,
+            targetMetadata.AnnotationRuleVersion,
+            targetMetadata.TeamLabelLimitation
         );
     }
 
@@ -101,7 +133,10 @@ public sealed class PlantCondition : Entity
         string name,
         string? scientificName,
         string? description,
-        DateTimeOffset createdAt)
+        DateTimeOffset createdAt,
+        string? datasetVersion = null,
+        string? annotationRuleVersion = null,
+        string? teamLabelLimitation = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         DomainGuard.Utc(createdAt);
@@ -120,6 +155,13 @@ public sealed class PlantCondition : Entity
         }
 
         var nextRevisionNumber = checked(RevisionNumber + 1);
+        var targetMetadata = NormalizePlantHealthMetadata(
+            Code,
+            ConditionType,
+            PlantHealthLabelKind,
+            datasetVersion ?? DatasetVersion,
+            annotationRuleVersion ?? AnnotationRuleVersion,
+            teamLabelLimitation ?? TeamLabelLimitation);
 
         Retire(createdAt);
 
@@ -136,7 +178,11 @@ public sealed class PlantCondition : Entity
             IsActive = true,
             CreatedAt = createdAt,
             UpdatedAt = createdAt,
-            Version = 1
+            Version = 1,
+            PlantHealthLabelKind = targetMetadata.LabelKind,
+            DatasetVersion = targetMetadata.DatasetVersion,
+            AnnotationRuleVersion = targetMetadata.AnnotationRuleVersion,
+            TeamLabelLimitation = targetMetadata.TeamLabelLimitation
         };
     }
 
@@ -168,4 +214,100 @@ public sealed class PlantCondition : Entity
         string.IsNullOrWhiteSpace(value)
             ? null
             : value.Trim();
+
+    private static PlantHealthMetadata NormalizePlantHealthMetadata(
+        string code,
+        ConditionType conditionType,
+        PlantHealthLabelKind? labelKind,
+        string? datasetVersion,
+        string? annotationRuleVersion,
+        string? teamLabelLimitation)
+    {
+        if (!labelKind.HasValue)
+        {
+            if (!string.IsNullOrWhiteSpace(datasetVersion) ||
+                !string.IsNullOrWhiteSpace(annotationRuleVersion) ||
+                !string.IsNullOrWhiteSpace(teamLabelLimitation))
+            {
+                throw new ArgumentException(
+                    "Plant Health provenance requires a label kind.");
+            }
+
+            return new PlantHealthMetadata(null, null, null, null);
+        }
+
+        if (!Enum.IsDefined(labelKind.Value))
+        {
+            throw new ArgumentOutOfRangeException(nameof(labelKind));
+        }
+
+        if (!PlantHealthLabelPolicy.IsAllowed(code, labelKind.Value))
+        {
+            throw new ArgumentException(
+                $"Condition code '{code.Trim().ToUpperInvariant()}' is not in the locked Plant Health label set.",
+                nameof(code));
+        }
+
+        if (labelKind == global::AgriDrone.Modules.Plants.Domain.Conditions.PlantHealthLabelKind.SuspectedDisease &&
+            conditionType != ConditionType.Disease)
+        {
+            throw new ArgumentException(
+                "A suspected-disease label must use the Disease condition type.");
+        }
+
+        if (labelKind == global::AgriDrone.Modules.Plants.Domain.Conditions.PlantHealthLabelKind.ConfusingNonDisease &&
+            conditionType == ConditionType.Disease)
+        {
+            throw new ArgumentException(
+                "A confusing/non-disease label cannot use the Disease condition type.");
+        }
+
+        var normalizedDatasetVersion = NormalizeRequired(
+            datasetVersion,
+            100,
+            nameof(datasetVersion));
+        var normalizedAnnotationRuleVersion = NormalizeRequired(
+            annotationRuleVersion,
+            100,
+            nameof(annotationRuleVersion));
+        var normalizedTeamLabelLimitation = NormalizeRequired(
+            teamLabelLimitation,
+            1000,
+            nameof(teamLabelLimitation));
+
+        if (normalizedDatasetVersion != PlantHealthLabelPolicy.DatasetVersion ||
+            normalizedAnnotationRuleVersion != PlantHealthLabelPolicy.AnnotationRuleVersion ||
+            normalizedTeamLabelLimitation != PlantHealthLabelPolicy.TeamLabelLimitation)
+        {
+            throw new ArgumentException(
+                "Plant Health provenance must match the locked pilot policy.");
+        }
+
+        return new PlantHealthMetadata(
+            labelKind,
+            normalizedDatasetVersion,
+            normalizedAnnotationRuleVersion,
+            normalizedTeamLabelLimitation);
+    }
+
+    private static string NormalizeRequired(
+        string? value,
+        int maximumLength,
+        string parameterName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(value, parameterName);
+        var normalized = value.Trim();
+        if (normalized.Length > maximumLength)
+        {
+            throw new ArgumentOutOfRangeException(parameterName);
+        }
+
+        return normalized;
+    }
+
+    private sealed record PlantHealthMetadata(
+        PlantHealthLabelKind? LabelKind,
+        string? DatasetVersion,
+        string? AnnotationRuleVersion,
+        string? TeamLabelLimitation);
 }

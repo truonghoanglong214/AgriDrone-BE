@@ -1,5 +1,9 @@
 # BE1 Step 2B — NewCustomer Survey Request report
 
+> Superseded for the current NewCustomer contract by
+> `be1-step2-r2-rebaseline-report.md` (2026-10-18). The current request also
+> carries a normalized candidate Tenant code without provisioning a Tenant.
+
 - Date: 2026-10-09
 - Scope: public NewCustomer application intake
 - Status: **CodeComplete — AwaitingFinalTest**

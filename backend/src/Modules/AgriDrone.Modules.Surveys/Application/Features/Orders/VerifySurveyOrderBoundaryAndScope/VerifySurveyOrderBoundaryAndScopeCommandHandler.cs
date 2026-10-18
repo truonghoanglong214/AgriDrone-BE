@@ -96,6 +96,13 @@ internal sealed class VerifySurveyOrderBoundaryAndScopeCommandHandler(
         var state = stateResult.Value;
         var order = state.Order;
 
+        if (order.RequiresBaselineMapping)
+        {
+            return Result.Failure<VerifySurveyOrderBoundaryAndScopeResponse>(
+                SurveyOrderError.InvalidTransition(
+                    "An unmapped farm must finalize a BoundaryCaptureSession; direct polygon verification is not allowed."));
+        }
+
         try
         {
             order.EnsureVersion(command.ExpectedOrderVersion);

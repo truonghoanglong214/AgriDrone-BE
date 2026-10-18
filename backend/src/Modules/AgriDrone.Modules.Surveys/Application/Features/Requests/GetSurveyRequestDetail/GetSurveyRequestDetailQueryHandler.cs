@@ -55,6 +55,7 @@ internal sealed class GetSurveyRequestDetailQueryHandler(
                 detail.TenantId,
                 detail.FarmId,
                 detail.RequestedByUserId,
+                detail.TenantCode,
                 detail.SurveyServiceId,
                 detail.SurveyServiceCode,
                 detail.SurveyServiceName,

@@ -266,7 +266,7 @@ internal sealed class SurveyApprovalReferenceQueries(
     }
 
     public async Task<SurveyApprovalPreviousOrderReference?>
-        GetPreviousCompatibleOrderForApprovalAsync(
+        GetPreviousOrderCandidateForApprovalAsync(
             Guid tenantId,
             Guid farmId,
             Guid surveyServiceId,
@@ -316,11 +316,60 @@ internal sealed class SurveyApprovalReferenceQueries(
                       order.Status == SurveyOrderStatus.Completed &&
                       result.Status == SurveyResultStatus.Published
                 orderby result.PublishedAt descending, order.Id descending
-                select new { OrderId = order.Id, result.PublishedAt })
+                select new
+                {
+                    OrderId = order.Id,
+                    order.FarmBaseMapVersionId,
+                    result.PublishedAt,
+                    result.Provenance
+                })
             .FirstAsync(cancellationToken);
 
         return new SurveyApprovalPreviousOrderReference(
             previous.OrderId,
-            previous.PublishedAt!.Value);
+            previous.PublishedAt!.Value,
+            previous.FarmBaseMapVersionId,
+            ReadProvenanceValue(
+                previous.Provenance.RootElement,
+                "labelDatasetVersion",
+                "datasetVersion"),
+            ReadProvenanceValue(
+                previous.Provenance.RootElement,
+                "annotationRuleVersion"));
+    }
+
+    private static string? ReadProvenanceValue(
+        System.Text.Json.JsonElement root,
+        params string[] propertyNames)
+    {
+        if (TryReadString(root, propertyNames, out var value))
+        {
+            return value;
+        }
+
+        return root.TryGetProperty("plantHealthSemantics", out var semantics) &&
+               semantics.ValueKind == System.Text.Json.JsonValueKind.Object &&
+               TryReadString(semantics, propertyNames, out value)
+            ? value
+            : null;
+    }
+
+    private static bool TryReadString(
+        System.Text.Json.JsonElement element,
+        IReadOnlyList<string> propertyNames,
+        out string? value)
+    {
+        foreach (var propertyName in propertyNames)
+        {
+            if (element.TryGetProperty(propertyName, out var property) &&
+                property.ValueKind == System.Text.Json.JsonValueKind.String)
+            {
+                value = property.GetString()?.Trim();
+                return !string.IsNullOrWhiteSpace(value);
+            }
+        }
+
+        value = null;
+        return false;
     }
 }

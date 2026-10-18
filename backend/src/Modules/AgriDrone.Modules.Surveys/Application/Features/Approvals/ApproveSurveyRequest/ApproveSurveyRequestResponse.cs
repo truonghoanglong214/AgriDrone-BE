@@ -18,4 +18,6 @@ public sealed record ApproveSurveyRequestResponse(
     Guid? OwnerInvitationId,
     bool RequiresBaselineMapping,
     Guid? PreviousCompatibleOrderId,
+    string? PreviousOrderCompatibilityPolicyVersion,
+    string? PreviousOrderCompatibilityReason,
     DateTimeOffset ApprovedAt);

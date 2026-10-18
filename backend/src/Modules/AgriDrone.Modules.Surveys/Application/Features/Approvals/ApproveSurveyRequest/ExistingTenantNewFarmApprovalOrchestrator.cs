@@ -62,7 +62,9 @@ internal sealed class ExistingTenantNewFarmApprovalOrchestrator(
             request.Id,
             request.SurveyServiceId,
             requiresBaselineMapping: true,
-            previousCompatibleOrderId: null,
+            prerequisites.OrderCompatibility.PreviousCompatibleOrderId,
+            prerequisites.OrderCompatibility.PolicyVersion,
+            prerequisites.OrderCompatibility.Reason,
             context.ApprovedAt);
         orderRepository.Add(order);
 

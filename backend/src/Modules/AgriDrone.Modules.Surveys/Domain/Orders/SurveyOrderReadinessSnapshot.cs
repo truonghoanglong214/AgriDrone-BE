@@ -25,7 +25,11 @@ public sealed record SurveyOrderReadinessSnapshot(
     bool HasValidWrittenDataUseConsent = false,
     bool HasValidFlightPermission = false,
     bool HasPendingFinancialSettlement = false,
-    bool HasUnapprovedExtraFlight = false)
+    bool HasUnapprovedExtraFlight = false,
+    bool HasFinalizedBoundaryCapture = false,
+    bool HasApprovedBaselineRoute = false,
+    bool IsBaselineRouteCurrent = false,
+    bool IsBaselineRouteWithinSafetyInset = false)
 {
     public SurveyOrderReadinessSnapshot(
         SurveyOrderStatus OrderStatus,
@@ -69,7 +73,11 @@ public sealed record SurveyOrderReadinessSnapshot(
             HasValidWrittenDataUseConsent: false,
             HasValidFlightPermission: false,
             HasPendingFinancialSettlement: false,
-            HasUnapprovedExtraFlight: false)
+            HasUnapprovedExtraFlight: false,
+            HasFinalizedBoundaryCapture: false,
+            HasApprovedBaselineRoute: false,
+            IsBaselineRouteCurrent: false,
+            IsBaselineRouteWithinSafetyInset: false)
     {
     }
 }

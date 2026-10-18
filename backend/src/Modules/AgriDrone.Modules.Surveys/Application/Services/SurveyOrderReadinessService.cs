@@ -99,6 +99,14 @@ internal sealed class SurveyOrderReadinessService(
                 "FINANCIAL_SETTLEMENT_PENDING",
             SurveyOrderReadinessFailure.ExtraFlightNotApproved =>
                 "EXTRA_FLIGHT_NOT_APPROVED",
+            SurveyOrderReadinessFailure.BoundaryCaptureNotFinalized =>
+                "BOUNDARY_CAPTURE_NOT_FINALIZED",
+            SurveyOrderReadinessFailure.BaselineRouteNotApproved =>
+                "BASELINE_ROUTE_NOT_APPROVED",
+            SurveyOrderReadinessFailure.BaselineRouteStale =>
+                "BASELINE_ROUTE_STALE",
+            SurveyOrderReadinessFailure.BaselineRouteOutsideSafetyInset =>
+                "BASELINE_ROUTE_OUTSIDE_SAFETY_INSET",
             _ => throw new ArgumentOutOfRangeException(nameof(failure))
         };
 }

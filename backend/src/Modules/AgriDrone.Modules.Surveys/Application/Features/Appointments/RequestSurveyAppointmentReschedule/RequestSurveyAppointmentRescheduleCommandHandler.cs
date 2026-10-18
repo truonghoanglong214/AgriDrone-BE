@@ -106,9 +106,14 @@ internal sealed class RequestSurveyAppointmentRescheduleCommandHandler(
             appointment.EnsureVersion(command.ExpectedAppointmentVersion);
             appointment.RequestReschedule(command.Reason, requestedAt);
             if (appointment.Purpose == SurveyAppointmentPurpose.BaselineMapping &&
-                previousOrderStatus == SurveyOrderStatus.BaselineReady)
+                previousOrderStatus is
+                    SurveyOrderStatus.AwaitingBoundaryCapture or
+                    SurveyOrderStatus.BaselineReady)
             {
                 order.ReopenBaselineAppointment(requestedAt);
+                await repository.InvalidateBaselineFieldWorkflowAsync(
+                    order.Id,
+                    cancellationToken);
             }
             else if (appointment.Purpose == SurveyAppointmentPurpose.BaselineMapping &&
                      previousOrderStatus !=

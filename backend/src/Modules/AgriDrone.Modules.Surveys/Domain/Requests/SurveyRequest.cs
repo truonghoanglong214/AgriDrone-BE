@@ -31,6 +31,7 @@ public sealed class SurveyRequest : AggregateRoot
     public Guid? TenantId { get; private set; }
     public Guid? FarmId { get; private set; }
     public Guid? RequestedByUserId { get; private set; }
+    public string? TenantCode { get; private set; }
     public Guid SurveyServiceId { get; private set; }
     public string CallerScope { get; private set; } = null!;
     public string IdempotencyKey { get; private set; } = null!;
@@ -56,6 +57,7 @@ public sealed class SurveyRequest : AggregateRoot
         string requestNumber,
         SurveyService surveyService,
         RequestIdempotency idempotency,
+        string tenantCode,
         string applicantName,
         string applicantEmail,
         string applicantPhone,
@@ -73,6 +75,7 @@ public sealed class SurveyRequest : AggregateRoot
             tenantId: null,
             farmId: null,
             requestedByUserId: null,
+            tenantCode,
             requestNumber,
             surveyService,
             idempotency,
@@ -112,6 +115,7 @@ public sealed class SurveyRequest : AggregateRoot
             tenantId,
             farmId: null,
             requestedByUserId,
+            tenantCode: null,
             requestNumber,
             surveyService,
             idempotency,
@@ -152,6 +156,7 @@ public sealed class SurveyRequest : AggregateRoot
             tenantId,
             farmId,
             requestedByUserId,
+            tenantCode: null,
             requestNumber,
             surveyService,
             idempotency,
@@ -173,6 +178,7 @@ public sealed class SurveyRequest : AggregateRoot
         Guid? tenantId,
         Guid? farmId,
         Guid? requestedByUserId,
+        string? tenantCode,
         string requestNumber,
         SurveyService surveyService,
         RequestIdempotency idempotency,
@@ -194,14 +200,16 @@ public sealed class SurveyRequest : AggregateRoot
             case SurveyRequestKind.NewCustomer
                 when !tenantId.HasValue &&
                      !farmId.HasValue &&
-                     !requestedByUserId.HasValue:
+                     !requestedByUserId.HasValue &&
+                     !string.IsNullOrWhiteSpace(tenantCode):
                 break;
             case SurveyRequestKind.ExistingTenantNewFarm
                 when tenantId.HasValue &&
                      tenantId.Value != Guid.Empty &&
                      !farmId.HasValue &&
                      requestedByUserId.HasValue &&
-                     requestedByUserId.Value != Guid.Empty:
+                     requestedByUserId.Value != Guid.Empty &&
+                     tenantCode is null:
                 break;
             case SurveyRequestKind.ExistingFarmSurvey
                 when tenantId.HasValue &&
@@ -209,7 +217,8 @@ public sealed class SurveyRequest : AggregateRoot
                      farmId.HasValue &&
                      farmId.Value != Guid.Empty &&
                      requestedByUserId.HasValue &&
-                     requestedByUserId.Value != Guid.Empty:
+                     requestedByUserId.Value != Guid.Empty &&
+                     tenantCode is null:
                 break;
             default:
                 throw new ArgumentException(
@@ -244,6 +253,10 @@ public sealed class SurveyRequest : AggregateRoot
             requestNumber,
             40,
             nameof(requestNumber));
+        var normalizedTenantCode = tenantCode is null
+            ? null
+            : NormalizeRequired(tenantCode, 50, nameof(tenantCode))
+                .ToUpperInvariant();
         var normalizedApplicantName = NormalizeRequired(
             applicantName,
             150,
@@ -304,6 +317,7 @@ public sealed class SurveyRequest : AggregateRoot
             TenantId = tenantId,
             FarmId = farmId,
             RequestedByUserId = requestedByUserId,
+            TenantCode = normalizedTenantCode,
             SurveyServiceId = surveyService.Id,
             SurveyService = surveyService,
             CallerScope = idempotency.CallerScope,

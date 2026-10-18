@@ -51,6 +51,10 @@ public sealed class SurveyOrderConfiguration : IEntityTypeConfiguration<SurveyOr
                     "(original_final_price IS NULL AND original_survey_service_price_id IS NULL AND original_confirmed_pole_count IS NULL AND original_price_per_pole_snapshot IS NULL) OR " +
                     "(original_final_price = round(original_confirmed_pole_count * original_price_per_pole_snapshot, 2) AND original_survey_service_price_id IS NOT NULL)");
                 table.HasCheckConstraint("ck_survey_orders_previous_not_self", "previous_compatible_order_id IS NULL OR previous_compatible_order_id <> id");
+                table.HasCheckConstraint(
+                    "ck_survey_orders_previous_compatibility_decision",
+                    "(previous_order_compatibility_policy_version IS NULL AND previous_order_compatibility_reason IS NULL) OR " +
+                    "(length(btrim(previous_order_compatibility_policy_version)) > 0 AND length(btrim(previous_order_compatibility_reason)) > 0)");
             });
         builder.HasKey(order => order.Id).HasName("pk_survey_orders");
         builder.HasAlternateKey(order => new { order.Id, order.TenantId, order.FarmId }).HasName("uq_survey_orders_id_tenant_farm");
@@ -106,6 +110,8 @@ public sealed class SurveyOrderConfiguration : IEntityTypeConfiguration<SurveyOr
             .HasPrecision(18, 2);
         builder.Property(order => order.FarmBoundaryVersionId).HasColumnName("farm_boundary_version_id").HasColumnType("uuid");
         builder.Property(order => order.FarmBaseMapVersionId).HasColumnName("farm_base_map_version_id").HasColumnType("uuid");
+        builder.Property(order => order.BoundaryCaptureSessionId).HasColumnName("boundary_capture_session_id").HasColumnType("uuid");
+        builder.Property(order => order.BaselineRoutePlanId).HasColumnName("baseline_route_plan_id").HasColumnType("uuid");
         builder.Property(order => order.PoleCountSource).HasColumnName("pole_count_source").HasColumnType("system.survey_pole_count_source");
         builder.Property(order => order.PoleCountEvidenceReference).HasColumnName("pole_count_evidence_reference").HasColumnType("character varying(1000)").HasMaxLength(1000);
         builder.Property(order => order.PoleCountConfirmedBy).HasColumnName("pole_count_confirmed_by").HasColumnType("uuid");
@@ -120,6 +126,14 @@ public sealed class SurveyOrderConfiguration : IEntityTypeConfiguration<SurveyOr
         builder.Property(order => order.ScopeConfirmedAt).HasColumnName("scope_confirmed_at").HasColumnType("timestamp with time zone");
         builder.Property(order => order.RequiresBaselineMapping).HasColumnName("requires_baseline_mapping").HasColumnType("boolean");
         builder.Property(order => order.PreviousCompatibleOrderId).HasColumnName("previous_compatible_order_id").HasColumnType("uuid");
+        builder.Property(order => order.PreviousOrderCompatibilityPolicyVersion)
+            .HasColumnName("previous_order_compatibility_policy_version")
+            .HasColumnType("character varying(100)")
+            .HasMaxLength(100);
+        builder.Property(order => order.PreviousOrderCompatibilityReason)
+            .HasColumnName("previous_order_compatibility_reason")
+            .HasColumnType("character varying(100)")
+            .HasMaxLength(100);
         builder.Property(order => order.Status)
             .HasColumnName("status")
             .HasColumnType("system.survey_order_status")

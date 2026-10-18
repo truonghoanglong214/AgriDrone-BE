@@ -1,5 +1,9 @@
 # BE1 Step 3E — Approval API và OpenAPI Evidence
 
+> Evidence này phản ánh checkpoint trước amendment. R2 ngày 2026-10-18 đã bổ
+> sung conditional initial state, versioned compatibility response và test;
+> xem `be1-step3-r2-rebaseline-report.md` để biết trạng thái hiện hành.
+
 Ngày chốt: 2026-10-11  
 Trạng thái: `CodeComplete — AwaitingFinalTest`
 

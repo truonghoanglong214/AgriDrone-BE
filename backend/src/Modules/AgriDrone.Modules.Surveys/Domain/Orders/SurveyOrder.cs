@@ -15,7 +15,13 @@ public sealed class SurveyOrder : AggregateRoot
             },
             [SurveyOrderStatus.AwaitingBaselineAppointment] = new HashSet<SurveyOrderStatus>
             {
+                SurveyOrderStatus.AwaitingBoundaryCapture,
+                SurveyOrderStatus.Cancelled
+            },
+            [SurveyOrderStatus.AwaitingBoundaryCapture] = new HashSet<SurveyOrderStatus>
+            {
                 SurveyOrderStatus.BaselineReady,
+                SurveyOrderStatus.AwaitingBaselineAppointment,
                 SurveyOrderStatus.Cancelled
             },
             [SurveyOrderStatus.BaselineReady] = new HashSet<SurveyOrderStatus>
@@ -80,6 +86,8 @@ public sealed class SurveyOrder : AggregateRoot
     public decimal? OriginalFinalPrice { get; private set; }
     public Guid? FarmBoundaryVersionId { get; private set; }
     public Guid? FarmBaseMapVersionId { get; private set; }
+    public Guid? BoundaryCaptureSessionId { get; private set; }
+    public Guid? BaselineRoutePlanId { get; private set; }
     public SurveyPoleCountSource? PoleCountSource { get; private set; }
     public string? PoleCountEvidenceReference { get; private set; }
     public Guid? PoleCountConfirmedBy { get; private set; }
@@ -97,6 +105,8 @@ public sealed class SurveyOrder : AggregateRoot
     public DateTimeOffset? ScopeConfirmedAt { get; private set; }
     public bool RequiresBaselineMapping { get; private set; }
     public Guid? PreviousCompatibleOrderId { get; private set; }
+    public string? PreviousOrderCompatibilityPolicyVersion { get; private set; }
+    public string? PreviousOrderCompatibilityReason { get; private set; }
     public SurveyOrderStatus Status { get; private set; }
     public uint Version { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
@@ -116,6 +126,8 @@ public sealed class SurveyOrder : AggregateRoot
         Guid surveyServiceId,
         bool requiresBaselineMapping,
         Guid? previousCompatibleOrderId,
+        string previousOrderCompatibilityPolicyVersion,
+        string previousOrderCompatibilityReason,
         DateTimeOffset createdAt)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(orderNumber);
@@ -139,6 +151,15 @@ public sealed class SurveyOrder : AggregateRoot
                 nameof(previousCompatibleOrderId));
         }
 
+        var compatibilityPolicyVersion = NormalizeCompatibilityValue(
+            previousOrderCompatibilityPolicyVersion,
+            100,
+            nameof(previousOrderCompatibilityPolicyVersion));
+        var compatibilityReason = NormalizeCompatibilityValue(
+            previousOrderCompatibilityReason,
+            100,
+            nameof(previousOrderCompatibilityReason));
+
         return new SurveyOrder
         {
             Id = Guid.NewGuid(),
@@ -149,7 +170,12 @@ public sealed class SurveyOrder : AggregateRoot
             SurveyServiceId = surveyServiceId,
             RequiresBaselineMapping = requiresBaselineMapping,
             PreviousCompatibleOrderId = previousCompatibleOrderId,
-            Status = SurveyOrderStatus.PendingBoundaryVerification,
+            PreviousOrderCompatibilityPolicyVersion =
+                compatibilityPolicyVersion,
+            PreviousOrderCompatibilityReason = compatibilityReason,
+            Status = requiresBaselineMapping
+                ? SurveyOrderStatus.AwaitingBaselineAppointment
+                : SurveyOrderStatus.PendingBoundaryVerification,
             CreatedAt = createdAt,
             UpdatedAt = createdAt
         };
@@ -182,12 +208,16 @@ public sealed class SurveyOrder : AggregateRoot
         }
 
         ValidateBoundaryAndScope(farmBoundaryVersionId, verifiedBy, verifiedAt);
-        EnsureTransitionTo(SurveyOrderStatus.AwaitingBaselineAppointment, verifiedAt);
+        EnsureCurrentOrTransitionTo(
+            SurveyOrderStatus.AwaitingBaselineAppointment,
+            verifiedAt);
 
         FarmBoundaryVersionId = farmBoundaryVersionId;
         ScopeConfirmedBy = verifiedBy;
         ScopeConfirmedAt = verifiedAt;
-        ApplyTransition(SurveyOrderStatus.AwaitingBaselineAppointment, verifiedAt);
+        ApplyCurrentOrTransition(
+            SurveyOrderStatus.AwaitingBaselineAppointment,
+            verifiedAt);
     }
 
     public void VerifyBoundaryScopeAndCurrentInventory(
@@ -242,7 +272,7 @@ public sealed class SurveyOrder : AggregateRoot
 
         if (!currentFarmBaseMapVersionId.HasValue)
         {
-            EnsureTransitionTo(
+            EnsureCurrentOrTransitionTo(
                 SurveyOrderStatus.AwaitingBaselineAppointment,
                 verifiedAt);
 
@@ -256,7 +286,7 @@ public sealed class SurveyOrder : AggregateRoot
             PoleCountEvidenceReference = null;
             PoleCountConfirmedBy = null;
             PoleCountConfirmedAt = null;
-            ApplyTransition(
+            ApplyCurrentOrTransition(
                 SurveyOrderStatus.AwaitingBaselineAppointment,
                 verifiedAt);
             return;
@@ -282,10 +312,63 @@ public sealed class SurveyOrder : AggregateRoot
     }
 
     public void MarkBaselineAppointmentConfirmed(DateTimeOffset occurredAt) =>
-        TransitionTo(SurveyOrderStatus.BaselineReady, occurredAt);
+        TransitionTo(SurveyOrderStatus.AwaitingBoundaryCapture, occurredAt);
 
-    public void ReopenBaselineAppointment(DateTimeOffset occurredAt) =>
+    public void ReopenBaselineAppointment(DateTimeOffset occurredAt)
+    {
         TransitionTo(SurveyOrderStatus.AwaitingBaselineAppointment, occurredAt);
+        BoundaryCaptureSessionId = null;
+        BaselineRoutePlanId = null;
+    }
+
+    public void RecordBoundaryCapture(
+        Guid boundaryCaptureSessionId,
+        Guid farmBoundaryVersionId,
+        Guid verifiedBy,
+        DateTimeOffset verifiedAt)
+    {
+        DomainGuard.NotEmpty(boundaryCaptureSessionId);
+        if (!RequiresBaselineMapping ||
+            Status != SurveyOrderStatus.AwaitingBoundaryCapture)
+        {
+            throw new SurveyDomainException(
+                SurveyOrderDomainErrorCodes.InvalidTransition,
+                "Boundary capture is only valid for an unmapped order awaiting field capture.");
+        }
+
+        ValidateBoundaryAndScope(farmBoundaryVersionId, verifiedBy, verifiedAt);
+        SurveyTransitionGuard.EnsureTimestamp(verifiedAt, UpdatedAt);
+        BoundaryCaptureSessionId = boundaryCaptureSessionId;
+        BaselineRoutePlanId = null;
+        FarmBoundaryVersionId = farmBoundaryVersionId;
+        ScopeConfirmedBy = verifiedBy;
+        ScopeConfirmedAt = verifiedAt;
+        UpdatedAt = verifiedAt;
+        Version++;
+    }
+
+    public void ApproveBaselineRoute(
+        Guid baselineRoutePlanId,
+        Guid boundaryCaptureSessionId,
+        Guid farmBoundaryVersionId,
+        DateTimeOffset approvedAt)
+    {
+        DomainGuard.NotEmpty(baselineRoutePlanId);
+        DomainGuard.NotEmpty(boundaryCaptureSessionId);
+        DomainGuard.NotEmpty(farmBoundaryVersionId);
+
+        if (BoundaryCaptureSessionId != boundaryCaptureSessionId ||
+            FarmBoundaryVersionId != farmBoundaryVersionId)
+        {
+            throw new SurveyDomainException(
+                SurveyOrderDomainErrorCodes.InvalidTransition,
+                "The route plan does not match the current capture session and boundary version.");
+        }
+
+        EnsureTransitionTo(SurveyOrderStatus.BaselineReady, approvedAt);
+        BaselineRoutePlanId = baselineRoutePlanId;
+        ApplyTransition(SurveyOrderStatus.BaselineReady, approvedAt);
+    }
 
     public void StartBaselineMapping(DateTimeOffset occurredAt) =>
         TransitionTo(SurveyOrderStatus.BaselineInProgress, occurredAt);
@@ -565,6 +648,52 @@ public sealed class SurveyOrder : AggregateRoot
             Status,
             target,
             SurveyOrderDomainErrorCodes.InvalidTransition);
+    }
+
+    private void EnsureCurrentOrTransitionTo(
+        SurveyOrderStatus target,
+        DateTimeOffset occurredAt)
+    {
+        SurveyTransitionGuard.EnsureTimestamp(occurredAt, UpdatedAt);
+        if (Status != target)
+        {
+            SurveyTransitionGuard.EnsureAllowed(
+                CanTransition(Status, target),
+                Status,
+                target,
+                SurveyOrderDomainErrorCodes.InvalidTransition);
+        }
+    }
+
+    private void ApplyCurrentOrTransition(
+        SurveyOrderStatus target,
+        DateTimeOffset occurredAt)
+    {
+        if (Status == target)
+        {
+            UpdatedAt = occurredAt;
+            Version++;
+            return;
+        }
+
+        ApplyTransition(target, occurredAt);
+    }
+
+    private static string NormalizeCompatibilityValue(
+        string value,
+        int maximumLength,
+        string parameterName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(value, parameterName);
+        var normalized = value.Trim();
+        if (normalized.Length > maximumLength)
+        {
+            throw new ArgumentOutOfRangeException(
+                parameterName,
+                $"Compatibility value cannot exceed {maximumLength} characters.");
+        }
+
+        return normalized;
     }
 
     private void ApplyTransition(

@@ -1,5 +1,9 @@
 # BE1 Step 2E — SystemAdmin request review report
 
+> Superseded for the current checklist/privacy contract by
+> `be1-step2-r2-rebaseline-report.md` (2026-10-18). This document is retained as
+> evidence of the original Step 2E checkpoint.
+
 Date: 2026-10-10
 
 Status: **CodeComplete — AwaitingFinalTest**

@@ -77,7 +77,7 @@ internal sealed class SurveyOrderMissionPlanningQuery(
         var isBaselinePlanning = source.RequiresBaselineMapping &&
                                  source.FarmBaseMapVersionId is null;
         var planningStatusAllowed = isBaselinePlanning
-            ? source.OrderStatus is "AwaitingBaselineAppointment" or "BaselineReady"
+            ? source.OrderStatus is "BaselineReady"
             : source.OrderStatus is "AwaitingPaidAppointment" or "AwaitingPayment" or
                 "ReadyForPaidService";
         var planningFailures = source.ReadinessFailures.Where(failure =>

@@ -11,10 +11,36 @@ public sealed class PlantConditionConfiguration : IEntityTypeConfiguration<Plant
         builder.ToTable(
             "plant_conditions",
             "plant",
-            tableBuilder => tableBuilder.HasComment(
-                "Global catalog of diseases, abiotic damage and mechanical plant conditions."));
+            tableBuilder =>
+            {
+                tableBuilder.HasComment(
+                    "Global catalog of diseases, abiotic damage and mechanical plant conditions.");
+                tableBuilder.HasCheckConstraint(
+                    "ck_plant_conditions_health_label_metadata",
+                    "(plant_health_label_kind IS NULL AND dataset_version IS NULL AND annotation_rule_version IS NULL AND team_label_limitation IS NULL) OR " +
+                    "(plant_health_label_kind IS NOT NULL AND dataset_version IS NOT NULL AND annotation_rule_version IS NOT NULL AND team_label_limitation IS NOT NULL)");
+                tableBuilder.HasCheckConstraint(
+                    "ck_plant_conditions_health_label_kind",
+                    "plant_health_label_kind IS NULL OR plant_health_label_kind IN ('SuspectedDisease', 'ConfusingNonDisease')");
+                tableBuilder.HasCheckConstraint(
+                    "ck_plant_conditions_health_label_type",
+                    "(plant_health_label_kind IS NULL) OR " +
+                    "(plant_health_label_kind = 'SuspectedDisease' AND condition_type = 'DISEASE'::system.condition_type) OR " +
+                    "(plant_health_label_kind = 'ConfusingNonDisease' AND condition_type <> 'DISEASE'::system.condition_type)");
+                tableBuilder.HasCheckConstraint(
+                    "ck_plant_conditions_health_label_code",
+                    "plant_health_label_kind IS NULL OR " +
+                    "(plant_health_label_kind = 'SuspectedDisease' AND code IN ('BROWN_SPOT', 'ANTHRACNOSE')) OR " +
+                    "(plant_health_label_kind = 'ConfusingNonDisease' AND code IN ('SUNBURN', 'MECHANICAL_SCAR'))");
+            });
 
         builder.HasKey(condition => condition.Id).HasName("pk_plant_conditions");
+        builder.HasAlternateKey(condition => new
+            {
+                condition.Id,
+                condition.RevisionNumber
+            })
+            .HasName("ak_plant_conditions_id_revision");
 
         builder.Property(condition => condition.Id)
             .HasColumnName("id")
@@ -49,6 +75,23 @@ public sealed class PlantConditionConfiguration : IEntityTypeConfiguration<Plant
         builder.Property(condition => condition.Description)
             .HasColumnName("description")
             .HasColumnType("text");
+
+        builder.Property(condition => condition.PlantHealthLabelKind)
+            .HasColumnName("plant_health_label_kind")
+            .HasConversion<string>()
+            .HasMaxLength(40);
+
+        builder.Property(condition => condition.DatasetVersion)
+            .HasColumnName("dataset_version")
+            .HasMaxLength(100);
+
+        builder.Property(condition => condition.AnnotationRuleVersion)
+            .HasColumnName("annotation_rule_version")
+            .HasMaxLength(100);
+
+        builder.Property(condition => condition.TeamLabelLimitation)
+            .HasColumnName("team_label_limitation")
+            .HasMaxLength(1000);
 
         builder.Property(condition => condition.RevisionNumber)
             .HasColumnName("revision_number")
@@ -106,6 +149,14 @@ public sealed class PlantConditionConfiguration : IEntityTypeConfiguration<Plant
             .HasDatabaseName("uq_plant_conditions_supersedes")
             .HasFilter("supersedes_id IS NOT NULL")
             .IsUnique();
+
+        builder.HasIndex(condition => new
+            {
+                condition.PlantHealthLabelKind,
+                condition.IsActive
+            })
+            .HasDatabaseName("ix_plant_conditions_health_label_active")
+            .HasFilter("plant_health_label_kind IS NOT NULL");
 
         builder.HasOne<PlantCondition>()
             .WithMany()

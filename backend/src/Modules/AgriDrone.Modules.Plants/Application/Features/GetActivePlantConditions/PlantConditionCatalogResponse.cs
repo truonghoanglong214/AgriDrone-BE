@@ -9,4 +9,8 @@ public sealed record PlantConditionCatalogResponse(
     string? ScientificName,
     ConditionType ConditionType,
     string? Description,
-    int RevisionNumber);
+    int RevisionNumber,
+    PlantHealthLabelKind? PlantHealthLabelKind = null,
+    string? DatasetVersion = null,
+    string? AnnotationRuleVersion = null,
+    string? TeamLabelLimitation = null);

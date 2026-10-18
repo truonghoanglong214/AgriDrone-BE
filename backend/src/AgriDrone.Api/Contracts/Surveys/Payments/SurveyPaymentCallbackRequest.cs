@@ -7,20 +7,20 @@ namespace AgriDrone.Api.Contracts.Surveys.Payments;
 /// request JSON as <c>{unixTimestamp}.{rawJson}</c> using HMAC-SHA256.
 /// </summary>
 public sealed record SurveyPaymentCallbackRequest(
-    [property: Required]
-    [property: StringLength(200, MinimumLength = 1)]
+    [param: Required]
+    [param: StringLength(200, MinimumLength = 1)]
     string ProviderReference,
-    [property: Required]
-    [property: StringLength(200, MinimumLength = 1)]
+    [param: Required]
+    [param: StringLength(200, MinimumLength = 1)]
     string EventId,
-    [property: Required]
-    [property: StringLength(100, MinimumLength = 1)]
+    [param: Required]
+    [param: StringLength(100, MinimumLength = 1)]
     string EventType,
-    [property: Required]
-    [property: Range(typeof(decimal), "0.01", "79228162514264337593543950335")]
+    [param: Required]
+    [param: Range(typeof(decimal), "0.01", "79228162514264337593543950335")]
     decimal Amount,
-    [property: Required]
-    [property: StringLength(3, MinimumLength = 3)]
+    [param: Required]
+    [param: StringLength(3, MinimumLength = 3)]
     string Currency,
-    [property: Required]
+    [param: Required]
     DateTimeOffset OccurredAt);

@@ -76,7 +76,12 @@ public sealed class SurveyApprovalDbContext(
         }
 
         await using var transaction = await Database.BeginTransactionAsync(
-            IsolationLevel.RepeatableRead,
+            // The approval repositories take explicit FOR UPDATE / FOR SHARE
+            // locks on every existing row whose state is relied upon. READ
+            // COMMITTED lets a waiter observe the latest locked row after a
+            // concurrent manager/status update instead of failing the whole
+            // approval with a repeatable-read serialization error.
+            IsolationLevel.ReadCommitted,
             cancellationToken);
 
         _approvalTransactionActive = true;
@@ -124,6 +129,12 @@ public sealed class SurveyApprovalDbContext(
         EnsureApprovalTransaction();
         await base.SaveChangesAsync(cancellationToken);
         await failureInjector.AfterFlushAsync(checkpoint, cancellationToken);
+    }
+
+    internal Task FlushAsync(CancellationToken cancellationToken)
+    {
+        EnsureApprovalTransaction();
+        return base.SaveChangesAsync(cancellationToken);
     }
 
     internal void AddOutboxMessage(OutboxMessage message)

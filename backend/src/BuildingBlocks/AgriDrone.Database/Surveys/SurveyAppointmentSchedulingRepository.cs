@@ -44,26 +44,28 @@ internal sealed class SurveyAppointmentSchedulingRepository(
             cancellationToken);
         var appointments = await context.SurveyAppointments
             .FromSqlInterpolated($$"""
-                SELECT *
-                FROM survey.survey_appointments
-                WHERE survey_order_id = {{surveyOrderId}}
-                  AND purpose = {{purpose}}
-                  AND status IN (
+                SELECT appointment.*, appointment.xmin
+                FROM survey.survey_appointments AS appointment
+                WHERE appointment.survey_order_id = {{surveyOrderId}}
+                  AND appointment.purpose = {{purpose}}
+                  AND appointment.status IN (
                     'PROPOSED'::system.survey_appointment_status,
                     'CONFIRMED'::system.survey_appointment_status,
                     'RESCHEDULE_REQUESTED'::system.survey_appointment_status)
-                FOR UPDATE
+                FOR UPDATE OF appointment
                 """)
             .ToListAsync(cancellationToken);
         var latestAppointments = await context.SurveyAppointments
             .FromSqlInterpolated($$"""
-                SELECT *
-                FROM survey.survey_appointments
-                WHERE survey_order_id = {{surveyOrderId}}
-                  AND purpose = {{purpose}}
-                ORDER BY revision_number DESC, created_at DESC, id DESC
+                SELECT appointment.*, appointment.xmin
+                FROM survey.survey_appointments AS appointment
+                WHERE appointment.survey_order_id = {{surveyOrderId}}
+                  AND appointment.purpose = {{purpose}}
+                ORDER BY appointment.revision_number DESC,
+                         appointment.created_at DESC,
+                         appointment.id DESC
                 LIMIT 1
-                FOR UPDATE
+                FOR UPDATE OF appointment
                 """)
             .ToListAsync(cancellationToken);
 
@@ -102,11 +104,11 @@ internal sealed class SurveyAppointmentSchedulingRepository(
             cancellationToken);
         var appointments = await context.SurveyAppointments
             .FromSqlInterpolated($$"""
-                SELECT *
-                FROM survey.survey_appointments
-                WHERE id = {{appointmentId}}
-                  AND survey_order_id = {{surveyOrderId}}
-                FOR UPDATE
+                SELECT appointment.*, appointment.xmin
+                FROM survey.survey_appointments AS appointment
+                WHERE appointment.id = {{appointmentId}}
+                  AND appointment.survey_order_id = {{surveyOrderId}}
+                FOR UPDATE OF appointment
                 """)
             .ToListAsync(cancellationToken);
         var appointment = appointments.SingleOrDefault();
@@ -126,6 +128,24 @@ internal sealed class SurveyAppointmentSchedulingRepository(
         ArgumentNullException.ThrowIfNull(appointment);
         context.EnsureTransaction();
         context.SurveyAppointments.Add(appointment);
+    }
+
+    public async Task InvalidateBaselineFieldWorkflowAsync(
+        Guid surveyOrderId,
+        CancellationToken cancellationToken = default)
+    {
+        context.EnsureTransaction();
+        await context.Database.ExecuteSqlInterpolatedAsync($$"""
+            UPDATE survey.boundary_capture_sessions
+            SET status = 'Superseded'
+            WHERE survey_order_id = {{surveyOrderId}}
+              AND status IN ('InProgress', 'Finalized');
+
+            UPDATE survey.baseline_route_plan_references
+            SET status = 'Superseded'
+            WHERE survey_order_id = {{surveyOrderId}}
+              AND status IN ('Generated', 'Approved');
+            """, cancellationToken);
     }
 
     private Task<bool> LockOrderAsync(

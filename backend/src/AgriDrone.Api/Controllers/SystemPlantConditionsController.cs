@@ -33,7 +33,13 @@ public sealed class SystemPlantConditionsController(
             request.Name,
             request.ScientificName,
             MapConditionType(request.ConditionType),
-            request.Description);
+            request.Description,
+            request.PlantHealthLabelKind.HasValue
+                ? MapLabelKind(request.PlantHealthLabelKind.Value)
+                : null,
+            request.DatasetVersion,
+            request.AnnotationRuleVersion,
+            request.TeamLabelLimitation);
 
         var result = await sender.Send(
             command,
@@ -58,7 +64,10 @@ public sealed class SystemPlantConditionsController(
             request.Name,
             request.ScientificName,
             request.Description,
-            request.ExpectedVersion);
+            request.ExpectedVersion,
+            request.DatasetVersion,
+            request.AnnotationRuleVersion,
+            request.TeamLabelLimitation);
 
         var result = await sender.Send(command, cancellationToken);
 
@@ -96,6 +105,12 @@ public sealed class SystemPlantConditionsController(
             response.ScientificName,
             MapConditionType(response.ConditionType),
             response.Description,
+            response.PlantHealthLabelKind.HasValue
+                ? MapLabelKind(response.PlantHealthLabelKind.Value)
+                : null,
+            response.DatasetVersion,
+            response.AnnotationRuleVersion,
+            response.TeamLabelLimitation,
             response.RevisionNumber,
             response.IsActive,
             response.CreatedAt,
@@ -133,5 +148,25 @@ public sealed class SystemPlantConditionsController(
                 nameof(conditionType),
                 conditionType,
                 "Unsupported plant condition type.")
+        };
+
+    private static PlantHealthLabelKind MapLabelKind(
+        PlantHealthLabelKindValue value) => value switch
+        {
+            PlantHealthLabelKindValue.SuspectedDisease =>
+                PlantHealthLabelKind.SuspectedDisease,
+            PlantHealthLabelKindValue.ConfusingNonDisease =>
+                PlantHealthLabelKind.ConfusingNonDisease,
+            _ => throw new ArgumentOutOfRangeException(nameof(value))
+        };
+
+    private static PlantHealthLabelKindValue MapLabelKind(
+        PlantHealthLabelKind value) => value switch
+        {
+            PlantHealthLabelKind.SuspectedDisease =>
+                PlantHealthLabelKindValue.SuspectedDisease,
+            PlantHealthLabelKind.ConfusingNonDisease =>
+                PlantHealthLabelKindValue.ConfusingNonDisease,
+            _ => throw new ArgumentOutOfRangeException(nameof(value))
         };
 }

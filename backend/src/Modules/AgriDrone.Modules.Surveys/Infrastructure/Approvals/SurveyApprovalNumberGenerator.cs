@@ -5,8 +5,6 @@ namespace AgriDrone.Modules.Surveys.Infrastructure.Approvals;
 internal sealed class SurveyApprovalNumberGenerator
     : ISurveyApprovalNumberGenerator
 {
-    public string CreateTenantCode() => Create("TEN", suffixLength: 26);
-
     public string CreateFarmCode() => Create("FARM", suffixLength: 25);
 
     public string CreateOrderNumber() => Create("SO", suffixLength: 32);

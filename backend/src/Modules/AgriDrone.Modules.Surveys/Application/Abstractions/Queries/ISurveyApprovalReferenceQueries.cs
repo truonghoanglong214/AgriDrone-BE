@@ -49,12 +49,14 @@ public interface ISurveyApprovalReferenceQueries
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Returns the most recently published compatible result whose order is
-    /// Completed and belongs to the same Tenant, Farm and SurveyService. Ordering
-    /// is PublishedAt descending, then OrderId descending.
+    /// Returns the most recently published candidate whose order is Completed
+    /// and belongs to the same Tenant, Farm and SurveyService. The caller must
+    /// still apply the versioned compatibility policy; same service alone does
+    /// not prove Plant identity or label/annotation semantic compatibility.
+    /// Ordering is PublishedAt descending, then OrderId descending.
     /// </summary>
     Task<SurveyApprovalPreviousOrderReference?>
-        GetPreviousCompatibleOrderForApprovalAsync(
+        GetPreviousOrderCandidateForApprovalAsync(
             Guid tenantId,
             Guid farmId,
             Guid surveyServiceId,
@@ -107,4 +109,7 @@ public sealed record SurveyApprovalFarmBaselineReference(
 
 public sealed record SurveyApprovalPreviousOrderReference(
     Guid SurveyOrderId,
-    DateTimeOffset PublishedAt);
+    DateTimeOffset PublishedAt,
+    Guid? FarmBaseMapVersionId,
+    string? LabelDatasetVersion,
+    string? AnnotationRuleVersion);

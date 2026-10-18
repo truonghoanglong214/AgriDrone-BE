@@ -5,6 +5,7 @@ using AgriDrone.IntegrationContracts.Mapping;
 using AgriDrone.IntegrationContracts.Messaging;
 using AgriDrone.Modules.Surveys.Application.Abstractions.Approvals;
 using AgriDrone.Modules.Surveys.Application.Abstractions.Appointments;
+using AgriDrone.Modules.Surveys.Application.Abstractions.BoundaryCapture;
 using AgriDrone.Modules.Surveys.Application.Abstractions.Persistence;
 using AgriDrone.Modules.Surveys.Application.Abstractions.Queries;
 using AgriDrone.Modules.Surveys.Application.Abstractions.Orders;
@@ -47,6 +48,8 @@ public static class DependencyInjection
 
         services.AddScoped<ISurveyOrderOperationalContextV3Query,
             SurveyOrderOperationalContextV3Query>();
+        services.AddScoped<ISystemManagerSurveyOrderQueries,
+            SystemManagerSurveyOrderQueries>();
 
         return services;
     }
@@ -64,7 +67,11 @@ public static class DependencyInjection
                     serviceProvider.GetRequiredService<NpgsqlDataSource>();
                 options.UseNpgsql(
                     dataSource,
-                    npgsql => npgsql.UseNetTopologySuite());
+                    npgsql =>
+                    {
+                        npgsql.UseNetTopologySuite();
+                        PostgreSqlEnumMappings.ConfigureOptions(npgsql);
+                    });
             });
 
         services.AddScoped<IMappingPublicationUnitOfWork>(serviceProvider =>
@@ -92,7 +99,11 @@ public static class DependencyInjection
                     serviceProvider.GetRequiredService<NpgsqlDataSource>();
                 options.UseNpgsql(
                     dataSource,
-                    npgsql => npgsql.UseNetTopologySuite());
+                    npgsql =>
+                    {
+                        npgsql.UseNetTopologySuite();
+                        PostgreSqlEnumMappings.ConfigureOptions(npgsql);
+                    });
             });
 
         services.AddScoped<ISurveyResultPublicationUnitOfWork>(
@@ -141,7 +152,6 @@ public static class DependencyInjection
         services.AddScoped<ISurveyApprovalOutbox, SurveyApprovalOutbox>();
         services.AddScoped<ISurveyOrderRepository,
             SurveyApprovalOrderRepository>();
-
         return services;
     }
 
@@ -158,7 +168,11 @@ public static class DependencyInjection
                     serviceProvider.GetRequiredService<NpgsqlDataSource>();
                 options.UseNpgsql(
                     dataSource,
-                    npgsql => npgsql.UseNetTopologySuite());
+                    npgsql =>
+                    {
+                        npgsql.UseNetTopologySuite();
+                        PostgreSqlEnumMappings.ConfigureOptions(npgsql);
+                    });
             });
 
         services.AddScoped<ISurveyBoundaryVerificationUnitOfWork>(
@@ -170,6 +184,8 @@ public static class DependencyInjection
             SurveyOrderBoundaryQueries>();
         services.AddScoped<ISurveyBoundaryVerificationOutbox,
             SurveyBoundaryVerificationOutbox>();
+        services.AddScoped<IBoundaryCaptureRepository,
+            BoundaryCaptureRepository>();
 
         return services;
     }
@@ -187,7 +203,11 @@ public static class DependencyInjection
                     serviceProvider.GetRequiredService<NpgsqlDataSource>();
                 options.UseNpgsql(
                     dataSource,
-                    npgsql => npgsql.UseNetTopologySuite());
+                    npgsql =>
+                    {
+                        npgsql.UseNetTopologySuite();
+                        PostgreSqlEnumMappings.ConfigureOptions(npgsql);
+                    });
             });
 
         services.AddScoped<ISurveyAppointmentSchedulingUnitOfWork>(
@@ -216,7 +236,11 @@ public static class DependencyInjection
                     serviceProvider.GetRequiredService<NpgsqlDataSource>();
                 options.UseNpgsql(
                     dataSource,
-                    npgsql => npgsql.UseNetTopologySuite());
+                    npgsql =>
+                    {
+                        npgsql.UseNetTopologySuite();
+                        PostgreSqlEnumMappings.ConfigureOptions(npgsql);
+                    });
             });
 
         services.AddScoped<ISurveyPricingConfirmationUnitOfWork>(
@@ -243,7 +267,11 @@ public static class DependencyInjection
                     serviceProvider.GetRequiredService<NpgsqlDataSource>();
                 options.UseNpgsql(
                     dataSource,
-                    npgsql => npgsql.UseNetTopologySuite());
+                    npgsql =>
+                    {
+                        npgsql.UseNetTopologySuite();
+                        PostgreSqlEnumMappings.ConfigureOptions(npgsql);
+                    });
             });
 
         services.AddScoped<ISurveyPaymentProcessingUnitOfWork>(

@@ -180,50 +180,84 @@ internal static class PostgreSqlEnumMappings
         dataSourceBuilder.MapEnum<HarvestReadinessGranularity>("system.harvest_readiness_granularity", translator);
     }
 
-    public static void ConfigureSurveyApprovalOptions(
+    public static void ConfigureOptions(
         NpgsqlDbContextOptionsBuilder optionsBuilder)
     {
         var translator = UpperSnakeCaseNameTranslator.Instance;
 
-        optionsBuilder.MapEnum<UserStatus>(
-            "user_status", DbSchemas.System, translator);
-        optionsBuilder.MapEnum<SystemManagerProfileStatus>(
-            "system_manager_profile_status", DbSchemas.System, translator);
-        optionsBuilder.MapEnum<SystemManagerAvailabilityStatus>(
-            "system_manager_availability_status", DbSchemas.System, translator);
-        optionsBuilder.MapEnum<FlightQualificationStatus>(
-            "flight_qualification_status", DbSchemas.System, translator);
-        optionsBuilder.MapEnum<TenantMemberRole>(
-            "tenant_member_role", DbSchemas.System, translator);
-        optionsBuilder.MapEnum<TenantInvitationStatus>(
-            "tenant_invitation_status", DbSchemas.System, translator);
-        optionsBuilder.MapEnum<TenantInvitationPurpose>(
-            "tenant_invitation_purpose", DbSchemas.System, translator);
-        optionsBuilder.MapEnum<GeneralStatus>(
-            "general_status", DbSchemas.System, translator);
-        optionsBuilder.MapEnum<FarmBaseMapStatus>(
-            "farm_base_map_status", DbSchemas.System, translator);
-        optionsBuilder.MapEnum<SurveyServiceType>(
-            "survey_service_type", DbSchemas.System, translator);
-        optionsBuilder.MapEnum<SurveyServiceStatus>(
-            "survey_service_status", DbSchemas.System, translator);
-        optionsBuilder.MapEnum<SurveyRequestKind>(
-            "survey_request_kind", DbSchemas.System, translator);
-        optionsBuilder.MapEnum<SurveyRequestStatus>(
-            "survey_request_status", DbSchemas.System, translator);
-        optionsBuilder.MapEnum<SurveyReviewDecision>(
-            "survey_review_decision", DbSchemas.System, translator);
-        optionsBuilder.MapEnum<SurveyOrderStatus>(
-            "survey_order_status", DbSchemas.System, translator);
-        optionsBuilder.MapEnum<SurveyPoleCountSource>(
-            "survey_pole_count_source", DbSchemas.System, translator);
-        optionsBuilder.MapEnum<SurveyCaptureAuthorizationType>(
-            "survey_capture_authorization_type", DbSchemas.System, translator);
-        optionsBuilder.MapEnum<SurveyCaptureAuthorizationStatus>(
-            "survey_capture_authorization_status", DbSchemas.System, translator);
-        optionsBuilder.MapEnum<SurveyResultStatus>(
-            "survey_result_status", DbSchemas.System, translator);
-        optionsBuilder.MapEnum<AuditActorType>(
-            "audit_actor_type", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<UserStatus>("user_status", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<SystemManagerProfileStatus>("system_manager_profile_status", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<SystemManagerAvailabilityStatus>("system_manager_availability_status", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<FlightQualificationStatus>("flight_qualification_status", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<FarmMemberRole>("farm_member_role", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<FarmAccessScope>("farm_access_scope", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<TenantMemberRole>("tenant_member_role", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<TenantInvitationStatus>("tenant_invitation_status", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<TenantInvitationPurpose>("tenant_invitation_purpose", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<GeneralStatus>("general_status", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<MapVersionStatus>("map_version_status", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<PlantLifecycleStatus>("plant_lifecycle_status", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<PositionSource>("position_source", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<DroneStatus>("drone_status", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<MissionType>("mission_type", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<MissionStatus>("mission_status", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<ProcessingStatus>("processing_status", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<MediaType>("media_type", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<MediaStorageStatus>("media_storage_status", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<AltitudeReference>("altitude_reference", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<ThresholdProfileStatus>("threshold_profile_status", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<ConditionType>("condition_type", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<PlantChangeSource>("plant_change_source", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<AuditActorType>("audit_actor_type", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<MissionMediaRole>("mission_media_role", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<AiModelType>("ai_model_type", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<AiJobType>("ai_job_type", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<AiJobStatus>("ai_job_status", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<ObservationReviewStatus>("observation_review_status", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<MatchStrategy>("match_strategy", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<PlantChangeType>("plant_change_type", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<ReviewStatus>("review_status", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<PlantInventoryChangeKind>("plant_inventory_change_kind", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<PlantInventoryChangeStatus>("plant_inventory_change_status", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<ScanSource>("scan_source", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<ScanMediaRole>("scan_media_role", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<FindingSource>("finding_source", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<DiseaseZoneStatus>("disease_zone_status", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<DiseaseZoneMembershipKind>("disease_zone_membership_kind", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<TreatmentRecommendationStatus>("treatment_recommendation_status", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<VerificationDecision>("verification_decision", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<ConditionReviewDecision>("condition_review_decision", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<FarmBaseMapStatus>("farm_base_map_status", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<FarmBoundaryStatus>("farm_boundary_status", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<FarmBoundarySource>("farm_boundary_source", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<BoundaryExceptionState>("boundary_exception_state", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<BoundaryExceptionDecision>("boundary_exception_decision", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<BoundaryExceptionSource>("boundary_exception_source", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<MissionPurpose>("mission_purpose", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<PreflightChecklistDefinitionStatus>("preflight_checklist_definition_status", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<MissionPreflightChecklistStatus>("mission_preflight_checklist_status", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<SurveyServiceType>("survey_service_type", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<SurveyServiceStatus>("survey_service_status", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<SurveyRequestKind>("survey_request_kind", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<SurveyRequestStatus>("survey_request_status", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<SurveyReviewDecision>("survey_review_decision", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<SurveyOrderStatus>("survey_order_status", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<SurveyPoleCountSource>("survey_pole_count_source", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<SurveyAppointmentPurpose>("survey_appointment_purpose", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<SurveyAppointmentStatus>("survey_appointment_status", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<SurveyPaymentStatus>("survey_payment_status", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<PriceAdjustmentStatus>("price_adjustment_status", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<SurveyCaptureAuthorizationType>("survey_capture_authorization_type", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<SurveyCaptureAuthorizationStatus>("survey_capture_authorization_status", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<SurveyResultStatus>("survey_result_status", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<HarvestReadinessReviewStatus>("harvest_readiness_review_status", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<HarvestReadinessCriterionStatus>("harvest_readiness_criterion_status", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<HarvestReadinessGranularity>("harvest_readiness_granularity", DbSchemas.System, translator);
+    }
+
+    public static void ConfigureSurveyApprovalOptions(
+        NpgsqlDbContextOptionsBuilder optionsBuilder)
+    {
+        ConfigureOptions(optionsBuilder);
     }
 }

@@ -22,6 +22,12 @@ internal sealed class SurveysDbContext(DbContextOptions<SurveysDbContext> option
     public DbSet<SurveyCaptureAuthorization> SurveyCaptureAuthorizations =>
         Set<SurveyCaptureAuthorization>();
     public DbSet<SurveyAppointment> SurveyAppointments => Set<SurveyAppointment>();
+    public DbSet<BoundaryCaptureSession> BoundaryCaptureSessions =>
+        Set<BoundaryCaptureSession>();
+    public DbSet<BoundaryCaptureSample> BoundaryCaptureSamples =>
+        Set<BoundaryCaptureSample>();
+    public DbSet<BaselineRoutePlanReference> BaselineRoutePlanReferences =>
+        Set<BaselineRoutePlanReference>();
     public DbSet<SurveyPayment> SurveyPayments => Set<SurveyPayment>();
     public DbSet<PaymentEvent> PaymentEvents => Set<PaymentEvent>();
     public DbSet<PriceAdjustment> PriceAdjustments => Set<PriceAdjustment>();
