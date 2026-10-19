@@ -16,9 +16,11 @@ public interface IFarmArchiveDependencyQuery
 
 public sealed record ArchiveDependencySummary(
     int ActiveZoneCount,
-    int ActiveMissionCount)
+    int ActiveMissionCount,
+    int ActiveSurveyOrderCount = 0)
 {
     public bool HasAny =>
         ActiveZoneCount > 0 ||
-        ActiveMissionCount > 0;
+        ActiveMissionCount > 0 ||
+        ActiveSurveyOrderCount > 0;
 }

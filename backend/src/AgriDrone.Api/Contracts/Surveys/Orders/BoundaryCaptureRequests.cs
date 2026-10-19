@@ -67,6 +67,26 @@ public sealed record AbortBoundaryCaptureRequest
     public uint? ExpectedSessionVersion { get; init; }
 }
 
+public sealed record ApproveBaselineRoutePlanRequest
+{
+    [Required]
+    public Guid? SessionId { get; init; }
+
+    [Required]
+    public Guid? FarmBoundaryVersionId { get; init; }
+
+    [Required]
+    public int? RoutePlanVersion { get; init; }
+
+    [Range(typeof(decimal), "0", "500")]
+    public decimal SafetyInsetMeters { get; init; }
+
+    public bool IsWithinSafetyInset { get; init; }
+
+    [Required]
+    public uint? ExpectedOrderVersion { get; init; }
+}
+
 public sealed record BoundaryCaptureSampleApiResponse(
     Guid Id,
     Guid ClientOperationId,

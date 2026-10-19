@@ -252,7 +252,8 @@ public sealed class LegacyEndpointSafetyTests
         Assert.Equal(
             [
                 "FarmsDbContext",
-                "IMissionArchiveReferenceQuery"
+                "IMissionArchiveReferenceQuery",
+                "ISurveyOrderArchiveReferenceQuery"
             ],
             dependencyNames);
         Assert.DoesNotContain(

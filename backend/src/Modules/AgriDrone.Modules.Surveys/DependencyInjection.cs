@@ -1,3 +1,4 @@
+using AgriDrone.IntegrationContracts.Farms;
 using AgriDrone.Modules.Surveys.Application.Abstractions.Messaging;
 using AgriDrone.Modules.Surveys.Application.Abstractions.Approvals;
 using AgriDrone.Modules.Surveys.Application.Abstractions.Payments;
@@ -129,6 +130,7 @@ public static class DependencyInjection
         services.AddScoped<ISurveyIntegrationOutbox, SurveyIntegrationOutbox>();
         services.AddScoped<ISurveyCatalogueQueries, SurveyCatalogueQueries>();
         services.AddScoped<ISurveyRequestQueries, SurveyRequestQueries>();
+        services.AddScoped<ISurveyOrderArchiveReferenceQuery, SurveyOrderArchiveReferenceQuery>();
         services.AddScoped<ISurveyRequestIdempotencyResolver, SurveyRequestIdempotencyResolver>();
         services.AddOptions<SurveyPaymentProviderOptions>()
             .Bind(configuration.GetSection(

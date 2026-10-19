@@ -1,4 +1,5 @@
 using AgriDrone.Modules.Farms.Application.Errors;
+using AgriDrone.Modules.Farms.Domain.Boundaries;
 using AgriDrone.Modules.Farms.Domain.Farms;
 using AgriDrone.Modules.Farms.Domain.Zones;
 using AgriDrone.SharedKernel.Application;
@@ -19,7 +20,9 @@ internal interface IFarmGeometryPolicy
         CancellationToken cancellationToken = default);
 }
 
-internal sealed class FarmGeometryPolicy(IFarmZoneRepository zoneRepository)
+internal sealed class FarmGeometryPolicy(
+    IFarmZoneRepository zoneRepository,
+    IFarmBoundaryRepository? boundaryRepository = null)
     : IFarmGeometryPolicy
 {
     public Result ValidateFarm(
@@ -73,9 +76,23 @@ internal sealed class FarmGeometryPolicy(IFarmZoneRepository zoneRepository)
             return Result.Failure(FarmZoneError.InvalidArea());
         }
 
+        var effectiveFarmBoundary = farm.Boundary;
+        if (boundaryRepository is not null)
+        {
+            var approvedBoundary = await boundaryRepository.GetCurrentApprovedAsync(
+                tenantId,
+                farm.Id,
+                cancellationToken);
+
+            if (approvedBoundary is not null)
+            {
+                effectiveFarmBoundary = approvedBoundary.Geometry;
+            }
+        }
+
         if (boundary is not null &&
-            farm.Boundary is not null &&
-            !farm.Boundary.Covers(boundary))
+            effectiveFarmBoundary is not null &&
+            !effectiveFarmBoundary.Covers(boundary))
         {
             return Result.Failure(FarmZoneError.BoundaryOutsideFarm());
         }

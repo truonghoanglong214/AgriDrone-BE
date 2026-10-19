@@ -30,4 +30,13 @@ public sealed record SurveyOrderOperationalContextV3(
     bool IsReady,
     IReadOnlyList<string> ReadinessFailures,
     DateTimeOffset EvaluatedAt,
-    IReadOnlyList<Guid>? ScopeZoneIds = null);
+    IReadOnlyList<Guid>? ScopeZoneIds = null,
+    Guid? BoundaryCaptureSessionId = null,
+    string? BoundaryCaptureSessionStatus = null,
+    Guid? BaselineRoutePlanId = null,
+    string? BaselineRoutePlanStatus = null,
+    bool HasPendingSettlement = false,
+    bool HasUnapprovedExtraFlight = false,
+    bool HasPendingAdjustment = false,
+    bool HasValidWrittenDataUseConsent = false,
+    bool HasValidFlightPermission = false);
