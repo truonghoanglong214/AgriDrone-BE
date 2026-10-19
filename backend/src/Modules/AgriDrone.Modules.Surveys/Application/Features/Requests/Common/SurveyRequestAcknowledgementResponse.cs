@@ -6,6 +6,7 @@ public sealed record SurveyRequestAcknowledgementResponse(
     Guid Id,
     string RequestNumber,
     string? TenantCode,
+    string? TenantName,
     SurveyRequestKind Kind,
     SurveyRequestStatus Status,
     DateTimeOffset CreatedAt);

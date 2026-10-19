@@ -21,6 +21,7 @@ internal static class SurveyRequestResponseMapper
             response.Id,
             response.RequestNumber,
             response.TenantCode,
+            response.TenantName,
             response.Kind,
             response.Status,
             response.CreatedAt);
@@ -31,6 +32,7 @@ internal static class SurveyRequestResponseMapper
             response.Id,
             response.RequestNumber,
             tenantCode: null,
+            tenantName: null,
             response.Kind,
             response.Status,
             response.CreatedAt);
@@ -41,6 +43,7 @@ internal static class SurveyRequestResponseMapper
             response.Id,
             response.RequestNumber,
             tenantCode: null,
+            tenantName: null,
             response.Kind,
             response.Status,
             response.CreatedAt);
@@ -64,6 +67,7 @@ internal static class SurveyRequestResponseMapper
             response.FarmId,
             response.RequestedByUserId,
             response.TenantCode,
+            response.TenantName,
             response.SurveyServiceId,
             response.SurveyServiceCode,
             response.SurveyServiceName,
@@ -153,6 +157,7 @@ internal static class SurveyRequestResponseMapper
             response.SurveyServiceCode,
             response.TenantId,
             response.TenantCode,
+            response.TenantName,
             response.FarmId,
             response.FarmName,
             response.ApproximateAreaHa,
@@ -165,6 +170,7 @@ internal static class SurveyRequestResponseMapper
         Guid id,
         string requestNumber,
         string? tenantCode,
+        string? tenantName,
         SurveyRequestKind kind,
         SurveyRequestStatus status,
         DateTimeOffset createdAt) =>
@@ -172,6 +178,7 @@ internal static class SurveyRequestResponseMapper
             id,
             requestNumber,
             tenantCode,
+            tenantName,
             MapKind(kind),
             MapStatus(status),
             createdAt);

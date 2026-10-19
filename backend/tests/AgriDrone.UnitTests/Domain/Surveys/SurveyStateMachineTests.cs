@@ -39,6 +39,7 @@ public sealed class SurveyStateMachineTests
             RequestIdempotency.Create("public:test", "request-1"),
             " acme-vn ",
             "Acme Company",
+            "John Doe",
             "owner@acme.test",
             "+84901234567",
             "Acme Farm",
@@ -52,6 +53,7 @@ public sealed class SurveyStateMachineTests
             createdAt: Now);
 
         Assert.Equal("ACME-VN", request.TenantCode);
+        Assert.Equal("Acme Company", request.TenantName);
     }
 
     [Theory]

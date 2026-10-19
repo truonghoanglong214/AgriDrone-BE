@@ -53,6 +53,7 @@ internal sealed class SubmitNewCustomerSurveyRequestCommandHandler(
                 requestedByUserId: null,
                 request.SurveyServiceId,
                 request.TenantCode,
+                request.TenantName,
                 request.ApplicantName,
                 request.ApplicantEmail,
                 request.ApplicantPhone,
@@ -116,6 +117,7 @@ internal sealed class SubmitNewCustomerSurveyRequestCommandHandler(
                 service,
                 request.Idempotency,
                 submission.TenantCode!,
+                submission.TenantName!,
                 submission.ApplicantName,
                 submission.ApplicantEmail,
                 submission.ApplicantPhone,
@@ -252,6 +254,7 @@ internal sealed class SubmitNewCustomerSurveyRequestCommandHandler(
             request.Id,
             request.RequestNumber,
             request.TenantCode!,
+            request.TenantName ?? request.ApplicantName,
             request.Kind,
             request.Status,
             request.CreatedAt);
@@ -262,6 +265,7 @@ internal sealed class SubmitNewCustomerSurveyRequestCommandHandler(
             response.Id,
             response.RequestNumber,
             response.TenantCode!,
+            response.TenantName ?? string.Empty,
             response.Kind,
             response.Status,
             response.CreatedAt);

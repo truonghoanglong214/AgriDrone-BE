@@ -44,6 +44,7 @@ internal sealed class GetSurveyRequestInboxQueryHandler(
                 item.SurveyServiceCode,
                 item.TenantId,
                 item.TenantCode,
+                item.TenantName,
                 item.FarmId,
                 item.FarmName,
                 item.ApproximateAreaHa,

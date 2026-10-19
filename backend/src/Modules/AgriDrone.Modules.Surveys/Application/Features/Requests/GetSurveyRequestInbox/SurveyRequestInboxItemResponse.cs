@@ -11,6 +11,7 @@ public sealed record SurveyRequestInboxItemResponse(
     string SurveyServiceCode,
     Guid? TenantId,
     string? TenantCode,
+    string? TenantName,
     Guid? FarmId,
     string FarmName,
     decimal ApproximateAreaHa,

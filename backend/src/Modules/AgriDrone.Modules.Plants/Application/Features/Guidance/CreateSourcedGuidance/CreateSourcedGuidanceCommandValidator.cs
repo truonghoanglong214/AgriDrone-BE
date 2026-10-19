@@ -9,7 +9,7 @@ internal sealed class CreateSourcedGuidanceCommandValidator
     {
         RuleFor(command => command.Code)
             .NotEmpty().MaximumLength(80)
-            .Matches("^[A-Za-z][A-Za-z0-9_]*$");
+            .Matches("^[A-Za-z][A-Za-z0-9_-]*$");
         RuleFor(command => command.PlantConditionId).NotEmpty();
         RuleFor(command => command.SourceTitle).NotEmpty().MaximumLength(300);
         RuleFor(command => command.SourceReference).NotEmpty().MaximumLength(1000);

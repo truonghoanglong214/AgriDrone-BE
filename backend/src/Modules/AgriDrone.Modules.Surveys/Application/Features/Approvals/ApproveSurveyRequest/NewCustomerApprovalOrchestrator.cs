@@ -37,7 +37,7 @@ internal sealed class NewCustomerApprovalOrchestrator(
         var tenantResult = await provisioningPort.StageTenantAsync(
             new StageSurveyApprovalTenant(
                 request.TenantCode,
-                request.ApplicantName,
+                request.TenantName ?? request.ApplicantName,
                 context.ApprovedAt),
             cancellationToken);
         if (tenantResult.IsFailure)

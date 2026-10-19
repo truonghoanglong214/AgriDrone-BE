@@ -15,6 +15,9 @@ internal sealed class SubmitNewCustomerSurveyRequestCommandValidator
         RuleFor(command => command.TenantCode)
             .NotEmpty()
             .MaximumLength(50);
+        RuleFor(command => command.TenantName)
+            .NotEmpty()
+            .MaximumLength(150);
         RuleFor(command => command.ApplicantName)
             .NotEmpty()
             .MaximumLength(150);

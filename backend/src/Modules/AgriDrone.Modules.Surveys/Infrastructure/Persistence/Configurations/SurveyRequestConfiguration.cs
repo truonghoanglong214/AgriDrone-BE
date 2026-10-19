@@ -18,9 +18,9 @@ public sealed class SurveyRequestConfiguration : IEntityTypeConfiguration<Survey
                 table.HasCheckConstraint("ck_survey_requests_preferred_window", "preferred_end_at IS NULL OR (preferred_start_at IS NOT NULL AND preferred_end_at > preferred_start_at)");
                 table.HasCheckConstraint(
                     "ck_survey_requests_kind_context",
-                    "(kind = 'NEW_CUSTOMER'::system.survey_request_kind AND tenant_id IS NULL AND farm_id IS NULL AND requested_by_user_id IS NULL AND tenant_code IS NOT NULL) OR " +
-                    "(kind = 'EXISTING_TENANT_NEW_FARM'::system.survey_request_kind AND tenant_id IS NOT NULL AND farm_id IS NULL AND requested_by_user_id IS NOT NULL AND tenant_code IS NULL) OR " +
-                    "(kind = 'EXISTING_FARM_SURVEY'::system.survey_request_kind AND tenant_id IS NOT NULL AND farm_id IS NOT NULL AND requested_by_user_id IS NOT NULL AND tenant_code IS NULL)");
+                    "(kind = 'NEW_CUSTOMER'::system.survey_request_kind AND tenant_id IS NULL AND farm_id IS NULL AND requested_by_user_id IS NULL AND tenant_code IS NOT NULL AND tenant_name IS NOT NULL) OR " +
+                    "(kind = 'EXISTING_TENANT_NEW_FARM'::system.survey_request_kind AND tenant_id IS NOT NULL AND farm_id IS NULL AND requested_by_user_id IS NOT NULL AND tenant_code IS NULL AND tenant_name IS NULL) OR " +
+                    "(kind = 'EXISTING_FARM_SURVEY'::system.survey_request_kind AND tenant_id IS NOT NULL AND farm_id IS NOT NULL AND requested_by_user_id IS NOT NULL AND tenant_code IS NULL AND tenant_name IS NULL)");
             });
         builder.HasKey(request => request.Id).HasName("pk_survey_requests");
         builder.Property(request => request.Id).HasColumnName("id").HasColumnType("uuid").HasDefaultValueSql("gen_random_uuid()").ValueGeneratedOnAdd();
@@ -30,6 +30,7 @@ public sealed class SurveyRequestConfiguration : IEntityTypeConfiguration<Survey
         builder.Property(request => request.FarmId).HasColumnName("farm_id").HasColumnType("uuid");
         builder.Property(request => request.RequestedByUserId).HasColumnName("requested_by_user_id").HasColumnType("uuid");
         builder.Property(request => request.TenantCode).HasColumnName("tenant_code").HasColumnType("character varying(50)").HasMaxLength(50);
+        builder.Property(request => request.TenantName).HasColumnName("tenant_name").HasColumnType("character varying(150)").HasMaxLength(150);
         builder.Property(request => request.SurveyServiceId).HasColumnName("survey_service_id").HasColumnType("uuid");
         builder.Property(request => request.CallerScope).HasColumnName("caller_scope").HasColumnType("character varying(100)").HasMaxLength(100).IsRequired();
         builder.Property(request => request.IdempotencyKey).HasColumnName("idempotency_key").HasColumnType("character varying(100)").HasMaxLength(100).IsRequired();
