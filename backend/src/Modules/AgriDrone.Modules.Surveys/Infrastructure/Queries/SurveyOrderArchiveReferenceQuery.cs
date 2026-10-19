@@ -22,4 +22,30 @@ internal sealed class SurveyOrderArchiveReferenceQuery(
                     order.Status != SurveyOrderStatus.Completed &&
                     order.Status != SurveyOrderStatus.Cancelled,
                 cancellationToken);
+
+    public Task<int> CountPublishedResultsForFarmAsync(
+        Guid tenantId,
+        Guid farmId,
+        CancellationToken cancellationToken = default) =>
+        dbContext.SurveyResults
+            .AsNoTracking()
+            .CountAsync(
+                result =>
+                    result.TenantId == tenantId &&
+                    result.FarmId == farmId &&
+                    result.Status == SurveyResultStatus.Published,
+                cancellationToken);
+
+    public Task<int> CountRetentionHistoryForFarmAsync(
+        Guid tenantId,
+        Guid farmId,
+        CancellationToken cancellationToken = default) =>
+        dbContext.SurveyOrders
+            .AsNoTracking()
+            .CountAsync(
+                order =>
+                    order.TenantId == tenantId &&
+                    order.FarmId == farmId &&
+                    order.Status == SurveyOrderStatus.Completed,
+                cancellationToken);
 }

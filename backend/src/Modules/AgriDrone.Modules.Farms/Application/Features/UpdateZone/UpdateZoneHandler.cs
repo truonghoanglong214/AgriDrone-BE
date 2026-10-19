@@ -1,7 +1,7 @@
 using System.Text.Json;
+using AgriDrone.Modules.Farms.Application.Abstractions.Boundaries;
 using AgriDrone.Modules.Farms.Application.Abstractions.Persistence;
 using AgriDrone.Modules.Farms.Application.Errors;
-using AgriDrone.Modules.Farms.Application.Policies;
 using AgriDrone.Modules.Farms.Domain.Farms;
 using AgriDrone.Modules.Farms.Domain.Zones;
 using AgriDrone.SharedInfrastructure.Auditing;
@@ -21,7 +21,7 @@ internal sealed class UpdateZoneHandler(
     IAuditWriter auditWriter,
     IExecutionContext executionContext,
     ISystemManagerAccessService managerAccessService,
-    IFarmGeometryPolicy geometryPolicy,
+    IFarmBoundaryPolicy boundaryPolicy,
     TimeProvider timeProvider)
     : IRequestHandler<UpdateZoneCommand, Result<UpdateZoneResponse>>
 {
@@ -42,7 +42,7 @@ internal sealed class UpdateZoneHandler(
         if (!accessDecision.IsAllowed || accessDecision.TenantId is not Guid tenantId)
         {
             return Result.Failure<UpdateZoneResponse>(
-                FarmZoneError.AccessDenied());
+                FarmZoneError.NotFound());
         }
 
         var farm = await farmRepository.GetByIdAsync(
@@ -76,9 +76,9 @@ internal sealed class UpdateZoneHandler(
 
         var name = request.Name.Trim();
 
-        var geometryDecision = await geometryPolicy.ValidateZoneAsync(
+        var geometryDecision = await boundaryPolicy.ValidateZoneAsync(
             tenantId,
-            farm,
+            request.FarmId,
             request.Boundary,
             request.AreaHectares,
             request.ZoneId,

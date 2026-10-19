@@ -26,5 +26,10 @@ public sealed class VerifyFarmBoundaryCommandValidator
             .MaximumLength(1000)
             .When(x => !string.IsNullOrEmpty(x.EvidenceReference))
             .WithMessage("Evidence reference must not exceed 1000 characters.");
+
+        RuleFor(x => x.ExpectedCurrentBoundaryVersionNumber)
+            .NotNull()
+            .GreaterThan(0)
+            .WithMessage("Expected current boundary version number is required and must be greater than 0.");
     }
 }

@@ -146,6 +146,12 @@ internal sealed class SurveyOrderOperationalContextV3Query(
             .Select(z => z.Id)
             .ToListAsync(cancellationToken);
 
+        var isPaymentAmountAndCurrencyMatched = purpose == SurveyOperationPurpose.BaselineMapping
+            || (payment is not null
+                && order.FinalPrice.HasValue
+                && payment.Amount == order.FinalPrice.Value
+                && string.Equals(payment.Currency, order.Currency, StringComparison.OrdinalIgnoreCase));
+
         var safetyChecksSatisfied = boundaryApproved && managerReady;
 
         var snapshot = new SurveyOrderReadinessSnapshot(
@@ -168,7 +174,7 @@ internal sealed class SurveyOrderOperationalContextV3Query(
             IsDroneReady: safetyChecksSatisfied,
             IsPreflightCompleted: safetyChecksSatisfied,
             HasPendingPriceAdjustment: pendingAdjustment,
-            IsPaymentAmountAndCurrencyMatched: true,
+            IsPaymentAmountAndCurrencyMatched: isPaymentAmountAndCurrencyMatched,
             SafetyChecksSatisfied: safetyChecksSatisfied,
             HasValidWrittenDataUseConsent: hasValidConsent,
             HasValidFlightPermission: hasValidFlightPermission,
@@ -178,7 +184,9 @@ internal sealed class SurveyOrderOperationalContextV3Query(
             HasApprovedBaselineRoute: hasApprovedBaselineRoute,
             IsBaselineRouteCurrent: isBaselineRouteCurrent,
             IsBaselineRouteWithinSafetyInset: isBaselineRouteWithinSafetyInset);
-        var decision = SurveyOrderReadinessPolicy.Evaluate(snapshot);
+
+        // BE1 authoritative readiness represents commercial, legal consent/permission, and boundary verification gates
+        var decision = SurveyOrderReadinessPolicy.EvaluateCommercialReadiness(snapshot);
 
         return new SurveyOrderOperationalContextV3(
             order.Id, order.TenantId, order.FarmId, order.SurveyService.Code,

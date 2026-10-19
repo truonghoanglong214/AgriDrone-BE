@@ -31,7 +31,7 @@ public sealed class VerifyFarmBoundaryCommandHandlerTests
             "Approval reason",
             "evidence-01",
             fixture.Farm.Version,
-            ExpectedCurrentBoundaryVersionNumber: null);
+            ExpectedCurrentBoundaryVersionNumber: 1);
 
         var result = await fixture.Handler.Handle(command, CancellationToken.None);
 
@@ -40,7 +40,7 @@ public sealed class VerifyFarmBoundaryCommandHandlerTests
     }
 
     [Fact]
-    public async Task HandleReturnsAccessDeniedWhenAccessDenied()
+    public async Task HandleReturnsNotFoundWhenAccessDenied()
     {
         var fixture = CreateFixture();
         fixture.AccessService.Decision = SystemManagerFarmAccess.Denied("Not authorized for this farm");
@@ -51,12 +51,12 @@ public sealed class VerifyFarmBoundaryCommandHandlerTests
             "Approval reason",
             "evidence-01",
             fixture.Farm.Version,
-            ExpectedCurrentBoundaryVersionNumber: null);
+            ExpectedCurrentBoundaryVersionNumber: 1);
 
         var result = await fixture.Handler.Handle(command, CancellationToken.None);
 
         Assert.True(result.IsFailure);
-        Assert.Equal("Farm.AccessDenied", result.Error.Code);
+        Assert.Equal("Farm.NotFound", result.Error.Code);
     }
 
     [Fact]
@@ -71,7 +71,7 @@ public sealed class VerifyFarmBoundaryCommandHandlerTests
             "Approval reason",
             "evidence-01",
             fixture.Farm.Version,
-            ExpectedCurrentBoundaryVersionNumber: null);
+            ExpectedCurrentBoundaryVersionNumber: 1);
 
         var result = await fixture.Handler.Handle(command, CancellationToken.None);
 
@@ -90,12 +90,32 @@ public sealed class VerifyFarmBoundaryCommandHandlerTests
             "Approval reason",
             "evidence-01",
             ExpectedFarmVersion: 999,
-            ExpectedCurrentBoundaryVersionNumber: null);
+            ExpectedCurrentBoundaryVersionNumber: 1);
 
         var result = await fixture.Handler.Handle(command, CancellationToken.None);
 
         Assert.True(result.IsFailure);
         Assert.Equal("Farm.ConcurrentUpdate", result.Error.Code);
+    }
+
+    [Fact]
+    public async Task HandleReturnsUnmappedRequiresCaptureSessionWhenNoCurrentBoundaryExists()
+    {
+        var fixture = CreateFixture();
+        fixture.BoundaryRepository.CurrentApproved = null;
+
+        var command = new VerifyFarmBoundaryCommand(
+            fixture.Farm.Id,
+            fixture.ValidBoundaryPolygon,
+            "Approval reason",
+            "evidence-01",
+            fixture.Farm.Version,
+            ExpectedCurrentBoundaryVersionNumber: 1);
+
+        var result = await fixture.Handler.Handle(command, CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(FarmError.UnmappedFarmBoundaryRequiresCaptureSession().Code, result.Error.Code);
     }
 
     [Fact]
@@ -197,6 +217,19 @@ public sealed class VerifyFarmBoundaryCommandHandlerTests
 
         var farmRepo = new FakeFarmRepository { Farm = farm };
         var boundaryRepo = new FakeFarmBoundaryRepository();
+        var initialBoundary = FarmBoundary.CreateDraft(
+            tenantId,
+            farm.Id,
+            versionNumber: 1,
+            boundaryPolygon,
+            FarmBoundarySource.SystemManager,
+            sourceSurveyRequestId: null,
+            submittedBy: actorId,
+            createdAt: Now.AddDays(-1));
+        initialBoundary.Approve(actorId, "Initial boundary", Now.AddDays(-1));
+        boundaryRepo.CurrentApproved = initialBoundary;
+        boundaryRepo.NextVersion = 2;
+
         var unitOfWork = new FakeFarmUnitOfWork();
         var auditWriter = new FakeAuditWriter();
         var execContext = new FakeExecutionContext(tenantId, actorId);

@@ -1,8 +1,10 @@
-﻿using AgriDrone.Modules.Farms.Application.Abstractions.Persistence;
+using System.Text.Json;
+using AgriDrone.Modules.Farms.Application.Abstractions.Boundaries;
+using AgriDrone.Modules.Farms.Application.Abstractions.Persistence;
 using AgriDrone.Modules.Farms.Application.Errors;
-using AgriDrone.Modules.Farms.Application.Policies;
 using AgriDrone.Modules.Farms.Domain.Farms;
 using AgriDrone.Modules.Farms.Domain.Zones;
+using AgriDrone.SharedInfrastructure.Auditing;
 using AgriDrone.SharedInfrastructure.Persistence;
 using AgriDrone.SharedKernel.Application;
 using AgriDrone.SharedKernel.Application.Abstractions.Authorization;
@@ -17,9 +19,10 @@ namespace AgriDrone.Modules.Farms.Application.Features.CreateZone
         IFarmZoneRepository farmZoneRepository,
         IFarmRepository farmRepository,
         IFarmUnitOfWork unitOfWork,
+        IAuditWriter auditWriter,
         IExecutionContext executionContext,
         ISystemManagerAccessService managerAccessService,
-        IFarmGeometryPolicy geometryPolicy,
+        IFarmBoundaryPolicy boundaryPolicy,
         TimeProvider timeProvider) : IRequestHandler<CreateZoneCommand, Result<CreateZoneResponse>>
     {
         private const string ActiveZoneCodeConstraint =
@@ -35,7 +38,7 @@ namespace AgriDrone.Modules.Farms.Application.Features.CreateZone
                 cancellationToken);
 
             if (!access.IsAllowed || access.TenantId is not Guid tenantId)
-                return Result.Failure<CreateZoneResponse>(FarmError.AccessDenied());
+                return Result.Failure<CreateZoneResponse>(FarmError.NotFound());
 
             var farm = await farmRepository.GetByIdAsync(
                 tenantId,
@@ -45,11 +48,12 @@ namespace AgriDrone.Modules.Farms.Application.Features.CreateZone
             if (farm is null)
                 return Result.Failure<CreateZoneResponse>(FarmError.NotFound());
 
-            var geometryDecision = await geometryPolicy.ValidateZoneAsync(
+            var geometryDecision = await boundaryPolicy.ValidateZoneAsync(
                 tenantId,
-                farm,
+                request.FarmId,
                 request.Boundary,
                 request.AreaHectares,
+                excludingZoneId: null,
                 cancellationToken: cancellationToken);
             if (geometryDecision.IsFailure)
             {
@@ -80,6 +84,30 @@ namespace AgriDrone.Modules.Farms.Application.Features.CreateZone
                 now);
             
             farmZoneRepository.Add(newZone);
+
+            using var auditData = JsonSerializer.SerializeToDocument(new
+            {
+                newZone.Code,
+                newZone.Name,
+                BoundaryWkt = newZone.Boundary?.AsText(),
+                BoundarySrid = newZone.Boundary?.SRID,
+                newZone.AreaHectares,
+                newZone.CreatedAt,
+                newZone.Version
+            });
+
+            auditWriter.AddUserAction(
+                sink: unitOfWork,
+                tenantId: tenantId,
+                farmId: farm.Id,
+                actorId: userId,
+                correlationId: executionContext.CorrelationId,
+                entityType: "FarmZone",
+                entityId: newZone.Id,
+                action: "CREATE_ZONE",
+                oldData: null,
+                newData: auditData,
+                createdAt: now);
 
             try
             {

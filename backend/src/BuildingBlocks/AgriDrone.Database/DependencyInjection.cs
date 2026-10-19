@@ -48,6 +48,8 @@ public static class DependencyInjection
 
         services.AddScoped<ISurveyOrderOperationalContextV3Query,
             SurveyOrderOperationalContextV3Query>();
+        services.AddScoped<ISurveyOrderOperationalContextV4Query,
+            SurveyOrderOperationalContextV4Query>();
         services.AddScoped<ISystemManagerSurveyOrderQueries,
             SystemManagerSurveyOrderQueries>();
 

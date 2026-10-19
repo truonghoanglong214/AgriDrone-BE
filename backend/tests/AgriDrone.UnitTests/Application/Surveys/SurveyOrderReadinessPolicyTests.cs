@@ -150,6 +150,55 @@ public sealed class SurveyOrderReadinessPolicyTests
         Assert.Empty(decision.Failures);
     }
 
+    [Fact]
+    public void EvaluateCommercialReadinessSucceedsWhenCommercialRequirementsMetEvenIfDroneNotReady()
+    {
+        var snapshot = CreateValidSnapshot(SurveyOperationPurpose.PlantHealth) with
+        {
+            IsDroneReady = false,
+            IsPreflightCompleted = false,
+            IsMissionPreparedForPurpose = false,
+            IsMissionScheduledWithinAppointment = false,
+            SafetyChecksSatisfied = false
+        };
+
+        var decision = SurveyOrderReadinessPolicy.EvaluateCommercialReadiness(snapshot);
+
+        Assert.True(decision.IsReady);
+        Assert.Empty(decision.Failures);
+    }
+
+    [Fact]
+    public void EvaluateOperationalReadinessFailsWhenDroneOrPreflightNotReady()
+    {
+        var commercialSnapshot = CreateValidSnapshot(SurveyOperationPurpose.PlantHealth);
+
+        var decision = SurveyOrderReadinessPolicy.EvaluateOperationalReadiness(
+            commercialSnapshot,
+            isMissionPrepared: true,
+            isMissionScheduled: true,
+            isDroneReady: false,
+            isPreflightCompleted: true,
+            safetyChecksSatisfied: true);
+
+        Assert.False(decision.IsReady);
+        Assert.Contains(SurveyOrderReadinessFailure.DroneNotReady, decision.Failures);
+    }
+
+    [Fact]
+    public void EvaluateReturnsFailureWhenPaymentAmountOrCurrencyMismatched()
+    {
+        var snapshot = CreateValidSnapshot(SurveyOperationPurpose.PlantHealth) with
+        {
+            IsPaymentAmountAndCurrencyMatched = false
+        };
+
+        var decision = SurveyOrderReadinessPolicy.Evaluate(snapshot);
+
+        Assert.False(decision.IsReady);
+        Assert.Contains(SurveyOrderReadinessFailure.PaymentAmountOrCurrencyMismatch, decision.Failures);
+    }
+
     private static SurveyOrderReadinessSnapshot CreateValidSnapshot(SurveyOperationPurpose purpose)
     {
         var isBaseline = purpose == SurveyOperationPurpose.BaselineMapping;

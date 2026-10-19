@@ -28,6 +28,25 @@ internal sealed class BoundaryExceptionRepository(FarmsDbContext context)
                                  boundaryException.State != BoundaryExceptionState.Resolved,
             cancellationToken);
 
+    public async Task<IReadOnlyList<BoundaryException>> ListByFarmAsync(
+        Guid tenantId,
+        Guid farmId,
+        BoundaryExceptionState? state = null,
+        CancellationToken cancellationToken = default)
+    {
+        var query = context.BoundaryExceptions
+            .Where(b => b.TenantId == tenantId && b.FarmId == farmId);
+
+        if (state.HasValue)
+        {
+            query = query.Where(b => b.State == state.Value);
+        }
+
+        return await query
+            .OrderByDescending(b => b.CreatedAt)
+            .ToListAsync(cancellationToken);
+    }
+
     public void Add(BoundaryException boundaryException)
     {
         ArgumentNullException.ThrowIfNull(boundaryException);

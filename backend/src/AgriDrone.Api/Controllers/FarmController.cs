@@ -1,4 +1,4 @@
-﻿using AgriDrone.Api.Contracts.Farms;
+using AgriDrone.Api.Contracts.Farms;
 using AgriDrone.Api.Contracts.Tenants;
 using AgriDrone.Api.Mapping;
 using AgriDrone.Modules.Farms.Application.Features.GetFarm;
@@ -334,7 +334,6 @@ namespace AgriDrone.Api.Controllers
                 farmId,
                 request.Name,
                 request.Address,
-                GeoJsonGeometryMapper.ToPolygon(request.Boundary),
                 GeoJsonGeometryMapper.ToPoint(request.CenterPoint),
                 request.AreaHectares,
                 request.ExpectedVersion);

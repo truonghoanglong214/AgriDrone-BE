@@ -1,9 +1,12 @@
 using System.Text.Json;
+using AgriDrone.Modules.Farms.Application.Abstractions.Boundaries;
 using AgriDrone.Modules.Farms.Application.Abstractions.Persistence;
 using AgriDrone.Modules.Farms.Application.Features.UpdateZone;
 using AgriDrone.Modules.Farms.Application.Policies;
+using AgriDrone.Modules.Farms.Domain.Boundaries;
 using AgriDrone.Modules.Farms.Domain.Farms;
 using AgriDrone.Modules.Farms.Domain.Zones;
+using AgriDrone.Modules.Farms.Infrastructure.Boundaries;
 using AgriDrone.SharedInfrastructure.Auditing;
 using AgriDrone.SharedKernel.Application.Abstractions.Authorization;
 using AgriDrone.SharedKernel.Application.Abstractions.Execution;
@@ -58,7 +61,7 @@ public sealed class UpdateZoneHandlerTests
             CancellationToken.None);
 
         Assert.True(result.IsFailure);
-        Assert.Equal("FarmZone.AccessDenied", result.Error.Code);
+        Assert.Equal("FarmZone.NotFound", result.Error.Code);
         Assert.Equal(0, fixture.ZoneRepository.GetByIdCallCount);
         Assert.Equal(0, fixture.UnitOfWork.SaveCallCount);
     }
@@ -188,16 +191,19 @@ public sealed class UpdateZoneHandlerTests
         var accessService = new FakeSystemManagerAccessService(
             tenantId,
             farm.Id);
+        var farmRepository = new FakeFarmRepository(farm);
+        var boundaryRepository = new FakeFarmBoundaryRepository();
+        var boundaryPolicy = new FarmBoundaryPolicy(boundaryRepository, zoneRepository, farmRepository);
         var handler = new UpdateZoneHandler(
             zoneRepository,
-            new FakeFarmRepository(farm),
+            farmRepository,
             unitOfWork,
             auditWriter,
             new FakeExecutionContext(
                 includeTenantContext ? tenantId : null,
                 actorId),
             accessService,
-            new FarmGeometryPolicy(zoneRepository),
+            boundaryPolicy,
             new FixedTimeProvider(Now));
 
         return new Fixture(
@@ -404,5 +410,20 @@ public sealed class UpdateZoneHandlerTests
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
     {
         public override DateTimeOffset GetUtcNow() => now;
+    }
+
+    private sealed class FakeFarmBoundaryRepository : IFarmBoundaryRepository
+    {
+        public Task<FarmBoundary?> GetCurrentApprovedAsync(Guid tenantId, Guid farmId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<FarmBoundary?>(null);
+
+        public Task<FarmBoundary?> GetByIdAsync(Guid tenantId, Guid farmId, Guid boundaryId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<FarmBoundary?>(null);
+
+        public Task<int> GetNextVersionNumberAsync(Guid tenantId, Guid farmId, CancellationToken cancellationToken = default) =>
+            Task.FromResult(1);
+
+        public void Add(FarmBoundary boundary) { }
+        public void Update(FarmBoundary boundary) { }
     }
 }

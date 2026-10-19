@@ -103,6 +103,9 @@ public static class DependencyInjection
             ISurveyOrderOperationalContextV3Query,
             UnavailableSurveyOrderOperationalContextQuery>();
         services.TryAddScoped<
+            ISurveyOrderOperationalContextV4Query,
+            UnavailableSurveyOrderOperationalContextQuery>();
+        services.TryAddScoped<
             ISurveyOrderMissionPlanningQuery,
             SurveyOrderMissionPlanningQuery>();
 

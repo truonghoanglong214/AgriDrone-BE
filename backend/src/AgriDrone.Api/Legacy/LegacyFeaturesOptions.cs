@@ -8,5 +8,5 @@ public sealed class LegacyFeaturesOptions
     /// Emergency rollback switch. It must remain false in production-like
     /// environments; enabling it reopens every endpoint marked as legacy.
     /// </summary>
-    public bool EnableDeprecatedEndpoints { get; init; }
+    public bool EnableDeprecatedEndpoints { get; set; }
 }

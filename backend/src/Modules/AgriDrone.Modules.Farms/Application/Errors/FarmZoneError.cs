@@ -42,9 +42,14 @@ public static class FarmZoneError
                 "FarmZone.ConcurrentUpdate",
                 "The zone was changed by another request. Reload it and try again.");
 
-    public static AppError ActiveDependenciesExist(int activeMissionCount) =>
+    public static AppError ActiveDependenciesExist(
+        int activeMissionCount,
+        int publishedMapCount = 0,
+        IReadOnlyList<string>? reasonCodes = null) =>
         AppError.Conflict(
             "FarmZone.ActiveDependenciesExist",
             "The zone cannot be archived while active dependencies remain. " +
-            $"Active missions: {activeMissionCount}.");
+            $"Active missions: {activeMissionCount}" +
+            (publishedMapCount > 0 ? $"; published maps: {publishedMapCount}" : "") +
+            (reasonCodes is not null && reasonCodes.Count > 0 ? $" (Reason codes: {string.Join(", ", reasonCodes)})." : "."));
 }

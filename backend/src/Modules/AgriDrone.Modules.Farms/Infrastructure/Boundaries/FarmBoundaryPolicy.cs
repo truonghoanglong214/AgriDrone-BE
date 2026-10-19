@@ -1,6 +1,8 @@
 using AgriDrone.Modules.Farms.Application.Abstractions.Boundaries;
+using AgriDrone.Modules.Farms.Application.Abstractions.Persistence;
 using AgriDrone.Modules.Farms.Application.Errors;
 using AgriDrone.Modules.Farms.Domain.Boundaries;
+using AgriDrone.Modules.Farms.Domain.Farms;
 using AgriDrone.Modules.Farms.Domain.Zones;
 using AgriDrone.SharedKernel.Application;
 using NetTopologySuite.Geometries;
@@ -9,7 +11,8 @@ namespace AgriDrone.Modules.Farms.Infrastructure.Boundaries;
 
 internal sealed class FarmBoundaryPolicy(
     IFarmBoundaryRepository boundaryRepository,
-    IFarmZoneRepository zoneRepository)
+    IFarmZoneRepository zoneRepository,
+    IFarmRepository? farmRepository = null)
     : IFarmBoundaryPolicy
 {
     private const double MetersPerDegreeLatitude = 111_320.0;
@@ -102,14 +105,22 @@ internal sealed class FarmBoundaryPolicy(
             farmId,
             cancellationToken);
 
-        if (approvedBoundary is null)
+        Polygon? effectiveBoundary = approvedBoundary?.Geometry;
+
+        if (effectiveBoundary is null && farmRepository is not null)
+        {
+            var farm = await farmRepository.GetByIdAsync(tenantId, farmId, cancellationToken);
+            effectiveBoundary = farm?.Boundary;
+        }
+
+        if (effectiveBoundary is null)
         {
             return Result.Failure(FarmError.NotFound());
         }
 
         var containmentResult = ValidateZoneWithinBoundary(
             zoneBoundary,
-            approvedBoundary.Geometry);
+            effectiveBoundary);
 
         if (containmentResult.IsFailure)
         {

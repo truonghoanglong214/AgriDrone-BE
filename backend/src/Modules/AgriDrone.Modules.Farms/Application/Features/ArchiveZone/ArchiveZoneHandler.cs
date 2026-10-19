@@ -38,7 +38,7 @@ internal sealed class ArchiveZoneHandler(
 
         if (!accessDecision.IsAllowed || accessDecision.TenantId is not Guid tenantId)
         {
-            return Result.Failure(FarmZoneError.AccessDenied());
+            return Result.Failure(FarmZoneError.NotFound());
         }
 
         var zone = await farmZoneRepository.GetByIdAsync(
@@ -67,7 +67,9 @@ internal sealed class ArchiveZoneHandler(
         {
             return Result.Failure(
                 FarmZoneError.ActiveDependenciesExist(
-                    dependencies.ActiveMissionCount));
+                    dependencies.ActiveMissionCount,
+                    dependencies.PublishedMapCount,
+                    dependencies.StableReasonCodes));
         }
 
         using var oldData = CreateAuditData(zone);

@@ -39,7 +39,7 @@ internal sealed class UpdateFarmDetailHandler(
 
         if (!accessDecision.IsAllowed || accessDecision.TenantId is not Guid tenantId)
         {
-            return Result.Failure<UpdateFarmDetailResponse>(FarmError.AccessDenied());
+            return Result.Failure<UpdateFarmDetailResponse>(FarmError.NotFound());
         }
 
         var farm = await farmRepository.GetByIdAsync(
@@ -53,7 +53,7 @@ internal sealed class UpdateFarmDetailHandler(
         }
 
         var geometryDecision = geometryPolicy.ValidateFarm(
-            request.boundary,
+            farm.Boundary,
             request.centerPoint,
             request.areaHectares);
         if (geometryDecision.IsFailure)
@@ -85,7 +85,6 @@ internal sealed class UpdateFarmDetailHandler(
         farm.UpdateDetails(
             name,
             address,
-            request.boundary,
             request.centerPoint,
             request.areaHectares,
             now);
@@ -125,7 +124,6 @@ internal sealed class UpdateFarmDetailHandler(
         UpdateFarmDetailCommand request) =>
         farm.Name == name &&
         farm.Address == address &&
-        GeometryEquals(farm.Boundary, request.boundary) &&
         GeometryEquals(farm.CenterPoint, request.centerPoint) &&
         farm.AreaHectares == request.areaHectares;
 

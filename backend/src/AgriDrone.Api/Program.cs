@@ -48,7 +48,14 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 builder.Services
     .AddOptions<LegacyFeaturesOptions>()
     .Bind(builder.Configuration.GetSection(
-        LegacyFeaturesOptions.SectionName));
+        LegacyFeaturesOptions.SectionName))
+    .PostConfigure(options =>
+    {
+        if (!builder.Environment.IsDevelopment())
+        {
+            options.EnableDeprecatedEndpoints = false;
+        }
+    });
 
 // Swagger
 builder.Services.AddEndpointsApiExplorer();

@@ -13,6 +13,12 @@ internal interface IBoundaryExceptionRepository
         string sourceReferenceId,
         CancellationToken cancellationToken = default);
 
+    Task<IReadOnlyList<BoundaryException>> ListByFarmAsync(
+        Guid tenantId,
+        Guid farmId,
+        BoundaryExceptionState? state = null,
+        CancellationToken cancellationToken = default);
+
     void Add(BoundaryException boundaryException);
     void Update(BoundaryException boundaryException);
 }

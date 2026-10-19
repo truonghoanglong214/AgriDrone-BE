@@ -105,6 +105,29 @@ public sealed class Farm : AggregateRoot
     public void UpdateDetails(
         string name,
         string? address,
+        Point? centerPoint,
+        decimal? areaHectares,
+        DateTimeOffset updateAt)
+    {
+        DomainGuard.Utc(updateAt);
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+
+        if (areaHectares < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(areaHectares));
+        }
+
+        Address = address;
+        Name = name;
+        CenterPoint = centerPoint;
+        AreaHectares = areaHectares;
+        UpdatedAt = updateAt;
+        Version++;
+    }
+
+    public void UpdateDetails(
+        string name,
+        string? address,
         Polygon? boundary,
         Point? centerPoint,
         decimal? areaHectares,
@@ -124,6 +147,14 @@ public sealed class Farm : AggregateRoot
         CenterPoint = centerPoint;
         AreaHectares = areaHectares;
         UpdatedAt = updateAt;
+        Version++;
+    }
+
+    public void SetBoundary(Polygon? boundary, DateTimeOffset updatedAt)
+    {
+        DomainGuard.Utc(updatedAt);
+        Boundary = boundary;
+        UpdatedAt = updatedAt;
         Version++;
     }
 

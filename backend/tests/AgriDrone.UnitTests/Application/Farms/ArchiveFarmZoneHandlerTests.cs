@@ -56,7 +56,7 @@ public sealed class ArchiveFarmZoneHandlerTests
             CancellationToken.None);
 
         Assert.True(result.IsFailure);
-        Assert.Equal("FarmZone.AccessDenied", result.Error.Code);
+        Assert.Equal("FarmZone.NotFound", result.Error.Code);
         Assert.Equal(0, fixture.ZoneRepository.GetByIdCallCount);
         Assert.Equal(0, fixture.UnitOfWork.SaveCallCount);
     }
@@ -79,6 +79,94 @@ public sealed class ArchiveFarmZoneHandlerTests
         Assert.True(result.IsFailure);
         Assert.Equal("FarmZone.ActiveDependenciesExist", result.Error.Code);
         Assert.Equal(0, fixture.ZoneRepository.UpdateCallCount);
+        Assert.Equal(0, fixture.UnitOfWork.SaveCallCount);
+    }
+
+    [Fact]
+    public async Task ArchiveZoneRejectsPublishedMaps()
+    {
+        var fixture = CreateFixture();
+        fixture.DependencyQuery.ZoneDependencies = new(
+            ActiveZoneCount: 0,
+            ActiveMissionCount: 0,
+            PublishedMapCount: 1);
+
+        var result = await fixture.ZoneHandler.Handle(
+            new ArchiveZoneCommand(
+                fixture.Farm.Id,
+                fixture.Zone.Id,
+                fixture.Zone.Version),
+            CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("FarmZone.ActiveDependenciesExist", result.Error.Code);
+        Assert.Contains("PUBLISHED_MAP_EXISTS", result.Error.Description);
+        Assert.Equal(0, fixture.ZoneRepository.UpdateCallCount);
+        Assert.Equal(0, fixture.UnitOfWork.SaveCallCount);
+    }
+
+    [Fact]
+    public async Task ArchiveFarmRejectsNonOwner()
+    {
+        var fixture = CreateFixture();
+        fixture.AccessService.Decision = SystemManagerFarmAccess.Denied(
+            "The manager assignment is not active.");
+
+        var result = await fixture.FarmHandler.Handle(
+            new ArchiveFarmCommand(
+                fixture.Farm.Id,
+                fixture.Farm.Version),
+            CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("Farm.NotFound", result.Error.Code);
+        Assert.Equal(0, fixture.FarmRepository.UpdateCallCount);
+        Assert.Equal(0, fixture.UnitOfWork.SaveCallCount);
+    }
+
+    [Fact]
+    public async Task ArchiveFarmRejectsPublishedMaps()
+    {
+        var fixture = CreateFixture();
+        fixture.DependencyQuery.FarmDependencies = new(
+            ActiveZoneCount: 0,
+            ActiveMissionCount: 0,
+            ActiveSurveyOrderCount: 0,
+            PublishedMapCount: 1);
+
+        var result = await fixture.FarmHandler.Handle(
+            new ArchiveFarmCommand(
+                fixture.Farm.Id,
+                fixture.Farm.Version),
+            CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("Farm.ActiveDependenciesExist", result.Error.Code);
+        Assert.Contains("PUBLISHED_MAP_EXISTS", result.Error.Description);
+        Assert.Equal(0, fixture.FarmRepository.UpdateCallCount);
+        Assert.Equal(0, fixture.UnitOfWork.SaveCallCount);
+    }
+
+    [Fact]
+    public async Task ArchiveFarmRejectsPublishedResults()
+    {
+        var fixture = CreateFixture();
+        fixture.DependencyQuery.FarmDependencies = new(
+            ActiveZoneCount: 0,
+            ActiveMissionCount: 0,
+            ActiveSurveyOrderCount: 0,
+            PublishedResultCount: 2);
+
+        var result = await fixture.FarmHandler.Handle(
+            new ArchiveFarmCommand(
+                fixture.Farm.Id,
+                fixture.Farm.Version),
+            CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("Farm.ActiveDependenciesExist", result.Error.Code);
+        Assert.Contains("PUBLISHED_RESULTS_EXIST", result.Error.Description);
+        Assert.Equal(0, fixture.FarmRepository.UpdateCallCount);
         Assert.Equal(0, fixture.UnitOfWork.SaveCallCount);
     }
 

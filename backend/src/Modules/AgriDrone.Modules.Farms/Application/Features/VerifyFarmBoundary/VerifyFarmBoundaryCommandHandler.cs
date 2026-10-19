@@ -37,7 +37,7 @@ internal sealed class VerifyFarmBoundaryCommandHandler(
 
         if (!access.IsAllowed || access.TenantId is not Guid tenantId)
         {
-            return Result.Failure<VerifyFarmBoundaryResponse>(FarmError.AccessDenied());
+            return Result.Failure<VerifyFarmBoundaryResponse>(FarmError.NotFound());
         }
 
         var farm = await farmRepository.GetByIdAsync(
@@ -62,14 +62,17 @@ internal sealed class VerifyFarmBoundaryCommandHandler(
             command.FarmId,
             cancellationToken);
 
-        if (command.ExpectedCurrentBoundaryVersionNumber.HasValue)
+        if (currentBoundary is null)
         {
-            if (currentBoundary is null ||
-                currentBoundary.VersionNumber != command.ExpectedCurrentBoundaryVersionNumber.Value)
-            {
-                return Result.Failure<VerifyFarmBoundaryResponse>(
-                    FarmError.BoundaryConcurrentModification());
-            }
+            return Result.Failure<VerifyFarmBoundaryResponse>(
+                FarmError.UnmappedFarmBoundaryRequiresCaptureSession());
+        }
+
+        if (!command.ExpectedCurrentBoundaryVersionNumber.HasValue ||
+            currentBoundary.VersionNumber != command.ExpectedCurrentBoundaryVersionNumber.Value)
+        {
+            return Result.Failure<VerifyFarmBoundaryResponse>(
+                FarmError.BoundaryConcurrentModification());
         }
 
         var nextVersionNumber = await boundaryRepository.GetNextVersionNumberAsync(
@@ -90,11 +93,11 @@ internal sealed class VerifyFarmBoundaryCommandHandler(
 
         newBoundary.Approve(actorId, command.Reason, now);
 
-        if (currentBoundary is not null)
-        {
-            currentBoundary.Supersede(newBoundary.Id, now);
-            boundaryRepository.Update(currentBoundary);
-        }
+        currentBoundary.Supersede(newBoundary.Id, now);
+        boundaryRepository.Update(currentBoundary);
+
+        farm.SetBoundary(newBoundary.Geometry, now);
+        farmRepository.Update(farm);
 
         boundaryRepository.Add(newBoundary);
 

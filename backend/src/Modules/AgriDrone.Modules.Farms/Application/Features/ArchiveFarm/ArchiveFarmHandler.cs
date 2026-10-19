@@ -38,7 +38,7 @@ internal sealed class ArchiveFarmHandler(
 
         if (!accessDecision.IsAllowed || accessDecision.TenantId is not Guid tenantId)
         {
-            return Result.Failure(FarmError.AccessDenied());
+            return Result.Failure(FarmError.NotFound());
         }
 
         var farm = await farmRepository.GetByIdAsync(
@@ -67,7 +67,11 @@ internal sealed class ArchiveFarmHandler(
                 FarmError.ActiveDependenciesExist(
                     dependencies.ActiveZoneCount,
                     dependencies.ActiveMissionCount,
-                    dependencies.ActiveSurveyOrderCount));
+                    dependencies.ActiveSurveyOrderCount,
+                    dependencies.PublishedMapCount,
+                    dependencies.PublishedResultCount,
+                    dependencies.RetentionHistoryCount,
+                    dependencies.StableReasonCodes));
         }
 
         using var oldData = CreateAuditData(farm);
