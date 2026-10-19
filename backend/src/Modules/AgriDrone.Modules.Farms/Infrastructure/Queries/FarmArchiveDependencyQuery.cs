@@ -6,12 +6,13 @@ using Microsoft.EntityFrameworkCore;
 namespace AgriDrone.Modules.Farms.Infrastructure.Queries;
 
 /// <summary>
-/// Read-only dependency adapter for archive operations. SurveyOrder can be
-/// added here once its schema and internal query port exist.
+/// Read-only dependency adapter for archive operations. Checks active zones,
+/// missions, and survey orders for the target farm.
 /// </summary>
 internal sealed class LegacyReadOnlyFarmArchiveDependencyQuery(
     FarmsDbContext dbContext,
-    IMissionArchiveReferenceQuery missionReferenceQuery)
+    IMissionArchiveReferenceQuery missionReferenceQuery,
+    ISurveyOrderArchiveReferenceQuery? surveyOrderReferenceQuery = null)
     : IFarmArchiveDependencyQuery
 {
     public async Task<ArchiveDependencySummary> GetForZoneAsync(
@@ -52,8 +53,16 @@ internal sealed class LegacyReadOnlyFarmArchiveDependencyQuery(
                 farmId,
                 cancellationToken);
 
+        var activeSurveyOrderCount = surveyOrderReferenceQuery is not null
+            ? await surveyOrderReferenceQuery.CountActiveForFarmAsync(
+                tenantId,
+                farmId,
+                cancellationToken)
+            : 0;
+
         return new ArchiveDependencySummary(
             activeZoneCount,
-            activeMissionCount);
+            activeMissionCount,
+            activeSurveyOrderCount);
     }
 }

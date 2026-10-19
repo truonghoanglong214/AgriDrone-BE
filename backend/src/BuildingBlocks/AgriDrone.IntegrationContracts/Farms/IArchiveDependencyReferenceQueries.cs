@@ -13,3 +13,12 @@ public interface IMissionArchiveReferenceQuery
         Guid farmId,
         CancellationToken cancellationToken = default);
 }
+
+public interface ISurveyOrderArchiveReferenceQuery
+{
+    Task<int> CountActiveForFarmAsync(
+        Guid tenantId,
+        Guid farmId,
+        CancellationToken cancellationToken = default);
+}
+

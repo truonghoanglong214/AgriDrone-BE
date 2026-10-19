@@ -294,6 +294,59 @@ public sealed class SystemManagerSurveyOrdersController(ISender sender)
             response => Results.Ok(MapBoundaryCapture(response)));
     }
 
+    /// <summary>Lấy thông tin chi tiết và các samples đã đồng bộ của phiên capture.</summary>
+    [HttpGet("{orderId:guid}/boundary-capture-sessions/{sessionId:guid}")]
+    [ProducesResponseType<BoundaryCaptureApiResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IResult> GetBoundaryCaptureSession(
+        [FromRoute] Guid orderId,
+        [FromRoute] Guid sessionId,
+        CancellationToken cancellationToken)
+    {
+        var result = await sender.Send(
+            new AgriDrone.Modules.Surveys.Application.Features.BoundaryCapture.GetBoundaryCaptureSession.GetBoundaryCaptureSessionQuery(
+                orderId,
+                sessionId),
+            cancellationToken);
+        return result.ToHttpResult(
+            HttpContext,
+            response => Results.Ok(MapBoundaryCapture(response)));
+    }
+
+    /// <summary>SystemManager duyệt route plan tự động từ BE2 và chuyển Order sang BaselineReady.</summary>
+    [HttpPost("{orderId:guid}/baseline-route-plans/{routePlanId:guid}/approve")]
+    [ProducesResponseType<BoundaryCaptureApiResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IResult> ApproveBaselineRoutePlan(
+        [FromRoute] Guid orderId,
+        [FromRoute] Guid routePlanId,
+        [FromBody] ApproveBaselineRoutePlanRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await sender.Send(
+            new ApproveBaselineRoutePlanCommand(
+                orderId,
+                request.SessionId!.Value,
+                request.FarmBoundaryVersionId!.Value,
+                routePlanId,
+                request.RoutePlanVersion!.Value,
+                request.SafetyInsetMeters,
+                request.IsWithinSafetyInset,
+                request.ExpectedOrderVersion!.Value),
+            cancellationToken);
+
+        return result.ToHttpResult(
+            HttpContext,
+            response => Results.Ok(MapBoundaryCapture(response)));
+    }
+
     /// <summary>Đánh giá readiness Baseline Mapping từ trạng thái server.</summary>
     /// <remarks>
     /// Mission phải liên kết Order, đúng purpose, nằm trong appointment window;

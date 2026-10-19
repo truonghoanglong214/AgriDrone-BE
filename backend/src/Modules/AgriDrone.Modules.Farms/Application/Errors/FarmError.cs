@@ -1,4 +1,4 @@
-﻿using AgriDrone.SharedKernel.Application;
+using AgriDrone.SharedKernel.Application;
 using System;
 using System.Collections.Generic;
 using System.Text;
@@ -50,10 +50,17 @@ namespace AgriDrone.Modules.Farms.Application.Errors
 
         public static AppError ActiveDependenciesExist(
             int activeZoneCount,
-            int activeMissionCount) =>
+            int activeMissionCount,
+            int activeSurveyOrderCount = 0) =>
             AppError.Conflict(
                 "Farm.ActiveDependenciesExist",
                 "The farm cannot be archived while active dependencies remain. " +
-                $"Active zones: {activeZoneCount}; active missions: {activeMissionCount}.");
+                $"Active zones: {activeZoneCount}; active missions: {activeMissionCount}" +
+                (activeSurveyOrderCount > 0 ? $"; active survey orders: {activeSurveyOrderCount}." : "."));
+
+        public static AppError BoundaryConcurrentModification() =>
+            AppError.Conflict(
+                "FarmBoundary.ConcurrentModification",
+                "The farm boundary has been updated by another operation. Please reload and retry.");
     }
 }

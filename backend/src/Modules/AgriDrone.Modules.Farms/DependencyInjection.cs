@@ -1,8 +1,10 @@
 using AgriDrone.IntegrationContracts.Farms;
+using AgriDrone.Modules.Farms.Application.Abstractions.Boundaries;
 using AgriDrone.Modules.Farms.Application.Abstractions.Persistence;
 using AgriDrone.Modules.Farms.Application.Abstractions.Queries;
 using AgriDrone.Modules.Farms.Application.Policies;
 using AgriDrone.Modules.Farms.Application.Provisioning;
+using AgriDrone.Modules.Farms.Infrastructure.Boundaries;
 using AgriDrone.Modules.Farms.Domain.Farms;
 using AgriDrone.Modules.Farms.Domain.Boundaries;
 using AgriDrone.Modules.Farms.Domain.Maps;
@@ -61,8 +63,10 @@ public static class DependencyInjection
             ISurveyRequestFarmReferenceQuery,
             SurveyRequestFarmReferenceQuery>();
         services.AddScoped<IFarmGeometryPolicy, FarmGeometryPolicy>();
+        services.AddScoped<IFarmBoundaryPolicy, FarmBoundaryPolicy>();
         services.AddScoped<IFarmProvisioningPort, FarmProvisioningPort>();
         services.AddScoped<IFarmBaseMapPublicationService, FarmBaseMapPublicationService>();
+        services.AddScoped<IFarmOperationalContextQueries, FarmOperationalContextQueries>();
 
         var assembly = typeof(DependencyInjection).Assembly;
 

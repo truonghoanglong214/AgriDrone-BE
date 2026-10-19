@@ -1,0 +1,189 @@
+using AgriDrone.Modules.Surveys.Domain;
+using Xunit;
+
+namespace AgriDrone.UnitTests.Application.Surveys;
+
+public sealed class SurveyOrderReadinessPolicyTests
+{
+    [Fact]
+    public void EvaluateReturnsFailureWhenPurposeIsHarvestReadiness()
+    {
+        var snapshot = CreateValidSnapshot(SurveyOperationPurpose.HarvestReadiness);
+
+        var decision = SurveyOrderReadinessPolicy.Evaluate(snapshot);
+
+        Assert.False(decision.IsReady);
+        Assert.Contains(SurveyOrderReadinessFailure.ServiceDisabled, decision.Failures);
+    }
+
+    [Fact]
+    public void EvaluateReturnsFailureWhenBaselineMappingLacksFinalizedBoundaryCapture()
+    {
+        var snapshot = CreateValidSnapshot(SurveyOperationPurpose.BaselineMapping) with
+        {
+            HasFinalizedBoundaryCapture = false
+        };
+
+        var decision = SurveyOrderReadinessPolicy.Evaluate(snapshot);
+
+        Assert.False(decision.IsReady);
+        Assert.Contains(SurveyOrderReadinessFailure.BoundaryCaptureNotFinalized, decision.Failures);
+    }
+
+    [Fact]
+    public void EvaluateReturnsFailureWhenBaselineRouteNotApproved()
+    {
+        var snapshot = CreateValidSnapshot(SurveyOperationPurpose.BaselineMapping) with
+        {
+            HasApprovedBaselineRoute = false
+        };
+
+        var decision = SurveyOrderReadinessPolicy.Evaluate(snapshot);
+
+        Assert.False(decision.IsReady);
+        Assert.Contains(SurveyOrderReadinessFailure.BaselineRouteNotApproved, decision.Failures);
+    }
+
+    [Fact]
+    public void EvaluateReturnsFailureWhenBaselineRouteIsStale()
+    {
+        var snapshot = CreateValidSnapshot(SurveyOperationPurpose.BaselineMapping) with
+        {
+            IsBaselineRouteCurrent = false
+        };
+
+        var decision = SurveyOrderReadinessPolicy.Evaluate(snapshot);
+
+        Assert.False(decision.IsReady);
+        Assert.Contains(SurveyOrderReadinessFailure.BaselineRouteStale, decision.Failures);
+    }
+
+    [Fact]
+    public void EvaluateReturnsFailureWhenBaselineRouteOutsideSafetyInset()
+    {
+        var snapshot = CreateValidSnapshot(SurveyOperationPurpose.BaselineMapping) with
+        {
+            IsBaselineRouteWithinSafetyInset = false
+        };
+
+        var decision = SurveyOrderReadinessPolicy.Evaluate(snapshot);
+
+        Assert.False(decision.IsReady);
+        Assert.Contains(SurveyOrderReadinessFailure.BaselineRouteOutsideSafetyInset, decision.Failures);
+    }
+
+    [Fact]
+    public void EvaluateReturnsFailureWhenConsentNotValid()
+    {
+        var snapshot = CreateValidSnapshot(SurveyOperationPurpose.BaselineMapping) with
+        {
+            HasValidWrittenDataUseConsent = false
+        };
+
+        var decision = SurveyOrderReadinessPolicy.Evaluate(snapshot);
+
+        Assert.False(decision.IsReady);
+        Assert.Contains(SurveyOrderReadinessFailure.WrittenConsentNotValid, decision.Failures);
+    }
+
+    [Fact]
+    public void EvaluateReturnsFailureWhenFlightPermissionNotValid()
+    {
+        var snapshot = CreateValidSnapshot(SurveyOperationPurpose.BaselineMapping) with
+        {
+            HasValidFlightPermission = false
+        };
+
+        var decision = SurveyOrderReadinessPolicy.Evaluate(snapshot);
+
+        Assert.False(decision.IsReady);
+        Assert.Contains(SurveyOrderReadinessFailure.FlightPermissionNotValid, decision.Failures);
+    }
+
+    [Fact]
+    public void EvaluateReturnsFailureWhenPendingFinancialSettlementExists()
+    {
+        var snapshot = CreateValidSnapshot(SurveyOperationPurpose.BaselineMapping) with
+        {
+            HasPendingFinancialSettlement = true
+        };
+
+        var decision = SurveyOrderReadinessPolicy.Evaluate(snapshot);
+
+        Assert.False(decision.IsReady);
+        Assert.Contains(SurveyOrderReadinessFailure.FinancialSettlementPending, decision.Failures);
+    }
+
+    [Fact]
+    public void EvaluateReturnsFailureWhenUnapprovedExtraFlightExists()
+    {
+        var snapshot = CreateValidSnapshot(SurveyOperationPurpose.BaselineMapping) with
+        {
+            HasUnapprovedExtraFlight = true
+        };
+
+        var decision = SurveyOrderReadinessPolicy.Evaluate(snapshot);
+
+        Assert.False(decision.IsReady);
+        Assert.Contains(SurveyOrderReadinessFailure.ExtraFlightNotApproved, decision.Failures);
+    }
+
+    [Fact]
+    public void EvaluateReturnsSuccessWhenBaselineMappingAllRequirementsMet()
+    {
+        var snapshot = CreateValidSnapshot(SurveyOperationPurpose.BaselineMapping);
+
+        var decision = SurveyOrderReadinessPolicy.Evaluate(snapshot);
+
+        Assert.True(decision.IsReady);
+        Assert.Empty(decision.Failures);
+    }
+
+    [Fact]
+    public void EvaluateReturnsSuccessWhenPlantHealthAllRequirementsMet()
+    {
+        var snapshot = CreateValidSnapshot(SurveyOperationPurpose.PlantHealth);
+
+        var decision = SurveyOrderReadinessPolicy.Evaluate(snapshot);
+
+        Assert.True(decision.IsReady);
+        Assert.Empty(decision.Failures);
+    }
+
+    private static SurveyOrderReadinessSnapshot CreateValidSnapshot(SurveyOperationPurpose purpose)
+    {
+        var isBaseline = purpose == SurveyOperationPurpose.BaselineMapping;
+        var orderStatus = isBaseline ? SurveyOrderStatus.BaselineReady : SurveyOrderStatus.ReadyForPaidService;
+
+        return new SurveyOrderReadinessSnapshot(
+            OrderStatus: orderStatus,
+            Purpose: purpose,
+            RequiresBaselineMapping: isBaseline,
+            HasApprovedFarmBoundary: true,
+            IsScopeConfirmed: true,
+            HasPublishedFarmBaseMap: !isBaseline,
+            HasConfirmedPoleCount: true,
+            HasPriceSnapshot: true,
+            AppointmentPurpose: isBaseline ? SurveyAppointmentPurpose.BaselineMapping : SurveyAppointmentPurpose.PaidService,
+            AppointmentStatus: SurveyAppointmentStatus.Confirmed,
+            PaymentStatus: isBaseline ? null : SurveyPaymentStatus.Confirmed,
+            HasActiveQualifiedPrimaryManager: true,
+            IsPrimaryManagerAvailable: true,
+            IsAppointmentCurrent: true,
+            IsMissionPreparedForPurpose: true,
+            IsMissionScheduledWithinAppointment: true,
+            IsDroneReady: true,
+            IsPreflightCompleted: true,
+            HasPendingPriceAdjustment: false,
+            IsPaymentAmountAndCurrencyMatched: true,
+            SafetyChecksSatisfied: true,
+            HasValidWrittenDataUseConsent: true,
+            HasValidFlightPermission: true,
+            HasPendingFinancialSettlement: false,
+            HasUnapprovedExtraFlight: false,
+            HasFinalizedBoundaryCapture: isBaseline,
+            HasApprovedBaselineRoute: isBaseline,
+            IsBaselineRouteCurrent: isBaseline,
+            IsBaselineRouteWithinSafetyInset: isBaseline);
+    }
+}

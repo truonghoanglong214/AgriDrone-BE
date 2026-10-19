@@ -124,6 +124,28 @@ public sealed class ArchiveFarmZoneHandlerTests
     }
 
     [Fact]
+    public async Task ArchiveFarmRejectsActiveSurveyOrders()
+    {
+        var fixture = CreateFixture();
+        fixture.DependencyQuery.FarmDependencies = new(
+            ActiveZoneCount: 0,
+            ActiveMissionCount: 0,
+            ActiveSurveyOrderCount: 2);
+
+        var result = await fixture.FarmHandler.Handle(
+            new ArchiveFarmCommand(
+                fixture.Farm.Id,
+                fixture.Farm.Version),
+            CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("Farm.ActiveDependenciesExist", result.Error.Code);
+        Assert.Contains("active survey orders: 2", result.Error.Description);
+        Assert.Equal(0, fixture.FarmRepository.UpdateCallCount);
+        Assert.Equal(0, fixture.UnitOfWork.SaveCallCount);
+    }
+
+    [Fact]
     public async Task ArchiveFarmRejectsStaleExpectedVersion()
     {
         var fixture = CreateFixture();

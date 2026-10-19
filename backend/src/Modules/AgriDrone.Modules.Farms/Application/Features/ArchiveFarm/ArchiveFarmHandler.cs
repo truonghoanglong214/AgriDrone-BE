@@ -66,7 +66,8 @@ internal sealed class ArchiveFarmHandler(
             return Result.Failure(
                 FarmError.ActiveDependenciesExist(
                     dependencies.ActiveZoneCount,
-                    dependencies.ActiveMissionCount));
+                    dependencies.ActiveMissionCount,
+                    dependencies.ActiveSurveyOrderCount));
         }
 
         using var oldData = CreateAuditData(farm);

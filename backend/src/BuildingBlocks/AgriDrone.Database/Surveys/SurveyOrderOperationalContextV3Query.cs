@@ -1,8 +1,10 @@
 using AgriDrone.IntegrationContracts.Surveys;
 using AgriDrone.Modules.Farms.Domain.Boundaries;
 using AgriDrone.Modules.Farms.Domain.Maps;
+using AgriDrone.Modules.Farms.Domain.Zones;
 using AgriDrone.Modules.Surveys.Domain;
 using AgriDrone.SharedKernel.Application.Abstractions.Authorization;
+using AgriDrone.SharedKernel.Domain;
 using Microsoft.EntityFrameworkCore;
 
 namespace AgriDrone.Database.Surveys;
@@ -120,6 +122,30 @@ internal sealed class SurveyOrderOperationalContextV3Query(
                 value.IsWithinSafetyInset,
                 cancellationToken);
 
+        string? captureSessionStatus = null;
+        if (order.BoundaryCaptureSessionId.HasValue)
+        {
+            captureSessionStatus = await db.Set<BoundaryCaptureSession>().AsNoTracking()
+                .Where(s => s.Id == order.BoundaryCaptureSessionId.Value)
+                .Select(s => s.Status.ToString())
+                .FirstOrDefaultAsync(cancellationToken);
+        }
+
+        string? baselineRoutePlanStatus = null;
+        if (order.BaselineRoutePlanId.HasValue)
+        {
+            baselineRoutePlanStatus = await db.Set<BaselineRoutePlanReference>().AsNoTracking()
+                .Where(r => r.RoutePlanId == order.BaselineRoutePlanId.Value)
+                .Select(r => r.Status.ToString())
+                .FirstOrDefaultAsync(cancellationToken);
+        }
+
+        var scopeZoneIds = await db.Set<FarmZone>().AsNoTracking()
+            .Where(z => z.FarmId == order.FarmId && z.Status == GeneralStatus.Active && z.DeletedAt == null)
+            .OrderBy(z => z.Code)
+            .Select(z => z.Id)
+            .ToListAsync(cancellationToken);
+
         var safetyChecksSatisfied = boundaryApproved && managerReady;
 
         var snapshot = new SurveyOrderReadinessSnapshot(
@@ -167,6 +193,16 @@ internal sealed class SurveyOrderOperationalContextV3Query(
             managerReady ? access.ManagerProfileId : null,
             order.PreviousCompatibleOrderId,
             decision.IsReady, decision.Failures.Select(value => value.ToString()).ToArray(),
-            clock.GetUtcNow());
+            clock.GetUtcNow(),
+            scopeZoneIds,
+            order.BoundaryCaptureSessionId,
+            captureSessionStatus,
+            order.BaselineRoutePlanId,
+            baselineRoutePlanStatus,
+            hasPendingSettlement,
+            hasUnapprovedExtraFlight,
+            pendingAdjustment,
+            hasValidConsent,
+            hasValidFlightPermission);
     }
 }
