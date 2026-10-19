@@ -75,29 +75,29 @@ internal sealed class SurveyOrderReadinessStateQueries(NpgsqlDataSource dataSour
                 ) AS has_open_adjustment,
                 EXISTS (
                     SELECT 1
-                    FROM survey.survey_capture_authorizations AS authorization
-                    WHERE authorization.survey_order_id = survey_order.id
-                      AND authorization.authorization_type =
+                    FROM survey.survey_capture_authorizations AS auth
+                    WHERE auth.survey_order_id = survey_order.id
+                      AND auth.authorization_type =
                         'WRITTEN_DATA_USE_CONSENT'::system.survey_capture_authorization_type
-                      AND authorization.status =
+                      AND auth.status =
                         'VERIFIED'::system.survey_capture_authorization_status
-                      AND authorization.verified_at <= @evaluated_at
-                      AND (authorization.expires_at IS NULL OR
-                           @evaluated_at < authorization.expires_at)
-                      AND authorization.revoked_at IS NULL
+                      AND auth.verified_at <= @evaluated_at
+                      AND (auth.expires_at IS NULL OR
+                           @evaluated_at < auth.expires_at)
+                      AND auth.revoked_at IS NULL
                 ) AS has_valid_consent,
                 EXISTS (
                     SELECT 1
-                    FROM survey.survey_capture_authorizations AS authorization
-                    WHERE authorization.survey_order_id = survey_order.id
-                      AND authorization.authorization_type =
+                    FROM survey.survey_capture_authorizations AS auth
+                    WHERE auth.survey_order_id = survey_order.id
+                      AND auth.authorization_type =
                         'FLIGHT_PERMISSION'::system.survey_capture_authorization_type
-                      AND authorization.status =
+                      AND auth.status =
                         'VERIFIED'::system.survey_capture_authorization_status
-                      AND authorization.verified_at <= @evaluated_at
-                      AND (authorization.expires_at IS NULL OR
-                           @evaluated_at < authorization.expires_at)
-                      AND authorization.revoked_at IS NULL
+                      AND auth.verified_at <= @evaluated_at
+                      AND (auth.expires_at IS NULL OR
+                           @evaluated_at < auth.expires_at)
+                      AND auth.revoked_at IS NULL
                 ) AS has_valid_flight_permission
                 , EXISTS (
                     SELECT 1

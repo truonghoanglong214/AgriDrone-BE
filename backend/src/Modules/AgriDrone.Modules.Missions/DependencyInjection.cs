@@ -83,6 +83,7 @@ public static class DependencyInjection
         services.AddScoped<IMissionsUnitOfWork>(
                 serviceProvider =>
                     serviceProvider.GetRequiredService<MissionsDbContext>());
+        services.AddScoped<IMissionPlantGpsStore, MissionPlantGpsStore>();
 
         services.AddScoped<
             IDroneRepository,

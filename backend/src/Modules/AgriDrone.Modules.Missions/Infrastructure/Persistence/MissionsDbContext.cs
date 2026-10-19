@@ -33,9 +33,6 @@ internal sealed class MissionsDbContext(
     private const string TelemetryImportOperationConstraint =
     "uq_telemetry_imports_operation";
 
-    private const string BlackboxDecodeChecksumConstraint =
-        "uq_blackbox_decodes_mission_checksum";
-
     private const string TelemetryImportMissionConstraint =
         "uq_telemetry_imports_mission";
 
@@ -102,7 +99,6 @@ internal sealed class MissionsDbContext(
 
     public DbSet<MissionTelemetryImport> MissionTelemetryImports => Set<MissionTelemetryImport>();
 
-    public DbSet<BlackboxDecode> BlackboxDecodes => Set<BlackboxDecode>();
 
     public void AddAuditLog(AuditLog auditLog)
     {
@@ -232,16 +228,6 @@ internal sealed class MissionsDbContext(
         {
             throw new TelemetryImportConflictException(
                 exception);
-        }
-
-        catch (DbUpdateException exception)
-            when (exception.InnerException is PostgresException
-            {
-                SqlState: PostgresErrorCodes.UniqueViolation,
-                ConstraintName: BlackboxDecodeChecksumConstraint
-            })
-        {
-            throw new BlackboxDecodeConflictException(exception);
         }
 
     }
