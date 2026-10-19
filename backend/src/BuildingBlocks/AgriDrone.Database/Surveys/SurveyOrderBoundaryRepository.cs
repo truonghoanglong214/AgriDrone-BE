@@ -124,12 +124,13 @@ internal sealed class SurveyOrderBoundaryRepository(
 
         var currentBoundaries = await context.FarmBoundaries
             .FromSqlInterpolated($$"""
-                SELECT *
-                FROM farm.farm_boundaries
-                WHERE tenant_id = {{order.TenantId}}
-                  AND farm_id = {{order.FarmId}}
-                  AND status = 'APPROVED'::system.farm_boundary_status
-                FOR UPDATE
+                SELECT boundary.*, boundary.xmin
+                FROM farm.farm_boundaries AS boundary
+                WHERE boundary.tenant_id = {{order.TenantId}}
+                  AND boundary.farm_id = {{order.FarmId}}
+                  AND boundary.status =
+                      'APPROVED'::system.farm_boundary_status
+                FOR UPDATE OF boundary
                 """)
             .ToListAsync(cancellationToken);
         var currentApproved = currentBoundaries.SingleOrDefault();

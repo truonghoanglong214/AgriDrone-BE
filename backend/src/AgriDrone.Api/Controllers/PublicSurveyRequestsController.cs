@@ -54,6 +54,8 @@ public sealed class PublicSurveyRequestsController(
             new SubmitNewCustomerSurveyRequestCommand(
                 idempotency,
                 request.SurveyServiceId,
+                request.TenantCode,
+                request.TenantName,
                 request.ApplicantName,
                 request.ApplicantEmail,
                 request.ApplicantPhone,

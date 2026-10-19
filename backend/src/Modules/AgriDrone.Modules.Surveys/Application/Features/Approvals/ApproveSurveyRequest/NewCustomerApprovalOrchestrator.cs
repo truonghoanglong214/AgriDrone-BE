@@ -25,6 +25,7 @@ internal sealed class NewCustomerApprovalOrchestrator(
             request.TenantId.HasValue ||
             request.FarmId.HasValue ||
             request.RequestedByUserId.HasValue ||
+            string.IsNullOrWhiteSpace(request.TenantCode) ||
             prerequisites.TenantOwner is not null ||
             prerequisites.Farm is not null ||
             prerequisites.CurrentPrimaryAssignment is not null)
@@ -35,8 +36,8 @@ internal sealed class NewCustomerApprovalOrchestrator(
 
         var tenantResult = await provisioningPort.StageTenantAsync(
             new StageSurveyApprovalTenant(
-                numberGenerator.CreateTenantCode(),
-                request.ApplicantName,
+                request.TenantCode,
+                request.TenantName ?? request.ApplicantName,
                 context.ApprovedAt),
             cancellationToken);
         if (tenantResult.IsFailure)
@@ -71,7 +72,9 @@ internal sealed class NewCustomerApprovalOrchestrator(
             request.Id,
             request.SurveyServiceId,
             requiresBaselineMapping: true,
-            previousCompatibleOrderId: null,
+            prerequisites.OrderCompatibility.PreviousCompatibleOrderId,
+            prerequisites.OrderCompatibility.PolicyVersion,
+            prerequisites.OrderCompatibility.Reason,
             context.ApprovedAt);
         orderRepository.Add(order);
 

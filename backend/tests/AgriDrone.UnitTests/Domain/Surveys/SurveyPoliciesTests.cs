@@ -51,22 +51,64 @@ public sealed class SurveyPoliciesTests
             AppointmentStatus: SurveyAppointmentStatus.Confirmed,
             PaymentStatus: null,
             HasActiveQualifiedPrimaryManager: true,
+            IsPrimaryManagerAvailable: true,
+            IsAppointmentCurrent: true,
+            IsMissionPreparedForPurpose: true,
+            IsMissionScheduledWithinAppointment: true,
+            IsDroneReady: true,
+            IsPreflightCompleted: true,
             HasPendingPriceAdjustment: false,
-            SafetyChecksSatisfied: true));
+            IsPaymentAmountAndCurrencyMatched: true,
+            SafetyChecksSatisfied: true,
+            HasValidWrittenDataUseConsent: true,
+            HasValidFlightPermission: true,
+            HasFinalizedBoundaryCapture: true,
+            HasApprovedBaselineRoute: true,
+            IsBaselineRouteCurrent: true,
+            IsBaselineRouteWithinSafetyInset: true));
 
         Assert.True(decision.IsReady);
         Assert.Empty(decision.Failures);
     }
 
-    [Theory]
-    [InlineData(SurveyOperationPurpose.PlantHealth)]
-    [InlineData(SurveyOperationPurpose.HarvestReadiness)]
-    public void PaidReadinessAllowsOrderWhenEveryPrerequisiteIsSatisfied(
-        SurveyOperationPurpose purpose)
+    [Fact]
+    public void PlantHealthReadinessAllowsOrderWhenEveryPrerequisiteIsSatisfied()
     {
         var decision = SurveyOrderReadinessPolicy.Evaluate(new(
             OrderStatus: SurveyOrderStatus.ReadyForPaidService,
-            Purpose: purpose,
+            Purpose: SurveyOperationPurpose.PlantHealth,
+            RequiresBaselineMapping: false,
+            HasApprovedFarmBoundary: true,
+            IsScopeConfirmed: true,
+            HasPublishedFarmBaseMap: true,
+            HasConfirmedPoleCount: true,
+            HasPriceSnapshot: true,
+            AppointmentPurpose: SurveyAppointmentPurpose.PaidService,
+            AppointmentStatus: SurveyAppointmentStatus.Confirmed,
+            PaymentStatus: SurveyPaymentStatus.Confirmed,
+            HasActiveQualifiedPrimaryManager: true,
+            IsPrimaryManagerAvailable: true,
+            IsAppointmentCurrent: true,
+            IsMissionPreparedForPurpose: true,
+            IsMissionScheduledWithinAppointment: true,
+            IsDroneReady: true,
+            IsPreflightCompleted: true,
+            HasPendingPriceAdjustment: false,
+            IsPaymentAmountAndCurrencyMatched: true,
+            SafetyChecksSatisfied: true,
+            HasValidWrittenDataUseConsent: true,
+            HasValidFlightPermission: true));
+
+        Assert.True(decision.IsReady);
+        Assert.Empty(decision.Failures);
+    }
+
+    [Fact]
+    public void HarvestReadinessIsDisabledInMvp()
+    {
+        var decision = SurveyOrderReadinessPolicy.Evaluate(new(
+            OrderStatus: SurveyOrderStatus.ReadyForPaidService,
+            Purpose: SurveyOperationPurpose.HarvestReadiness,
             RequiresBaselineMapping: false,
             HasApprovedFarmBoundary: true,
             IsScopeConfirmed: true,
@@ -80,8 +122,10 @@ public sealed class SurveyPoliciesTests
             HasPendingPriceAdjustment: false,
             SafetyChecksSatisfied: true));
 
-        Assert.True(decision.IsReady);
-        Assert.Empty(decision.Failures);
+        Assert.False(decision.IsReady);
+        Assert.Equal(
+            [SurveyOrderReadinessFailure.ServiceDisabled],
+            decision.Failures);
     }
 
     [Fact]

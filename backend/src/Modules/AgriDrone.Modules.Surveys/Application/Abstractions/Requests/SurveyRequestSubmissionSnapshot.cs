@@ -11,6 +11,8 @@ internal sealed record SurveyRequestSubmissionSnapshot(
     Guid? FarmId,
     Guid? RequestedByUserId,
     Guid SurveyServiceId,
+    string? TenantCode,
+    string? TenantName,
     string ApplicantName,
     string ApplicantEmail,
     string ApplicantPhone,
@@ -31,6 +33,8 @@ internal sealed record SurveyRequestSubmissionSnapshot(
         Guid? farmId,
         Guid? requestedByUserId,
         Guid surveyServiceId,
+        string? tenantCode,
+        string? tenantName,
         string applicantName,
         string applicantEmail,
         string applicantPhone,
@@ -51,6 +55,24 @@ internal sealed record SurveyRequestSubmissionSnapshot(
         EnsureOptionalId(tenantId, nameof(tenantId));
         EnsureOptionalId(farmId, nameof(farmId));
         EnsureOptionalId(requestedByUserId, nameof(requestedByUserId));
+        var normalizedTenantCode = kind switch
+        {
+            SurveyRequestKind.NewCustomer =>
+                NormalizeTenantCode(tenantCode),
+            _ when tenantCode is null => null,
+            _ => throw new ArgumentException(
+                "Tenant code can only be supplied for a new customer request.",
+                nameof(tenantCode))
+        };
+        var normalizedTenantName = kind switch
+        {
+            SurveyRequestKind.NewCustomer =>
+                NormalizeTenantName(tenantName),
+            _ when tenantName is null => null,
+            _ => throw new ArgumentException(
+                "Tenant name can only be supplied for a new customer request.",
+                nameof(tenantName))
+        };
 
         return new SurveyRequestSubmissionSnapshot(
             kind,
@@ -58,6 +80,8 @@ internal sealed record SurveyRequestSubmissionSnapshot(
             farmId,
             requestedByUserId,
             surveyServiceId,
+            normalizedTenantCode,
+            normalizedTenantName,
             NormalizeRequired(applicantName, nameof(applicantName)),
             NormalizeRequired(applicantEmail, nameof(applicantEmail))
                 .ToLowerInvariant(),
@@ -85,6 +109,8 @@ internal sealed record SurveyRequestSubmissionSnapshot(
             request.FarmId,
             request.RequestedByUserId,
             request.SurveyServiceId,
+            request.TenantCode,
+            request.TenantName,
             request.ApplicantName,
             request.ApplicantEmail,
             request.ApplicantPhone,
@@ -110,6 +136,33 @@ internal sealed record SurveyRequestSubmissionSnapshot(
 
     private static string? NormalizeOptional(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static string NormalizeTenantCode(string? value)
+    {
+        var normalized = NormalizeRequired(value!, nameof(value))
+            .ToUpperInvariant();
+        if (normalized.Length > 50)
+        {
+            throw new ArgumentException(
+                "Tenant code cannot exceed 50 characters.",
+                nameof(value));
+        }
+
+        return normalized;
+    }
+
+    private static string NormalizeTenantName(string? value)
+    {
+        var normalized = NormalizeRequired(value!, nameof(value));
+        if (normalized.Length > 150)
+        {
+            throw new ArgumentException(
+                "Tenant name cannot exceed 150 characters.",
+                nameof(value));
+        }
+
+        return normalized;
+    }
 
     private static string NormalizePhone(string value)
     {
@@ -189,6 +242,8 @@ internal readonly record struct SurveyRequestSubmissionFingerprint
             FormatId(snapshot.FarmId),
             FormatId(snapshot.RequestedByUserId),
             snapshot.SurveyServiceId.ToString("D"),
+            includesApplicantPayload ? snapshot.TenantCode : null,
+            includesApplicantPayload ? snapshot.TenantName : null,
             includesApplicantPayload ? snapshot.ApplicantName : null,
             includesApplicantPayload ? snapshot.ApplicantEmail : null,
             includesApplicantPayload ? snapshot.ApplicantPhone : null,
@@ -235,6 +290,8 @@ internal readonly record struct SurveyRequestSubmissionFingerprint
         string? FarmId,
         string? RequestedByUserId,
         string SurveyServiceId,
+        string? TenantCode,
+        string? TenantName,
         string? ApplicantName,
         string? ApplicantEmail,
         string? ApplicantPhone,

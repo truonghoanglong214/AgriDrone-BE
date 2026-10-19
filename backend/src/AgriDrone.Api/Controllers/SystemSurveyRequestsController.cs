@@ -119,12 +119,7 @@ public sealed class SystemSurveyRequestsController(ISender sender)
             new RejectSurveyRequestCommand(
                 requestId,
                 request.Reason,
-                new SurveyRequestReviewChecklistInput(
-                    checklist.Version,
-                    checklist.ContactValid,
-                    checklist.IsServiceAreaSupported,
-                    checklist.IsPreliminaryLegalAndFlightFeasible,
-                    checklist.Notes),
+                MapChecklist(checklist),
                 request.ExpectedVersion),
             cancellationToken);
         return result.ToHttpResult(
@@ -175,12 +170,7 @@ public sealed class SystemSurveyRequestsController(ISender sender)
                 requestId,
                 request.SelectedSystemManagerProfileId,
                 request.Reason,
-                new SurveyRequestReviewChecklistInput(
-                    checklist.Version,
-                    checklist.ContactValid,
-                    checklist.IsServiceAreaSupported,
-                    checklist.IsPreliminaryLegalAndFlightFeasible,
-                    checklist.Notes),
+                MapChecklist(checklist),
                 request.ExpectedVersion!.Value,
                 normalizedKey),
             cancellationToken);
@@ -228,4 +218,27 @@ public sealed class SystemSurveyRequestsController(ISender sender)
                 kind,
                 "Unsupported survey request kind filter.")
         };
+
+    private static SurveyRequestReviewChecklistInput MapChecklist(
+        SurveyRequestReviewChecklistRequest checklist) =>
+        new(
+            SurveyRequestReviewChecklistDefinition.Version,
+            new Dictionary<string, bool>(StringComparer.Ordinal)
+            {
+                [SurveyRequestReviewChecklistDefinition.ContactValidCode] =
+                    checklist.ContactValid,
+                [SurveyRequestReviewChecklistDefinition.DragonFruitFarmConfirmedCode] =
+                    checklist.DragonFruitFarmConfirmed,
+                [SurveyRequestReviewChecklistDefinition.ServiceAreaSupportedCode] =
+                    checklist.ServiceAreaSupported,
+                [SurveyRequestReviewChecklistDefinition.CandidateLocationSufficientCode] =
+                    checklist.CandidateLocationSufficient,
+                [SurveyRequestReviewChecklistDefinition.ConsentFeasibilityCode] =
+                    checklist.ConsentFeasibility,
+                [SurveyRequestReviewChecklistDefinition.FlightPermissionFeasibilityCode] =
+                    checklist.FlightPermissionFeasibility,
+                [SurveyRequestReviewChecklistDefinition.EligibleManagerAvailableCode] =
+                    checklist.EligibleManagerAvailable
+            },
+            checklist.Notes);
 }

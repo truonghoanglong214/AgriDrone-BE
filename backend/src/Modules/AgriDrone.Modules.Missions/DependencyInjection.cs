@@ -51,6 +51,14 @@ public static class DependencyInjection
                     .MapEnum<MissionType>("mission_type", "system", translator)
                     .MapEnum<MissionPurpose>("mission_purpose", "system", translator)
                     .MapEnum<MissionStatus>("mission_status", "system", translator)
+                    .MapEnum<PreflightChecklistDefinitionStatus>(
+                        "preflight_checklist_definition_status",
+                        "system",
+                        translator)
+                    .MapEnum<MissionPreflightChecklistStatus>(
+                        "mission_preflight_checklist_status",
+                        "system",
+                        translator)
                     .MapEnum<ProcessingStatus>("processing_status", "system", translator)
                     .MapEnum<MediaType>("media_type", "system", translator)
                     .MapEnum<MediaStorageStatus>("media_storage_status", "system", translator)

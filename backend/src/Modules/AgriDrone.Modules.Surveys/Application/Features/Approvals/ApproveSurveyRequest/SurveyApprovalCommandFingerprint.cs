@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text.Json;
+using AgriDrone.Modules.Surveys.Application.Features.Requests.Common;
 
 namespace AgriDrone.Modules.Surveys.Application.Features.Approvals.ApproveSurveyRequest;
 
@@ -16,9 +17,8 @@ internal static class SurveyApprovalCommandFingerprint
             command.SelectedSystemManagerProfileId,
             Reason = command.Reason.Trim(),
             ChecklistVersion = command.Checklist.Version,
-            command.Checklist.ContactValid,
-            command.Checklist.IsServiceAreaSupported,
-            command.Checklist.IsPreliminaryLegalAndFlightFeasible,
+            ChecklistAnswers = SurveyRequestReviewChecklistDefinition
+                .CanonicalizeAnswers(command.Checklist.Answers),
             ChecklistNotes = string.IsNullOrWhiteSpace(command.Checklist.Notes)
                 ? null
                 : command.Checklist.Notes.Trim(),

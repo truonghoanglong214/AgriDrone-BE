@@ -39,6 +39,12 @@ builder.Services
                 JsonNamingPolicy.SnakeCaseUpper,
                 allowIntegerValues: false)));
 
+builder.Services.ConfigureHttpJsonOptions(options =>
+    options.SerializerOptions.Converters.Add(
+        new JsonStringEnumConverter(
+            JsonNamingPolicy.SnakeCaseUpper,
+            allowIntegerValues: false)));
+
 builder.Services
     .AddOptions<LegacyFeaturesOptions>()
     .Bind(builder.Configuration.GetSection(

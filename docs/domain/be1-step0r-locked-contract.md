@@ -2,8 +2,11 @@
 
 - Status: Approved design baseline
 - Date: 2026-10-07
+- Amended: 2026-10-17 — same-visit boundary capture and automatic Baseline route
 - Implements: ADR-0007 through ADR-0011
-- Implementation status: `CodeComplete — AwaitingFinalTest` as of 2026-10-08.
+- Implementation status: pre-amendment baseline was `CodeComplete — AwaitingFinalTest`
+  as of 2026-10-08; the 2026-10-17 state-order/capture/route amendment is
+  `DesignLocked — ImplementationRequired` and supersedes conflicting runtime behavior.
   PR 0R-1 implements the per-pole value objects,
   two-stage SurveyOrder model, appointment purpose and purpose-aware readiness.
   PR 0R-2 adds the fresh/upgrade/guarded-rollback persistence migration. PR 0R-3
@@ -30,6 +33,8 @@
 | `AppointmentPurpose` | `BaselineMapping`, `PaidService` |
 | `MissionPurpose` | `BaselineMapping`, `PlantHealth`, `HarvestReadiness` |
 | `FarmBoundaryStatus` | `Draft`, `Approved`, `Rejected`, `Superseded` |
+| `BoundaryCaptureSessionStatus` | `InProgress`, `Finalized`, `Aborted` |
+| `BaselineRoutePlanStatus` | `Draft`, `Approved`, `Superseded`, `Rejected` |
 | `BoundaryExceptionState` | `OutOfBoundary`, `NeedsReview`, `Resolved` |
 | `BoundaryExceptionDecision` | `AcceptedInside`, `RejectedOutside`, `LocationCorrected` |
 | `DiseaseZoneStatus` | `Proposed`, `Reviewed`, `Published`, `Rejected`, `Superseded` |
@@ -42,10 +47,11 @@ All timestamps are UTC `DateTimeOffset`. All mutable business resources carry an
 
 | From | Source of truth | To |
 |---|---|---|
-| creation | approved SurveyRequest orchestration | `PendingBoundaryVerification` |
-| `PendingBoundaryVerification` | assigned manager verifies boundary/scope; Farm has no published map | `AwaitingBaselineAppointment` |
+| creation for unmapped Farm | approved SurveyRequest orchestration | `AwaitingBaselineAppointment` |
+| `AwaitingBaselineAppointment` | Baseline appointment confirmed by TenantOwner | `AwaitingBoundaryCapture` |
+| `AwaitingBoundaryCapture` | assigned Manager finalizes GNSS corner capture, approves boundary and system persists a valid automatic route plan | `BaselineReady` |
+| creation for mapped Farm | approved SurveyRequest orchestration | `PendingBoundaryVerification` |
 | `PendingBoundaryVerification` | assigned manager verifies boundary/scope and current published map/count | `AwaitingPricing` |
-| `AwaitingBaselineAppointment` | Baseline appointment confirmed | `BaselineReady` |
 | `BaselineReady` | BE2 starts Baseline Mapping Mission after readiness re-check | `BaselineInProgress` |
 | `BaselineInProgress` | candidates imported successfully | `AwaitingBaselineReview` |
 | `AwaitingBaselineReview` | atomic map publication confirms active-pole count | `AwaitingPricing` |
@@ -66,8 +72,9 @@ No `Cancelled` transition is allowed after the relevant Mission has started. Fai
 Required:
 
 - order expects Baseline Mapping and is `BaselineReady`;
-- approved FarmBoundary and verified scope;
 - confirmed active `BaselineMapping` appointment;
+- approved FarmBoundary captured during that appointment and verified scope;
+- active automatic route-plan version generated from the same FarmBoundary version; every route segment/waypoint is inside the configured safety-inset polygon;
 - assigned active, available and flight-qualified primary SystemManager;
 - mission/drone/pre-flight safety gates.
 
@@ -98,6 +105,8 @@ Synchronous/internal query response:
 | `RequestedMissionPurpose` | string | yes | Purpose being evaluated |
 | `OrderStatus`, `OrderVersion` | string, uint | yes | Authoritative order state |
 | `FarmBoundaryVersionId` | Guid? | conditional | Required after boundary approval |
+| `BoundaryCaptureSessionId` | Guid? | conditional | Required for an unmapped Farm after same-visit corner capture |
+| `BaselineRoutePlanId`, `BaselineRoutePlanVersion` | Guid?/int? | conditional | Required to prepare/start Baseline after boundary approval |
 | `FarmBaseMapVersionId` | Guid? | conditional | Required for paid purpose |
 | `RequiresBaselineMapping` | bool | yes | Whether prerequisite mapping remains required |
 | `ConfirmedSurveyPoleCount` | int? | conditional | Required after count confirmation |

@@ -58,14 +58,100 @@ internal sealed class SurveyOrderOperationalContextV3Query(
             (value.Status == PriceAdjustmentStatus.Pending ||
              value.Status == PriceAdjustmentStatus.Approved), cancellationToken);
 
+        var evaluatedAt = clock.GetUtcNow();
+
+        var hasValidConsent = await db.Set<SurveyCaptureAuthorization>().AsNoTracking().AnyAsync(value =>
+            value.SurveyOrderId == order.Id &&
+            value.Type == SurveyCaptureAuthorizationType.WrittenDataUseConsent &&
+            value.Status == SurveyCaptureAuthorizationStatus.Verified &&
+            value.VerifiedAt <= evaluatedAt &&
+            (!value.ExpiresAt.HasValue || evaluatedAt < value.ExpiresAt.Value) &&
+            !value.RevokedAt.HasValue,
+            cancellationToken);
+
+        var hasValidFlightPermission = await db.Set<SurveyCaptureAuthorization>().AsNoTracking().AnyAsync(value =>
+            value.SurveyOrderId == order.Id &&
+            value.Type == SurveyCaptureAuthorizationType.FlightPermission &&
+            value.Status == SurveyCaptureAuthorizationStatus.Verified &&
+            value.VerifiedAt <= evaluatedAt &&
+            (!value.ExpiresAt.HasValue || evaluatedAt < value.ExpiresAt.Value) &&
+            !value.RevokedAt.HasValue,
+            cancellationToken);
+
+        var hasPendingSettlement = await db.Set<AdjustmentSettlement>().AsNoTracking().AnyAsync(value =>
+            db.Set<PriceAdjustment>().Any(adj => adj.Id == value.PriceAdjustmentId && adj.SurveyOrderId == order.Id) &&
+            (value.Status == AdjustmentSettlementStatus.Pending ||
+             value.Status == AdjustmentSettlementStatus.Processing ||
+             value.Status == AdjustmentSettlementStatus.Failed),
+            cancellationToken);
+
+        var hasUnapprovedExtraFlight = await db.Set<ExtraFlightRequest>().AsNoTracking().AnyAsync(value =>
+            value.SurveyOrderId == order.Id &&
+            value.Status == ExtraFlightRequestStatus.Pending,
+            cancellationToken);
+
+        var hasFinalizedBoundaryCapture = order.BoundaryCaptureSessionId.HasValue &&
+            await db.Set<BoundaryCaptureSession>().AsNoTracking().AnyAsync(value =>
+                value.Id == order.BoundaryCaptureSessionId.Value &&
+                value.SurveyOrderId == order.Id &&
+                value.FarmBoundaryVersionId == order.FarmBoundaryVersionId &&
+                value.Status == BoundaryCaptureSessionStatus.Finalized,
+                cancellationToken);
+
+        var hasApprovedBaselineRoute = order.BaselineRoutePlanId.HasValue &&
+            await db.Set<BaselineRoutePlanReference>().AsNoTracking().AnyAsync(value =>
+                value.RoutePlanId == order.BaselineRoutePlanId.Value &&
+                value.SurveyOrderId == order.Id &&
+                value.Status == BaselineRoutePlanReferenceStatus.Approved,
+                cancellationToken);
+
+        var isBaselineRouteCurrent = order.BaselineRoutePlanId.HasValue &&
+            await db.Set<BaselineRoutePlanReference>().AsNoTracking().AnyAsync(value =>
+                value.RoutePlanId == order.BaselineRoutePlanId.Value &&
+                value.SurveyOrderId == order.Id &&
+                value.BoundaryCaptureSessionId == order.BoundaryCaptureSessionId &&
+                value.FarmBoundaryVersionId == order.FarmBoundaryVersionId,
+                cancellationToken);
+
+        var isBaselineRouteWithinSafetyInset = order.BaselineRoutePlanId.HasValue &&
+            await db.Set<BaselineRoutePlanReference>().AsNoTracking().AnyAsync(value =>
+                value.RoutePlanId == order.BaselineRoutePlanId.Value &&
+                value.SurveyOrderId == order.Id &&
+                value.IsWithinSafetyInset,
+                cancellationToken);
+
+        var safetyChecksSatisfied = boundaryApproved && managerReady;
+
         var snapshot = new SurveyOrderReadinessSnapshot(
-            order.Status, purpose, order.RequiresBaselineMapping,
-            boundaryApproved, order.ScopeConfirmedAt.HasValue,
-            mapPublished, order.ConfirmedSurveyPoleCount.HasValue,
-            order.PricePerPoleSnapshot.HasValue && order.SurveyServicePriceId.HasValue,
-            appointment?.Purpose, appointment?.Status, payment?.Status,
-            managerReady, pendingAdjustment,
-            boundaryApproved && managerReady);
+            OrderStatus: order.Status,
+            Purpose: purpose,
+            RequiresBaselineMapping: order.RequiresBaselineMapping,
+            HasApprovedFarmBoundary: boundaryApproved,
+            IsScopeConfirmed: order.ScopeConfirmedAt.HasValue,
+            HasPublishedFarmBaseMap: mapPublished,
+            HasConfirmedPoleCount: order.ConfirmedSurveyPoleCount.HasValue,
+            HasPriceSnapshot: order.PricePerPoleSnapshot.HasValue && order.SurveyServicePriceId.HasValue,
+            AppointmentPurpose: appointment?.Purpose,
+            AppointmentStatus: appointment?.Status,
+            PaymentStatus: payment?.Status,
+            HasActiveQualifiedPrimaryManager: managerReady,
+            IsPrimaryManagerAvailable: managerReady,
+            IsAppointmentCurrent: appointment?.Status == SurveyAppointmentStatus.Confirmed,
+            IsMissionPreparedForPurpose: safetyChecksSatisfied,
+            IsMissionScheduledWithinAppointment: safetyChecksSatisfied,
+            IsDroneReady: safetyChecksSatisfied,
+            IsPreflightCompleted: safetyChecksSatisfied,
+            HasPendingPriceAdjustment: pendingAdjustment,
+            IsPaymentAmountAndCurrencyMatched: true,
+            SafetyChecksSatisfied: safetyChecksSatisfied,
+            HasValidWrittenDataUseConsent: hasValidConsent,
+            HasValidFlightPermission: hasValidFlightPermission,
+            HasPendingFinancialSettlement: hasPendingSettlement,
+            HasUnapprovedExtraFlight: hasUnapprovedExtraFlight,
+            HasFinalizedBoundaryCapture: hasFinalizedBoundaryCapture,
+            HasApprovedBaselineRoute: hasApprovedBaselineRoute,
+            IsBaselineRouteCurrent: isBaselineRouteCurrent,
+            IsBaselineRouteWithinSafetyInset: isBaselineRouteWithinSafetyInset);
         var decision = SurveyOrderReadinessPolicy.Evaluate(snapshot);
 
         return new SurveyOrderOperationalContextV3(

@@ -14,6 +14,8 @@ public static class SurveyRequestError
         "SurveyRequest.IdempotencyPayloadMismatch";
     public const string RequestNumberConflictCode =
         "SurveyRequest.RequestNumberConflict";
+    public const string TenantCodeUnavailableCode =
+        "SurveyRequest.TenantCodeUnavailable";
     public const string NotReviewableCode =
         "SurveyRequest.NotReviewable";
     public const string ForbiddenCode = "SurveyRequest.Forbidden";
@@ -63,6 +65,11 @@ public static class SurveyRequestError
         AppError.Conflict(
             RequestNumberConflictCode,
             "A unique survey request number could not be allocated. Retry the operation.");
+
+    public static AppError TenantCodeUnavailable(string tenantCode) =>
+        AppError.Conflict(
+            TenantCodeUnavailableCode,
+            $"Tenant code '{tenantCode}' is already reserved by another survey request.");
 
     public static AppError NotReviewable(Guid id) =>
         AppError.Conflict(

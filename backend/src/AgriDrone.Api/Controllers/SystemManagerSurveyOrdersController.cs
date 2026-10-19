@@ -5,13 +5,19 @@ using AgriDrone.Api.Contracts.Surveys.Payments;
 using AgriDrone.Api.Mapping;
 using AgriDrone.Modules.Surveys.Application.Features.Appointments.ProposeSurveyAppointment;
 using AgriDrone.Modules.Surveys.Application.Features.Orders.GetSurveyOrderReadiness;
+using AgriDrone.Modules.Surveys.Application.Features.Orders.GetAssignedSurveyOrders;
 using AgriDrone.Modules.Surveys.Application.Features.Orders.ConfirmSurveyOrderPoleCount;
 using AgriDrone.Modules.Surveys.Application.Features.Orders.GetSurveyOrderBoundaryScope;
 using AgriDrone.Modules.Surveys.Application.Features.Orders.VerifySurveyOrderBoundaryAndScope;
 using AgriDrone.Modules.Surveys.Application.Features.Payments.RequestPriceAdjustment;
+using AgriDrone.Modules.Surveys.Application.Features.BoundaryCapture;
+using AgriDrone.Modules.Surveys.Application.Features.Adjustments.ScopeAdjustments.RequestScopeAdjustment;
+using AgriDrone.Modules.Surveys.Application.Features.Adjustments.ExtraFlights.RequestExtraFlight;
+using AgriDrone.Modules.Surveys.Application.Features.Adjustments.ExtraFlights.ConsumeExtraFlight;
 using AgriDrone.Modules.Surveys.Domain;
 using AgriDrone.SharedInfrastructure.Authorization;
 using AgriDrone.SharedInfrastructure.Http;
+using AgriDrone.SharedKernel.Application.Pagination;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -24,6 +30,32 @@ namespace AgriDrone.Api.Controllers;
 public sealed class SystemManagerSurveyOrdersController(ISender sender)
     : ControllerBase
 {
+    /// <summary>Lấy danh sách SurveyOrder thuộc các farm đang được phân công.</summary>
+    /// <remarks>
+    /// Backend tự xác định SystemManager từ access token. Có thể lọc theo status;
+    /// kết quả chứa SurveyOrderId và Version để tiếp tục các bước boundary-scope.
+    /// </remarks>
+    [HttpGet]
+    [ProducesResponseType<PagedResult<AssignedSurveyOrderApiResponse>>(
+        StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<IResult> GetAssignedOrders(
+        [FromQuery] GetAssignedSurveyOrdersRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await sender.Send(
+            new GetAssignedSurveyOrdersQuery(
+                MapStatus(request.Status),
+                request.PageNumber,
+                request.PageSize),
+            cancellationToken);
+
+        return result.ToHttpResult(
+            HttpContext,
+            page => Results.Ok(SurveyOrderResponseMapper.ToResponse(page)));
+    }
+
     /// <summary>
     /// Lấy Order, approved FarmBoundary và Zone scope để SystemManager review.
     /// </summary>
@@ -156,6 +188,112 @@ public sealed class SystemManagerSurveyOrdersController(ISender sender)
                 statusCode: StatusCodes.Status201Created));
     }
 
+    /// <summary>Bắt đầu phiên chấm boundary trong lịch Baseline đã được Owner xác nhận.</summary>
+    [HttpPost("{orderId:guid}/boundary-capture-sessions")]
+    [ProducesResponseType<BoundaryCaptureApiResponse>(StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IResult> StartBoundaryCapture(
+        [FromRoute] Guid orderId,
+        [FromBody] StartBoundaryCaptureRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await sender.Send(
+            new StartBoundaryCaptureCommand(
+                orderId,
+                request.DroneId!.Value,
+                request.OperationId!.Value,
+                request.ExpectedOrderVersion!.Value),
+            cancellationToken);
+        return result.ToHttpResult(
+            HttpContext,
+            response => Results.Json(
+                MapBoundaryCapture(response),
+                statusCode: StatusCodes.Status201Created));
+    }
+
+    /// <summary>Đồng bộ idempotent các mẫu drone-GNSS theo thứ tự.</summary>
+    [HttpPost("{orderId:guid}/boundary-capture-sessions/{sessionId:guid}/samples:sync")]
+    [ProducesResponseType<BoundaryCaptureApiResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IResult> SyncBoundaryCaptureSamples(
+        [FromRoute] Guid orderId,
+        [FromRoute] Guid sessionId,
+        [FromBody] SyncBoundaryCaptureSamplesRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await sender.Send(
+            new SyncBoundaryCaptureSamplesCommand(
+                orderId,
+                sessionId,
+                request.ExpectedSessionVersion!.Value,
+                request.Samples.Select(item => new BoundaryCaptureSampleInput(
+                    item.ClientOperationId!.Value,
+                    item.SequenceNumber,
+                    item.Latitude,
+                    item.Longitude,
+                    item.HorizontalAccuracyMeters,
+                    item.CapturedAt!.Value)).ToArray()),
+            cancellationToken);
+        return result.ToHttpResult(
+            HttpContext,
+            response => Results.Ok(MapBoundaryCapture(response)));
+    }
+
+    /// <summary>Đóng vòng GNSS, approve immutable FarmBoundary và giữ Order chờ route.</summary>
+    [HttpPost("{orderId:guid}/boundary-capture-sessions/{sessionId:guid}/finalize")]
+    [ProducesResponseType<BoundaryCaptureApiResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IResult> FinalizeBoundaryCapture(
+        [FromRoute] Guid orderId,
+        [FromRoute] Guid sessionId,
+        [FromBody] FinalizeBoundaryCaptureRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await sender.Send(
+            new FinalizeBoundaryCaptureCommand(
+                orderId,
+                sessionId,
+                request.EvidenceReference,
+                request.ExpectedOrderVersion!.Value,
+                request.ExpectedSessionVersion!.Value,
+                request.ExpectedCurrentBoundaryVersionNumber),
+            cancellationToken);
+        return result.ToHttpResult(
+            HttpContext,
+            response => Results.Ok(MapBoundaryCapture(response)));
+    }
+
+    /// <summary>Hủy phiên capture nhưng giữ toàn bộ evidence đã đồng bộ.</summary>
+    [HttpPost("{orderId:guid}/boundary-capture-sessions/{sessionId:guid}/abort")]
+    [ProducesResponseType<BoundaryCaptureApiResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IResult> AbortBoundaryCapture(
+        [FromRoute] Guid orderId,
+        [FromRoute] Guid sessionId,
+        [FromBody] AbortBoundaryCaptureRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await sender.Send(
+            new AbortBoundaryCaptureCommand(
+                orderId,
+                sessionId,
+                request.Reason,
+                request.ExpectedSessionVersion!.Value),
+            cancellationToken);
+        return result.ToHttpResult(
+            HttpContext,
+            response => Results.Ok(MapBoundaryCapture(response)));
+    }
+
     /// <summary>Đánh giá readiness Baseline Mapping từ trạng thái server.</summary>
     /// <remarks>
     /// Mission phải liên kết Order, đúng purpose, nằm trong appointment window;
@@ -238,6 +376,198 @@ public sealed class SystemManagerSurveyOrdersController(ISender sender)
                 SurveyPaymentResponseMapper.ToResponse(response),
                 statusCode: StatusCodes.Status201Created));
     }
+
+    /// <summary>Yêu cầu điều chỉnh scope (boundary/pole count) có lưu audit evidence.</summary>
+    [HttpPost("{orderId:guid}/scope-adjustments")]
+    [ProducesResponseType<ScopeAdjustmentApiResponse>(StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IResult> RequestScopeAdjustment(
+        [FromRoute] Guid orderId,
+        [FromBody] RequestScopeAdjustmentApiRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await sender.Send(
+            new RequestScopeAdjustmentCommand(
+                orderId,
+                request.Reason,
+                request.BeforeBoundaryVersionId,
+                request.AfterBoundaryVersionId,
+                request.BeforePoleCount,
+                request.AfterPoleCount,
+                request.FinancialImpact,
+                request.Currency,
+                request.EvidenceReference,
+                request.ExpectedOrderVersion!.Value),
+            cancellationToken);
+
+        return result.ToHttpResult(
+            HttpContext,
+            response => Results.Json(
+                MapScopeAdjustment(response),
+                statusCode: StatusCodes.Status201Created));
+    }
+
+    /// <summary>Yêu cầu chuyến bay bổ sung (extra flight) trong cùng visit hoặc rescan.</summary>
+    [HttpPost("{orderId:guid}/extra-flights")]
+    [ProducesResponseType<ExtraFlightApiResponse>(StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IResult> RequestExtraFlight(
+        [FromRoute] Guid orderId,
+        [FromBody] RequestExtraFlightApiRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await sender.Send(
+            new RequestExtraFlightCommand(
+                orderId,
+                request.FarmId,
+                request.SourceMissionId,
+                request.Reason,
+                request.EvidenceReference,
+                request.CostImpact,
+                request.Currency),
+            cancellationToken);
+
+        return result.ToHttpResult(
+            HttpContext,
+            response => Results.Json(
+                MapExtraFlight(response),
+                statusCode: StatusCodes.Status201Created));
+    }
+
+    /// <summary>Ghi nhận chuyến bay bổ sung đã được thực thi bởi mission.</summary>
+    [HttpPost("{orderId:guid}/extra-flights/{requestId:guid}/consume")]
+    [ProducesResponseType<ExtraFlightApiResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IResult> ConsumeExtraFlight(
+        [FromRoute] Guid orderId,
+        [FromRoute] Guid requestId,
+        [FromBody] ConsumeExtraFlightApiRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await sender.Send(
+            new ConsumeExtraFlightCommand(
+                orderId,
+                requestId,
+                request.ExtraMissionId,
+                request.ExpectedVersion!.Value),
+            cancellationToken);
+
+        return result.ToHttpResult(
+            HttpContext,
+            response => Results.Ok(MapExtraFlight(response)));
+    }
+
+    private static SurveyOrderStatus? MapStatus(
+        SurveyOrderStatusFilterValue? status) =>
+        status switch
+        {
+            null => null,
+            SurveyOrderStatusFilterValue.PENDING_BOUNDARY_VERIFICATION =>
+                SurveyOrderStatus.PendingBoundaryVerification,
+            SurveyOrderStatusFilterValue.AWAITING_BASELINE_APPOINTMENT =>
+                SurveyOrderStatus.AwaitingBaselineAppointment,
+            SurveyOrderStatusFilterValue.AWAITING_BOUNDARY_CAPTURE =>
+                SurveyOrderStatus.AwaitingBoundaryCapture,
+            SurveyOrderStatusFilterValue.BASELINE_READY =>
+                SurveyOrderStatus.BaselineReady,
+            SurveyOrderStatusFilterValue.BASELINE_IN_PROGRESS =>
+                SurveyOrderStatus.BaselineInProgress,
+            SurveyOrderStatusFilterValue.AWAITING_BASELINE_REVIEW =>
+                SurveyOrderStatus.AwaitingBaselineReview,
+            SurveyOrderStatusFilterValue.AWAITING_PRICING =>
+                SurveyOrderStatus.AwaitingPricing,
+            SurveyOrderStatusFilterValue.AWAITING_PAID_APPOINTMENT =>
+                SurveyOrderStatus.AwaitingPaidAppointment,
+            SurveyOrderStatusFilterValue.AWAITING_PAYMENT =>
+                SurveyOrderStatus.AwaitingPayment,
+            SurveyOrderStatusFilterValue.READY_FOR_PAID_SERVICE =>
+                SurveyOrderStatus.ReadyForPaidService,
+            SurveyOrderStatusFilterValue.IN_PROGRESS =>
+                SurveyOrderStatus.InProgress,
+            SurveyOrderStatusFilterValue.PENDING_REVIEW =>
+                SurveyOrderStatus.PendingReview,
+            SurveyOrderStatusFilterValue.COMPLETED =>
+                SurveyOrderStatus.Completed,
+            SurveyOrderStatusFilterValue.CANCELLED =>
+                SurveyOrderStatus.Cancelled,
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(status),
+                status,
+                "Unsupported survey-order status.")
+        };
+
+    private static BoundaryCaptureApiResponse MapBoundaryCapture(
+        BoundaryCaptureResponse response) => new(
+            response.SurveyOrderId,
+            response.SessionId,
+            response.StartOperationId,
+            response.FarmId,
+            response.AppointmentId,
+            response.AppointmentVersion,
+            response.SystemManagerProfileId,
+            response.DroneId,
+            response.Status.ToString(),
+            response.FarmBoundaryVersionId,
+            response.BaselineRoutePlanId,
+            response.OrderStatus.ToString(),
+            response.OrderVersion,
+            response.SessionVersion,
+            response.Samples.Select(item => new BoundaryCaptureSampleApiResponse(
+                item.Id,
+                item.ClientOperationId,
+                item.SequenceNumber,
+                item.Latitude,
+                item.Longitude,
+                item.HorizontalAccuracyMeters,
+                item.CapturedAt,
+                item.ReceivedAt)).ToArray());
+
+    private static ScopeAdjustmentApiResponse MapScopeAdjustment(
+        ScopeAdjustmentResponse response) =>
+        new(response.Id,
+            response.SurveyOrderId,
+            response.Reason.ToString(),
+            response.BeforeBoundaryVersionId,
+            response.AfterBoundaryVersionId,
+            response.BeforePoleCount,
+            response.AfterPoleCount,
+            response.FinancialImpact,
+            response.Currency,
+            response.EvidenceReference,
+            response.Status.ToString(),
+            response.RequestedBy,
+            response.ReviewedBy,
+            response.ReviewedAt,
+            response.ReviewReason,
+            response.Version,
+            response.CreatedAt);
+
+    private static ExtraFlightApiResponse MapExtraFlight(
+        ExtraFlightRequestResponse response) =>
+        new(response.Id,
+            response.SurveyOrderId,
+            response.FarmId,
+            response.SourceMissionId,
+            response.ExtraMissionId,
+            response.Reason.ToString(),
+            response.EvidenceReference,
+            response.CostImpact,
+            response.Currency,
+            response.Status.ToString(),
+            response.RequestedBy,
+            response.ReviewedBy,
+            response.ReviewedAt,
+            response.Version,
+            response.CreatedAt);
 }
 
 public enum PaidSurveyMissionPurpose

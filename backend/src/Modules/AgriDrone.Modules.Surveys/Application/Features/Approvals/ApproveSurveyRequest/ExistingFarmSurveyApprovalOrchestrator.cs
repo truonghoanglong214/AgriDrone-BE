@@ -50,7 +50,9 @@ internal sealed class ExistingFarmSurveyApprovalOrchestrator(
             request.Id,
             request.SurveyServiceId,
             prerequisites.RequiresBaselineMapping,
-            prerequisites.PreviousCompatibleOrder?.SurveyOrderId,
+            prerequisites.OrderCompatibility.PreviousCompatibleOrderId,
+            prerequisites.OrderCompatibility.PolicyVersion,
+            prerequisites.OrderCompatibility.Reason,
             context.ApprovedAt);
         orderRepository.Add(order);
 

@@ -1,6 +1,6 @@
 using AgriDrone.Api.Contracts.PlantConditions;
 using AgriDrone.Modules.Plants.Application.Features.GetActivePlantConditions;
-using AgriDrone.Modules.Plants.Application.Features.GetHealthLevels;
+using AgriDrone.Modules.Plants.Application.Features.GetPlantHealthMasterData;
 using AgriDrone.Modules.Plants.Domain.Conditions;
 using AgriDrone.SharedInfrastructure.Http;
 using MediatR;
@@ -15,17 +15,17 @@ namespace AgriDrone.Api.Controllers;
 public sealed class PlantCatalogController(
     ISender sender) : ControllerBase
 {
-    [HttpGet("health-levels")]
-    public async Task<IResult> GetHealthLevels(
+    [HttpGet("plant-health")]
+    public async Task<IResult> GetPlantHealth(
         CancellationToken cancellationToken)
     {
         var result = await sender.Send(
-            new GetHealthLevelsQuery(),
+            new GetPlantHealthMasterDataQuery(),
             cancellationToken);
 
         return result.ToHttpResult(
             HttpContext,
-            levels => Results.Ok(levels));
+            response => Results.Ok(response));
     }
 
     /// <summary>Lấy các plant condition đang được phép chọn khi tạo record mới.</summary>
@@ -51,7 +51,13 @@ public sealed class PlantCatalogController(
             response.ScientificName,
             MapConditionType(response.ConditionType),
             response.Description,
-            response.RevisionNumber);
+            response.RevisionNumber,
+            response.PlantHealthLabelKind.HasValue
+                ? MapLabelKind(response.PlantHealthLabelKind.Value)
+                : null,
+            response.DatasetVersion,
+            response.AnnotationRuleVersion,
+            response.TeamLabelLimitation);
 
     private static PlantConditionTypeValue MapConditionType(
         ConditionType conditionType) =>
@@ -65,5 +71,15 @@ public sealed class PlantCatalogController(
                 nameof(conditionType),
                 conditionType,
                 "Unsupported plant condition type.")
+        };
+
+    private static PlantHealthLabelKindValue MapLabelKind(
+        PlantHealthLabelKind value) => value switch
+        {
+            PlantHealthLabelKind.SuspectedDisease =>
+                PlantHealthLabelKindValue.SuspectedDisease,
+            PlantHealthLabelKind.ConfusingNonDisease =>
+                PlantHealthLabelKindValue.ConfusingNonDisease,
+            _ => throw new ArgumentOutOfRangeException(nameof(value))
         };
 }

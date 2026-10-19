@@ -27,5 +27,9 @@ public enum SurveyOrderReadinessFailure
     WrittenConsentNotValid,
     FlightPermissionNotValid,
     FinancialSettlementPending,
-    ExtraFlightNotApproved
+    ExtraFlightNotApproved,
+    BoundaryCaptureNotFinalized,
+    BaselineRouteNotApproved,
+    BaselineRouteStale,
+    BaselineRouteOutsideSafetyInset
 }

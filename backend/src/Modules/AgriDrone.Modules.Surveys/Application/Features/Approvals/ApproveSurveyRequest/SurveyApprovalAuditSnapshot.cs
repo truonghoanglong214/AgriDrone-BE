@@ -40,6 +40,8 @@ internal static class SurveyApprovalAuditSnapshot
             approval.OwnerInvitationId,
             approval.Order.RequiresBaselineMapping,
             approval.Order.PreviousCompatibleOrderId,
+            approval.Order.PreviousOrderCompatibilityPolicyVersion,
+            approval.Order.PreviousOrderCompatibilityReason,
             ChecklistVersion = checklistVersion
         });
 }

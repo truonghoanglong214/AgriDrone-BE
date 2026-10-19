@@ -36,6 +36,12 @@ public static class DependencyInjection
                     .UseNetTopologySuite()
                     .MapEnum<GeneralStatus>("general_status", "system", translator)
                     .MapEnum<MapVersionStatus>("map_version_status", "system", translator)
+                    .MapEnum<FarmBaseMapStatus>("farm_base_map_status", "system", translator)
+                    .MapEnum<FarmBoundaryStatus>("farm_boundary_status", "system", translator)
+                    .MapEnum<FarmBoundarySource>("farm_boundary_source", "system", translator)
+                    .MapEnum<BoundaryExceptionState>("boundary_exception_state", "system", translator)
+                    .MapEnum<BoundaryExceptionDecision>("boundary_exception_decision", "system", translator)
+                    .MapEnum<BoundaryExceptionSource>("boundary_exception_source", "system", translator)
                     .MapEnum<AuditActorType>("audit_actor_type", "system", translator)));
 
         services.AddScoped<IFarmUnitOfWork>(serviceProvider =>

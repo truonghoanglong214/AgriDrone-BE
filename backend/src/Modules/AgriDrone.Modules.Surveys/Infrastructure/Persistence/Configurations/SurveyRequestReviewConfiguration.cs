@@ -10,7 +10,10 @@ public sealed class SurveyRequestReviewConfiguration : IEntityTypeConfiguration<
     {
         builder.ToTable("survey_request_reviews", "survey", table => table.HasCheckConstraint("ck_survey_request_reviews_reason", "length(btrim(reason)) > 0"));
         builder.HasKey(review => review.Id).HasName("pk_survey_request_reviews");
-        builder.Property(review => review.Id).HasColumnName("id").HasColumnType("uuid").HasDefaultValueSql("gen_random_uuid()").ValueGeneratedOnAdd();
+        builder.Property(review => review.Id)
+            .HasColumnName("id")
+            .HasColumnType("uuid")
+            .ValueGeneratedNever();
         builder.Property(review => review.SurveyRequestId).HasColumnName("survey_request_id").HasColumnType("uuid");
         builder.Property(review => review.Decision).HasColumnName("decision").HasColumnType("system.survey_review_decision").IsRequired();
         builder.Property(review => review.ChecklistSnapshot).HasColumnName("checklist_snapshot").HasColumnType("jsonb").IsRequired();

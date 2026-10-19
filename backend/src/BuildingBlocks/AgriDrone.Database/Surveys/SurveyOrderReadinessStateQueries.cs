@@ -113,6 +113,39 @@ internal sealed class SurveyOrderReadinessStateQueries(NpgsqlDataSource dataSour
                     WHERE extra_flight.survey_order_id = survey_order.id
                       AND extra_flight.status = 'Pending'
                 ) AS has_unapproved_extra_flight
+                , EXISTS (
+                    SELECT 1
+                    FROM survey.boundary_capture_sessions AS capture
+                    WHERE capture.id = survey_order.boundary_capture_session_id
+                      AND capture.survey_order_id = survey_order.id
+                      AND capture.farm_boundary_version_id =
+                          survey_order.farm_boundary_version_id
+                      AND capture.status = 'Finalized'
+                ) AS has_finalized_boundary_capture
+                , EXISTS (
+                    SELECT 1
+                    FROM survey.baseline_route_plan_references AS route
+                    WHERE route.route_plan_id = survey_order.baseline_route_plan_id
+                      AND route.survey_order_id = survey_order.id
+                      AND route.status = 'Approved'
+                ) AS has_approved_baseline_route
+                , EXISTS (
+                    SELECT 1
+                    FROM survey.baseline_route_plan_references AS route
+                    WHERE route.route_plan_id = survey_order.baseline_route_plan_id
+                      AND route.survey_order_id = survey_order.id
+                      AND route.boundary_capture_session_id =
+                          survey_order.boundary_capture_session_id
+                      AND route.farm_boundary_version_id =
+                          survey_order.farm_boundary_version_id
+                ) AS is_baseline_route_current
+                , EXISTS (
+                    SELECT 1
+                    FROM survey.baseline_route_plan_references AS route
+                    WHERE route.route_plan_id = survey_order.baseline_route_plan_id
+                      AND route.survey_order_id = survey_order.id
+                      AND route.is_within_safety_inset
+                ) AS is_baseline_route_within_safety_inset
             FROM survey.survey_orders AS survey_order
             JOIN survey.survey_services AS service
               ON service.id = survey_order.survey_service_id
@@ -287,7 +320,15 @@ internal sealed class SurveyOrderReadinessStateQueries(NpgsqlDataSource dataSour
                 "has_valid_flight_permission")),
             reader.GetBoolean(reader.GetOrdinal("has_pending_settlement")),
             reader.GetBoolean(reader.GetOrdinal(
-                "has_unapproved_extra_flight")));
+                "has_unapproved_extra_flight")),
+            reader.GetBoolean(reader.GetOrdinal(
+                "has_finalized_boundary_capture")),
+            reader.GetBoolean(reader.GetOrdinal(
+                "has_approved_baseline_route")),
+            reader.GetBoolean(reader.GetOrdinal(
+                "is_baseline_route_current")),
+            reader.GetBoolean(reader.GetOrdinal(
+                "is_baseline_route_within_safety_inset")));
 
         return Result.Success(new SurveyOrderReadinessState(
             surveyOrderId,

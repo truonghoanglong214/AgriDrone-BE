@@ -28,6 +28,25 @@ namespace AgriDrone.Modules.Plants.Application.Features.CreatePlantCondition
 
             RuleFor(command => command.Description)
                 .MaximumLength(2000);
+
+            RuleFor(command => command.DatasetVersion)
+                .NotEmpty()
+                .MaximumLength(100)
+                .When(command => command.PlantHealthLabelKind.HasValue);
+
+            RuleFor(command => command.AnnotationRuleVersion)
+                .NotEmpty()
+                .MaximumLength(100)
+                .When(command => command.PlantHealthLabelKind.HasValue);
+
+            RuleFor(command => command.TeamLabelLimitation)
+                .NotEmpty()
+                .MaximumLength(1000)
+                .When(command => command.PlantHealthLabelKind.HasValue);
+
+            RuleFor(command => command.PlantHealthLabelKind)
+                .IsInEnum()
+                .When(command => command.PlantHealthLabelKind.HasValue);
         }
     }
 }

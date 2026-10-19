@@ -4,6 +4,7 @@
 > Rebaseline nghiệp vụ và kiến trúc .NET: 2026-10-06  
 > Hợp nhất kế hoạch phase và implementation: 2026-10-07  
 > Rebaseline theo Capstone proposal v2: 2026-10-15
+> Same-visit Baseline field-flow amendment: 2026-10-17
 > Nguồn nghiệp vụ cao nhất: `Codex-Plan/Be-Plan-v2.md`
 > Use case nguồn: `Codex-Plan/BE1-Use-Case-Specification.md`  
 > Kế hoạch kỹ thuật hiện hành: tài liệu này trên `backend/AgriDrone.sln`  
@@ -11,7 +12,7 @@
 
 **Trạng thái tài liệu:** đây là kế hoạch BE1 duy nhất; phase roadmap, baseline/evidence và implementation backlog đã được hợp nhất tại đây. Các đường dẫn `.cs`, `.csproj`, `DbContext`, EF Core configuration, MediatR/FluentValidation handler và file manifest trong tài liệu này là target implementation hiện hành. Mọi thay đổi tiếp tục trên .NET modular monolith; không có bước port BE1 sang Java/Spring Boot.
 
-Phase 0–6 và Core Step 0 là baseline đã có evidence. Step 0R–4 đã triển khai theo baseline ngày 2026-10-06, nhưng source audit ngày 2026-10-15 cho thấy code hiện hữu còn `Severity`, `TreatmentRecommendation`, `HarvestReadiness` trong MVP trong khi chưa có `Consent`, `FlightPermission`, `ScopeAdjustment` hoặc `ExtraFlight` capability. Vì vậy **Step R2 là gate bắt buộc đầu tiên**: không tiếp tục Step 5–11 và không đánh dấu phase cũ `Done` trước khi remediation theo `Be-Plan-v2.md` hoàn tất.
+Phase 0–6 và Core Step 0 là baseline đã có evidence. Step 0R–4 đã triển khai theo baseline ngày 2026-10-06, nhưng source audit ngày 2026-10-15 cho thấy code hiện hữu còn `Severity`, `TreatmentRecommendation`, `HarvestReadiness` trong MVP trong khi chưa có `Consent`, `FlightPermission`, `ScopeAdjustment` hoặc `ExtraFlight` capability. Amendment ngày 2026-10-17 còn xác định flow hiện tại đang đảo thứ tự field work: code bắt verify boundary trước khi đặt lịch, trong khi target phải chốt Baseline appointment trước rồi capture boundary và bay tự động trong cùng visit. Vì vậy **Step R2 là gate bắt buộc đầu tiên**: không tiếp tục Step 5–11 và không đánh dấu phase cũ `Done` trước khi remediation theo `Be-Plan-v2.md` hoàn tất.
 
 ## 1. Mục tiêu
 
@@ -36,9 +37,9 @@ ExistingFarmSurvey
 → SurveyOrder cho Farm hiện hữu + previous compatible order nếu có
 
 Flow chung sau approval
-→ thu thập/xác minh written data-use consent + flight permission
-→ SystemManager verify FarmBoundary/scope
-→ nếu Farm chưa có base map: Baseline appointment/mission chạy trước payment
+→ nếu Farm chưa có base map: Manager đề xuất và Owner confirm Baseline appointment trước khi có boundary
+→ thu thập/xác minh written data-use consent + flight permission trước capture
+→ trong cùng visit: Manager dùng drone GNSS chấm góc → approve FarmBoundary/scope → hệ thống sinh/review route tự động nằm trong boundary → Baseline mission chạy trước payment
 → SystemManager publish base map và confirm active pole count
 → BE1 snapshot PricePerPole + pole count và tính FinalPrice
 → paid-service appointment được confirm/reschedule
@@ -58,7 +59,10 @@ Không flow nào được xem là hoàn thành nếu còn đường bypass Surve
 - `PLANT_HEALTH` Survey Service, effective-dated PricePerPole, 2–3 team-labelled suspected-disease classes, confusing/non-disease labels và sourced-guidance catalogue.
 - Ba loại Survey Request và SystemAdmin review.
 - Atomic approval/onboarding/SurveyOrder orchestration.
-- Written data-use consent/flight permission, FarmBoundary/scope, Baseline Mapping, confirmed pole-count/price snapshot, appointment, sandbox payment và purpose-aware readiness policy.
+- Written data-use consent/flight permission; Baseline appointment trước boundary;
+  `BoundaryCaptureSession` + ordered drone-GNSS samples; immutable
+  FarmBoundary/scope; confirmed pole-count/price snapshot; paid appointment,
+  sandbox payment và purpose-aware readiness policy.
 - Farm/Zone operational verification theo SystemManager assignment.
 - Farm-level base-map publication và persistent Plant identity.
 - Plant Health suspected finding, Disease Zone và sourced-guidance human review/publication dưới dạng preliminary result; không severity/diagnosis.
@@ -68,7 +72,9 @@ Không flow nào được xem là hoàn thành nếu còn đường bypass Surve
 
 ### BE1 không triển khai trong plan này
 
-- Drone registry, Mission state machine, pre-flight, media, telemetry hoặc AI job orchestration.
+- Drone registry, `BaselineRoutePlan`, Mission state machine, pre-flight, media,
+  telemetry hoặc AI job orchestration thuộc BE2. BE1 chỉ lưu/reference route-plan
+  identity/version trong Order operational context và dùng nó làm readiness gate.
 - AI detection, tracking, re-identification algorithm hoặc raw observation storage thuộc BE2.
 - Worker/legacy `FieldTask` domain. Tuy nhiên minimal Manager mobile offline work-item/checklist/notes sync là MVP và phải có contract/backend support mới, không khôi phục aggregate legacy.
 - Harvest season, batch, quantity, yield hoặc post-harvest management.
@@ -86,6 +92,7 @@ User actors chỉ gồm Public Applicant, SystemAdmin, SystemManager và TenantO
 |---|---|---|
 | Plant Health là paid service duy nhất; Harvest Readiness là Stretch | R2, 1, 2, 8 | Catalogue/request/API negative tests và runtime DI inventory |
 | Free mandatory Baseline cho Farm chưa mapped; paid flight bị chặn trước payment | 4, 5, 6 | Purpose-aware readiness + E2E |
+| Baseline appointment trước boundary; chấm góc và bay mapping trong cùng field visit | 3, 4, 5 + BE2 | Order-state/capture-session/route-plan contract + one-visit E2E |
 | Written consent và flight permission trước capture | R2, 3, 4, 5 | Versioned evidence, revoke/expiry tests, BE2 re-check contract |
 | Count × PricePerPole snapshot; difference có payment/refund, không silent repricing | 1, 4 | Immutable original snapshot + adjustment settlement ledger tests |
 | Scope change audit; extra flight chỉ khi justified | R2, 4, 5 | ScopeAdjustment/ExtraFlightRequest audit và negative start tests |
@@ -116,6 +123,15 @@ User actors chỉ gồm Public Applicant, SystemAdmin, SystemManager và TenantO
 15. Published Plant Health result luôn mang `Suspected`/`Preliminary` và team-label limitation; “published” chỉ là publication state, không phải expert diagnosis.
 16. Written consent và flight permission là fail-closed flight gate. Verbal/message consent chỉ là preliminary evidence, không mở capture.
 17. MVP chỉ bán `PLANT_HEALTH`; Baseline Mapping là free MissionPurpose, Follow-up là relation và Harvest Readiness là Stretch-disabled.
+18. Unmapped Order bắt đầu ở `AwaitingBaselineAppointment`; Baseline appointment
+    không yêu cầu boundary. Owner confirm chuyển sang `AwaitingBoundaryCapture`,
+    không chuyển thẳng `BaselineReady`.
+19. `BoundaryCaptureSession` là evidence của BE1, không phải Mission thứ hai. Chỉ
+    finalize session từ ordered drone-GNSS samples mới được approve operational
+    FarmBoundary cho unmapped Farm; direct client polygon không thay thế capture.
+20. BE2 sinh và sở hữu automatic `BaselineRoutePlan` từ đúng boundary version.
+    Chỉ route đã review/approve, nằm trong safety inset mới cho Order sang
+    `BaselineReady`; client không gửi arbitrary waypoint làm source of truth.
 
 ## 4. Phase status, baseline và evidence
 
@@ -130,12 +146,12 @@ User actors chỉ gồm Public Applicant, SystemAdmin, SystemManager và TenantO
 | 4 | Cleanup FieldTasks/Harvests/staff surface | Baseline | Done 2026-09-25, còn external retention gates | Runtime detached; archival data chưa được drop tùy tiện |
 | 5 | Survey/base-map/result database foundation | Step 0 foundation | Done theo snapshot 2026-09-25 | Không bao gồm rebaseline delta 2026-10-06 |
 | 6 | Internal ports, policies và authorization boundary | Step 0/1A foundation | Done 2026-09-25 | Không mở business API mới |
-| R2 | Proposal v2 remediation | Step R2 | **InProgress — foundation compiled 2026-10-15** | Plant Health-only guards, V4 no-severity contract, pending consent/permission, immutable original snapshot và domain/schema seams đã có; settlement/extra-flight application workflows và Final Test còn thiếu |
+| R2 | Proposal v2 + same-visit Baseline remediation | Step R2 | **InProgress — rebaseline amended 2026-10-17** | Ngoài Plant Health/no-severity/authorization/commercial work, phải sửa initial Order state, appointment transition, boundary-capture session và route-plan readiness contract |
 | 6R | Per-pole, purpose readiness, FarmBoundary, Disease Zone/guidance, plant-change | Step 0R + R2 | **RebaselineRequired** | Evidence cũ giữ lại; phần severity/expert recommendation/readiness cũ không còn đạt gate |
 | 7 | Plant Health catalogue/master data và Survey Request | Step 1B–1E, Step 2 + R2 | **RebaselineRequired** | Public chỉ thấy Plant Health; request ngoài Plant Health fail closed |
-| 8 | Approval/onboarding/SurveyOrder | Step 3 + R2 | **RebaselineRequired** | Ba request kinds atomic và tạo pending consent/permission checklist |
-| 9 | Consent/permission, boundary/scope, baseline count, pricing, appointment, payment | Step 4 + R2 | **RebaselineRequired** | Readiness có consent/permission và original snapshot/adjustment semantics đúng v2 |
-| 10 | Order-bound Mission/pre-flight | BE2 implementation + Step 5 BE1 boundary | External dependency | BE2 dùng authoritative BE1 context/readiness contract |
+| 8 | Approval/onboarding/SurveyOrder | Step 3 + R2 | **RebaselineRequired** | Unmapped Order tạo ở `AwaitingBaselineAppointment`; mapped Order mới dùng `PendingBoundaryVerification`; pending authorization vẫn fail closed |
+| 9 | Consent/permission, Baseline appointment, same-visit boundary capture, pricing/payment/readiness | Step 4 + R2 | **RebaselineRequired** | Confirm appointment → `AwaitingBoundaryCapture`; finalized capture + approved BE2 route → `BaselineReady` |
+| 10 | Automatic route plan, Order-bound Mission/pre-flight | BE2 implementation + Step 5 BE1 contract | External dependency | BE2 route tham chiếu đúng boundary version/safety inset; BE1 authoritative context/readiness không cho bypass |
 | 11 | Initial Farm base map và persistent Plant identity | Step 6 | NotStarted | Hoàn tất publication V3 atomic, review và count handoff |
 | 12 | Plant Health/Disease Zone/sourced guidance preliminary result | Step 7 | NotStarted | Chỉ Manager-reviewed suspected/preliminary result lộ cho owner; không severity |
 | 13 | Digital Plant Profile, plant-change workflow, history/follow-up | Step 9–10 | NotStarted | Hoàn tất published-only, same-service và ownership behavior |
@@ -151,8 +167,8 @@ Không xử lý Phase 6R, 7, 8 và 9 song song như bốn backlog độc lập. 
 | 0 | R2-A — Freeze và inventory | Khóa Harvest Readiness runtime/API; inventory severity, treatment recommendation, service seed, route, DI, event và schema cũ | Không | Có artifact matrix `remove/rename/compatibility/disabled`; public path không nhận thêm dữ liệu sai v2 |
 | 1 | Phase 6R foundation — R2-B/R2-F | No-severity target model; `SourcedGuidance`; preliminary/team-label semantics; V4 health contract; capture-authorization, adjustment-settlement và extra-flight domain/schema seams | R2-A | Domain/contract/migration expand compile; contract cũ bất biến; downstream có interface ổn định |
 | 2 | Phase 7 — Step 1/2 remediation | Plant Health-only catalogue/master data; disable Harvest Readiness; ba request handlers từ chối service khác; checklist chỉ ghi consent/permission feasibility | Phase 6R foundation | Public/admin/OpenAPI đúng service scope; request path không provision và không nhận Stretch service |
-| 3 | Phase 8 — Step 3 remediation | Approval re-check Plant Health; tạo pending capture-authorization requirement; compatible-order policy có version/reason | Phase 7 | Ba approval flow atomic/retry-safe và không tự mở flight gate |
-| 4 | Phase 9 — Step 4 remediation | Verify/revoke consent/permission; immutable original price/count; ScopeAdjustment; additional payment/refund; ExtraFlightRequest; readiness fail closed | Phase 8 + Phase 6R seams | Baseline/Plant Health readiness đúng v2; payment/refund/extra-flight truy nguyên được và không bypass |
+| 3 | Phase 8 — Step 3 remediation | Approval re-check Plant Health; tạo pending capture-authorization requirement; khởi tạo conditional Order state; compatible-order policy có version/reason | Phase 7 | Unmapped → `AwaitingBaselineAppointment`; mapped → `PendingBoundaryVerification`; ba approval flow atomic/retry-safe |
+| 4 | Phase 9 — Step 4 remediation | Appointment-first state transitions; capture-session/finalize boundary; route-plan handoff/approval; verify/revoke permission; pricing/payment/adjustment/extra-flight; readiness fail closed | Phase 8 + Phase 6R seams + BE2 route contract | Một visit: confirm appointment → capture boundary → approve route → BaselineReady; paid gates vẫn truy nguyên và không bypass |
 | 5 | R2 integration gate | Runtime DI/route inventory, OpenAPI, migration upgrade notes, V4 golden contract backlog và negative scenarios | Hoàn tất 1–4 | R2, 6R, 7, 8, 9 chuyển `CodeComplete — AwaitingFinalTest`; chỉ lúc này mới bắt đầu Step 5 |
 
 Quy tắc phạm vi của thứ tự này:
@@ -166,7 +182,10 @@ Quy tắc điều phối:
 
 1. Dùng bảng trên để chọn phase hiện tại; dùng Step tương ứng bên dưới để code.
 2. Hoàn thành Step R2 trước mọi work mới; mọi dấu `[x]` mâu thuẫn v2 phải được mở lại và xác nhận bằng remediation evidence.
-3. Baseline Mapping có thể chạy trước payment để tạo confirmed pole count nhưng vẫn cần written consent/flight permission; paid Plant Health Mission không được chạy trước Phase 9 commercial gate.
+3. Baseline appointment được chốt trước boundary. Trong cùng visit, Manager capture
+   boundary rồi BE2 sinh/duyệt route trước khi Baseline start. Baseline không cần
+   payment nhưng vẫn cần consent/flight permission; paid Plant Health không được
+   chạy trước Phase 9 commercial gate.
 4. Không làm published preliminary result Phase 12 trước khi Phase 11 cung cấp current Farm base map và persistent Plant identity.
 5. Trong các phase code, có thể ghi `CodeComplete — AwaitingFinalTest` khi implementation/migration/documentation đã xong. Chỉ đổi sang `Done` sau Final Test Phase có evidence thực tế; entity/table/interface hoặc build pass đơn lẻ không đủ.
 
@@ -233,6 +252,8 @@ Khảo sát source tại thời điểm lập plan cho thấy:
 | Results | Có SurveyResult/legacy Readiness schema | Plant Health association/import, review/correction/preliminary publication handlers; disable Stretch readiness surface |
 | Owner portal queries | Chưa có target read models | Farm map, plant count, profile timeline, survey history, same-service comparison |
 | Proposal-v2 gaps | Source audit 2026-10-15: production source còn nhiều `Severity`, `TreatmentRecommendation`, `HarvestReadiness` references; chưa có `Consent`, `FlightPermission`, `ExtraFlight`, `ScopeAdjustment` capability | Step R2 inventory chính xác, migration/compatibility plan và implementation trước Step 5 |
+| Same-visit Baseline gap | Source 2026-10-17 khởi tạo mọi Order ở `PendingBoundaryVerification`, chỉ cho đặt lịch sau verify, confirm chuyển thẳng `BaselineReady`; chưa có `BoundaryCaptureSession`/route-plan gate | Sửa Step 3–5, migration/state mapping, OpenAPI và E2E; không dùng direct polygon API cho unmapped happy path |
+| Automatic route gap | BE2 `PrepareMissionSet` đang tạo `flightParameters = {}` và không có persisted route planner | BE2 sở hữu `BaselineRoutePlan`; BE1 operational context/reference/readiness bắt buộc đúng boundary version và approved status |
 
 Step 1A runtime wiring đã hoàn thành ngày 2026-10-08. Step 1B–1E gồm public catalogue, SystemAdmin catalogue, versioned pricing và business master data đạt `CodeComplete — AwaitingFinalTest` ngày 2026-10-09; Phase 7 tiếp tục từ Step 2 Survey Request.
 
@@ -255,6 +276,7 @@ AgriDrone.Modules.Surveys/
       Appointments/
       Payments/
       Authorizations/
+      BoundaryCapture/
       Adjustments/
       MobileSync/
       Results/
@@ -282,6 +304,7 @@ AgriDrone.Api/
 
 AgriDrone.IntegrationContracts/
   Surveys/
+  Missions/  # route-plan identity/status contract; implementation thuộc BE2
   Mapping/V2/ và Mapping/V3/
   Health/V2/, Health/V3/ compatibility và Health/V4/ target
   HarvestReadiness/V2/  # compatibility only; không đăng ký MVP producer/consumer/API
@@ -302,7 +325,7 @@ Step 0  Khóa contract, state machine, transaction và security conventions
    ↓
 Step 0R Rebaseline per-pole/boundary/Disease Zone/recommendation/plant-change
    ↓
-Step R2 Proposal-v2 remediation: Plant Health-only/no severity/consent/adjustment/offline
+Step R2 Proposal-v2 + same-visit remediation: Plant Health-only/no severity/consent/appointment-first/capture/route contract
    ↓
 Step 1  Runtime Surveys module + UC03 Catalogue/Master Data
    ↓
@@ -310,7 +333,7 @@ Step 2  UC04 Survey Request intake/review (Phase 7)
    ↓
 Step 3  UC05 Atomic approval/onboarding/SurveyOrder (Phase 8)
    ↓
-Step 4  UC06 Scope/Pricing/Appointment/Payment/Readiness (Phase 9)
+Step 4  UC06 Baseline appointment → same-visit boundary capture → pricing/payment/readiness (Phase 9)
    ↓
 Step 5  UC07 Farm/Zone operational verification + BE2 readiness boundary
    ↓
@@ -325,7 +348,10 @@ Step 10 UC12 Work queues/Notifications/Audit completion
 Step 11 Residual cleanup + E2E/release gate (Phase 14–15)
 ```
 
-BE2 có thể phát triển order-bound Mission song song sau khi Step 4 chốt contract. BE1 không bắt đầu Step 6 trước khi mission/order/base-map context V3 đã ổn định về schema và semantics; contract test được thực hiện ở Final Test Phase.
+BE2 có thể phát triển `BaselineRoutePlan` và order-bound Mission song song sau khi
+Step 4 khóa capture/route contract. BE1 không bắt đầu Step 6 trước khi
+appointment → capture → approved boundary → approved route → Mission context V3
+đã ổn định về schema và semantics; contract test được thực hiện ở Final Test Phase.
 
 Step 8 được giữ số để trace lịch sử nhưng là **Stretch capability gate**, không nằm trên critical path và không được triển khai/kích hoạt trong MVP.
 
@@ -339,11 +365,16 @@ Step 8 được giữ số để trace lịch sử nhưng là **Stretch capabili
   - `Submitted → UnderReview`.
   - `UnderReview → Approved | Rejected`.
   - `Submitted | UnderReview → Withdrawn` theo policy.
-- [x] Rebaseline transition table cho `SurveyOrder` theo hai stage:
-  - Unmapped Farm: `PendingBoundaryVerification → AwaitingBaselineAppointment → BaselineReady → BaselineInProgress → AwaitingBaselineReview → AwaitingPricing`.
+- [ ] Implement lại transition table `SurveyOrder` theo amendment 2026-10-17;
+  bảng target đã khóa nhưng source hiện hành chưa đạt:
+  - Unmapped Farm: `AwaitingBaselineAppointment → AwaitingBoundaryCapture → BaselineReady → BaselineInProgress → AwaitingBaselineReview → AwaitingPricing`.
   - Sau confirmed pole count: `AwaitingPaidAppointment → AwaitingPayment → ReadyForPaidService → InProgress → PendingReview → Completed`.
   - Mapped Farm có thể đi thẳng từ boundary/scope verification tới confirmed pole-count/pricing; không tạo Baseline Mapping giả.
   - `Cancelled` chỉ từ các trạng thái được phép và không xóa lịch sử.
+- [ ] Thêm `BoundaryCaptureSession`: `InProgress → Finalized | Aborted`; finalized
+  session bất biến và giữ ordered samples/evidence.
+- [ ] Khóa route-plan handoff: `Draft → Approved | Rejected | Superseded` thuộc
+  BE2; BE1 chỉ transition Order khi approved route khớp current boundary version.
 - [x] Viết transition table cho Appointment, Payment, PriceAdjustment và SurveyResult.
 - [x] Chốt source-of-truth của mỗi transition; không để controller/client tự set enum.
 - [x] Chốt timestamp dùng UTC `DateTimeOffset`/`TimeProvider` và explicit `Version` concurrency token.
@@ -355,12 +386,14 @@ Step 8 được giữ số để trace lịch sử nhưng là **Stretch capabili
 - [x] `403`: resource nằm trong visible scope nhưng actor không có action permission.
 - [x] `409`: stale version, duplicate/conflicting transition hoặc concurrent approval/publication.
 - [x] `422` hoặc business validation response đã thống nhất: request/scope/payment payload đúng cú pháp nhưng vi phạm rule.
-- [x] Tạo stable error codes theo nhóm `SurveyRequest.*`, `SurveyOrder.*`, `Appointment.*`, `Payment.*`, `SurveyResult.*`.
+- [ ] Bổ sung stable error codes `BoundaryCapture.*` và `BaselineRoute.*` cho
+  wrong state/window/assignment, stale session/boundary/route, invalid polygon và
+  out-of-inset route; giữ các nhóm error hiện hành.
 - [x] Viết shared authorization tests cho SystemAdmin, assigned/unassigned SystemManager, correct/wrong TenantOwner và public actor.
 
 ### 8.3. Transaction boundaries
 
-Chốt ba boundary trước khi viết handler:
+Chốt năm boundary trước khi viết handler:
 
 1. `ISurveyApprovalUnitOfWork`/specialized DbContext:
    - SurveyRequest + review.
@@ -368,12 +401,24 @@ Chốt ba boundary trước khi viết handler:
    - FarmManagerAssignment.
    - SurveyOrder.
    - Audit + Outbox.
-2. `IMappingPublicationUnitOfWork` mở rộng cho V2:
+2. `IBoundaryCaptureFinalizationUnitOfWork`:
+   - `BoundaryCaptureSession` + ordered GNSS samples.
+   - current FarmBoundary lock và immutable approved version mới.
+   - SurveyOrder vẫn ở `AwaitingBoundaryCapture` sau finalize.
+   - Audit + Outbox trong một commit.
+3. `IBaselineRouteApprovalCoordinator`/specialized cross-module DbContext:
+   - khóa SurveyOrder, confirmed Baseline appointment, finalized capture session,
+     current FarmBoundary và BE2 `BaselineRoutePlan`.
+   - validate route tham chiếu đúng boundary version, approved và mọi segment/
+     waypoint nằm trong safety inset.
+   - transition route/Order nhất quán tới `BaselineReady`, Audit + Outbox trong
+     một commit; không dùng eventual event để tạo cửa sổ ready giả.
+4. `IMappingPublicationUnitOfWork` mở rộng cho V3:
    - Inbox.
    - FarmBaseMapVersion + ZoneMapVersions.
    - Plants + PlantChangeEvents.
    - Audit + Outbox.
-3. `ISurveyResultPublicationUnitOfWork`:
+5. `ISurveyResultPublicationUnitOfWork`:
    - Inbox/imported pending suspected findings; Harvest Readiness assessment không thuộc MVP target path.
    - SurveyResult + review history.
    - Derived latest-reviewed Plant Health state khi publish preliminary Plant Health result.
@@ -382,11 +427,19 @@ Chốt ba boundary trước khi viết handler:
 
 - [x] Không dùng distributed transaction hoặc chuỗi SaveChanges độc lập.
 - [x] Specialized DbContext chỉ map bảng cần thiết; `AgriDroneSchemaDbContext` vẫn chỉ phục vụ migration/design-time.
-- [x] Viết rollback integration test skeleton trước handler orchestration.
+- [x] Rollback skeleton cho approval/map/result publication baseline đã có.
+- [ ] Bổ sung rollback seams/test backlog cho capture finalization và atomic route/
+  Order approval; không suy evidence cũ bao phủ hai boundary mới.
 
 ### 8.4. Versioned contracts với BE2
 
 - [x] Chốt `SurveyOrderOperationalContext`/readiness query contract.
+- [ ] Mở rộng V3 với nullable boundary trong appointment stage,
+  `BoundaryCaptureSessionId/status`, `BaselineRoutePlanId/version/status` và
+  stable failure codes tương ứng.
+- [ ] Chốt `IBaselineRoutePlanningPort`: BE1 cung cấp immutable boundary
+  ID/version/geometry tối thiểu; BE2 persist/generate route và không nhận client
+  waypoint authoritative.
 - [x] Chốt current Farm base-map và Plant reference snapshot contract.
 - [x] Chốt `BaselineMappingCandidatesApprovedV2`.
 - [x] Chốt `FarmBaseMapPublishedV2`.
@@ -400,7 +453,7 @@ Chốt ba boundary trước khi viết handler:
 
 ### Deliverable Step 0
 
-- ADR bổ sung nếu một trong ba transaction boundary hoặc contract chưa được ADR hiện tại quyết định đủ rõ.
+- ADR bổ sung nếu một trong năm transaction boundary hoặc contract chưa được ADR hiện tại quyết định đủ rõ.
 - State-transition/error-code tables được review.
 - Interfaces/contract DTO compile nhưng chưa mở public feature API.
 - Architecture tests khóa dependency direction.
@@ -446,8 +499,31 @@ Step này sửa baseline/code đã hoàn thành nhưng không còn đúng nghi�
 
 - [x] Tạo versioned `SurveyCaptureAuthorization` hoặc hai record tương đương cho written data-use consent và flight permission: status, evidence reference, issued/verified/expiry/revoked time, verifier, reason và optimistic version.
 - [x] Approval Step 3 chỉ tạo checklist/requirement pending; không tự coi request approval là flight permission.
-- [ ] SystemAdmin/SystemManager action verify/revoke phải authorize rõ và ghi audit/outbox.
+- [x] Chỉ SystemAdmin action verify/revoke; evidence/version/audit/outbox bắt buộc.
+  SystemManager chỉ đọc minimal readiness status cho assigned work, không tự xác
+  minh giấy phép của chuyến bay mình thực hiện.
 - [x] `SurveyOrderReadinessSnapshot` và BE2 operational contract thêm consent/permission status + expiry. Mọi Baseline/Plant Health capture fail closed nếu thiếu, expired hoặc revoked.
+
+#### R2-C2 — Appointment-first boundary capture và automatic route handoff
+
+- [ ] Sửa `SurveyOrder.Create`: unmapped Farm khởi tạo
+  `AwaitingBaselineAppointment`; mapped Farm mới khởi tạo
+  `PendingBoundaryVerification`.
+- [ ] Cho propose/confirm Baseline appointment khi chưa có boundary. Confirm chuyển
+  `AwaitingBaselineAppointment → AwaitingBoundaryCapture`; reschedule/cancel không
+  được tạo trạng thái `BaselineReady` giả.
+- [ ] Thêm `BoundaryCaptureSession` + ordered GNSS samples, operation ID,
+  captured-at/accuracy, appointment/Manager/Drone reference và optimistic version.
+- [ ] Chỉ mở session trong confirmed Baseline window cho đúng assigned Manager;
+  nếu drone cất cánh/hover thì authorization/safety gate phải còn hiệu lực.
+- [ ] Finalize tự đóng polygon, validate PostGIS validity/non-self-intersection/
+  area/Farm ownership, lưu evidence và approve immutable FarmBoundary version trong
+  cùng transaction. Direct `boundary-scope/verify` chỉ còn mapped/correction path.
+- [ ] Mở port sang BE2 để sinh persisted route từ đúng boundary version với
+  altitude/speed/overlap/safety inset; client không gửi arbitrary waypoint.
+- [ ] Chỉ approved route khớp current boundary/capture session mới chuyển Order
+  `AwaitingBoundaryCapture → BaselineReady`; boundary thay đổi làm route cũ stale/
+  superseded và đóng readiness.
 
 #### R2-D — Scope/count adjustment, refund và extra flight
 
@@ -469,7 +545,10 @@ Step này sửa baseline/code đã hoàn thành nhưng không còn đúng nghi�
 - [x] Phát hành contract revision mới cho Plant Health, readiness và result publication; không sửa payload V2/V3 đã phát hành tại chỗ.
 - [ ] OpenAPI không còn public Harvest Readiness option, severity field, expert-diagnosis wording hoặc owner endpoint xem pending/raw result.
 - [x] Fresh migration + upgrade snapshot giữ được lịch sử cũ nhưng target write/read path không sinh dữ liệu severity/Harvest Readiness mới.
-- [ ] Cập nhật Final Test Backlog: catalogue Plant Health-only, no-severity contract, preliminary disclaimer, consent revoke/expiry, immutable original snapshot, payment/refund, extra-flight và offline retry/conflict.
+- [ ] Cập nhật Final Test Backlog: catalogue Plant Health-only, no-severity contract,
+  preliminary disclaimer, consent revoke/expiry, appointment-first state,
+  boundary-capture retry/offline sync, route containment/staleness, immutable
+  original snapshot, payment/refund, extra-flight và offline retry/conflict.
 
 Checkpoint implementation 2026-10-15:
 
@@ -480,9 +559,18 @@ Checkpoint implementation 2026-10-15:
 - [x] Thêm immutable `OriginalSurveyServicePriceId`, `OriginalConfirmedPoleCount`, `OriginalPricePerPoleSnapshot`, `OriginalFinalPrice`; adjustment chỉ thay effective snapshot.
 - [x] Thêm domain/schema seam `ScopeAdjustment`, `AdjustmentSettlement`, `ExtraFlightRequest` và readiness blocker tương ứng.
 - [x] Migration expand/backfill `R2ProposalV2Remediation` và inventory `docs/domain/be1-r2-legacy-artifact-inventory.md`; EF báo không còn pending model change.
-- [ ] Còn lại trước khi đóng R2: application/API/outbox đầy đủ cho scope adjustment, additional payment/refund và extra-flight; V4 ingestion/publication; authoritative V3 query adapter; OpenAPI runtime snapshot đầy đủ; Final Test backlog.
+- [ ] Còn lại trước khi đóng R2: conditional initial Order state; appointment
+  confirm → `AwaitingBoundaryCapture`; capture-session/API/outbox; BE2 automatic
+  route handoff/approval; application/API/outbox cho scope adjustment, additional
+  payment/refund và extra-flight; V4 ingestion/publication; authoritative V3 query
+  adapter; OpenAPI runtime snapshot đầy đủ; Final Test backlog.
 
-**Exit gate Step R2:** build compile; runtime/OpenAPI route inventory đúng; Plant Health-only enforced server-side; readiness fail closed với consent/permission; original price/count bất biến; no-severity/preliminary contracts đã version hóa; Stretch/legacy data chỉ còn compatibility-read-only. Chỉ sau gate này mới tiếp tục Step 5.
+**Exit gate Step R2:** build compile; runtime/OpenAPI route inventory đúng;
+unmapped approval/appointment/capture/route state order đã implement; Plant
+Health-only enforced server-side; readiness fail closed với consent/permission và
+stale/missing boundary-route; original price/count bất biến; no-severity/
+preliminary contracts đã version hóa; Stretch/legacy data chỉ còn
+compatibility-read-only. Chỉ sau gate này mới tiếp tục Step 5.
 
 ### 8.5. Cách sử dụng hướng dẫn từ Step 1 đến Step 11
 
@@ -517,8 +605,8 @@ Ma trận vị trí code theo Step:
 | 1 | `Features/Catalogue/` | Surveys repositories, catalogue queries, DI |
 | 2 | `Features/Requests/` | Request repository, admin/owner queries |
 | 3 | `Features/Approvals/` | Approval specialized UoW/cross-module persistence |
-| 4 | `Features/Orders/`, `Appointments/`, `Payments/` | Payment adapter/callback, readiness query |
-| 5 | Farms operational features + Surveys integration port | PostGIS queries, BE2 operational-context adapter |
+| 4 | `Features/Appointments/`, `BoundaryCapture/`, `Orders/`, `Payments/` | Capture-finalization UoW, BE2 route-planning port/coordinator, payment adapter và readiness query |
+| 5 | Farms operational/correction features + Surveys integration port | PostGIS policies, BE2 operational-context adapter có capture/boundary/route versions |
 | 6 | Mapping publication handler/policy | V2 consumer, Inbox, mapping publication UoW |
 | 7 | `Features/Results/PlantHealth/` | Plant Health V4 consumer, preliminary-result publication UoW |
 | 8 | Không có MVP feature folder | Stretch-disabled; compatibility inventory do Step R2 quản lý |
@@ -759,44 +847,57 @@ Ba orchestrator không tự commit và không inject DbContext; chúng nhận tr
 
 Domain/persistence files:
 
-| Thao tác | File |
-|---|---|
-| `[Tạo]` | `SURVEYS/Domain/Orders/ISurveyOrderRepository.cs` nếu Step 3 chưa tạo |
-| `[Tạo]` | `SURVEYS/Domain/Appointments/ISurveyAppointmentRepository.cs` |
-| `[Tạo]` | `SURVEYS/Domain/Payments/ISurveyPaymentRepository.cs` |
-| `[Tạo]` | `SURVEYS/Domain/Payments/IPriceAdjustmentRepository.cs` |
-| `[Tạo]` | `SURVEYS/Domain/Authorizations/ISurveyCaptureAuthorizationRepository.cs` |
-| `[Tạo]` | `SURVEYS/Domain/Adjustments/IScopeAdjustmentRepository.cs` |
-| `[Tạo]` | `SURVEYS/Domain/Flights/IExtraFlightRequestRepository.cs` |
-| `[Tạo]` | `SURVEYS/Infrastructure/Persistence/Repositories/SurveyOrderRepository.cs` |
-| `[Tạo]` | `SURVEYS/Infrastructure/Persistence/Repositories/SurveyAppointmentRepository.cs` |
-| `[Tạo]` | `SURVEYS/Infrastructure/Persistence/Repositories/SurveyPaymentRepository.cs` |
-| `[Tạo]` | `SURVEYS/Infrastructure/Persistence/Repositories/PriceAdjustmentRepository.cs` |
-| `[Tạo]` | `SURVEYS/Application/Abstractions/Queries/ISurveyOrderQueries.cs` |
-| `[Tạo]` | `SURVEYS/Infrastructure/Queries/SurveyOrderQueries.cs` |
-| `[Tạo]` | `SURVEYS/Application/Abstractions/Orders/ISurveyBoundaryVerificationUnitOfWork.cs` và boundary repository/outbox ports |
-| `[Tạo]` | `DB/Surveys/SurveyBoundaryVerificationDbContext.cs` | Transaction duy nhất cho FarmBoundary + SurveyOrder + audit + Outbox |
-| `[Tạo]` | `DB/Surveys/SurveyOrderBoundaryRepository.cs` và `SurveyOrderBoundaryQueries.cs` | Re-check assignment/baseline, stage boundary và work-context query |
-| `[Tạo]` | `DB/Migrations/20261011041401_Phase9BoundaryVerification*` | `SYSTEM_MANAGER` source và boundary evidence reference |
+| Thao tác | File | Trách nhiệm/gap |
+|---|---|---|
+| `[Tạo]` | `SURVEYS/Domain/Orders/ISurveyOrderRepository.cs` nếu Step 3 chưa tạo | Aggregate mutation load/add |
+| `[Tạo]` | `SURVEYS/Domain/Appointments/ISurveyAppointmentRepository.cs` | Purpose appointment persistence |
+| `[Tạo]` | `SURVEYS/Domain/Payments/ISurveyPaymentRepository.cs` | Payment aggregate persistence |
+| `[Tạo]` | `SURVEYS/Domain/Payments/IPriceAdjustmentRepository.cs` | Append-only price adjustment persistence |
+| `[Tạo]` | `SURVEYS/Domain/Authorizations/ISurveyCaptureAuthorizationRepository.cs` | Consent/flight-permission mutation load |
+| `[Tạo]` | `SURVEYS/Domain/BoundaryCapture/BoundaryCaptureSession.cs` và `BoundaryCaptureSample.cs` | Session lifecycle và immutable finalized ordered samples |
+| `[Tạo]` | `SURVEYS/Domain/BoundaryCapture/IBoundaryCaptureSessionRepository.cs` | Session mutation load/add, không trả `IQueryable` |
+| `[Tạo]` | `SURVEYS/Domain/Adjustments/IScopeAdjustmentRepository.cs` | Scope adjustment persistence |
+| `[Tạo]` | `SURVEYS/Domain/Flights/IExtraFlightRequestRepository.cs` | Extra-flight request persistence |
+| `[Tạo]` | `SURVEYS/Infrastructure/Persistence/Repositories/SurveyOrderRepository.cs` | EF repository implementation |
+| `[Tạo]` | `SURVEYS/Infrastructure/Persistence/Repositories/SurveyAppointmentRepository.cs` | EF repository implementation |
+| `[Tạo]` | `SURVEYS/Infrastructure/Persistence/Repositories/SurveyPaymentRepository.cs` | EF repository implementation |
+| `[Tạo]` | `SURVEYS/Infrastructure/Persistence/Repositories/PriceAdjustmentRepository.cs` | EF repository implementation |
+| `[Tạo]` | `SURVEYS/Application/Abstractions/Queries/ISurveyOrderQueries.cs` | Scoped Order/work-queue read models |
+| `[Tạo]` | `SURVEYS/Infrastructure/Queries/SurveyOrderQueries.cs` | Projection implementation |
+| `[Giữ/thu hẹp]` | `SURVEYS/Application/Abstractions/Orders/ISurveyBoundaryVerificationUnitOfWork.cs` và direct boundary ports | Chỉ mapped-Farm verification/correction path; unmapped happy path không dùng direct polygon |
+| `[Giữ/thu hẹp]` | `DB/Surveys/SurveyBoundaryVerificationDbContext.cs` | Compatibility transaction cho mapped/correction path |
+| `[Tạo]` | `SURVEYS/Application/Abstractions/BoundaryCapture/IBoundaryCaptureFinalizationUnitOfWork.cs` | Session + samples + FarmBoundary + Order + audit/Outbox trong một commit |
+| `[Tạo]` | `DB/Surveys/BoundaryCaptureFinalizationDbContext.cs` và `BoundaryCaptureFinalizationUnitOfWork.cs` | Lock appointment/assignment/session/current boundary; finalize immutable capture evidence |
+| `[Tạo]` | `SURVEYS/Application/Abstractions/Missions/IBaselineRoutePlanningPort.cs` | Gửi boundary version/geometry + planning parameters cho BE2; không nhận arbitrary client waypoint |
+| `[Tạo]` | `SURVEYS/Application/Abstractions/Missions/IDroneFieldOperationEligibilityPort.cs` | Query typed Drone operational/capability snapshot cho session start; không đọc BE2 repository/entity |
+| `[Tạo]` | `DB/Surveys/BaselineRouteApprovalDbContext.cs` và coordinator | Cross-module lock/validate approved BE2 route rồi transition Order tới `BaselineReady` atomically |
+| `[Tạo]` | `DB/Migrations/<timestamp>_AppointmentFirstBoundaryCapture*` | `AwaitingBoundaryCapture`, session/sample tables, indexes/constraints và guarded state backfill |
 | `[Tạo]` | `SURVEYS/Application/Abstractions/Appointments/*` | Port transaction/repository/outbox và baseline-readiness query |
 | `[Tạo]` | `DB/Surveys/SurveyAppointmentScheduling*` và `SurveyBaselineReadinessQueries.cs` | Transaction serializable, authorization hiện hành và snapshot readiness từ DB |
 | `[Tạo]` | `DB/Migrations/20261011080125_Phase9BaselineAppointmentReadiness*` | Revision chain, proposer, superseded state và constraint/index lịch hẹn |
-| `[Tạo]` | `INTEGRATION_CONTRACTS/Surveys/SurveyAppointmentChangedV1.cs` | Event append-only sau thay đổi appointment |
+| `[Tạo]` | `CONTRACTS/Surveys/SurveyAppointmentChangedV1.cs` | Event append-only sau thay đổi appointment |
 | `[Tạo]` | `SURVEYS/Application/Abstractions/Pricing/*` và `.../ConfirmSurveyOrderPoleCount/*` | Confirm authoritative count và khóa price snapshot |
 | `[Tạo]` | `DB/Surveys/SurveyPricingConfirmation*` | Transaction serializable đọc current map/inventory/effective price và ghi audit/Outbox |
 | `[Tạo]` | `DB/Migrations/20261011154933_Phase9PoleCountPricingSnapshot*` | CountSource/evidence, guarded backfill và snapshot constraints |
-| `[Tạo]` | `INTEGRATION_CONTRACTS/Surveys/SurveyOrderPricingConfirmedV1.cs` | Event count/price snapshot đã khóa |
+| `[Tạo]` | `CONTRACTS/Surveys/SurveyOrderPricingConfirmedV1.cs` | Event count/price snapshot đã khóa |
 | `[Tạo]` | `SURVEYS/Application/Abstractions/Payments/*` và `.../Features/Payments/*` | Port provider, owner initiation và trusted callback processing |
 | `[Tạo]` | `DB/Surveys/SurveyPaymentProcessing*` | Transaction serializable cho Payment/Event/audit/Outbox |
 | `[Tạo]` | `DB/Migrations/20261011162047_Phase9PaidAppointmentPayment*` | Provider event identity, dedup index và payment-session constraint |
-| `[Tạo]` | `INTEGRATION_CONTRACTS/Surveys/SurveyPaymentChangedV1.cs` | Event trạng thái payment sau commit |
+| `[Tạo]` | `CONTRACTS/Surveys/SurveyPaymentChangedV1.cs` | Event trạng thái payment sau commit |
 
 Feature folders và exact files:
 
 | Folder | Files |
 |---|---|
-| `.../Features/Orders/VerifySurveyOrderBoundaryAndScope/` | `VerifySurveyOrderBoundaryAndScopeCommand.cs`, validator, handler, response |
+| `.../Features/Orders/VerifySurveyOrderBoundaryAndScope/` | Giữ cho mapped-Farm/correction compatibility; validator từ chối dùng endpoint này để bypass unmapped capture session |
 | `.../Features/Orders/GetSurveyOrderBoundaryScope/` | Query, validator, handler và response cho assigned-manager work context |
+| `.../Features/BoundaryCapture/StartBoundaryCaptureSession/` | command, validator, handler, response; gắn confirmed appointment/Drone, operation ID và expected Order version |
+| `.../Features/BoundaryCapture/GetBoundaryCaptureSession/` | query/handler/response để mobile resume bằng latest samples/session version |
+| `.../Features/BoundaryCapture/SyncBoundaryCaptureSamples/` | command, validator, handler, response; ordered GNSS samples, dedup operation ID và optimistic version |
+| `.../Features/BoundaryCapture/FinalizeBoundaryCaptureSession/` | command, validator, handler, response; validate polygon/evidence và approve boundary atomically |
+| `.../Features/BoundaryCapture/AbortBoundaryCaptureSession/` | command, validator, handler, response; reason/audit, không xóa samples/history |
+| `.../Features/Orders/GenerateBaselineRoutePlan/` | command/handler gọi BE2 port bằng current immutable boundary version và planning parameters |
+| `.../Features/Orders/ApproveBaselineRoutePlan/` | command/handler cross-module validate route/boundary/session rồi transition `BaselineReady` |
 | `.../Features/Orders/ConfirmSurveyOrderPoleCount/` | `ConfirmSurveyOrderPoleCountCommand.cs`, validator, handler, response; authoritative inventory source required |
 | `.../Features/Appointments/ProposeSurveyAppointment/` | `ProposeSurveyAppointmentCommand.cs`, `ProposeSurveyAppointmentCommandValidator.cs`, `ProposeSurveyAppointmentCommandHandler.cs`, `ProposeSurveyAppointmentResponse.cs` |
 | `.../Features/Appointments/ConfirmSurveyAppointment/` | `ConfirmSurveyAppointmentCommand.cs`, `ConfirmSurveyAppointmentCommandValidator.cs`, `ConfirmSurveyAppointmentCommandHandler.cs`, `ConfirmSurveyAppointmentResponse.cs` |
@@ -830,8 +931,16 @@ Payment adapter/API files:
 - `[Tạo] API/Controllers/TenantOwnerSurveyOrdersController.cs`
 - `[Tạo] API/Controllers/SurveyPaymentCallbacksController.cs`
 - `[Tạo] API/Controllers/SystemSurveyPaymentsController.cs`
-- `[Tạo] API/Contracts/Surveys/Orders/VerifySurveyOrderBoundaryAndScopeRequest.cs`
-- `[Tạo] INTEGRATION_CONTRACTS/Surveys/SurveyOrderBoundaryVerifiedV1.cs`
+- `[Giữ/thu hẹp] API/Contracts/Surveys/Orders/VerifySurveyOrderBoundaryAndScopeRequest.cs` cho mapped/correction compatibility
+- `[Tạo] CONTRACTS/Surveys/BoundaryCaptureFinalizedV1.cs` cho audit/notification/route work-item; event không tự transition Order tới ready
+- `[Tạo] CONTRACTS/Missions/BaselineRoutePlanApprovedV1.cs` chỉ cho notification/integration sau commit; Order transition dùng synchronous typed coordinator cùng transaction, event không mở readiness gate
+- `[Tạo] API/Contracts/Surveys/BoundaryCapture/StartBoundaryCaptureSessionRequest.cs`
+- `[Tạo] API/Contracts/Surveys/BoundaryCapture/SyncBoundaryCaptureSamplesRequest.cs`
+- `[Tạo] API/Contracts/Surveys/BoundaryCapture/FinalizeBoundaryCaptureSessionRequest.cs`
+- `[Tạo] API/Contracts/Surveys/BoundaryCapture/AbortBoundaryCaptureSessionRequest.cs`
+- `[Tạo] API/Contracts/Surveys/Orders/GenerateBaselineRoutePlanRequest.cs`
+- `[Tạo] API/Contracts/Surveys/Orders/ApproveBaselineRoutePlanRequest.cs`
+- `[Tạo] CONTRACTS/Surveys/SurveyOrderBoundaryVerifiedV1.cs`
 - `[Tạo] API/Contracts/Surveys/Orders/ConfirmSurveyOrderPoleCountRequest.cs`
 - `[Tạo] API/Contracts/Surveys/Appointments/ProposeSurveyAppointmentRequest.cs`
 - `[Tạo] API/Contracts/Surveys/Appointments/ConfirmSurveyAppointmentRequest.cs`
@@ -855,7 +964,7 @@ Step này chủ yếu mở rộng Farms và integration query; không chuyển F
 | Thao tác | File | Nội dung cần viết |
 |---|---|---|
 | `[Sửa]` | `FARMS/Application/Features/UpdateFarmDetail/UpdateFarmDetailHandler.cs` | Thay/siết authorization bằng current assignment policy; giữ handler chỉ cho update detail |
-| `[Tạo/Sửa]` | `FARMS/Application/Features/VerifyFarmBoundary/` | Command/validator/handler/response; version/evidence/reason/audit và PostGIS validation |
+| `[Tạo/Sửa]` | `FARMS/Application/Features/VerifyFarmBoundary/` | Mapped/correction path only; version/evidence/reason/audit và PostGIS validation, không bypass capture session |
 | `[Tạo]` | `FARMS/Application/Abstractions/Boundaries/IFarmBoundaryPolicy.cs` | Point-in-polygon + near-boundary classification dùng chung |
 | `[Sửa]` | `FARMS/Application/Features/CreateZone/CreateZoneHandler.cs` | Assignment + PostGIS geometry validation + audit |
 | `[Sửa]` | `FARMS/Application/Features/UpdateZone/UpdateZoneHandler.cs` | Assignment + expected version + within-Farm/non-overlap checks |
@@ -869,7 +978,7 @@ Step này chủ yếu mở rộng Farms và integration query; không chuyển F
 | `[Tạo]` | `FARMS/Application/Features/GetAssignedFarmOperationalContext/FarmOperationalContextResponse.cs` | Farm/Zone/map/version data cần cho manager, không trả EF entity |
 | `[Tạo]` | `SURVEYS/Infrastructure/Queries/SurveyOrderOperationalContextQuery.cs` | Implementation của operational/readiness contract cho BE2 |
 | `[Giữ để drain]` | `CONTRACTS/Surveys/SurveyOrderOperationalContextV2.cs` | Giữ bất biến cho consumer cũ |
-| `[Tạo]` | `CONTRACTS/Surveys/SurveyOrderOperationalContextV3.cs` | MissionPurpose, approved boundary/scope, confirmed pole count/price state và purpose-aware readiness |
+| `[Tạo/Sửa]` | `CONTRACTS/Surveys/SurveyOrderOperationalContextV3.cs` | MissionPurpose; nullable boundary trong appointment stage; appointment/capture-session/boundary/route-plan identities+versions; count/price và purpose-aware readiness |
 | `[Tạo]` | `API/Controllers/SystemManagerFarmsController.cs` | Assigned-manager operational read/update routes; không tạo Farm |
 
 Nếu cần trạng thái “Zone đã verify”, phải tạo migration/domain field riêng trước khi tạo `VerifyFarmZone` feature. Không dùng một boolean tạm trong response. Khi model đã chốt, folder phải gồm `VerifyFarmZoneCommand.cs`, `VerifyFarmZoneCommandValidator.cs`, `VerifyFarmZoneCommandHandler.cs`, `VerifyFarmZoneResponse.cs`.
@@ -1123,30 +1232,47 @@ Feature nên tách thành `CreateSurveyServicePrice`, `GetSurveyServicePriceHist
 - [x] Không sửa amount/currency hoặc delete price version đã được order tham chiếu; chỉ cho phép đóng `EffectiveTo` một lần khi tạo replacement version.
 - [x] Public query resolve đúng service/price đang nhận request tại thời điểm query.
 - [x] SystemAdmin query vẫn đọc được retired/history version.
-- [ ] R2 remediation: chỉ seed/activate `PLANT_HEALTH`; disable/retire public `HARVEST_READINESS`; không seed Follow-up/Baseline Mapping.
+- [x] R2 remediation: chỉ seed/activate `PLANT_HEALTH`; disable/retire public `HARVEST_READINESS`; không seed Follow-up/Baseline Mapping.
 
 ### 9.3. Business master data
 
-- [ ] R2 remediation: bỏ fixed severity/health levels khỏi Plant Health target API/event/read model; giữ legacy read compatibility khi cần.
-- [ ] Chốt đúng 2–3 team-labelled suspected-disease classes, annotation rules và confusing cases gồm sunburn/scarring.
-- [ ] Thay expert/disease+severity treatment mapping bằng sourced guidance theo suspected class + source/version/provenance.
+- [x] R2 remediation: bỏ fixed severity/health levels khỏi Plant Health target API/event/read model; giữ legacy persistence/reference compatibility khi cần.
+- [x] Chốt hai team-labelled suspected-disease classes (`BROWN_SPOT`, `ANTHRACNOSE`) và hai confusing/non-disease labels (`SUNBURN`, `MECHANICAL_SCAR`) cùng dataset/annotation-rule/team-label limitation cố định.
+- [x] Thay target expert/disease+severity treatment mapping bằng sourced guidance theo suspected class + source/version/provenance; legacy recommendation chỉ còn compatibility artifact và không được đăng ký target runtime/API.
 - [x] Quản lý AI model/threshold reference dùng cho audit/result provenance mà không đưa inference runtime vào BE1.
-- [ ] R2 remediation: Harvest Readiness criteria/runtime/API disabled trong MVP; chỉ giữ compatibility artifact.
+- [x] R2 remediation: Harvest Readiness criteria/runtime/API disabled trong MVP; chỉ giữ compatibility artifact.
 - [x] Tách Plant Health business class/annotation/guidance semantics khỏi BE2 AI model/threshold configuration.
 - [x] Result/job snapshot reference đúng version; retired definition vẫn resolve cho history.
 
-Checkpoint Step 1 ngày 2026-10-09 là evidence của baseline cũ và hiện mang trạng thái **RebaselineRequired**. Chỉ khôi phục `CodeComplete — AwaitingFinalTest` sau khi Step R2 chứng minh Plant Health-only, no-severity, sourced-guidance và Stretch-disabled bằng code/OpenAPI/migration evidence.
+Checkpoint Step 1 ngày 2026-10-09 là evidence của baseline cũ và đã được thay thế bởi checkpoint R2 ngày 2026-10-17.
+
+Checkpoint R2 ngày 2026-10-17 đạt **CodeComplete — AwaitingFinalTest**:
+
+- target catalogue chỉ còn `PLANT_HEALTH`; Harvest Readiness runtime/API bị vô hiệu hóa;
+- target Plant Health API/read model không có severity/health-level;
+- tập nhãn pilot được khóa tại domain, database constraint và startup/readiness validation;
+- sourced guidance có source/reference, immutable version, effective window, lifecycle, audit và optimistic concurrency;
+- migration `20261017154310_Step1PlantHealthMasterData` backfill provenance an toàn cho dữ liệu hiện hữu;
+- runtime OpenAPI đã tái sinh; build `0 warning / 0 error`, unit test `572/572`, architecture test `80/80`, EF model không còn drift.
+
+Chưa nâng Step 1 thành `Done` cho tới khi migration và integration test được chạy trên PostgreSQL test cùng nội dung guidance thực tế đã được Product/SystemAdmin phê duyệt nguồn.
 
 ### 9.4. API đề xuất
 
 ```text
 GET  /api/public/survey-services
+GET  /api/catalog/plant-health
 
 GET  /api/system-admin/survey-services
 GET  /api/system-admin/survey-services/{serviceId}/prices
 POST /api/system-admin/survey-services/{serviceId}/prices
 POST /api/system-admin/survey-services/{serviceId}/activate
 POST /api/system-admin/survey-services/{serviceId}/retire
+
+GET  /api/system-admin/plant-health/guidance
+POST /api/system-admin/plant-health/guidance
+POST /api/system-admin/plant-health/guidance/{guidanceId}/activate
+POST /api/system-admin/plant-health/guidance/{guidanceId}/retire
 ```
 
 `GET /api/system-admin/survey-services` chỉ trả `currentPrice` đang hiệu lực cho
@@ -1157,7 +1283,10 @@ current price.
 
 ### Tests Step 1
 
-Chưa viết/chạy trong Step 1. Toàn bộ backlog kiểm thử của Step 1 đã chuyển xuống mục 27.2.
+Đã có unit test cho tập nhãn/provenance, lifecycle sourced guidance và các policy
+Survey liên quan; architecture test khóa controller boundary và loại route
+health-level cũ. Migration execution, persistence/concurrency integration và E2E
+vẫn thuộc Final Test Phase tại mục 27.2.
 
 ### Definition of Done Step 1
 
@@ -1295,6 +1424,25 @@ có route `approve`. Evidence triển khai tại
 `docs/operations/be1-step2f-contract-security-report.md`; test xác nhận vẫn thuộc
 Final Test Phase.
 
+Checkpoint R2 ngày 2026-10-18 tiếp tục giữ trạng thái
+**CodeComplete — AwaitingFinalTest**:
+
+- checklist được nâng lên `survey-request-review.v5` với đủ contact, loại Farm,
+  service area, candidate location, consent feasibility, flight-permission
+  feasibility và eligible-manager availability;
+- consent/permission tại Step 2 chỉ là feasibility, không phải authorization đã
+  verified và không nhận verbal/message evidence làm bằng chứng xác minh;
+- SystemAdmin inbox không còn trả contact PII; dữ liệu liên hệ đầy đủ chỉ xuất
+  hiện trong detail được bảo vệ bởi policy;
+- test khóa Plant Health-only intake, canonical idempotency fingerprint,
+  server-derived caller scope, authorization policy, identity-free TenantOwner
+  body và PII boundary;
+- runtime OpenAPI đã được tái sinh theo contract mới.
+
+Endpoint `approve` có thể xuất hiện trong OpenAPI tổng hợp hiện hành vì Step 3 đã
+được triển khai sau checkpoint Step 2; endpoint đó không thuộc phạm vi hoặc
+Definition of Done của Step 2.
+
 ### 10.1. Domain behavior
 
 - [x] Tạo `SurveyRequest.CreateNewCustomer`.
@@ -1322,7 +1470,7 @@ Final Test Phase.
 - [x] Supported service area.
 - [x] Farm location/candidate boundary đủ để thẩm định sơ bộ; approval không tự biến nó thành approved FarmBoundary.
 - [x] Preliminary legal/flight feasibility.
-- [ ] R2 remediation: checklist tách rõ `ConsentFeasibility`/`FlightPermissionFeasibility`; không map verbal/message evidence thành verified authorization.
+- [x] R2 remediation: checklist tách rõ `ConsentFeasibility`/`FlightPermissionFeasibility`; không map verbal/message evidence thành verified authorization.
 - [x] Active + available + flight-qualified SystemManager tồn tại.
 - [x] Checklist version/snapshot được lưu cùng review.
 - [x] Reject bắt buộc reason; approve validation được chuẩn bị nhưng chưa expose trước Step 3.
@@ -1345,7 +1493,11 @@ POST /api/system-admin/survey-requests/{requestId}/reject
 
 ### Tests Step 2
 
-Chưa viết/chạy trong Step 2. Toàn bộ backlog kiểm thử của Step 2 đã chuyển xuống mục 27.2.
+Đã có unit test cho Plant Health-only intake, normalization/idempotency
+fingerprint và server-derived tenant caller scope; architecture test khóa
+authorization, request identity boundary, checklist contract và inbox PII
+boundary. Concurrent database idempotency, transaction/outbox và E2E vẫn thuộc
+Final Test Phase tại mục 27.2.
 
 ### Definition of Done Step 2
 
@@ -1358,6 +1510,11 @@ Chưa viết/chạy trong Step 2. Toàn bộ backlog kiểm thử của Step 2 �
 ---
 
 ## 11. Step 3 — UC05 Atomic approval, onboarding và SurveyOrder (Phase 8)
+
+**R2 status 2026-10-18:** Step 3 đã trở lại
+`CodeComplete — AwaitingFinalTest`. Conditional initial Order state, versioned
+previous-order compatibility và pending capture-authorization requirements đã
+được implement; PostgreSQL atomic/concurrency E2E vẫn là release gate tại mục 27.
 
 ### 11.0. Chia phase và cách triển khai Step 3
 
@@ -1428,7 +1585,8 @@ Handler chung có thể điều phối, nhưng logic mỗi kind phải được 
 1. Revalidate request/service/manager.
 2. Provision Tenant.
 3. Provision Farm thuộc Tenant vừa tạo.
-4. Tạo SurveyOrder và primary assignment.
+4. Tạo SurveyOrder với `RequiresBaselineMapping = true` và initial state
+   `AwaitingBaselineAppointment`, đồng thời tạo primary assignment.
 5. Tạo pending consent/flight-permission checklist cho Order/Farm.
 6. Tạo TenantOwner invitation, không tạo password hay active account.
 7. Append approved review, transition request, ghi audit/outbox rồi commit.
@@ -1438,7 +1596,8 @@ Handler chung có thể điều phối, nhưng logic mỗi kind phải được 
 1. Revalidate requester vẫn là active owner của Tenant.
 2. Không tạo Tenant/User/membership/invitation.
 3. Provision Farm trong đúng Tenant.
-4. Tạo order và primary assignment.
+4. Tạo Order với `RequiresBaselineMapping = true` và initial state
+   `AwaitingBaselineAppointment`, đồng thời tạo primary assignment.
 5. Tạo pending consent/flight-permission checklist.
 6. Transition/audit/outbox rồi commit.
 
@@ -1448,7 +1607,9 @@ Handler chung có thể điều phối, nhưng logic mỗi kind phải được 
 2. Kiểm tra hoặc chọn primary manager theo policy; không âm thầm thay assignment.
 3. Không tạo Tenant/Farm/invitation.
 4. Resolve previous compatible completed/published Plant Health order cùng Farm/service bằng versioned compatibility policy; nếu class/annotation/base-map identity semantics không so sánh an toàn thì để null và lưu reason.
-5. Tạo order rồi transition/audit/outbox và commit.
+5. Resolve map/inventory: nếu unmapped thì tạo Order ở
+   `AwaitingBaselineAppointment`; nếu mapped thì tạo ở
+   `PendingBoundaryVerification`; sau đó audit/outbox và commit.
 6. Tạo/reuse authorization requirement cho Order; không reuse consent/permission hết hạn hoặc khác scope.
 
 Checkpoint 2026-10-10: Phase 3C đạt `CodeComplete — AwaitingFinalTest`.
@@ -1459,15 +1620,18 @@ strategy có tên riêng bảo đảm đúng side effect matrix: `NewCustomer` t
 Tenant/Farm/order/primary assignment/Owner invitation; `ExistingTenantNewFarm`
 chỉ tạo Farm/order/assignment trong Tenant hiện hữu; `ExistingFarmSurvey` giữ
 primary assignment hiện tại và chỉ tạo order với baseline/previous compatible
-order đã resolve. Order bắt đầu ở `PendingBoundaryVerification`, chưa có price
-snapshot. Idempotent replay, database exception translation và concurrent retry
+order đã resolve. Ở checkpoint source cũ, mọi Order bắt đầu ở
+`PendingBoundaryVerification`; amendment 2026-10-17 thay rule này cho unmapped Farm
+thành `AwaitingBaselineAppointment`. Chưa có price snapshot. Idempotent replay,
+database exception translation và concurrent retry
 vẫn thuộc Phase 3D; HTTP/OpenAPI vẫn thuộc Phase 3E. Evidence tại
 `docs/operations/be1-step3c-approval-orchestration-report.md`.
 
 #### Phase 3D — Khởi tạo SurveyOrder và chống retry
 
 - `RequiresBaselineMapping` lấy từ current published Farm base map + confirmed active-pole inventory, không lấy từ client hay lịch sử mission.
-- Order bắt đầu ở `PendingBoundaryVerification`; chưa có confirmed pole count hoặc price snapshot.
+- Target initial state phụ thuộc Farm: unmapped → `AwaitingBaselineAppointment`;
+  mapped → `PendingBoundaryVerification`. Chưa có confirmed pole count hoặc price snapshot.
 - Order bắt đầu với capture authorization chưa verified; approval không mở flight gate.
 - OrderNumber sinh ở server và unique.
 - Approval command mang expected request version và idempotency key.
@@ -1507,7 +1671,17 @@ Bearer security, required header/body và các response `200/400/401/403/404/409
 snapshot đã cập nhật tại `docs/openapi/be1-surveys.openapi.json`. Evidence chi tiết
 tại `docs/operations/be1-step3e-api-evidence-report.md`.
 
-Step 3 chỉ đạt `CodeComplete — AwaitingFinalTest` trước phase cuối. Atomic rollback trên PostgreSQL thật là release gate bắt buộc tại mục 27.
+Checkpoint R2 2026-10-18: Step 3 đạt lại
+`CodeComplete — AwaitingFinalTest`. Order chưa mapped bắt đầu trực tiếp ở
+`AwaitingBaselineAppointment`; mapped Order bắt đầu ở
+`PendingBoundaryVerification`. Approval tạo hai requirement
+`WrittenDataUseConsent`/`FlightPermission` ở `Pending` trong cùng transaction.
+Previous order chỉ được link khi cùng current base-map identity và provenance có
+đúng Plant Health label dataset/annotation-rule semantics theo policy
+`plant-health-order-compatibility.v1`; policy version/reason được lưu trên Order,
+audit và approval response. Evidence tại
+`docs/operations/be1-step3-r2-rebaseline-report.md`. Atomic rollback trên
+PostgreSQL thật vẫn là release gate bắt buộc tại mục 27.
 
 ### 11.1. Approval command
 
@@ -1540,16 +1714,16 @@ Step 3 chỉ đạt `CodeComplete — AwaitingFinalTest` trước phase cuối. 
 - [x] Tạo SurveyOrder.
 - [x] Resolve previous compatible order theo cùng Farm + cùng Service + completed/published gần nhất.
 - [x] Service khác không được dùng làm previous order.
-- [ ] R2 remediation: compatibility policy kiểm tra base-map/Plant identity và class/annotation semantics; lưu policy version/reason, không chỉ chọn nearest same-service.
+- [x] R2 remediation: compatibility policy kiểm tra base-map/Plant identity và class/annotation semantics; lưu policy version/reason, không chỉ chọn nearest same-service.
 
 ### 11.5. Order initialization
 
 - [x] Snapshot `RequiresBaselineMapping` từ current published Farm base map + confirmed inventory; không suy ra từ Mission gần nhất.
 - [x] Lưu Request/Tenant/Farm/Service và nullable previous compatible order.
-- [x] Initial status `PendingBoundaryVerification`.
+- [x] Rebaseline initial status: unmapped → `AwaitingBaselineAppointment`; chỉ mapped Farm → `PendingBoundaryVerification`.
 - [x] Unique Request→ApprovedOrder và unique OrderNumber.
 - [x] Không snapshot price ở approval; price chỉ được snapshot sau approved boundary/scope và authoritative confirmed pole count ở Step 4.
-- [ ] R2 remediation: tạo pending consent/permission requirements trong approval transaction; không đánh dấu verified nếu chưa có evidence.
+- [x] R2 remediation: tạo pending consent/permission requirements trong approval transaction; không đánh dấu verified nếu chưa có evidence.
 
 ### 11.6. Transaction implementation
 
@@ -1568,11 +1742,19 @@ Response trả Request/Order/Farm/Tenant IDs theo kind, không trả invitation 
 
 ### Tests Step 3
 
-Chưa viết/chạy trong Step 3. Toàn bộ backlog kiểm thử của Step 3 đã chuyển xuống mục 27.2.
+R2 đã bổ sung unit test cho conditional initial state, fail-closed compatibility
+policy và pending authorization không có evidence; persistence-model và API
+contract test khóa cột/index/response mới. Build, unit và architecture suite đã
+pass ngày 2026-10-18. PostgreSQL atomic rollback/concurrency và HTTP E2E vẫn thuộc
+Final Test Phase tại mục 27.2.
 
 ### Definition of Done Step 3
 
 - Ba request kinds approve end-to-end và atomic.
+- NewCustomer/ExistingTenantNewFarm và ExistingFarmSurvey chưa mapped đều trả
+  Order `AwaitingBaselineAppointment`; không yêu cầu boundary ở approval.
+- ExistingFarmSurvey đã có current published map/inventory mới trả
+  `PendingBoundaryVerification` để kiểm chứng current boundary/scope.
 - Mọi Farm/Order mới truy nguyên được request/reviewer/assignment.
 - Mọi Order có capture-authorization requirement và không thể bay chỉ vì request đã Approved.
 - Invitation accept/login cũ vẫn hoạt động.
@@ -1580,18 +1762,31 @@ Chưa viết/chạy trong Step 3. Toàn bộ backlog kiểm thử của Step 3 �
 
 ---
 
-## 12. Step 4 — UC06 Consent/permission, boundary/scope, baseline, pricing, appointment, payment và readiness (Phase 9)
+## 12. Step 4 — UC06 Consent/permission, Baseline appointment, same-visit boundary/route, pricing, paid appointment/payment và readiness (Phase 9)
+
+**Amendment status 2026-10-17:** Step 4 là `RebaselineRequired`. Appointment/
+payment foundation cũ được reuse; direct boundary-before-appointment flow không
+còn là target và không được tính `CodeComplete` cho tới khi capture/route gates
+trong mục này được implement.
 
 ### 12.0. Chia phase và cách triển khai Step 4
 
 | Phase | Nghiệp vụ | Trạng thái/order outcome |
 |---|---|---|
 | 4A0 — Capture authorization | Verify written consent và flight permission | Có evidence/version/expiry; thiếu hoặc revoke thì fail closed |
-| 4A — Verify boundary/scope | Manager xác minh FarmBoundary, Zone và scope | Có approved boundary/scope version |
-| 4B — Baseline appointment/readiness | Với Farm chưa mapped, manager đề xuất lịch baseline | Baseline có thể ready mà chưa payment |
+| 4A — Baseline appointment | Với Farm chưa mapped, Manager đề xuất lịch và TenantOwner confirm trước khi có boundary | Có confirmed field window cho một lần đến Farm |
+| 4B — Same-visit boundary/route/readiness | Trong confirmed appointment, Manager chấm GNSS corners, approve FarmBoundary; hệ thống sinh route tự động trong safety-inset polygon | Baseline có thể ready mà chưa payment; route/boundary cùng version |
 | 4C — Confirm pole count/pricing | Publish baseline hoặc kiểm chứng inventory hiện hữu rồi snapshot giá/trụ | Có count + PricePerPole + FinalPrice bất biến |
 | 4D — Paid appointment/payment | Owner xác nhận lịch paid service và thanh toán | Payment chỉ Confirmed từ trusted evidence |
 | 4E — Adjustment/purpose-aware readiness | Xử lý adjustment/reconciliation và tổng hợp gate cho BE2 | Paid service chỉ ready khi đủ commercial gate |
+
+Thứ tự **xây capability** là `4A0 → 4A → 4B`; thứ tự **business action** cho phép
+đặt/confirm appointment ngay sau approval rồi verify authorization bất kỳ lúc nào
+trước capture. Appointment được confirm khi boundary còn rỗng; tới đúng appointment
+mới mở capture session, chấm ordered GNSS corners, approve boundary và sinh/duyệt
+route tự động. Hai checkpoint Phase 4A/4B ngày
+2026-10-11 bên dưới chỉ là evidence của source cũ và **không** chứng minh amendment
+này đã được implement.
 
 #### Phase 4A0 — Written consent và flight permission
 
@@ -1603,54 +1798,73 @@ Tạo use case riêng để verify/revoke capture authorization. Record phải p
 - Revoke/expire sau khi payment confirmed vẫn đóng mọi capture gate; không tự refund nếu chưa qua adjustment/cancellation policy.
 - Audit/outbox cùng transaction; BE2 chỉ nhận status/reference tối thiểu, không nhận PII/document body.
 
-#### Phase 4A — Verify FarmBoundary và scope
-
-Tạo feature `VerifySurveyOrderBoundaryAndScope` với command, validator, handler và response riêng.
-
-Luồng xử lý:
-
-1. Lấy actor từ execution context và kiểm tra đang là primary assigned SystemManager của Farm.
-2. Đọc order cùng service/Farm và kiểm tra expected version/status.
-3. Validate SRID 4326, polygon validity, supported area, Zone containment/non-overlap và notes/evidence.
-4. Lưu approved FarmBoundary/scope version với reviewer/time/reason; không dùng applicant polygon làm approved data ngầm.
-5. Xác định authoritative `RequiresBaselineMapping` từ current published map + confirmed inventory.
-6. Transition order sang Baseline appointment hoặc pole-count confirmation, ghi audit/outbox và commit một lần.
-
-Checkpoint 2026-10-11: Phase 4A đạt `CodeComplete — AwaitingFinalTest`.
-`GET /api/system-manager/survey-orders/{orderId}/boundary-scope` trả Order,
-approved FarmBoundary hiện hành và active Zone scope cho primary assigned manager.
-`POST .../boundary-scope/verify` nhận GeoJSON Polygon, reason/evidence, expected
-Order version và expected current boundary version number. Specialized
-`SurveyBoundaryVerificationDbContext` khóa/re-check Order, active qualified
-manager assignment, Farm, current boundary và published base-map inventory; sau
-đó version/approve FarmBoundary, derive lại `RequiresBaselineMapping`, transition
-Order, ghi audit và `survey.order-boundary-verified.v1` Outbox trong một commit.
-Migration `20261011041401_Phase9BoundaryVerification` thêm nguồn
-`SYSTEM_MANAGER` và `evidence_reference`. Evidence tại
-`docs/operations/be1-step4a-boundary-scope-report.md`.
-
-#### Phase 4B — Baseline Mapping appointment và readiness
+#### Phase 4A — Baseline appointment trước boundary
 
 Với Farm chưa có approved base map/confirmed inventory:
 
-- Tạo appointment có `Purpose = BaselineMapping`; manager đề xuất, owner confirm/reschedule và mọi version được giữ.
-- Readiness policy cho Baseline Mapping kiểm tra boundary/scope, appointment, active qualified assignment, drone/schedule/pre-flight và safety, nhưng không kiểm tra payment.
-- BE2 prepare/start phải truyền MissionPurpose và re-check decision ngay trước flight.
-- Sau flight, Step 6 publication trả confirmed active-pole count về Order; không cho client tự gửi count như authoritative result.
+1. Order phải ở `AwaitingBaselineAppointment`; boundary có thể `null`.
+2. Primary assigned Manager propose appointment `Purpose = BaselineMapping` với
+   start/end đủ cho chấm boundary, sinh/review route, pre-flight và mapping flight.
+3. TenantOwner confirm hoặc request reschedule bằng expected Order/appointment
+   version; không actor nào tự confirm thay Owner trong normal flow.
+4. Confirm transition Order
+   `AwaitingBaselineAppointment → AwaitingBoundaryCapture`, không sang
+   `BaselineReady`.
+5. Reschedule/cancel giữ revision/history và đóng capture/start gate cho window cũ.
+6. Authorization có thể được verify trước hoặc sau confirm, nhưng phải còn hiệu
+   lực trước khi session bắt đầu và trước flight start.
 
-Farm đã có current approved base map/inventory bỏ qua Phase 4B; handler phải chứng minh inventory source/version thay vì tạo Baseline Mapping giả.
+Farm mapped không tạo Baseline appointment giả; nó đi qua current boundary/scope
+verification rồi tới count/pricing/paid appointment.
 
-Checkpoint 2026-10-11: Phase 4B đạt `CodeComplete — AwaitingFinalTest` cho phía BE1.
-SystemManager có thể propose/re-propose lịch Baseline Mapping; TenantOwner confirm hoặc
-request-reschedule bằng expected Order/appointment version. Lịch cũ chuyển
-`Superseded`, giữ revision chain; authorization, audit và
-`survey.appointment-changed.v1` Outbox cùng nằm trong transaction serializable.
-Readiness đọc lại boundary/scope, appointment, assigned manager, Mission purpose và
-schedule, Drone, completed pre-flight/safety trực tiếp từ database; Baseline không
-đọc payment. Consumer BE2 prepare/start sẽ nối port và re-check theo contract ở Step
-5C, không được cache decision. Migration/evidence lần lượt tại
-`20261011080125_Phase9BaselineAppointmentReadiness` và
-`docs/operations/be1-step4b-baseline-appointment-readiness-report.md`.
+#### Phase 4B — Same-visit boundary capture, boundary approval và route gate
+
+Trong đúng confirmed Baseline appointment:
+
+1. Manager chọn operational Drone và gọi `StartBoundaryCaptureSession`; backend
+   re-check Order state, window, assignment, authorization và operation ID.
+2. Mobile gửi ordered GNSS samples theo từng đợt bằng session version. Server
+   deduplicate retry, giữ sequence/captured-at/accuracy và hỗ trợ reload/resume.
+3. Manager review preview polygon rồi finalize. Backend tự đóng ring, validate
+   SRID 4326, minimum distinct points, validity/non-self-intersection, area và
+   Farm ownership.
+4. `IBoundaryCaptureFinalizationUnitOfWork` commit finalized session, immutable
+   approved FarmBoundary version, audit và Outbox. Order vẫn
+   `AwaitingBoundaryCapture` vì chưa có route an toàn.
+5. BE1 gọi typed BE2 route-planning port bằng immutable boundary ID/version và
+   planning parameters; BE2 sinh/persist grid/waypoints trong safety inset.
+6. Manager review route overlay. Cross-module coordinator re-check mọi segment/
+   waypoint, boundary/capture/appointment version và transition Order
+   `AwaitingBoundaryCapture → BaselineReady` trong cùng commit với route approval.
+7. Boundary thay đổi hoặc appointment superseded làm route stale/superseded và
+   đóng readiness. Không client nào được gửi arbitrary waypoint để mở gate.
+8. BE2 prepare/start truyền MissionPurpose/route identity, re-check authoritative
+   readiness ngay trước flight; Baseline không yêu cầu payment.
+
+Boundary capture và automatic Baseline Mapping là hai hoạt động liên tiếp trong
+cùng field visit, không phải hai appointment hoặc hai chuyến đi tới Farm.
+
+Data model tối thiểu:
+
+- `BoundaryCaptureSession`: ID, Order/Farm/Appointment/Manager/Drone IDs, status,
+  started/finalized/aborted time, reason/evidence, operation identity và Version.
+- `BoundaryCaptureSample`: SessionId + unique sequence, longitude/latitude WGS84,
+  captured-at, optional horizontal accuracy, client operation ID/payload hash và
+  server received-at; finalized samples không update/delete.
+- SurveyOrder/reference projection: current capture-session ID, approved
+  FarmBoundaryVersionId, current BaselineRoutePlanId/version/status. Không copy
+  waypoint JSON vào BE1 làm một source of truth thứ hai.
+
+##### Evidence source cũ cần giữ nhưng không tính là hoàn tất amendment
+
+Checkpoint 2026-10-11 đã có direct
+`POST .../boundary-scope/verify`, appointment lifecycle và baseline readiness.
+Source này đang verify polygon trước appointment và confirm thẳng
+`BaselineReady`, nên chỉ được giữ làm mapped-Farm/correction compatibility và
+historical evidence tại `docs/operations/be1-step4a-boundary-scope-report.md`,
+`docs/operations/be1-step4b-baseline-appointment-readiness-report.md` cùng các
+migration đã phát hành. Không sửa migration cũ; thêm migration/feature mới cho
+appointment-first capture/route flow.
 
 #### Phase 4C — Confirmed pole count và per-pole price snapshot
 
@@ -1727,7 +1941,7 @@ Tạo use case riêng cho request/approve/reject/apply price adjustment và admi
 
 Tạo một application query/service duy nhất xây `SurveyOrderReadinessSnapshot` từ `MissionPurpose` và trạng thái hiện hành:
 
-1. Mọi purpose: written consent + flight permission verified/còn hiệu lực/đúng scope, approved boundary/scope, purpose appointment confirmed/còn hiệu lực, active qualified assignment, drone/schedule/pre-flight/safety hợp lệ.
+1. Mọi purpose tại thời điểm start: written consent + flight permission verified/còn hiệu lực/đúng scope, approved boundary/scope, purpose appointment confirmed/còn hiệu lực, active qualified assignment, drone/schedule/pre-flight/safety hợp lệ. Riêng unmapped Baseline cho phép appointment được confirm trước boundary; trước start phải có thêm route plan sinh từ đúng boundary version và mọi waypoint nằm trong safety-inset polygon.
 2. `BaselineMapping`: Order thật sự requires baseline và chưa có initial map trái policy; không yêu cầu count/price/payment.
 3. `PlantHealth`: current base map + confirmed pole count/price snapshot + sandbox payment đúng amount/currency và Confirmed.
 4. Không có pending scope/price adjustment, unsettled additional payment/refund, unapproved extra flight hoặc trạng thái order cấm purpose tương ứng.
@@ -1752,25 +1966,43 @@ database rồi gọi domain policy. Migration/evidence tại
 `20261012024731_Phase9CommercialAdjustmentReadiness` và
 `docs/operations/be1-step4e-commercial-readiness-report.md`.
 
-### 12.1. Boundary/scope và baseline decision
+### 12.1. Baseline appointment trước boundary
 
-- [x] Assigned SystemManager query Order/Farm/FarmBoundary/Zone scope.
-- [x] `VerifyBoundaryAndScope` nhận geometry/version, expected version và evidence/notes cần thiết.
-- [x] FarmBoundary dùng SRID 4326, valid polygon; Zone nằm trong boundary và không overlap trái policy.
-- [x] Derive `RequiresBaselineMapping` từ current published map + confirmed inventory, không từ client.
-- [ ] Detection/candidate ngoài hoặc nghi ngờ gần biên dùng `OutOfBoundary/NeedsReview`, không tự assign Farm.
+- [x] Source cũ đã có create/confirm/reschedule appointment purpose
+  `BaselineMapping`; giữ revision/audit foundation.
+- [ ] Cho propose/confirm khi `FarmBoundaryVersionId = null` và Order ở
+  `AwaitingBaselineAppointment`.
+- [ ] Confirm chuyển Order tới `AwaitingBoundaryCapture`; reschedule/cancel đóng
+  capture/route/start gate của appointment cũ.
+- [ ] Work queue/read model trả nullable boundary, current appointment ID/version
+  và `AWAITING_BOUNDARY_CAPTURE` wire token ổn định.
 
-### 12.2. Baseline appointment và confirmed pole-count price snapshot
+### 12.2. Same-visit boundary capture và automatic route gate
 
-- [x] Tạo/confirm/reschedule appointment có purpose `BaselineMapping` khi Order requires baseline.
-- [x] Baseline readiness không yêu cầu Payment nhưng vẫn yêu cầu boundary/scope, manager, drone/schedule/pre-flight/safety.
-- [ ] R2 remediation: Baseline và Plant Health đều yêu cầu written consent + flight permission hợp lệ; payment chỉ áp dụng Plant Health.
+- [x] Assigned SystemManager query được Order/Farm/current FarmBoundary/Zone scope.
+- [ ] Thêm `BoundaryCaptureSession` gắn confirmed Baseline appointment,
+  Manager, Drone, operation ID và ordered GNSS samples.
+- [ ] Sync samples retry/offline-safe; finalize validate/close polygon, lưu evidence
+  rồi mới approve immutable FarmBoundary version.
+- [ ] Direct `VerifyBoundaryAndScope` chỉ dành cho mapped-Farm/correction path và
+  từ chối unmapped flow cố bypass session.
+- [ ] Gọi BE2 sinh/duyệt `BaselineRoutePlan` từ đúng boundary version; mọi
+  waypoint/segment nằm trong safety inset và client không gửi arbitrary route.
+- [ ] Chỉ matching approved route mới transition `AwaitingBoundaryCapture →
+  BaselineReady`; boundary/appointment đổi làm route stale và đóng gate.
+- [ ] Detection/candidate ngoài hoặc gần biên dùng
+  `OutOfBoundary/NeedsReview`, không tự assign Farm.
+- [ ] Baseline và Plant Health đều yêu cầu written consent + flight permission
+  hợp lệ; payment chỉ áp dụng Plant Health.
+
+### 12.3. Confirmed pole-count và price snapshot
+
 - [x] Initial map publication hoặc authoritative mapped inventory cung cấp `ConfirmedSurveyPoleCount` + source version; producer publication thực tế tiếp tục ở Step 6C.
 - [x] Resolve effective service price và lưu PriceVersionId, PricePerPoleSnapshot, ConfirmedSurveyPoleCount, Currency, FinalPrice.
 - [x] Dùng duy nhất per-pole money policy; approximate area không tham gia công thức.
 - [x] Count/price snapshot bị khóa; catalogue/inventory thay đổi sau đó không ảnh hưởng Order nếu không có adjustment.
 
-### 12.3. Paid-service appointment lifecycle
+### 12.4. Paid-service appointment lifecycle
 
 - [x] SystemManager `ProposeAppointment` cho selected service với start < end sau confirmed count/price.
 - [x] TenantOwner `ConfirmAppointment` hoặc `RequestReschedule`.
@@ -1778,7 +2010,7 @@ database rồi gọi domain policy. Migration/evidence tại
 - [x] Chỉ appointment current + Confirmed + còn hiệu lực đúng MissionPurpose mới cho phép initiate payment; readiness tổng hợp thuộc 4E.
 - [ ] SystemAdmin support action nếu có phải có reason/audit và không thay actor trong normal flow.
 
-### 12.4. Payment lifecycle
+### 12.5. Payment lifecycle
 
 - [x] TenantOwner initiate payment theo exact current amount/currency.
 - [x] Tạo Payment `Pending/Processing`, provider reference và redirect/client token an toàn.
@@ -1790,7 +2022,7 @@ database rồi gọi domain policy. Migration/evidence tại
 - [x] TenantOwner không có command mark-confirmed.
 - [x] Không tạo/đòi payment riêng cho Baseline Mapping.
 
-### 12.5. Price adjustment
+### 12.6. Price adjustment
 
 - [x] Trước payment confirmed, policy đổi count/price sau snapshot phải explicit và giữ history; boundary/scope re-verification vẫn thuộc lifecycle riêng của 4A.
 - [x] Sau payment confirmed, mọi đổi confirmed pole count/price qua PriceAdjustment append-only.
@@ -1801,30 +2033,52 @@ database rồi gọi domain policy. Migration/evidence tại
 - [ ] Chênh tăng tạo additional sandbox payment; chênh giảm tạo refund; ledger liên kết adjustment/payment/refund và không silent repricing.
 - [ ] ExtraFlightRequest chỉ cho `InsufficientData`/`ApprovedScopeChange`, có evidence/approval/cost impact và readiness re-check.
 
-### 12.6. Purpose-aware readiness service/contract
+### 12.7. Purpose-aware readiness service/contract
 
 - [x] Tạo application service build `SurveyOrderReadinessSnapshot` từ MissionPurpose + database state hiện hành.
 - [x] Không persist `ReadyForOperations` từ payload; Order status thương mại chỉ đổi từ trusted payment/reconciliation và readiness vẫn re-check authoritative state.
 - [x] Expose internal query/port cho BE2 prepare/start flight.
-- [ ] R2 remediation: decision trả stable failures cho consent, flight permission, boundary, scope, appointment/purpose, count-price, payment/refund, manager, adjustment, extra-flight, eligibility và safety.
+- [ ] Decision trả stable failures cho consent, flight permission, appointment,
+  capture session, boundary/scope, route missing/stale/out-of-inset, count-price,
+  payment/refund, manager, adjustment, extra-flight, eligibility và safety.
 - [x] Re-check manager assignment/qualification thời điểm query.
 - Scenario missing payment/Baseline Mapping/paid-service đã chuyển xuống mục 27.2.
 
-### 12.7. API mục tiêu
+### 12.8. API mục tiêu
+
+`boundary-scope/verify` là compatibility/verification path cho Farm đã có
+boundary hoặc correction có evidence. Unmapped flow dùng nhóm
+`boundary-capture-sessions` API, không gửi polygon ngay sau approval.
+Các `baseline-route-plans` route là SurveyOrder-facing façade; BE1 authorize và
+điều phối Order/boundary, còn BE2 port sinh/persist/validate flight route.
 
 ```text
+GET  /api/system-manager/survey-orders?status=AWAITING_BASELINE_APPOINTMENT
+POST /api/system-manager/survey-orders/{orderId}/appointments  # purpose=BASELINE_MAPPING
+POST /api/tenant-owner/survey-orders/{orderId}/appointments/{appointmentId}/confirm
+POST /api/tenant-owner/survey-orders/{orderId}/appointments/{appointmentId}/request-reschedule
+
+PUT  /api/system-admin/survey-orders/{orderId}/capture-authorizations/{type}/verify
+PUT  /api/system-admin/survey-orders/{orderId}/capture-authorizations/{type}/revoke
+
+POST /api/system-manager/survey-orders/{orderId}/boundary-capture-sessions
+GET  /api/system-manager/survey-orders/{orderId}/boundary-capture-sessions/{sessionId}
+PUT  /api/system-manager/survey-orders/{orderId}/boundary-capture-sessions/{sessionId}/samples
+POST /api/system-manager/survey-orders/{orderId}/boundary-capture-sessions/{sessionId}/finalize
+POST /api/system-manager/survey-orders/{orderId}/boundary-capture-sessions/{sessionId}/abort
+POST /api/system-manager/survey-orders/{orderId}/baseline-route-plans/generate
+GET  /api/system-manager/survey-orders/{orderId}/baseline-route-plans/{routePlanId}
+POST /api/system-manager/survey-orders/{orderId}/baseline-route-plans/{routePlanId}/approve
+
 GET  /api/system-manager/survey-orders/{orderId}/boundary-scope
-POST /api/system-manager/survey-orders/{orderId}/boundary-scope/verify
-POST /api/system-manager/survey-orders/{orderId}/capture-authorizations/verify
-POST /api/system-manager/survey-orders/{orderId}/capture-authorizations/revoke
+POST /api/system-manager/survey-orders/{orderId}/boundary-scope/verify  # mapped/correction only
+
 POST /api/system-manager/survey-orders/{orderId}/pole-count/confirm
-POST /api/system-manager/survey-orders/{orderId}/appointments
+POST /api/system-manager/survey-orders/{orderId}/appointments  # purpose=PAID_SERVICE
 POST /api/system-manager/survey-orders/{orderId}/scope-adjustments
 POST /api/system-manager/survey-orders/{orderId}/extra-flights
 GET  /api/system-manager/survey-orders/{orderId}/readiness/baseline-mapping?missionId={missionId}
 
-POST /api/tenant-owner/survey-orders/{orderId}/appointments/{appointmentId}/confirm
-POST /api/tenant-owner/survey-orders/{orderId}/appointments/{appointmentId}/request-reschedule
 POST /api/tenant-owner/survey-orders/{orderId}/payments
 
 POST /api/integrations/payments/{provider}/callbacks
@@ -1835,13 +2089,37 @@ POST /api/system-admin/survey-orders/{orderId}/scope-adjustments/{adjustmentId}/
 POST /api/system-admin/survey-orders/{orderId}/extra-flights/{extraFlightId}/review
 ```
 
+Command contract tối thiểu cho flow mới:
+
+| Command | Input authoritative từ client | Server phải derive/re-check |
+|---|---|---|
+| Propose Baseline appointment | purpose, proposed start/end, expected Order/current appointment versions | Farm/assignment, `RequiresBaselineMapping`, boundary được phép null |
+| Confirm appointment | expected Order + appointment versions | Owner qua Order→Farm→Tenant; transition tới `AwaitingBoundaryCapture` |
+| Start capture session | appointmentId, droneId, operationId, expected Order version | current window, assignment, authorization, Drone eligibility |
+| Sync samples | operationId, expected session version, ordered sequence/lon/lat/capturedAt/accuracy | dedup, WGS84/range, session mutable/current |
+| Finalize capture | reason/evidence, expected Order/session/current boundary versions | close/validate polygon, ownership, immutable approved boundary |
+| Generate route | boundaryVersionId, droneId, altitude/speed/overlap/safety inset, operationId, expected Order version | current finalized session/boundary, Drone capability; BE2 sinh waypoint |
+| Approve route | expected Order + route versions, reason | route/boundary/session/window match, full segment containment |
+
+Client không gửi TenantId/ManagerId authoritative, derived state, arbitrary
+waypoint, payment amount/currency hoặc `IsReady`; server resolve từ token và current
+database state.
+Altitude/speed/overlap/safety inset là requested planning parameters, không phải
+quyền bỏ qua policy; server áp min/max, Drone capability, no-fly/range/pin và
+configured minimum safety inset trước khi BE2 sinh route.
+
 ### Tests Step 4
 
 Chưa viết/chạy trong Step 4. Toàn bộ backlog kiểm thử của Step 4 đã chuyển xuống mục 27.2.
 
 ### Definition of Done Step 4
 
-- Flow chạy từ consent/permission → boundary verification → free Baseline (nếu cần) → confirmed pole count/pricing → paid appointment/sandbox payment → ready for Plant Health.
+- Flow unmapped chạy từ consent/permission + Baseline appointment confirmation →
+  cùng field visit capture/approve boundary → generate/approve automatic route →
+  free Baseline → confirmed pole count/pricing → paid appointment/sandbox payment
+  → ready for Plant Health.
+- Không cần boundary để propose/confirm Baseline appointment; bắt buộc matching
+  boundary/route trước prepare/start và không phát sinh chuyến đi riêng để nhập boundary.
 - BE2 nhận authoritative readiness decision và failure reasons.
 - Không actor/client nào tự set payment/order ready.
 - Original count/price snapshot không đổi; mọi difference truy được adjustment → additional payment/refund; extra flight có approval/evidence.
@@ -1856,7 +2134,7 @@ Chưa viết/chạy trong Step 4. Toàn bộ backlog kiểm thử của Step 4 �
 | Phase | Mục tiêu | Đầu ra |
 |---|---|---|
 | 5A — Farm access | Khóa quyền owner/assigned manager | Không đọc/mutate chéo assignment hoặc tenant |
-| 5B — FarmBoundary/Zone verification | Chuẩn hóa và xác minh vùng khảo sát | Approved FarmBoundary/Zone hợp lệ trên PostGIS |
+| 5B — Boundary policy/Zone verification | Dùng boundary đã capture; quản lý correction, Zone và spatial policy | Approved boundary/Zone hợp lệ, không tạo lại unmapped happy path |
 | 5C — Operational context | Cấp context tối thiểu cho BE2 | Contract không lộ EF entity/secret |
 | 5D — Archive and history safety | Chặn archive khi còn dependency | Không mất map/result/provenance |
 
@@ -1868,9 +2146,12 @@ Chưa viết/chạy trong Step 4. Toàn bộ backlog kiểm thử của Step 4 �
 - TenantOwner chỉ đọc và gửi change request nếu use case yêu cầu; không được dùng manager command.
 - Trả `404` cho resource ngoài visibility và `403` khi resource visible nhưng actor thiếu action permission theo convention Step 0.
 
-#### Phase 5B — FarmBoundary, geometry và Zone verification
+#### Phase 5B — FarmBoundary policy, correction và Zone verification
 
-Tách từng use case theo hành động: verify/version FarmBoundary, update Farm operational detail, create Zone, update Zone, verify Zone và archive Zone/Farm.
+Unmapped operational boundary được tạo từ `BoundaryCaptureSession` ở Step 4.
+Step 5 không mở một đường direct polygon khác để thay thế flow đó. Tại đây chỉ
+tách use case cho mapped-Farm verification, audited boundary correction/version,
+update Farm operational detail, create/update/verify Zone và archive Zone/Farm.
 
 Mỗi handler cần:
 
@@ -1885,7 +2166,12 @@ Geometry phải được thiết kế để kiểm chứng trên PostgreSQL/Post
 
 #### Phase 5C — Contract operational context cho BE2
 
-Implement versioned port với read model tối thiểu: OrderId, FarmId, Plant Health service type, consent/flight-permission status+expiry, approved FarmBoundary/scope version, original/effective count-price references, adjustment/refund/extra-flight gate, purpose-aware readiness decision, baseline requirement, current base-map version và assignment summary.
+Implement versioned port với read model tối thiểu: OrderId, FarmId, Plant Health
+service type, consent/flight-permission status+expiry, Baseline appointment,
+BoundaryCaptureSession identity/status, approved FarmBoundary/scope version,
+BE2 BaselineRoutePlan identity/version/status, original/effective count-price
+references, adjustment/refund/extra-flight gate, purpose-aware readiness decision,
+baseline requirement, current base-map version và assignment summary.
 
 - Contract trả ID/value snapshot, không trả navigation property hoặc EF entity.
 - Plant/base-map references có version và stable ordering.
@@ -1903,7 +2189,7 @@ Archive query phải tổng hợp dependency từ active order, mission, current
 
 - [ ] Giữ Farm creation chỉ qua approval internal port.
 - [ ] Assigned SystemManager get/update Farm operational details theo policy.
-- [ ] Assigned SystemManager verify/version FarmBoundary với evidence/reason/audit.
+- [ ] Assigned SystemManager verify/version current FarmBoundary với evidence/reason/audit cho mapped/correction path; unmapped boundary chỉ từ finalized capture session.
 - [ ] Assigned SystemManager create/update/verify Zone và survey scope nếu workflow yêu cầu.
 - [ ] Geometry luôn SRID 4326, valid polygon, Zone within approved FarmBoundary và non-overlap.
 - [ ] Boundary exception query/classification hỗ trợ `OutOfBoundary/NeedsReview`; không cross-Farm auto-assignment.
@@ -1912,7 +2198,11 @@ Archive query phải tổng hợp dependency từ active order, mission, current
 
 ### 13.2. Work context cho BE2
 
-- [ ] Query Order operational context gồm OrderId, FarmId, service type, MissionPurpose, consent/permission status+expiry, RequiresBaselineMapping, current base-map reference, approved boundary/scope, original/effective count-price state, settlement/extra-flight gate và manager assignment summary.
+- [ ] Query Order operational context gồm OrderId, FarmId, service type,
+  MissionPurpose, consent/permission status+expiry, Baseline appointment,
+  capture-session ID/status, RequiresBaselineMapping, current base-map reference,
+  approved boundary/scope, route-plan ID/version/status, original/effective
+  count-price state, settlement/extra-flight gate và manager assignment summary.
 - [ ] Contract không trả secrets/payment payload hoặc EF entity.
 - [ ] BE2 không được tự suy readiness từ copy trạng thái; phải dùng Step 4 decision.
 - [ ] Plant reference/base-map query có version và stable ordering.
@@ -1924,6 +2214,8 @@ Chưa viết/chạy trong Step 5. Toàn bộ backlog kiểm thử của Step 5 �
 ### Definition of Done Step 5
 
 - SystemManager có đủ verified Farm/Zone/scope data để BE2 chuẩn bị Mission.
+- Context cho phép boundary `null` khi đang đặt lịch, nhưng prepare/start Baseline
+  bắt buộc finalized capture + approved boundary + matching approved route.
 - TenantOwner không có operational mutation path.
 - Phase 10 của BE2 có thể tích hợp mà không đọc DbContext BE1.
 
@@ -2339,7 +2631,10 @@ Chưa viết/chạy trong Step 9. Toàn bộ backlog kiểm thử của Step 9 �
 Tạo bảng actor → queue item → source state → action route:
 
 - SystemAdmin: submitted/under-review requests, manager eligibility exceptions, consent/permission exceptions, payment/refund mismatch/reconciliation, scope/extra-flight approval và failed publication/integration.
-- SystemManager: assigned orders chờ consent/permission, boundary/scope, Baseline/paid appointment, baseline-count review, boundary exceptions, findings/Disease Zones/guidance, plant-change reports và preliminary publication actions.
+- SystemManager: assigned orders chờ Baseline appointment, authorization,
+  boundary-capture session, route review, paid appointment, baseline-count review,
+  boundary exceptions, findings/Disease Zones/guidance, plant-change reports và
+  preliminary publication actions.
 - TenantOwner: requests, Baseline/paid appointment confirmation/reschedule, payment action, plant-change report status và newly published results.
 
 Mỗi queue item phải chỉ ra action tiếp theo và resource version; không trả deep link mà endpoint đích không re-authorize.
@@ -2376,7 +2671,10 @@ Step này được thực hiện tăng dần trong Steps 1–9, sau đó có gat
 ### 18.1. Work queues
 
 - [ ] SystemAdmin: request inbox, manager availability, payment reconciliation và operational exceptions.
-- [ ] SystemManager: assigned Orders, boundary/scope pending, purpose appointments, count confirmation, processing/Disease Zone/change-report review và publication actions.
+- [ ] SystemManager: assigned Orders theo
+  `AwaitingBaselineAppointment`/`AwaitingBoundaryCapture`, capture/route pending,
+  paid appointments, count confirmation, processing/Disease Zone/change-report
+  review và publication actions.
 - [ ] TenantOwner: requests, purpose appointments, payment/order/change-report status và published results.
 - [ ] Pagination/filter/sort ổn định và tenant/assignment scoped từ query layer.
 
@@ -2385,6 +2683,8 @@ Step này được thực hiện tăng dần trong Steps 1–9, sau đó có gat
 - [ ] Request acknowledgement/rejection/approval.
 - [ ] TenantOwner invitation.
 - [ ] Baseline/paid-service appointment proposed/reschedule/confirmed.
+- [ ] Boundary capture started/finalized/aborted và automatic route ready/rejected/
+  superseded để Manager biết action tiếp theo trong cùng appointment.
 - [ ] Payment action/state/reconciliation.
 - [ ] Review required.
 - [ ] Consent/permission, scope adjustment, additional payment/refund và extra-flight decision.
@@ -2396,7 +2696,8 @@ Step này được thực hiện tăng dần trong Steps 1–9, sau đó có gat
 
 - [ ] Approval/rejection.
 - [ ] Assignment/reassignment.
-- [ ] FarmBoundary/scope, confirmed-pole-count/PricePerPole snapshot và PriceAdjustment.
+- [ ] BoundaryCaptureSession/FarmBoundary/route-plan handoff, confirmed-pole-count/
+  PricePerPole snapshot và PriceAdjustment.
 - [ ] Appointment/payment/reconciliation.
 - [ ] AI correction, Disease Zone/sourced-guidance review, preliminary publication và offline sync conflict.
 - [ ] Plant lifecycle/base-map amendment.
@@ -2483,11 +2784,15 @@ Các lệnh chạy test và release gates chưa hoàn thành đã chuyển xuố
 | Submit New Farm/Existing Farm request | Không | Không | Không | Có, đúng tenant/farm |
 | Review/approve/reject request | Không | Có | Không | Không |
 | Quản lý manager/assignment | Không | Có | Không | Không |
-| Verify/revoke consent và flight permission | Không | Oversight/revoke | Có, assigned theo policy | Cung cấp/xem status thuộc own Farm |
-| Verify FarmBoundary/scope | Không | Support only | Có, assigned | Xem |
+| Verify/revoke consent và flight permission | Không | Có, evidence/version bắt buộc | Không; chỉ xem readiness status cần cho work | Cung cấp tài liệu/xem status thuộc own Farm |
+| Propose Baseline appointment khi boundary còn null | Không | Support only | Có, assigned | Không |
+| Confirm/request reschedule Baseline appointment | Không | Support only | Không | Có, own Order |
+| Start/sync/finalize BoundaryCaptureSession | Không | Oversight only | Có, assigned trong confirmed window | Không |
+| Generate/review/approve automatic Baseline route | Không | Oversight only | Có, assigned; waypoint do BE2 sinh | Xem lịch/trạng thái nếu product cần |
+| Verify FarmBoundary/scope cho mapped/correction path | Không | Support only | Có, assigned | Xem |
 | Confirm active pole count/price input | Không | Support only | Có, assigned | Xem |
-| Propose Baseline/paid appointment | Không | Support only | Có, assigned | Không |
-| Confirm/request reschedule | Không | Support only | Không | Có |
+| Propose paid appointment sau pricing | Không | Support only | Có, assigned | Không |
+| Confirm/request reschedule paid appointment | Không | Support only | Không | Có |
 | Initiate payment | Không | Support only | Không | Có |
 | Confirm/reconcile payment | Không | Reconcile có evidence | Không | Không |
 | Request/review scope adjustment và extra flight | Không | Review/approve | Request có evidence, assigned | Xem financial impact |
@@ -2504,10 +2809,18 @@ Architecture/API tests khóa ma trận này được viết ở Final Test Phase
 ## 21. Migration strategy theo step
 
 1. Step 0R: giữ migration lịch sử cho per-pole pricing, FarmBoundary, Disease Zone/recommendation và PlantInventoryChangeReport; không sửa migration Phase 5.
-2. Step R2: expand/backfill/compatibility migration cho no-severity target, sourced guidance, capture authorization, immutable original commercial snapshot, ScopeAdjustment, ExtraFlightRequest và mobile sync operation. Không drop legacy columns/tables trước inventory/retention/upgrade evidence.
+2. Step R2: expand/backfill/compatibility migration cho no-severity target, sourced
+   guidance, capture authorization, appointment-first Order states,
+   `BoundaryCaptureSession`/ordered samples, route-plan reference, immutable
+   original commercial snapshot, ScopeAdjustment, ExtraFlightRequest và mobile
+   sync operation. Không drop legacy columns/tables trước evidence.
 3. Step 1–2: chỉ migration nhỏ cho field/constraint thực sự thiếu; không gộp commercial/result changes.
 4. Step 3: migration/index cho approval idempotency, unique Request→Order và authorization-requirement creation nếu cần.
-5. Step 4: migration riêng cho purpose appointment/payment/refund/adjustment/history còn thiếu.
+5. Step 4: migration riêng cho `AwaitingBoundaryCapture`, session/sample
+   uniqueness/indexes, guarded state backfill, purpose appointment và
+   payment/refund/adjustment/history còn thiếu. Không backfill capture evidence hoặc
+   approve route giả cho Order cũ nếu không có dữ liệu xác thực; đưa row mơ hồ vào
+   explicit remediation state/report.
 6. Step 6: base-map/Plant/count association contract migration sau backfill/validation.
 7. Step 7: preliminary result/review/Disease Zone/sourced-guidance provenance association migration.
 8. Step 9–10: plant-change/mobile-sync và index/read-model optimization migration có benchmark chứng minh.
@@ -2531,22 +2844,28 @@ Chiến lược và toàn bộ backlog test chưa viết đã được chuyển 
 3. `surveys: enforce plant-health-only catalogue and versioned pricing`
 4. `surveys: add public and tenant-owner request intake`
 5. `surveys: add system-admin request review and rejection`
-6. `surveys: add atomic request approval orchestration`
-7. `farms: verify approved boundary and spatial exceptions`
-8. `surveys: add baseline appointment count and immutable per-pole price snapshot`
-9. `surveys: add paid appointment payment reconciliation and adjustments`
-10. `surveys: expose purpose-aware order readiness contract`
-11. `mapping: add farm base-map v2 count publication`
-12. `surveys: add consent permission scope adjustment refund and extra-flight gates`
-13. `surveys: add plant-health suspected finding disease-zone sourced-guidance preliminary publication`
-14. `plants: add owner inventory-change workflow profile timeline and follow-up queries`
-15. `surveys: add manager offline work-item checklist notes sync`
-16. `surveys: complete actor work queues notifications and audit`
-17. `cleanup: retire replaced routes and drained consumers`
-18. `tests: add deferred unit architecture contract integration and e2e suites`
-19. `release: run final migration security performance and e2e gates`
+6. `surveys: make approval initialize unmapped orders awaiting baseline appointment`
+7. `surveys: rebaseline baseline appointment confirmation to awaiting boundary capture`
+8. `surveys: enforce consent and flight-permission gates before field capture`
+9. `surveys: add same-visit boundary capture sessions and immutable finalization`
+10. `missions: add boundary-versioned automatic baseline route planning and approval`
+11. `surveys: atomically gate baseline-ready on finalized capture and approved route`
+12. `surveys: add confirmed count and immutable per-pole price snapshot`
+13. `surveys: add paid appointment payment reconciliation and adjustments`
+14. `surveys: expose purpose-aware operational context and readiness contract`
+15. `mapping: add farm base-map v3 count publication`
+16. `surveys: add scope-adjustment refund and extra-flight settlement gates`
+17. `surveys: add plant-health suspected finding disease-zone sourced-guidance preliminary publication`
+18. `plants: add owner inventory-change workflow profile timeline and follow-up queries`
+19. `surveys: add manager offline work-item checklist notes sync`
+20. `surveys: complete actor work queues notifications and audit`
+21. `cleanup: retire replaced routes and drained consumers`
+22. `tests: add deferred unit architecture contract integration and e2e suites`
+23. `release: run final migration security performance and e2e gates`
 
-Không gộp approval, payment, mapping và result publication vào một PR lớn. Mỗi PR code phải ghi rõ migration/rollback scope và test scenarios vào mục 27; test implementation được gom ở PR 17 và chỉ chạy full suite ở PR 18.
+Không gộp approval, capture, route planning, payment, mapping và result publication
+vào một PR lớn. Mỗi PR code phải ghi rõ migration/rollback scope và test scenarios
+vào mục 27; test implementation được gom ở PR 22 và chỉ chạy full suite ở PR 23.
 
 ## 24. Phân chia sprint đề xuất
 
@@ -2566,52 +2885,68 @@ Không gộp approval, payment, mapping và result publication vào một PR l�
 
 ### Sprint C — Phase 9 commercial gate
 
-9. Consent/permission, FarmBoundary/scope và Baseline appointment/readiness.
-10. Map/count handoff và PricePerPole snapshot.
-11. Paid appointment/sandbox payment/callback/reconciliation/scope-price adjustment/additional payment-refund/extra flight.
-12. Purpose-aware readiness contract và BE2 integration boundary.
+9. Rebaseline approval/Order state và Baseline appointment trước boundary.
+10. Consent/permission + same-visit BoundaryCaptureSession/finalization.
+11. BE2 automatic route generation/review/approval và atomic `BaselineReady` gate.
+12. Operational context/readiness V3 có appointment/capture/boundary/route versions.
+13. Map/count handoff và PricePerPole snapshot.
+14. Paid appointment/sandbox payment/callback/reconciliation/scope-price adjustment/additional payment-refund/extra flight.
 
 ### Sprint D — Phase 11 mapping V3
 
-13. V2 mapping contracts/consumer.
-14. Farm-level atomic publication.
-15. Persistent Plant identity/amendment rules.
-16. V1 drain metrics.
+15. V3 mapping contracts/consumer.
+16. Farm-level atomic publication.
+17. Persistent Plant identity/amendment rules.
+18. V1/V2 drain metrics.
 
 ### Sprint E — Phase 12 results
 
-17. Plant Health suspected finding/Disease Zone/sourced-guidance ingestion/review/preliminary publication.
-18. BE2 Mission completion coordination.
-19. Chứng minh Harvest Readiness disabled/not sellable trong MVP.
+19. Plant Health suspected finding/Disease Zone/sourced-guidance ingestion/review/preliminary publication.
+20. BE2 Mission completion coordination.
+21. Chứng minh Harvest Readiness disabled/not sellable trong MVP.
 
 ### Sprint F — Phase 13–15 product completion
 
-20. Owner published-only portal queries.
-21. Owner plant-change workflow, profile/history/follow-up.
-22. Work queues/notification/audit và Manager offline sync completion.
-23. Residual cleanup và release runbook.
+22. Owner published-only portal queries.
+23. Owner plant-change workflow, profile/history/follow-up.
+24. Work queues/notification/audit và Manager offline sync completion.
+25. Residual cleanup và release runbook.
 
 ### Sprint G — Final Test Phase
 
-24. Viết toàn bộ unit/architecture/contract/integration/migration/E2E tests còn thiếu theo mục 27.
-25. Chạy test một lần theo thứ tự release; sửa lỗi và chạy lại full release suite cuối cùng.
-26. Chốt security/performance evidence và completion report.
+26. Viết toàn bộ unit/architecture/contract/integration/migration/E2E tests còn thiếu theo mục 27.
+27. Chạy test một lần theo thứ tự release; sửa lỗi và chạy lại full release suite cuối cùng.
+28. Chốt security/performance evidence và completion report.
 
 ## 25. Công việc nên bắt đầu ngay
 
 Step 0R–4 có evidence baseline cũ nhưng đang `RebaselineRequired`. Thứ tự thực thi ngay:
 
-1. R2-A: freeze Harvest Readiness và hoàn tất artifact inventory.
-2. Rebaseline Phase 6R: target domain/contract/migration seams không severity, dùng sourced guidance và preliminary semantics.
-3. Rebaseline Phase 7: Plant Health-only catalogue/master data/request guards.
-4. Rebaseline Phase 8: approval tạo pending consent/permission requirement và compatible-order policy đúng.
-5. Rebaseline Phase 9: consent/permission, immutable original snapshot, adjustment settlement/refund, extra flight và readiness.
-6. Chạy R2 integration gate; cập nhật R2/6R/7/8/9 thành `CodeComplete — AwaitingFinalTest` khi có đủ code/migration/OpenAPI/evidence.
-7. Bắt đầu Step 5: nối BE2 prepare/start vào authoritative readiness port và bắt buộc truyền MissionPurpose/re-check ngay trước flight; không cache snapshot.
-8. Nối producer initial-map publication ở Step 6C vào
+1. Sửa `SurveyOrderStatus`/transition/migration và approval factory: unmapped →
+   `AwaitingBaselineAppointment`; mapped → `PendingBoundaryVerification`.
+2. Sửa appointment handlers/read models/OpenAPI: Baseline propose/confirm không
+   cần boundary; confirm → `AwaitingBoundaryCapture`.
+3. Giữ SystemAdmin verify/revoke authorization API, bổ sung assigned-manager read
+   status và bắt buộc consent/flight permission còn hiệu lực trước session start.
+4. Implement `BoundaryCaptureSession`, ordered/offline GNSS sample sync,
+   finalize/abort và atomic FarmBoundary approval; giữ direct polygon endpoint chỉ
+   cho mapped/correction path.
+5. Khóa typed port với BE2 và implement automatic `BaselineRoutePlan` generation,
+   review/approval, safety-inset containment và atomic Order `BaselineReady` gate.
+6. Mở rộng `SurveyOrderOperationalContextV3`/readiness bằng appointment,
+   capture-session, boundary và route identities/versions; prepare/start re-check
+   route stale/missing/out-of-inset.
+7. Hoàn tất các R2 còn lại: Plant Health-only/no severity,
+   immutable original snapshot, adjustment settlement/refund và extra flight.
+8. Chạy R2 integration gate; cập nhật R2/6R/7/8/9 thành
+   `CodeComplete — AwaitingFinalTest` khi đủ code/migration/OpenAPI/evidence.
+9. Nối BE2 prepare/start vào authoritative readiness port và bắt buộc truyền
+   MissionPurpose + route identity/re-check ngay trước flight; không cache snapshot.
+10. Nối producer initial-map publication ở Step 6C vào
    `SurveyOrder.RecordBaselinePublication`; không nhận authoritative count từ client.
-9. Không bắt đầu paid Plant Health mission/result flow trước khi consent/permission → boundary → baseline →
-   count → price → appointment/payment dependency đã hoàn chỉnh về code và
+11. Không bắt đầu paid Plant Health mission/result flow trước khi Baseline
+   appointment → consent/permission → same-visit capture boundary → approved route
+   → Baseline → map/count → price → paid appointment/payment đã hoàn chỉnh về code và
    contract; integration test xác nhận ở Final Test Phase.
 
 Trong Step 4 chỉ build/compile, cập nhật migration/OpenAPI/evidence và bổ sung
@@ -2624,7 +2959,14 @@ Chỉ đánh dấu kế hoạch `Done` khi:
 - [ ] UC00–UC12 trong `BE1-Use-Case-Specification.md` đạt DoD tương ứng.
 - [ ] Ba request kinds và flow chung chạy end-to-end.
 - [ ] Không có public/tenant path tạo trực tiếp Tenant/Farm/Mission/Drone.
-- [ ] Purpose-aware gate không thể bypass: mọi flight cần consent/permission + boundary/appointment/manager/safety; paid Plant Health cần thêm count-price/payment.
+- [ ] Unmapped Order khởi tạo `AwaitingBaselineAppointment`; confirm lịch khi
+  boundary còn null chuyển `AwaitingBoundaryCapture`, không sang thẳng ready.
+- [ ] Trong một confirmed visit, Manager sync GNSS corners, finalize approved
+  boundary, review BE2-generated in-boundary route rồi mới start Baseline; không
+  cần chuyến đi riêng chỉ để nhập boundary.
+- [ ] Purpose-aware gate không thể bypass: mọi flight cần consent/permission +
+  appointment/boundary/manager/safety; Baseline cần matching approved route, paid
+  Plant Health cần thêm count-price/payment.
 - [ ] Initial Farm bắt buộc có Baseline Mapping; repeat survey không rebuild map.
 - [ ] Persistent Plant IDs và same-service follow-up được chứng minh.
 - [ ] Plant Health suspected findings, Disease Zones và sourced guidance đều human-reviewed/published preliminary, không severity/diagnosis và giữ full provenance.
@@ -2711,10 +3053,12 @@ Không viết lại test lịch sử 0R; bổ sung R2 tests chứng minh target 
 - [ ] Chèn lỗi sau idempotency claim/Tenant/Farm/assignment/invitation/outbox phải rollback request Approved và mọi resource trước đó.
 - [ ] Manager invalid/unavailable/expired qualification bị reject.
 - [ ] `RequiresBaselineMapping` đúng với current published Farm base map.
+- [ ] Approval tạo unmapped Order ở `AwaitingBaselineAppointment`; mapped Order ở
+  `PendingBoundaryVerification`; retry snapshot trả đúng state tương ứng.
 - [ ] HTTP authorization/response đúng cho approval endpoint.
 - [ ] Approval tạo pending capture-authorization requirement nhưng không mở flight gate.
 
-#### Step 4 — Boundary, pricing, payment và readiness
+#### Step 4 — Baseline appointment, boundary capture/route, pricing, payment và readiness
 
 - [ ] Verify/revoke written consent và flight permission có evidence/version/audit; missing/expired/revoked/wrong-scope đóng cả Baseline và Plant Health gate.
 - [ ] Assigned/unassigned/expired manager verify boundary/scope và confirm count allow-deny.
@@ -2727,7 +3071,27 @@ Không viết lại test lịch sử 0R; bổ sung R2 tests chứng minh target 
 - [ ] Giá catalogue hoặc inventory đổi sau confirmation không silent-recalculate immutable original Order snapshot.
 - [ ] Stale expected Order/appointment version và concurrent Baseline proposal chỉ một current appointment thắng.
 - [ ] TenantOwner khác Tenant bị từ chối confirm/reschedule; reschedule mở lại baseline gate và re-proposal giữ nguyên revision cũ.
-- [ ] Baseline readiness yêu cầu Mission liên kết đúng purpose/window, Drone available, manager active/available/qualified và completed safe pre-flight nhưng không yêu cầu Payment.
+- [ ] Propose/confirm Baseline appointment pass khi boundary null; confirm transition
+  đúng `AwaitingBaselineAppointment → AwaitingBoundaryCapture`, không
+  `BaselineReady`.
+- [ ] Start capture ngoài confirmed window, wrong appointment/Manager/Drone,
+  missing/revoked authorization hoặc duplicate operation ID bị xử lý đúng.
+- [ ] Offline sample retry không đảo/nhân đôi sequence; stale session version trả
+  conflict; reload trả latest samples/version.
+- [ ] Finalize reject ít điểm, duplicate-only, self-intersection, invalid SRID,
+  cross-Farm hoặc area policy violation; success lưu immutable session evidence và
+  approved FarmBoundary cùng transaction.
+- [ ] Direct `boundary-scope/verify` từ unmapped Order bị reject; mapped/correction
+  path vẫn hoạt động và có audit/version guard.
+- [ ] Route planner chỉ nhận server-owned boundary version; arbitrary client
+  waypoint bị reject; mọi waypoint/segment nằm trong safety inset.
+- [ ] Route stale/superseded khi boundary hoặc appointment đổi; concurrent route
+  approval chỉ một transition Order tới `BaselineReady` thắng.
+- [ ] Failure giữa route approval và Order transition rollback cả hai; không có
+  route Approved nhưng Order chưa ready hoặc ngược lại.
+- [ ] Baseline readiness yêu cầu finalized capture, matching approved route,
+  Mission đúng purpose/window, Drone available, manager active/qualified và safe
+  pre-flight nhưng không yêu cầu Payment.
 - [ ] Manager/appointment/Mission/Drone/pre-flight đổi sau lần đọc readiness phải bị phát hiện khi BE2 re-check trước flight.
 - [ ] Decimal precision/rounding chính xác; FinalPrice bằng `ConfirmedSurveyPoleCount × PricePerPoleSnapshot`.
 - [ ] Catalogue price change không đổi snapshot.
@@ -2749,7 +3113,7 @@ Không viết lại test lịch sử 0R; bổ sung R2 tests chứng minh target 
 - [ ] Direct readiness/handler invocation không bypass rule.
 - [ ] Baseline không payment vẫn pass nhưng thiếu consent/permission phải fail; Plant Health thiếu payment phải fail; Harvest Readiness luôn disabled trong MVP.
 - [ ] Mỗi readiness failure code có ít nhất một test; state đổi sau khi snapshot được đọc phải được re-check.
-- [ ] Concurrent boundary/count/appointment/payment mutations trả conflict đúng.
+- [ ] Concurrent appointment/capture/boundary/route/count/payment mutations trả conflict đúng.
 
 #### Step 5 — Farm/Zone operational verification
 
@@ -2759,6 +3123,8 @@ Không viết lại test lịch sử 0R; bổ sung R2 tests chứng minh target 
 - [ ] Outside/near-boundary points không tự gán Plant/Farm; correction cần manager decision và audit.
 - [ ] Archive không làm mất history/provenance.
 - [ ] Contract tests producer/consumer với BE2 prepare/start Mission pass.
+- [ ] Operational context cho phép boundary/route null ở appointment stage nhưng
+  bắt buộc capture/boundary/route identities khớp trước Baseline prepare/start.
 
 #### Step 6 — Farm base map và persistent Plant identity
 
@@ -2830,17 +3196,27 @@ Architecture tests:
 - [ ] BE2/module khác không truy cập repository/entity nội bộ của Surveys/Farms/Plants.
 - [ ] Không còn production dependency FieldTasks/Harvests/FarmMembership legacy.
 - [ ] TenantOwner không có Mission/Drone/raw-AI mutation routes.
+- [ ] Unmapped Order không thể dùng direct boundary verify hoặc generic Mission/
+  route mutation để bypass appointment → capture → generated-route gates.
+- [ ] Surveys không sở hữu BE2 route implementation/entity; chỉ dùng typed
+  contract/coordinator và không trả EF entity chéo module.
 - [ ] API actor matrix ở mục 20 được khóa bằng authorization tests.
 
 Contract tests:
 
 - [ ] Golden JSON V1/V2/V3 theo drain policy.
-- [ ] BE1↔BE2 purpose-aware readiness gồm consent/permission, base map/count, boundary exception, Plant Health V4/Disease Zone/guidance và preliminary completion events.
+- [ ] BE1↔BE2 purpose-aware readiness gồm appointment/capture-session/boundary/
+  route identities+versions, consent/permission, base map/count, boundary exception,
+  Plant Health V4/Disease Zone/guidance và preliminary completion events.
 - [ ] Payment provider callback signature/dedup contract.
 
 Migration/integration tests trên PostgreSQL/PostGIS thật:
 
 - [ ] Unique/concurrency/composite FK/PostGIS constraints.
+- [ ] Fresh schema có `AwaitingBoundaryCapture`, capture-session/sample constraints
+  và route reference; mapped/unmapped Order factory persist đúng initial state.
+- [ ] Upgrade không giả lập capture evidence/approved route cho legacy row; ambiguous
+  state được report/remediate rõ và rollback/roll-forward có hướng dẫn.
 - [ ] Approval/map/result atomic rollback.
 - [ ] Callback/event Inbox/Outbox idempotency.
 - [ ] Fresh database migration từ đầu.
@@ -2856,6 +3232,7 @@ Mỗi E2E scenario phải có Arrange, actor actions, expected state sau từng 
 Các file E2E cần tạo/cập nhật:
 
 - [ ] `backend/tests/AgriDrone.IntegrationTests/E2E/NewCustomerSurveyFlowTests.cs`.
+- [ ] `backend/tests/AgriDrone.IntegrationTests/E2E/BaselineBoundaryCaptureRouteFlowTests.cs`.
 - [ ] `backend/tests/AgriDrone.IntegrationTests/E2E/ExistingTenantNewFarmSurveyFlowTests.cs`.
 - [ ] `backend/tests/AgriDrone.IntegrationTests/E2E/RepeatPlantHealthSurveyFlowTests.cs`.
 - [ ] `backend/tests/AgriDrone.IntegrationTests/E2E/HarvestReadinessDisabledTests.cs`.
@@ -2866,7 +3243,14 @@ Các file E2E cần tạo/cập nhật:
 
 Không gom các flow vào một file `SurveyTests.cs`.
 
-- [ ] E2E-01 NewCustomer: Plant Health request → approval atomic → invitation → written consent/flight permission → boundary/free Baseline → map/Plant/count → per-pole pricing/sandbox payment → Plant Health → review → preliminary result/Disease Zone/sourced guidance → owner portal/change report.
+- [ ] E2E-01 NewCustomer: Plant Health request → atomic approval/assignment →
+  unmapped Order `AwaitingBaselineAppointment` → Manager propose + Owner confirm
+  khi boundary null → written consent/flight permission → trong cùng appointment
+  sync GNSS corners/finalize approved boundary → BE2 sinh + Manager approve
+  safety-inset route → free Baseline → map/Plant/count → per-pole pricing → paid
+  appointment/sandbox payment → Plant Health → review → preliminary result/
+  Disease Zone/sourced guidance → owner portal/change report. Assert không có
+  appointment/chuyến đi thứ hai chỉ để nhập boundary.
 - [ ] E2E-02 ExistingTenantNewFarm: không tạo Tenant/User/Owner dư, tạo đúng Farm/Order/assignment rồi chạy flow chuẩn.
 - [ ] E2E-03 Repeat Plant Health: không rebuild base map, reuse Plant IDs, previous comparison là published Plant Health gần nhất.
 - [ ] E2E-04 MVP scope: Harvest Readiness không list/request/order/pay/process/publish được và không ảnh hưởng MVP DoD.
@@ -2881,7 +3265,9 @@ Không gom các flow vào một file `SurveyTests.cs`.
 - [ ] RQ2 evidence: per-class precision/recall/F1 và macro-F1 (pilot target `≥ 0.70`) cho đúng 2–3 team-labelled classes; proposed vs standard detector trên cùng held-out split.
 - [ ] Dataset: 70/20/10 split theo plot/plant/session/original capture sequence, augmentation Train-only, ba seeds cùng split/hardware, versioned dataset/annotation/scripts/logs.
 - [ ] Claim boundary: metrics chỉ đo agreement với team labels; report uncertainty/confounders/single-orchard limitation và không có severity metric/expert diagnosis claim.
-- [ ] Flight safety evidence: written consent, flight legality/permission, pre-flight checklist và failsafe references đều present/còn hiệu lực trước capture; revoke/expiry fail closed.
+- [ ] Flight safety evidence: written consent, flight legality/permission và field
+  safety evidence còn hiệu lực trước boundary capture có cất cánh/hover; full
+  pre-flight/failsafe pass trước automatic Baseline start; revoke/expiry fail closed.
 
 Không mock domain authorization/readiness/publication trong E2E happy/failure gates.
 

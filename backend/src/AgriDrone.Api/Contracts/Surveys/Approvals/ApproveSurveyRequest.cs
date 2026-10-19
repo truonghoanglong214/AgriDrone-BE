@@ -30,4 +30,6 @@ public sealed record ApproveSurveyRequestApiResponse(
     Guid? OwnerInvitationId,
     bool RequiresBaselineMapping,
     Guid? PreviousCompatibleOrderId,
+    string? PreviousOrderCompatibilityPolicyVersion,
+    string? PreviousOrderCompatibilityReason,
     DateTimeOffset ApprovedAt);

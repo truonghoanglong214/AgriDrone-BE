@@ -12,6 +12,12 @@ internal sealed class SubmitNewCustomerSurveyRequestCommandValidator
             .Must(value => value != default)
             .WithMessage("A valid server-derived caller scope and idempotency key are required.");
         RuleFor(command => command.SurveyServiceId).NotEmpty();
+        RuleFor(command => command.TenantCode)
+            .NotEmpty()
+            .MaximumLength(50);
+        RuleFor(command => command.TenantName)
+            .NotEmpty()
+            .MaximumLength(150);
         RuleFor(command => command.ApplicantName)
             .NotEmpty()
             .MaximumLength(150);

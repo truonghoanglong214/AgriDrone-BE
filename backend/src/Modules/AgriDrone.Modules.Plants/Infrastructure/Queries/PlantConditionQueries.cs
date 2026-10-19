@@ -23,7 +23,11 @@ internal sealed class PlantConditionQueries(
                 condition.ScientificName,
                 condition.ConditionType,
                 condition.Description,
-                condition.RevisionNumber))
+                condition.RevisionNumber,
+                condition.PlantHealthLabelKind,
+                condition.DatasetVersion,
+                condition.AnnotationRuleVersion,
+                condition.TeamLabelLimitation))
             .ToListAsync(cancellationToken);
     }
 }

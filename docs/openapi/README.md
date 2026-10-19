@@ -54,3 +54,23 @@ R2 (2026-10-15) khóa public catalogue và paid-readiness purpose chỉ còn
 của API Development đang chạy với startup migration/core-master-data validation
 tạm tắt bằng environment override; giá trị mặc định của ứng dụng vẫn bật các
 startup gate này.
+
+R2 Step 1E (2026-10-17) tái sinh snapshot từ runtime sau Plant Health master-data
+cutover. `GET /api/catalog/plant-health` trả tập team-labelled class và sourced
+guidance không có severity; các route quản trị guidance nằm dưới
+`/api/system-admin/plant-health/guidance`. Route `/api/catalog/health-levels`
+không còn trong snapshot. Legacy health-level/treatment/Harvest Readiness schema
+chỉ còn phục vụ compatibility và không được đăng ký làm target HTTP runtime.
+
+R2 Step 2 (2026-10-18) nâng Survey Request checklist lên
+`survey-request-review.v5`. Contract tách `consent-feasibility` và
+`flight-permission-feasibility`, đồng thời khẳng định đây không phải consent/
+permission đã verified. Admin inbox không còn `applicantName`; contact PII chỉ
+được trả tại SystemAdmin detail. Snapshot hiện hành là contract tổng hợp nên có
+thể chứa route approve của Step 3 dù route đó không thuộc Step 2.
+
+R2 Step 3 (2026-10-18) tái sinh snapshot sau khi approval response bổ sung
+`previousOrderCompatibilityPolicyVersion` và
+`previousOrderCompatibilityReason`. Hai field này giải thích vì sao
+`previousCompatibleOrderId` được chọn hoặc bị để null theo policy kiểm tra cùng
+base-map/Plant identity và cùng label-dataset/annotation-rule semantics.

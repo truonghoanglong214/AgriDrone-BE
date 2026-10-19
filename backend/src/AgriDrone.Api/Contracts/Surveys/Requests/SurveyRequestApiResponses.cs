@@ -5,6 +5,8 @@ namespace AgriDrone.Api.Contracts.Surveys.Requests;
 public sealed record SurveyRequestAcknowledgementApiResponse(
     Guid Id,
     string RequestNumber,
+    string? TenantCode,
+    string? TenantName,
     string Kind,
     string Status,
     DateTimeOffset CreatedAt);
@@ -17,8 +19,9 @@ public sealed record SurveyRequestInboxItemApiResponse(
     Guid SurveyServiceId,
     string SurveyServiceCode,
     Guid? TenantId,
+    string? TenantCode,
+    string? TenantName,
     Guid? FarmId,
-    string ApplicantName,
     string FarmName,
     decimal ApproximateAreaHa,
     int? EstimatedPoleCount,
@@ -34,6 +37,8 @@ public sealed record SurveyRequestDetailApiResponse(
     Guid? TenantId,
     Guid? FarmId,
     Guid? RequestedByUserId,
+    string? TenantCode,
+    string? TenantName,
     Guid SurveyServiceId,
     string SurveyServiceCode,
     string SurveyServiceName,

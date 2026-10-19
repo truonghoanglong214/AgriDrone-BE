@@ -1,5 +1,9 @@
 # BE1 Step 1E — Business master data report
 
+> Superseded for the target MVP flow by
+> `be1-step1e-plant-health-rebaseline-report.md` (2026-10-17). This document is
+> retained as evidence for the legacy severity/Harvest Readiness baseline only.
+
 - Date: 2026-10-09
 - Scope: disease/severity/recommendation and Harvest Readiness criteria versioning
 - Status: **CodeComplete — AwaitingFinalTest**

@@ -697,13 +697,222 @@
         }
       }
     },
+    "/api/missions/{missionId}/farms/{farmId}/media/upload-sessions": {
+      "post": {
+        "tags": [
+          "MissionMedia"
+        ],
+        "summary": "Create or renew a direct-to-storage upload session for an assigned manager.",
+        "description": "Tạo hoặc lấy lại phiên upload trực tiếp lên storage bằng OperationId. CapturedAt là tùy chọn; nếu gửi phải là UTC trong khoảng bay. Client dùng UploadUri được trả về để gửi file, sau đó gọi complete; ExpectedMissionVersion kiểm soát thay đổi đồng thời.",
+        "parameters": [
+          {
+            "name": "farmId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "missionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateMissionMediaUploadSessionRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateMissionMediaUploadSessionRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateMissionMediaUploadSessionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/missions/{missionId}/farms/{farmId}/media/multipart-upload-sessions": {
+      "post": {
+        "tags": [
+          "MissionMedia"
+        ],
+        "summary": "Create or resume a direct-to-storage multipart upload.",
+        "description": "Tạo hoặc tiếp tục phiên multipart cho file lớn. CapturedAt là tùy chọn. Response cho biết kích thước part và các part đã upload để client tiếp tục sau khi mất kết nối.",
+        "parameters": [
+          {
+            "name": "farmId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "missionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateMissionMediaUploadSessionRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateMissionMediaUploadSessionRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateMissionMediaUploadSessionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/missions/{missionId}/farms/{farmId}/media/upload-sessions/{uploadSessionId}/parts/{partNumber}/url": {
+      "get": {
+        "tags": [
+          "MissionMedia"
+        ],
+        "summary": "Issue a short-lived URL for one multipart part.",
+        "description": "Cấp URL có thời hạn cho một part của upload session thuộc đúng mission. Client gửi dữ liệu part trực tiếp tới storage.",
+        "parameters": [
+          {
+            "name": "farmId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "missionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "uploadSessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "partNumber",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/missions/{missionId}/farms/{farmId}/media/upload-sessions/{uploadSessionId}/complete": {
+      "post": {
+        "tags": [
+          "MissionMedia"
+        ],
+        "summary": "Verify a directly uploaded object and attach it to the mission.",
+        "description": "Kiểm tra object đã upload và hoàn tất media asset cho mission. Có thể gửi capturedAt UTC trong query khi complete, hoặc để trống để xử lý thời gian ảnh ở bước khác. Gọi lại phiên đã hoàn tất trả kết quả dùng lại thay vì tạo media trùng.",
+        "parameters": [
+          {
+            "name": "farmId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "missionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "uploadSessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "capturedAt",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
     "/api/missions/{missionId}/farms/{farmId}/media": {
       "post": {
         "tags": [
           "MissionMedia"
         ],
         "summary": "Upload một hoặc nhiều ảnh/video trực tiếp cho Mission.",
-        "description": "Gửi 1–20 file trong trường files. JPEG/PNG tối đa 50 MiB mỗi file;\r\nMP4/MOV tối đa 5 GiB. Tổng dữ liệu file tối đa 5 GiB mỗi request.\r\nBackend tính SHA-256, upload MinIO và hoàn tất media.\r\nKhông cần gửi metadata, operationId hay version. Mission phải đã kết thúc\r\nchuyến bay. Gửi lại cùng nội dung trong cùng Mission trả media đã hoàn tất.\r\nTelemetry và finalize upload được thực hiện qua API riêng.\r\nXử lý tuần tự; khi một file lỗi, dừng và đánh dấu các file còn lại NotAttempted.\r\nFile đã Completed được giữ lại. HTTP 200 nếu tất cả thành công, 207 nếu\r\ncó lỗi. Response chứa kết quả theo index (bắt đầu từ 0) và tên từng file.",
+        "description": "Gửi file nhỏ trong trường files, tối đa 50 MiB tổng request.\r\nFile lớn và video sử dụng upload-sessions để truyền trực tiếp tới storage.\r\nBackend tính SHA-256, upload MinIO và hoàn tất media.\r\nCapturedAt tùy chọn; nếu gửi thì cần một giá trị UTC cho mỗi file, đúng thứ tự Files. Mission phải đã kết thúc\r\nchuyến bay. Gửi lại cùng nội dung trong cùng Mission trả media đã hoàn tất.\r\nTelemetry và finalize upload được thực hiện qua API riêng.\r\nXử lý tuần tự; khi một file lỗi, dừng và đánh dấu các file còn lại NotAttempted.\r\nFile đã Completed được giữ lại. HTTP 200 nếu tất cả thành công, 207 nếu\r\ncó lỗi. Response chứa kết quả theo index (bắt đầu từ 0) và tên từng file.",
         "parameters": [
           {
             "name": "farmId",
@@ -741,11 +950,22 @@
                       "type": "string",
                       "format": "binary"
                     }
+                  },
+                  "CapturedAt": {
+                    "maxItems": 20,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
                   }
                 }
               },
               "encoding": {
                 "Files": {
+                  "style": "form"
+                },
+                "CapturedAt": {
                   "style": "form"
                 }
               }
@@ -818,7 +1038,7 @@
           "MissionMedia"
         ],
         "summary": "Lấy danh sách media đã hoàn tất của Mission.",
-        "description": "Yêu cầu FarmManage. Phân trang tối đa 100 phần tử, lọc MediaType/MediaRole.\r\nChỉ trả media Active thuộc đúng tenant, farm và mission; không trả storage URI.\r\nMission tồn tại chưa có media trả trang rỗng; mission không tồn tại trả 404.",
+        "description": "Yêu cầu SystemManager đang được phân công Farm. Phân trang tối đa 100 phần tử, lọc MediaType/MediaRole.\r\nChỉ trả media Active thuộc đúng tenant, farm và mission; không trả storage URI.\r\nMission tồn tại chưa có media trả trang rỗng; mission không tồn tại trả 404.",
         "parameters": [
           {
             "name": "farmId",
@@ -899,7 +1119,7 @@
           "MissionMedia"
         ],
         "summary": "Lấy chi tiết media của Mission.",
-        "description": "Yêu cầu FarmManage. Media phải Active và liên kết với đúng mission/farm/tenant.\r\nTrả metadata, checksum và thông tin capture; không trả storage URI nội bộ.",
+        "description": "Yêu cầu SystemManager đang được phân công Farm. Media phải Active và liên kết với đúng mission/farm/tenant.\r\nTrả metadata, checksum và thông tin capture; không trả storage URI nội bộ.",
         "parameters": [
           {
             "name": "farmId",
@@ -959,7 +1179,7 @@
           "MissionMedia"
         ],
         "summary": "Cấp link xem/tải media có hiệu lực 5 phút.",
-        "description": "Kiểm tra FarmManage, liên kết media và object trước khi cấp presigned GET URL.\r\nKhông cache response. Link đã cấp còn dùng được tới khi hết hạn.",
+        "description": "Kiểm tra quyền SystemManager trên Farm, liên kết media và object trước khi cấp presigned GET URL.\r\nKhông cache response. Link đã cấp còn dùng được tới khi hết hạn.",
         "parameters": [
           {
             "name": "farmId",
@@ -1009,6 +1229,92 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/missions/{missionId}/farms/{farmId}/process-metashape": {
+      "post": {
+        "tags": [
+          "MissionOrthophoto"
+        ],
+        "summary": "Kích hoạt gửi ảnh đã gắn GPS sang Agisoft Metashape Pro để ghép bản đồ (bước riêng biệt do người dùng chủ động gọi).",
+        "description": "Cấu hình tối ưu cho camera GoPro 5 (Equidistant Fisheye):\r\n- Camera type: equidistant_fisheye\r\n- Align Accuracy: medium\r\n- Generic preselection: true\r\n- Build Model: Height Field (Tie points)\r\n- Build Orthomosaic: WGS 84 / EPSG:4326 (Mesh)\r\n- Xuất GeoTIFF chuẩn LZW và ảnh JPEG phẳng chất lượng 100%.",
+        "parameters": [
+          {
+            "name": "farmId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "missionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProcessMetashapeRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProcessMetashapeRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProcessMetashapeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/missions/{missionId}/farms/{farmId}/orthophoto-status": {
+      "get": {
+        "tags": [
+          "MissionOrthophoto"
+        ],
+        "summary": "Kiểm tra tiến độ ghép bản đồ của Metashape và lấy ảnh xem trước nhẹ (map_preview.jpg) kèm tọa độ 4 góc GPS khi hoàn thành.",
+        "parameters": [
+          {
+            "name": "farmId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "missionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
           }
         }
       }
@@ -1215,7 +1521,7 @@
           "MissionTelemetry"
         ],
         "summary": "Nhập telemetry đã chuẩn hóa để tạo đường bay thực tế.",
-        "description": "Nhận từ 2 đến 50.000 điểm GPS có SequenceNumber và RecordedAt UTC tăng\r\ndần. Các điểm phải nằm trong khoảng StartedAt đến EndedAt của Mission\r\nđang Uploading. Mỗi Mission chỉ có một telemetry import; OperationId hỗ\r\ntrợ retry an toàn khi client gửi lại cùng payload.",
+        "description": "Nhận từ 2 đến 50.000 điểm GPS có SequenceNumber và RecordedAt UTC tăng\r\ndần. Các điểm phải nằm trong khoảng StartedAt đến EndedAt của Mission\r\nđang Uploading. Mỗi Mission giữ một telemetry import; request có\r\nOperationId có thể giữ nguyên khi chọn lại segment trước Finalize;\r\ncùng payload sẽ trả kết quả cũ, payload khác sẽ thay import hiện tại.",
         "parameters": [
           {
             "name": "farmId",
@@ -1268,6 +1574,7 @@
           "MissionTelemetryNormalization"
         ],
         "summary": "Giải mã Blackbox TXT/BBL thành các đoạn telemetry để kiểm tra trước import.",
+        "description": "Trả các segment và điểm telemetry kèm cảnh báo để client kiểm tra. Bước này chưa lưu đường bay; dùng telemetry/imports để nhập segment được chọn.",
         "parameters": [
           {
             "name": "farmId",
@@ -1377,6 +1684,7 @@
           "MissionUpload"
         ],
         "summary": "Kiểm tra điều kiện hoàn tất upload của Mission.",
+        "description": "Trả CanFinalize và danh sách Blockers, cùng số media, điểm telemetry và tình trạng upload session. Dùng kết quả để xử lý dữ liệu còn thiếu trước khi gọi upload/finalize.",
         "parameters": [
           {
             "name": "farmId",
@@ -1421,7 +1729,7 @@
         }
       }
     },
-    "/api/catalog/health-levels": {
+    "/api/catalog/plant-health": {
       "get": {
         "tags": [
           "PlantCatalog"
@@ -1439,6 +1747,38 @@
           "PlantCatalog"
         ],
         "summary": "Lấy các plant condition đang được phép chọn khi tạo record mới.",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/system/preflight-checklist-definitions/drone-pre-flight/active": {
+      "put": {
+        "tags": [
+          "PreflightChecklistDefinitions"
+        ],
+        "description": "SystemAdmin kích hoạt phiên bản mới của checklist DRONE_PRE_FLIGHT từ danh sách Items. Checklist đã hoàn tất theo phiên bản cũ sẽ bị coi là stale khi kiểm tra StartFlight.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ManagePreflightChecklistDefinitionRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ManagePreflightChecklistDefinitionRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/ManagePreflightChecklistDefinitionRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "OK"
@@ -1802,6 +2142,7 @@
         "tags": [
           "SystemDrones"
         ],
+        "description": "Chỉ SystemAdmin xem danh sách drone cấp hệ thống. Registry nội bộ không dành cho TenantOwner.",
         "responses": {
           "200": {
             "description": "OK"
@@ -1812,6 +2153,7 @@
         "tags": [
           "SystemDrones"
         ],
+        "description": "Đăng ký drone cấp hệ thống cùng thông số, serial và thông tin đăng ký. Code, serial và registration phải duy nhất.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -1838,11 +2180,79 @@
         }
       }
     },
+    "/api/system/drones/{droneId}/maintenance-history": {
+      "get": {
+        "tags": [
+          "SystemDrones"
+        ],
+        "description": "Xem lịch sử bảo trì của drone để đối chiếu tình trạng vận hành và các sự cố đã ghi nhận.",
+        "parameters": [
+          {
+            "name": "droneId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/system/drones/{droneId}": {
+      "put": {
+        "tags": [
+          "SystemDrones"
+        ],
+        "description": "Cập nhật thông tin drone. ExpectedVersion dùng để phát hiện cập nhật đồng thời.",
+        "parameters": [
+          {
+            "name": "droneId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateDroneRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateDroneRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateDroneRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
     "/api/system/drones/{droneId}/status": {
       "patch": {
         "tags": [
           "SystemDrones"
         ],
+        "description": "Đổi trạng thái vận hành hoặc bảo trì của drone, kèm lý do và lịch bảo trì kế tiếp khi áp dụng. Trạng thái mới ảnh hưởng đến khả năng được chọn cho mission.",
         "parameters": [
           {
             "name": "droneId",
@@ -1969,6 +2379,7 @@
         "tags": [
           "SystemManagerDrones"
         ],
+        "description": "Tìm drone còn khả dụng trong khoảng StartAt–EndAt và hỗ trợ Purpose yêu cầu. SystemManager phải có quyền trên Farm; kết quả tìm kiếm không thay thế kiểm tra lại khi đặt lịch hoặc bắt đầu bay.",
         "parameters": [
           {
             "name": "farmId",
@@ -1993,6 +2404,13 @@
             "schema": {
               "type": "string",
               "format": "date-time"
+            }
+          },
+          {
+            "name": "Purpose",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/MissionPurpose"
             }
           }
         ],
@@ -2067,7 +2485,502 @@
         "security": [ ]
       }
     },
+    "/api/system-manager/farms/{farmId}/missions/{missionId}/field-notes": {
+      "post": {
+        "tags": [
+          "SystemManagerMissions"
+        ],
+        "description": "Đồng bộ ghi chú hiện trường bằng OperationId để retry an toàn. Có thể ghi loại sự cố, kết quả xử lý, quyết định recovery và tham chiếu bằng chứng; quyết định phải phù hợp trạng thái chuyến bay.",
+        "parameters": [
+          {
+            "name": "farmId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "missionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SyncMissionFieldNoteRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SyncMissionFieldNoteRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/SyncMissionFieldNoteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "SystemManagerMissions"
+        ],
+        "description": "Lấy ghi chú và sự cố đã ghi cho mission thuộc Farm được phân công.",
+        "parameters": [
+          {
+            "name": "farmId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "missionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/system-manager/farms/{farmId}/missions/{missionId}/reschedule": {
+      "post": {
+        "tags": [
+          "SystemManagerMissions"
+        ],
+        "description": "Đổi lịch mission Scheduled; với FlightFailed, chỉ phục hồi khi sự cố có quyết định RESCHEDULE_REQUIRED. Có thể chọn drone thay thế cho lần bay lại. ExpectedVersion chống cập nhật đồng thời và checklist cũ hết hiệu lực.",
+        "parameters": [
+          {
+            "name": "farmId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "missionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RescheduleOrderMissionRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RescheduleOrderMissionRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/RescheduleOrderMissionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/system-manager/farms/{farmId}/missions/{missionId}/preflight/checklist": {
+      "get": {
+        "tags": [
+          "SystemManagerMissions"
+        ],
+        "description": "Lấy phiên bản checklist đang áp dụng cho mission trước khi SystemManager hoàn tất kiểm tra trước bay.",
+        "parameters": [
+          {
+            "name": "farmId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "missionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/system-manager/farms/{farmId}/missions/{missionId}/preflight": {
+      "post": {
+        "tags": [
+          "SystemManagerMissions"
+        ],
+        "description": "Lưu câu trả lời checklist theo OperationId và ExpectedVersion. Nếu xác nhận phù hợp để bay, cần ghi bằng chứng điều kiện cho phép bay và phương án failsafe; quyết định không bay được lưu để theo dõi.",
+        "parameters": [
+          {
+            "name": "farmId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "missionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompleteMissionPreflightRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompleteMissionPreflightRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompleteMissionPreflightRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/system-manager/farms/{farmId}/missions/{missionId}/start": {
+      "post": {
+        "tags": [
+          "SystemManagerMissions"
+        ],
+        "description": "Chỉ bắt đầu trong lịch bay và lịch hẹn đã xác nhận. Handler kiểm tra lại Order, boundary/scope, phân công, drone, checklist và các điều kiện riêng cho BaselineMapping hoặc dịch vụ trả phí.",
+        "parameters": [
+          {
+            "name": "farmId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "missionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OperateMissionRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OperateMissionRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/OperateMissionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/system-manager/farms/{farmId}/missions/{missionId}/complete-flight": {
+      "post": {
+        "tags": [
+          "SystemManagerMissions"
+        ],
+        "description": "Chuyển chuyến bay InFlight sang FlightCompleted và ghi thời điểm kết thúc. Bước upload media/telemetry được thực hiện qua API riêng.",
+        "parameters": [
+          {
+            "name": "farmId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "missionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OperateMissionRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OperateMissionRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/OperateMissionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/system-manager/farms/{farmId}/missions/{missionId}/fail-flight": {
+      "post": {
+        "tags": [
+          "SystemManagerMissions"
+        ],
+        "description": "Ghi chuyến bay thất bại cùng Reason, loại sự cố, kết quả xử lý, quyết định recovery và tham chiếu bằng chứng trong một giao dịch; đồng thời chuyển drone sang bảo trì.",
+        "parameters": [
+          {
+            "name": "farmId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "missionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OperateMissionRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OperateMissionRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/OperateMissionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/system-manager/farms/{farmId}/missions/{missionId}/cancel": {
+      "post": {
+        "tags": [
+          "SystemManagerMissions"
+        ],
+        "description": "Hủy mission ở trạng thái Draft hoặc Scheduled; yêu cầu Reason để lưu vết quyết định.",
+        "parameters": [
+          {
+            "name": "farmId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "missionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OperateMissionRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OperateMissionRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/OperateMissionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
     "/api/system/managers": {
+      "get": {
+        "tags": [
+          "SystemManagers"
+        ],
+        "summary": "Lấy danh sách hồ sơ System Manager và version hiện tại.",
+        "parameters": [
+          {
+            "name": "Status",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/SystemManagerProfileStatusValue"
+            }
+          },
+          {
+            "name": "Availability",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/SystemManagerAvailabilityValue"
+            }
+          },
+          {
+            "name": "QualificationStatus",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/FlightQualificationStatusValue"
+            }
+          },
+          {
+            "name": "PageNumber",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "PageSize",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemManagerProfileApiResponsePagedResult"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemManagerProfileApiResponsePagedResult"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemManagerProfileApiResponsePagedResult"
+                }
+              }
+            }
+          }
+        }
+      },
       "post": {
         "tags": [
           "SystemManagers"
@@ -2098,11 +3011,74 @@
         }
       }
     },
+    "/api/system/managers/{profileId}": {
+      "get": {
+        "tags": [
+          "SystemManagers"
+        ],
+        "summary": "Lấy chi tiết hồ sơ System Manager và version hiện tại.",
+        "parameters": [
+          {
+            "name": "profileId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemManagerProfileApiResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemManagerProfileApiResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemManagerProfileApiResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/system/managers/{profileId}/activate": {
       "put": {
         "tags": [
           "SystemManagers"
         ],
+        "summary": "Kích hoạt hồ sơ System Manager.",
+        "description": "Chuyển trạng thái hồ sơ sang Active. Thao tác này không tự động đánh dấu\r\nmanager là Available và không thay đổi tình trạng chứng chỉ bay. Gửi version\r\nmới nhất từ API GET chi tiết để chống cập nhật đồng thời; reason được lưu audit.",
         "parameters": [
           {
             "name": "profileId",
@@ -2135,7 +3111,64 @@
         },
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemManagerProfileApiResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemManagerProfileApiResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemManagerProfileApiResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       }
@@ -2145,6 +3178,8 @@
         "tags": [
           "SystemManagers"
         ],
+        "summary": "Đình chỉ hồ sơ System Manager.",
+        "description": "Chuyển trạng thái hồ sơ sang Suspended và đồng thời đặt availability thành\r\nUnavailable, ngăn manager nhận phân công hoặc vận hành mới. Reason được lưu audit.",
         "parameters": [
           {
             "name": "profileId",
@@ -2177,7 +3212,64 @@
         },
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemManagerProfileApiResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemManagerProfileApiResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemManagerProfileApiResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       }
@@ -2187,6 +3279,8 @@
         "tags": [
           "SystemManagers"
         ],
+        "summary": "Cập nhật khả năng nhận việc của System Manager.",
+        "description": "Đặt manager thành Available hoặc Unavailable. Manager chỉ thực sự đủ điều kiện\r\nnhận phân công khi hồ sơ Active, availability là Available và chứng chỉ bay\r\nđang Qualified, chưa hết hạn.",
         "parameters": [
           {
             "name": "profileId",
@@ -2219,7 +3313,64 @@
         },
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemManagerProfileApiResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemManagerProfileApiResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemManagerProfileApiResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       }
@@ -2229,6 +3380,8 @@
         "tags": [
           "SystemManagers"
         ],
+        "summary": "Cập nhật tình trạng chứng chỉ bay của System Manager.",
+        "description": "Cập nhật Pending, Qualified, Suspended hoặc Revoked. Trạng thái Qualified yêu\r\ncầu expiresAt ở tương lai; mọi trạng thái khác Qualified sẽ tự đặt manager về\r\nUnavailable.",
         "parameters": [
           {
             "name": "profileId",
@@ -2261,7 +3414,84 @@
         },
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemManagerProfileApiResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemManagerProfileApiResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemManagerProfileApiResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       }
@@ -2293,6 +3523,102 @@
         "responses": {
           "200": {
             "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/system-manager/survey-orders": {
+      "get": {
+        "tags": [
+          "SystemManagerSurveyOrders"
+        ],
+        "summary": "Lấy danh sách SurveyOrder thuộc các farm đang được phân công.",
+        "description": "Backend tự xác định SystemManager từ access token. Có thể lọc theo status;\r\nkết quả chứa SurveyOrderId và Version để tiếp tục các bước boundary-scope.",
+        "parameters": [
+          {
+            "name": "Status",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/SurveyOrderStatusFilterValue"
+            }
+          },
+          {
+            "name": "PageNumber",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "PageSize",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssignedSurveyOrderApiResponsePagedResult"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssignedSurveyOrderApiResponsePagedResult"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssignedSurveyOrderApiResponsePagedResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       }
@@ -3295,6 +4621,50 @@
         "tags": [
           "SystemManagerWork"
         ],
+        "description": "Trả các Farm được phân công cho SystemManager hiện tại để chọn công việc hiện trường.",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/system-manager/survey-orders/{surveyOrderId}/missions/prepare": {
+      "post": {
+        "tags": [
+          "SystemManagerWork"
+        ],
+        "description": "Chuẩn bị mission theo SurveyOrder authoritative. Farm cần baseline sẽ có BaselineMapping trước; mission dịch vụ trả phí chỉ được bổ sung khi đủ điều kiện bản đồ, số trụ, giá và payment. BaselineStartAt/EndAt và ServiceStartAt/EndAt là hai cặp lịch độc lập; khi chưa có lịch phù hợp mission có thể ở Draft. OperationId hỗ trợ gọi lại an toàn.",
+        "parameters": [
+          {
+            "name": "surveyOrderId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PrepareMissionSetRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PrepareMissionSetRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/PrepareMissionSetRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "OK"
@@ -3410,6 +4780,231 @@
             "application/*+json": {
               "schema": {
                 "$ref": "#/components/schemas/RetirePlantConditionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/system-admin/plant-health/guidance": {
+      "get": {
+        "tags": [
+          "SystemPlantHealthGuidance"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "SystemPlantHealthGuidance"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSourcedGuidanceRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSourcedGuidanceRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSourcedGuidanceRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/system-admin/plant-health/guidance/{guidanceId}/activate": {
+      "post": {
+        "tags": [
+          "SystemPlantHealthGuidance"
+        ],
+        "parameters": [
+          {
+            "name": "guidanceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeSourcedGuidanceStatusRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeSourcedGuidanceStatusRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeSourcedGuidanceStatusRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/system-admin/plant-health/guidance/{guidanceId}/retire": {
+      "post": {
+        "tags": [
+          "SystemPlantHealthGuidance"
+        ],
+        "parameters": [
+          {
+            "name": "guidanceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeSourcedGuidanceStatusRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeSourcedGuidanceStatusRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeSourcedGuidanceStatusRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/system-admin/survey-orders/{orderId}/capture-authorizations/{type}/verify": {
+      "put": {
+        "tags": [
+          "SystemSurveyOrderAuthorizations"
+        ],
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifySurveyCaptureAuthorizationRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifySurveyCaptureAuthorizationRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifySurveyCaptureAuthorizationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/system-admin/survey-orders/{orderId}/capture-authorizations/{type}/revoke": {
+      "put": {
+        "tags": [
+          "SystemSurveyOrderAuthorizations"
+        ],
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevokeSurveyCaptureAuthorizationRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevokeSurveyCaptureAuthorizationRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevokeSurveyCaptureAuthorizationRequest"
               }
             }
           }
@@ -6054,13 +7649,12 @@
       },
       "AltitudeReference": {
         "enum": [
-          0,
-          1,
-          2,
-          3
+          "RELATIVE_TO_TAKEOFF",
+          "AGL",
+          "MSL",
+          "UNKNOWN"
         ],
-        "type": "integer",
-        "format": "int32"
+        "type": "string"
       },
       "AppliedPriceAdjustmentApiResponse": {
         "type": "object",
@@ -6130,27 +7724,19 @@
         "additionalProperties": false
       },
       "ApplyPriceAdjustmentRequest": {
-        "required": [
-          "expectedAdjustmentVersion",
-          "expectedOrderVersion"
-        ],
         "type": "object",
         "properties": {
           "expectedOrderVersion": {
-            "maximum": 4294967295,
-            "minimum": 1,
             "type": "integer",
-            "format": "int32"
+            "format": "int32",
+            "nullable": true
           },
           "expectedAdjustmentVersion": {
-            "maximum": 4294967295,
-            "minimum": 1,
             "type": "integer",
-            "format": "int32"
+            "format": "int32",
+            "nullable": true
           },
           "expectedPaymentVersion": {
-            "maximum": 4294967295,
-            "minimum": 1,
             "type": "integer",
             "format": "int32",
             "nullable": true
@@ -6159,11 +7745,6 @@
         "additionalProperties": false
       },
       "ApproveSurveyRequest": {
-        "required": [
-          "checklist",
-          "expectedVersion",
-          "reason"
-        ],
         "type": "object",
         "properties": {
           "selectedSystemManagerProfileId": {
@@ -6172,18 +7753,16 @@
             "nullable": true
           },
           "reason": {
-            "maxLength": 4000,
-            "minLength": 1,
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "checklist": {
             "$ref": "#/components/schemas/SurveyRequestReviewChecklistRequest"
           },
           "expectedVersion": {
-            "maximum": 4294967295,
-            "minimum": 1,
             "type": "integer",
-            "format": "int32"
+            "format": "int32",
+            "nullable": true
           }
         },
         "additionalProperties": false
@@ -6253,6 +7832,14 @@
             "format": "uuid",
             "nullable": true
           },
+          "previousOrderCompatibilityPolicyVersion": {
+            "type": "string",
+            "nullable": true
+          },
+          "previousOrderCompatibilityReason": {
+            "type": "string",
+            "nullable": true
+          },
           "approvedAt": {
             "type": "string",
             "format": "date-time"
@@ -6299,6 +7886,105 @@
         },
         "additionalProperties": false
       },
+      "AssignedSurveyOrderApiResponse": {
+        "type": "object",
+        "properties": {
+          "surveyOrderId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "orderNumber": {
+            "type": "string",
+            "nullable": true
+          },
+          "tenantId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "farmId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "farmCode": {
+            "type": "string",
+            "nullable": true
+          },
+          "farmName": {
+            "type": "string",
+            "nullable": true
+          },
+          "surveyServiceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "surveyServiceCode": {
+            "type": "string",
+            "nullable": true
+          },
+          "surveyServiceName": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "nullable": true
+          },
+          "orderVersion": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "requiresBaselineMapping": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      },
+      "AssignedSurveyOrderApiResponsePagedResult": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AssignedSurveyOrderApiResponse"
+            },
+            "nullable": true
+          },
+          "pageNumber": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pageSize": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalCount": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "totalPages": {
+            "type": "integer",
+            "format": "int64",
+            "readOnly": true
+          },
+          "hasPreviousPage": {
+            "type": "boolean",
+            "readOnly": true
+          },
+          "hasNextPage": {
+            "type": "boolean",
+            "readOnly": true
+          }
+        },
+        "additionalProperties": false
+      },
       "ChangeDroneStatusRequest": {
         "type": "object",
         "properties": {
@@ -6309,6 +7995,24 @@
             "type": "string",
             "format": "date-time",
             "nullable": true
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "reason": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ChangeSourcedGuidanceStatusRequest": {
+        "type": "object",
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int32"
           }
         },
         "additionalProperties": false
@@ -6360,20 +8064,65 @@
         },
         "additionalProperties": false
       },
+      "CompleteMissionPreflightRequest": {
+        "type": "object",
+        "properties": {
+          "operationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "checklistDefinitionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "checklistVersion": {
+            "type": "string",
+            "nullable": true
+          },
+          "answers": { },
+          "suitableForFlight": {
+            "type": "boolean"
+          },
+          "notes": {
+            "type": "string",
+            "nullable": true
+          },
+          "deviceCompletedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "unsuitableConditionNotes": {
+            "type": "string",
+            "nullable": true
+          },
+          "failsafeNotes": {
+            "type": "string",
+            "nullable": true
+          },
+          "flightAuthorizationEvidence": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
       "ConfirmSurveyAppointmentRequest": {
-        "required": [
-          "expectedAppointmentVersion",
-          "expectedOrderVersion"
-        ],
         "type": "object",
         "properties": {
           "expectedOrderVersion": {
             "type": "integer",
-            "format": "int32"
+            "format": "int32",
+            "nullable": true
           },
           "expectedAppointmentVersion": {
             "type": "integer",
-            "format": "int32"
+            "format": "int32",
+            "nullable": true
           }
         },
         "additionalProperties": false
@@ -6457,27 +8206,21 @@
         "additionalProperties": false
       },
       "ConfirmSurveyOrderPoleCountRequest": {
-        "required": [
-          "evidenceReference",
-          "expectedFarmBaseMapVersionId",
-          "expectedOrderVersion"
-        ],
         "type": "object",
         "properties": {
           "expectedFarmBaseMapVersionId": {
             "type": "string",
-            "format": "uuid"
+            "format": "uuid",
+            "nullable": true
           },
           "evidenceReference": {
-            "maxLength": 1000,
-            "minLength": 1,
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "expectedOrderVersion": {
-            "maximum": 4294967295,
-            "minimum": 1,
             "type": "integer",
-            "format": "int32"
+            "format": "int32",
+            "nullable": true
           }
         },
         "additionalProperties": false
@@ -6506,6 +8249,44 @@
           "areaHectares": {
             "type": "number",
             "format": "double",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "CreateMissionMediaUploadSessionRequest": {
+        "type": "object",
+        "properties": {
+          "operationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "fileName": {
+            "type": "string",
+            "nullable": true
+          },
+          "mimeType": {
+            "type": "string",
+            "nullable": true
+          },
+          "mediaType": {
+            "$ref": "#/components/schemas/MediaType"
+          },
+          "fileSizeBytes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "sha256Checksum": {
+            "type": "string",
+            "nullable": true
+          },
+          "expectedMissionVersion": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "capturedAt": {
+            "type": "string",
+            "format": "date-time",
             "nullable": true
           }
         },
@@ -6569,6 +8350,57 @@
           },
           "description": {
             "type": "string",
+            "nullable": true
+          },
+          "plantHealthLabelKind": {
+            "$ref": "#/components/schemas/PlantHealthLabelKindValue"
+          },
+          "datasetVersion": {
+            "type": "string",
+            "nullable": true
+          },
+          "annotationRuleVersion": {
+            "type": "string",
+            "nullable": true
+          },
+          "teamLabelLimitation": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "CreateSourcedGuidanceRequest": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "nullable": true
+          },
+          "plantConditionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sourceTitle": {
+            "type": "string",
+            "nullable": true
+          },
+          "sourceReference": {
+            "type": "string",
+            "nullable": true
+          },
+          "guidanceText": {
+            "type": "string",
+            "nullable": true
+          },
+          "effectiveFrom": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "effectiveTo": {
+            "type": "string",
+            "format": "date-time",
             "nullable": true
           }
         },
@@ -6640,14 +8472,13 @@
       },
       "DroneStatus": {
         "enum": [
-          0,
-          1,
-          2,
-          3,
-          4
+          "AVAILABLE",
+          "IN_MISSION",
+          "MAINTENANCE",
+          "INACTIVE",
+          "RETIRED"
         ],
-        "type": "integer",
-        "format": "int32"
+        "type": "string"
       },
       "EndPrimaryFarmManagerAssignmentRequest": {
         "type": "object",
@@ -6673,15 +8504,14 @@
         },
         "additionalProperties": false
       },
-      "FlightQualificationStatus": {
+      "FlightQualificationStatusValue": {
         "enum": [
-          0,
-          1,
-          2,
-          3
+          "PENDING",
+          "QUALIFIED",
+          "SUSPENDED",
+          "REVOKED"
         ],
-        "type": "integer",
-        "format": "int32"
+        "type": "string"
       },
       "ForgotPasswordRequest": {
         "type": "object",
@@ -6827,6 +8657,11 @@
               "$ref": "#/components/schemas/MissionTelemetryPointRequest"
             },
             "nullable": true
+          },
+          "segmentIndex": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
           }
         },
         "additionalProperties": false
@@ -6895,16 +8730,12 @@
         "additionalProperties": false
       },
       "InitiateSurveyPaymentRequest": {
-        "required": [
-          "expectedOrderVersion"
-        ],
         "type": "object",
         "properties": {
           "expectedOrderVersion": {
-            "maximum": 4294967295,
-            "minimum": 1,
             "type": "integer",
-            "format": "int32"
+            "format": "int32",
+            "nullable": true
           }
         },
         "additionalProperties": false
@@ -6933,13 +8764,19 @@
         },
         "additionalProperties": false
       },
+      "ManagePreflightChecklistDefinitionRequest": {
+        "type": "object",
+        "properties": {
+          "items": { }
+        },
+        "additionalProperties": false
+      },
       "MediaType": {
         "enum": [
-          0,
-          1
+          "IMAGE",
+          "VIDEO"
         ],
-        "type": "integer",
-        "format": "int32"
+        "type": "string"
       },
       "MissionMediaDownloadResponse": {
         "type": "object",
@@ -7065,33 +8902,39 @@
       },
       "MissionMediaRole": {
         "enum": [
-          0,
-          1,
-          2,
-          3,
-          4
+          "RAW_VIDEO",
+          "RAW_IMAGE",
+          "PROCESSED_IMAGE",
+          "THUMBNAIL",
+          "OTHER"
         ],
-        "type": "integer",
-        "format": "int32"
+        "type": "string"
+      },
+      "MissionPurpose": {
+        "enum": [
+          "BASELINE_MAPPING",
+          "PLANT_HEALTH",
+          "HARVEST_READINESS"
+        ],
+        "type": "string"
       },
       "MissionStatus": {
         "enum": [
-          0,
-          1,
-          2,
-          3,
-          4,
-          5,
-          6,
-          7,
-          8,
-          9,
-          10,
-          11,
-          12
+          "DRAFT",
+          "SCHEDULED",
+          "IN_FLIGHT",
+          "FLIGHT_COMPLETED",
+          "UPLOADING",
+          "READY_FOR_PROCESSING",
+          "PROCESSING",
+          "AWAITING_REVIEW",
+          "COMPLETED",
+          "CANCELLED",
+          "FLIGHT_FAILED",
+          "UPLOAD_FAILED",
+          "PROCESSING_FAILED"
         ],
-        "type": "integer",
-        "format": "int32"
+        "type": "string"
       },
       "MissionTelemetryPointRequest": {
         "type": "object",
@@ -7140,11 +8983,10 @@
       },
       "MissionType": {
         "enum": [
-          0,
-          1
+          "MAPPING",
+          "HEALTH_INSPECTION"
         ],
-        "type": "integer",
-        "format": "int32"
+        "type": "string"
       },
       "MissionUploadReadinessResponse": {
         "type": "object",
@@ -7189,9 +9031,44 @@
         },
         "additionalProperties": false
       },
+      "OperateMissionRequest": {
+        "type": "object",
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "reason": {
+            "type": "string",
+            "nullable": true
+          },
+          "incidentOperationId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "incidentType": {
+            "type": "string",
+            "nullable": true
+          },
+          "incidentOutcome": {
+            "type": "string",
+            "nullable": true
+          },
+          "recoveryDecision": {
+            "type": "string",
+            "nullable": true
+          },
+          "evidenceReference": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
       "PaidSurveyMissionPurpose": {
         "enum": [
-          "PlantHealth"
+          "PLANT_HEALTH"
         ],
         "type": "string"
       },
@@ -7203,6 +9080,47 @@
           "OTHER"
         ],
         "type": "string"
+      },
+      "PlantHealthLabelKindValue": {
+        "enum": [
+          "SUSPECTED_DISEASE",
+          "CONFUSING_NON_DISEASE"
+        ],
+        "type": "string"
+      },
+      "PrepareMissionSetRequest": {
+        "type": "object",
+        "properties": {
+          "droneId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "operationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "serviceStartAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "serviceEndAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "baselineStartAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "baselineEndAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
       },
       "PreviewSystemManagerInvitationRequest": {
         "type": "object",
@@ -7251,13 +9169,25 @@
         },
         "additionalProperties": { }
       },
+      "ProcessMetashapeRequest": {
+        "type": "object",
+        "properties": {
+          "cameraType": {
+            "type": "string",
+            "nullable": true
+          },
+          "alignAccuracy": {
+            "type": "string",
+            "nullable": true
+          },
+          "genericPreselection": {
+            "type": "boolean",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
       "ProposeSurveyAppointmentRequest": {
-        "required": [
-          "expectedOrderVersion",
-          "proposedEndAt",
-          "proposedStartAt",
-          "purpose"
-        ],
         "type": "object",
         "properties": {
           "purpose": {
@@ -7265,15 +9195,18 @@
           },
           "proposedStartAt": {
             "type": "string",
-            "format": "date-time"
+            "format": "date-time",
+            "nullable": true
           },
           "proposedEndAt": {
             "type": "string",
-            "format": "date-time"
+            "format": "date-time",
+            "nullable": true
           },
           "expectedOrderVersion": {
             "type": "integer",
-            "format": "int32"
+            "format": "int32",
+            "nullable": true
           },
           "expectedCurrentAppointmentId": {
             "type": "string",
@@ -7413,54 +9346,38 @@
         "additionalProperties": false
       },
       "ReconcileSurveyPaymentRequest": {
-        "required": [
-          "currency",
-          "evidenceReference",
-          "expectedOrderVersion",
-          "expectedPaymentVersion",
-          "providerReference",
-          "reason",
-          "settledAmount"
-        ],
         "type": "object",
         "properties": {
           "providerReference": {
-            "maxLength": 150,
-            "minLength": 1,
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "settledAmount": {
-            "maximum": 79228162514264337593543950335,
-            "minimum": 0.01,
             "type": "number",
-            "format": "double"
+            "format": "double",
+            "nullable": true
           },
           "currency": {
-            "maxLength": 3,
-            "minLength": 3,
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "reason": {
-            "maxLength": 2000,
-            "minLength": 1,
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "evidenceReference": {
-            "maxLength": 1000,
-            "minLength": 1,
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "expectedPaymentVersion": {
-            "maximum": 4294967295,
-            "minimum": 1,
             "type": "integer",
-            "format": "int32"
+            "format": "int32",
+            "nullable": true
           },
           "expectedOrderVersion": {
-            "maximum": 4294967295,
-            "minimum": 1,
             "type": "integer",
-            "format": "int32"
+            "format": "int32",
+            "nullable": true
           }
         },
         "additionalProperties": false
@@ -7545,59 +9462,45 @@
         "additionalProperties": false
       },
       "RequestPriceAdjustmentRequest": {
-        "required": [
-          "evidenceReference",
-          "expectedOrderVersion",
-          "newConfirmedPoleCount",
-          "reason"
-        ],
         "type": "object",
         "properties": {
           "newConfirmedPoleCount": {
-            "maximum": 2147483647,
-            "minimum": 1,
             "type": "integer",
-            "format": "int32"
+            "format": "int32",
+            "nullable": true
           },
           "reason": {
-            "maxLength": 2000,
-            "minLength": 1,
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "evidenceReference": {
-            "maxLength": 1000,
-            "minLength": 1,
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "expectedOrderVersion": {
-            "maximum": 4294967295,
-            "minimum": 1,
             "type": "integer",
-            "format": "int32"
+            "format": "int32",
+            "nullable": true
           }
         },
         "additionalProperties": false
       },
       "RequestSurveyAppointmentRescheduleRequest": {
-        "required": [
-          "expectedAppointmentVersion",
-          "expectedOrderVersion",
-          "reason"
-        ],
         "type": "object",
         "properties": {
           "reason": {
-            "maxLength": 1000,
-            "minLength": 1,
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "expectedOrderVersion": {
             "type": "integer",
-            "format": "int32"
+            "format": "int32",
+            "nullable": true
           },
           "expectedAppointmentVersion": {
             "type": "integer",
-            "format": "int32"
+            "format": "int32",
+            "nullable": true
           }
         },
         "additionalProperties": false
@@ -7680,6 +9583,29 @@
         },
         "additionalProperties": false
       },
+      "RescheduleOrderMissionRequest": {
+        "type": "object",
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "startAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "endAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "replacementDroneId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
       "ResetPasswordRequest": {
         "type": "object",
         "properties": {
@@ -7719,35 +9645,25 @@
         "additionalProperties": false
       },
       "ReviewPriceAdjustmentRequest": {
-        "required": [
-          "evidenceReference",
-          "expectedAdjustmentVersion",
-          "expectedOrderVersion",
-          "reason"
-        ],
         "type": "object",
         "properties": {
           "reason": {
-            "maxLength": 2000,
-            "minLength": 1,
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "evidenceReference": {
-            "maxLength": 1000,
-            "minLength": 1,
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "expectedOrderVersion": {
-            "maximum": 4294967295,
-            "minimum": 1,
             "type": "integer",
-            "format": "int32"
+            "format": "int32",
+            "nullable": true
           },
           "expectedAdjustmentVersion": {
-            "maximum": 4294967295,
-            "minimum": 1,
             "type": "integer",
-            "format": "int32"
+            "format": "int32",
+            "nullable": true
           }
         },
         "additionalProperties": false
@@ -7790,6 +9706,20 @@
           "reviewedAt": {
             "type": "string",
             "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      },
+      "RevokeSurveyCaptureAuthorizationRequest": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "nullable": true
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int32"
           }
         },
         "additionalProperties": false
@@ -7871,6 +9801,10 @@
           "surveyServiceId": {
             "type": "string",
             "format": "uuid"
+          },
+          "tenantCode": {
+            "type": "string",
+            "nullable": true
           },
           "applicantName": {
             "type": "string",
@@ -8046,8 +9980,8 @@
       },
       "SurveyAppointmentPurposeValue": {
         "enum": [
-          "BaselineMapping",
-          "PaidService"
+          "BASELINE_MAPPING",
+          "PAID_SERVICE"
         ],
         "type": "string"
       },
@@ -8144,6 +10078,24 @@
         },
         "additionalProperties": false
       },
+      "SurveyOrderStatusFilterValue": {
+        "enum": [
+          "PENDING_BOUNDARY_VERIFICATION",
+          "AWAITING_BASELINE_APPOINTMENT",
+          "BASELINE_READY",
+          "BASELINE_IN_PROGRESS",
+          "AWAITING_BASELINE_REVIEW",
+          "AWAITING_PRICING",
+          "AWAITING_PAID_APPOINTMENT",
+          "AWAITING_PAYMENT",
+          "READY_FOR_PAID_SERVICE",
+          "IN_PROGRESS",
+          "PENDING_REVIEW",
+          "COMPLETED",
+          "CANCELLED"
+        ],
+        "type": "string"
+      },
       "SurveyOrderZoneScopeApiResponse": {
         "type": "object",
         "properties": {
@@ -8174,41 +10126,27 @@
         "additionalProperties": false
       },
       "SurveyPaymentCallbackRequest": {
-        "required": [
-          "amount",
-          "currency",
-          "eventId",
-          "eventType",
-          "occurredAt",
-          "providerReference"
-        ],
         "type": "object",
         "properties": {
           "providerReference": {
-            "maxLength": 200,
-            "minLength": 1,
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "eventId": {
-            "maxLength": 200,
-            "minLength": 1,
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "eventType": {
-            "maxLength": 100,
-            "minLength": 1,
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "amount": {
-            "maximum": 79228162514264337593543950335,
-            "minimum": 0.01,
             "type": "number",
             "format": "double"
           },
           "currency": {
-            "maxLength": 3,
-            "minLength": 3,
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "occurredAt": {
             "type": "string",
@@ -8280,6 +10218,10 @@
             "format": "uuid"
           },
           "requestNumber": {
+            "type": "string",
+            "nullable": true
+          },
+          "tenantCode": {
             "type": "string",
             "nullable": true
           },
@@ -8365,6 +10307,10 @@
           "requestedByUserId": {
             "type": "string",
             "format": "uuid",
+            "nullable": true
+          },
+          "tenantCode": {
+            "type": "string",
             "nullable": true
           },
           "surveyServiceId": {
@@ -8490,13 +10436,13 @@
             "format": "uuid",
             "nullable": true
           },
+          "tenantCode": {
+            "type": "string",
+            "nullable": true
+          },
           "farmId": {
             "type": "string",
             "format": "uuid",
-            "nullable": true
-          },
-          "applicantName": {
-            "type": "string",
             "nullable": true
           },
           "farmName": {
@@ -8631,28 +10577,36 @@
         "additionalProperties": false
       },
       "SurveyRequestReviewChecklistRequest": {
+        "required": [
+          "candidate-location-sufficient",
+          "consent-feasibility",
+          "contact-valid",
+          "dragon-fruit-farm-confirmed",
+          "eligible-manager-available",
+          "flight-permission-feasibility",
+          "service-area-supported"
+        ],
         "type": "object",
         "properties": {
-          "version": {
-            "type": "string",
-            "nullable": true
-          },
-          "contactValid": {
+          "contact-valid": {
             "type": "boolean"
           },
-          "isDragonFruitFarm": {
+          "dragon-fruit-farm-confirmed": {
             "type": "boolean"
           },
-          "isServiceAreaSupported": {
+          "service-area-supported": {
             "type": "boolean"
           },
-          "isLocationSufficient": {
+          "candidate-location-sufficient": {
             "type": "boolean"
           },
-          "isPreliminaryLegalAndFlightFeasible": {
+          "consent-feasibility": {
             "type": "boolean"
           },
-          "isEligibleSystemManagerAvailable": {
+          "flight-permission-feasibility": {
+            "type": "boolean"
+          },
+          "eligible-manager-available": {
             "type": "boolean"
           },
           "notes": {
@@ -8746,13 +10700,134 @@
         },
         "additionalProperties": false
       },
-      "SystemManagerAvailabilityStatus": {
+      "SyncMissionFieldNoteRequest": {
+        "type": "object",
+        "properties": {
+          "operationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "text": {
+            "type": "string",
+            "nullable": true
+          },
+          "observedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "incidentType": {
+            "type": "string",
+            "nullable": true
+          },
+          "incidentOutcome": {
+            "type": "string",
+            "nullable": true
+          },
+          "recoveryDecision": {
+            "type": "string",
+            "nullable": true
+          },
+          "evidenceReference": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "SystemManagerAvailabilityValue": {
         "enum": [
-          0,
-          1
+          "AVAILABLE",
+          "UNAVAILABLE"
         ],
-        "type": "integer",
-        "format": "int32"
+        "type": "string"
+      },
+      "SystemManagerProfileApiResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "email": {
+            "type": "string",
+            "nullable": true
+          },
+          "fullName": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "nullable": true
+          },
+          "availability": {
+            "type": "string",
+            "nullable": true
+          },
+          "qualificationStatus": {
+            "type": "string",
+            "nullable": true
+          },
+          "qualificationExpiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false
+      },
+      "SystemManagerProfileApiResponsePagedResult": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SystemManagerProfileApiResponse"
+            },
+            "nullable": true
+          },
+          "pageNumber": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pageSize": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalCount": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "totalPages": {
+            "type": "integer",
+            "format": "int64",
+            "readOnly": true
+          },
+          "hasPreviousPage": {
+            "type": "boolean",
+            "readOnly": true
+          },
+          "hasNextPage": {
+            "type": "boolean",
+            "readOnly": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "SystemManagerProfileStatusValue": {
+        "enum": [
+          "ACTIVE",
+          "SUSPENDED"
+        ],
+        "type": "string"
       },
       "SystemManagerStateChangeRequest": {
         "type": "object",
@@ -8867,6 +10942,58 @@
         },
         "additionalProperties": false
       },
+      "UpdateDroneRequest": {
+        "type": "object",
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "model": {
+            "type": "string",
+            "nullable": true
+          },
+          "manufacturer": {
+            "type": "string",
+            "nullable": true
+          },
+          "specifications": {
+            "nullable": true
+          },
+          "serialNumber": {
+            "type": "string",
+            "nullable": true
+          },
+          "registrationNumber": {
+            "type": "string",
+            "nullable": true
+          },
+          "registrationDate": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "registrationExpiryDate": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "weightKg": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "notes": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
       "UpdateFarmDetailRequest": {
         "type": "object",
         "properties": {
@@ -8918,7 +11045,7 @@
         "type": "object",
         "properties": {
           "availability": {
-            "$ref": "#/components/schemas/SystemManagerAvailabilityStatus"
+            "$ref": "#/components/schemas/SystemManagerAvailabilityValue"
           },
           "reason": {
             "type": "string",
@@ -8935,7 +11062,7 @@
         "type": "object",
         "properties": {
           "status": {
-            "$ref": "#/components/schemas/FlightQualificationStatus"
+            "$ref": "#/components/schemas/FlightQualificationStatusValue"
           },
           "expiresAt": {
             "type": "string",
@@ -9032,6 +11159,29 @@
         },
         "additionalProperties": false
       },
+      "VerifySurveyCaptureAuthorizationRequest": {
+        "type": "object",
+        "properties": {
+          "evidenceReference": {
+            "type": "string",
+            "nullable": true
+          },
+          "issuedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
       "VerifySurveyOrderBoundaryAndScopeApiResponse": {
         "type": "object",
         "properties": {
@@ -9092,36 +11242,25 @@
         "additionalProperties": false
       },
       "VerifySurveyOrderBoundaryAndScopeRequest": {
-        "required": [
-          "boundary",
-          "expectedOrderVersion",
-          "reason"
-        ],
         "type": "object",
         "properties": {
           "boundary": {
             "$ref": "#/components/schemas/GeoJsonPolygonRequest"
           },
           "reason": {
-            "maxLength": 2000,
-            "minLength": 1,
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "evidenceReference": {
-            "maxLength": 1000,
-            "minLength": 0,
             "type": "string",
             "nullable": true
           },
           "expectedOrderVersion": {
-            "maximum": 4294967295,
-            "minimum": 1,
             "type": "integer",
-            "format": "int32"
+            "format": "int32",
+            "nullable": true
           },
           "expectedCurrentBoundaryVersionNumber": {
-            "maximum": 2147483647,
-            "minimum": 1,
             "type": "integer",
             "format": "int32",
             "nullable": true
@@ -9147,6 +11286,18 @@
           "expectedVersion": {
             "type": "integer",
             "format": "int64"
+          },
+          "datasetVersion": {
+            "type": "string",
+            "nullable": true
+          },
+          "annotationRuleVersion": {
+            "type": "string",
+            "nullable": true
+          },
+          "teamLabelLimitation": {
+            "type": "string",
+            "nullable": true
           }
         },
         "additionalProperties": false
@@ -9180,6 +11331,9 @@
       "name": "MissionMedia"
     },
     {
+      "name": "MissionOrthophoto"
+    },
+    {
       "name": "Missions"
     },
     {
@@ -9193,6 +11347,9 @@
     },
     {
       "name": "PlantCatalog"
+    },
+    {
+      "name": "PreflightChecklistDefinitions"
     },
     {
       "name": "PublicSurveyRequests"
@@ -9216,6 +11373,9 @@
       "name": "SystemManagerInvitation"
     },
     {
+      "name": "SystemManagerMissions"
+    },
+    {
       "name": "SystemManagers"
     },
     {
@@ -9226,6 +11386,12 @@
     },
     {
       "name": "SystemPlantConditions"
+    },
+    {
+      "name": "SystemPlantHealthGuidance"
+    },
+    {
+      "name": "SystemSurveyOrderAuthorizations"
     },
     {
       "name": "SystemSurveyOrders"

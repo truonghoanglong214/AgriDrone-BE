@@ -65,6 +65,9 @@ internal sealed class VersionPlantConditionHandler(
             current.Name,
             current.ScientificName,
             current.Description,
+            current.DatasetVersion,
+            current.AnnotationRuleVersion,
+            current.TeamLabelLimitation,
             current.RevisionNumber,
             current.IsActive
         });
@@ -75,13 +78,19 @@ internal sealed class VersionPlantConditionHandler(
             request.Name,
             request.ScientificName,
             request.Description,
-            now);
+            now,
+            request.DatasetVersion,
+            request.AnnotationRuleVersion,
+            request.TeamLabelLimitation);
 
         using var newData = JsonSerializer.SerializeToDocument(new
         {
             nextRevision.Name,
             nextRevision.ScientificName,
             nextRevision.Description,
+            nextRevision.DatasetVersion,
+            nextRevision.AnnotationRuleVersion,
+            nextRevision.TeamLabelLimitation,
             nextRevision.RevisionNumber,
             nextRevision.SupersedesId,
             nextRevision.IsActive

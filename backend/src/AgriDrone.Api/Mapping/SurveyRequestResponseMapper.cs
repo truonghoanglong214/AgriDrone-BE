@@ -20,6 +20,8 @@ internal static class SurveyRequestResponseMapper
         ToAcknowledgement(
             response.Id,
             response.RequestNumber,
+            response.TenantCode,
+            response.TenantName,
             response.Kind,
             response.Status,
             response.CreatedAt);
@@ -29,6 +31,8 @@ internal static class SurveyRequestResponseMapper
         ToAcknowledgement(
             response.Id,
             response.RequestNumber,
+            tenantCode: null,
+            tenantName: null,
             response.Kind,
             response.Status,
             response.CreatedAt);
@@ -38,6 +42,8 @@ internal static class SurveyRequestResponseMapper
         ToAcknowledgement(
             response.Id,
             response.RequestNumber,
+            tenantCode: null,
+            tenantName: null,
             response.Kind,
             response.Status,
             response.CreatedAt);
@@ -60,6 +66,8 @@ internal static class SurveyRequestResponseMapper
             response.TenantId,
             response.FarmId,
             response.RequestedByUserId,
+            response.TenantCode,
+            response.TenantName,
             response.SurveyServiceId,
             response.SurveyServiceCode,
             response.SurveyServiceName,
@@ -134,6 +142,8 @@ internal static class SurveyRequestResponseMapper
             response.OwnerInvitationId,
             response.RequiresBaselineMapping,
             response.PreviousCompatibleOrderId,
+            response.PreviousOrderCompatibilityPolicyVersion,
+            response.PreviousOrderCompatibilityReason,
             response.ApprovedAt);
 
     private static SurveyRequestInboxItemApiResponse ToResponse(
@@ -146,8 +156,9 @@ internal static class SurveyRequestResponseMapper
             response.SurveyServiceId,
             response.SurveyServiceCode,
             response.TenantId,
+            response.TenantCode,
+            response.TenantName,
             response.FarmId,
-            response.ApplicantName,
             response.FarmName,
             response.ApproximateAreaHa,
             response.EstimatedPoleCount,
@@ -158,12 +169,16 @@ internal static class SurveyRequestResponseMapper
     private static SurveyRequestAcknowledgementApiResponse ToAcknowledgement(
         Guid id,
         string requestNumber,
+        string? tenantCode,
+        string? tenantName,
         SurveyRequestKind kind,
         SurveyRequestStatus status,
         DateTimeOffset createdAt) =>
         new(
             id,
             requestNumber,
+            tenantCode,
+            tenantName,
             MapKind(kind),
             MapStatus(status),
             createdAt);
@@ -213,6 +228,8 @@ internal static class SurveyRequestResponseMapper
                 "PENDING_BOUNDARY_VERIFICATION",
             SurveyOrderStatus.AwaitingBaselineAppointment =>
                 "AWAITING_BASELINE_APPOINTMENT",
+            SurveyOrderStatus.AwaitingBoundaryCapture =>
+                "AWAITING_BOUNDARY_CAPTURE",
             SurveyOrderStatus.BaselineReady => "BASELINE_READY",
             SurveyOrderStatus.BaselineInProgress => "BASELINE_IN_PROGRESS",
             SurveyOrderStatus.AwaitingBaselineReview =>

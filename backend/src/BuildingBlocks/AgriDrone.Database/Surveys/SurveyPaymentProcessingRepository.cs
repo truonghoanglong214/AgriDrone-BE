@@ -51,15 +51,15 @@ internal sealed class SurveyPaymentProcessingRepository(
 
         var activePayments = await context.SurveyPayments
             .FromSqlInterpolated($$"""
-                SELECT *
-                FROM survey.survey_payments
-                WHERE survey_order_id = {{surveyOrderId}}
-                  AND status IN (
+                SELECT payment.*, payment.xmin
+                FROM survey.survey_payments AS payment
+                WHERE payment.survey_order_id = {{surveyOrderId}}
+                  AND payment.status IN (
                     'PENDING'::system.survey_payment_status,
                     'PROCESSING'::system.survey_payment_status,
                     'CONFIRMED'::system.survey_payment_status,
                     'ADJUSTMENT_REQUIRED'::system.survey_payment_status)
-                FOR UPDATE
+                FOR UPDATE OF payment
                 """)
             .ToListAsync(cancellationToken);
 
@@ -150,13 +150,13 @@ internal sealed class SurveyPaymentProcessingRepository(
             cancellationToken);
         var openAdjustments = await context.PriceAdjustments
             .FromSqlInterpolated($$"""
-                SELECT *
-                FROM survey.price_adjustments
-                WHERE survey_order_id = {{surveyOrderId}}
-                  AND status IN (
+                SELECT adjustment.*, adjustment.xmin
+                FROM survey.price_adjustments AS adjustment
+                WHERE adjustment.survey_order_id = {{surveyOrderId}}
+                  AND adjustment.status IN (
                     'PENDING'::system.price_adjustment_status,
                     'APPROVED'::system.price_adjustment_status)
-                FOR UPDATE
+                FOR UPDATE OF adjustment
                 """)
             .ToListAsync(cancellationToken);
         var effectivePrices = await ReadEffectivePricesAsync(

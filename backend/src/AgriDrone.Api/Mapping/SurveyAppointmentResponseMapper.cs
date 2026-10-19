@@ -95,6 +95,8 @@ internal static class SurveyAppointmentResponseMapper
         {
             SurveyOrderStatus.AwaitingBaselineAppointment =>
                 "AWAITING_BASELINE_APPOINTMENT",
+            SurveyOrderStatus.AwaitingBoundaryCapture =>
+                "AWAITING_BOUNDARY_CAPTURE",
             SurveyOrderStatus.BaselineReady => "BASELINE_READY",
             SurveyOrderStatus.AwaitingPaidAppointment =>
                 "AWAITING_PAID_APPOINTMENT",

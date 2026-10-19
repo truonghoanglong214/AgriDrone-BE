@@ -18,9 +18,9 @@ public sealed class SurveyRequestConfiguration : IEntityTypeConfiguration<Survey
                 table.HasCheckConstraint("ck_survey_requests_preferred_window", "preferred_end_at IS NULL OR (preferred_start_at IS NOT NULL AND preferred_end_at > preferred_start_at)");
                 table.HasCheckConstraint(
                     "ck_survey_requests_kind_context",
-                    "(kind = 'NEW_CUSTOMER'::system.survey_request_kind AND tenant_id IS NULL AND farm_id IS NULL AND requested_by_user_id IS NULL) OR " +
-                    "(kind = 'EXISTING_TENANT_NEW_FARM'::system.survey_request_kind AND tenant_id IS NOT NULL AND farm_id IS NULL AND requested_by_user_id IS NOT NULL) OR " +
-                    "(kind = 'EXISTING_FARM_SURVEY'::system.survey_request_kind AND tenant_id IS NOT NULL AND farm_id IS NOT NULL AND requested_by_user_id IS NOT NULL)");
+                    "(kind = 'NEW_CUSTOMER'::system.survey_request_kind AND tenant_id IS NULL AND farm_id IS NULL AND requested_by_user_id IS NULL AND tenant_code IS NOT NULL AND tenant_name IS NOT NULL) OR " +
+                    "(kind = 'EXISTING_TENANT_NEW_FARM'::system.survey_request_kind AND tenant_id IS NOT NULL AND farm_id IS NULL AND requested_by_user_id IS NOT NULL AND tenant_code IS NULL AND tenant_name IS NULL) OR " +
+                    "(kind = 'EXISTING_FARM_SURVEY'::system.survey_request_kind AND tenant_id IS NOT NULL AND farm_id IS NOT NULL AND requested_by_user_id IS NOT NULL AND tenant_code IS NULL AND tenant_name IS NULL)");
             });
         builder.HasKey(request => request.Id).HasName("pk_survey_requests");
         builder.Property(request => request.Id).HasColumnName("id").HasColumnType("uuid").HasDefaultValueSql("gen_random_uuid()").ValueGeneratedOnAdd();
@@ -29,6 +29,8 @@ public sealed class SurveyRequestConfiguration : IEntityTypeConfiguration<Survey
         builder.Property(request => request.TenantId).HasColumnName("tenant_id").HasColumnType("uuid");
         builder.Property(request => request.FarmId).HasColumnName("farm_id").HasColumnType("uuid");
         builder.Property(request => request.RequestedByUserId).HasColumnName("requested_by_user_id").HasColumnType("uuid");
+        builder.Property(request => request.TenantCode).HasColumnName("tenant_code").HasColumnType("character varying(50)").HasMaxLength(50);
+        builder.Property(request => request.TenantName).HasColumnName("tenant_name").HasColumnType("character varying(150)").HasMaxLength(150);
         builder.Property(request => request.SurveyServiceId).HasColumnName("survey_service_id").HasColumnType("uuid");
         builder.Property(request => request.CallerScope).HasColumnName("caller_scope").HasColumnType("character varying(100)").HasMaxLength(100).IsRequired();
         builder.Property(request => request.IdempotencyKey).HasColumnName("idempotency_key").HasColumnType("character varying(100)").HasMaxLength(100).IsRequired();
@@ -54,6 +56,14 @@ public sealed class SurveyRequestConfiguration : IEntityTypeConfiguration<Survey
         builder.Property(request => request.UpdatedAt).HasColumnName("updated_at").HasColumnType("timestamp with time zone").HasDefaultValueSql("NOW()").IsRequired();
         builder.HasIndex(request => request.RequestNumber).HasDatabaseName("uq_survey_requests_number").IsUnique();
         builder.HasIndex(request => new { request.CallerScope, request.IdempotencyKey }).HasDatabaseName("uq_survey_requests_caller_idempotency").IsUnique();
+        builder.HasIndex(request => request.TenantCode)
+            .HasDatabaseName("ux_survey_requests_active_tenant_code")
+            .HasFilter(
+                "tenant_code IS NOT NULL AND status IN (" +
+                "'SUBMITTED'::system.survey_request_status, " +
+                "'UNDER_REVIEW'::system.survey_request_status, " +
+                "'APPROVED'::system.survey_request_status)")
+            .IsUnique();
         builder.HasIndex(request => new { request.Status, request.CreatedAt }).HasDatabaseName("ix_survey_requests_inbox");
         builder.HasIndex(request => new { request.TenantId, request.CreatedAt }).HasDatabaseName("ix_survey_requests_tenant_history").IsDescending(false, true);
         builder.HasIndex(request => request.MapLocation).HasDatabaseName("ix_survey_requests_map_location_gist").HasMethod("gist");

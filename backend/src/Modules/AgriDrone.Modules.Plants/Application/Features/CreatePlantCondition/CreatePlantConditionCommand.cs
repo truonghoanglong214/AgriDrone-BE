@@ -12,5 +12,9 @@ namespace AgriDrone.Modules.Plants.Application.Features.CreatePlantCondition
         string Name,
         string? ScientificName,
         ConditionType ConditionType,
-        string? Description) : IRequest<Result<PlantConditionResponse>>;
+        string? Description,
+        PlantHealthLabelKind? PlantHealthLabelKind = null,
+        string? DatasetVersion = null,
+        string? AnnotationRuleVersion = null,
+        string? TeamLabelLimitation = null) : IRequest<Result<PlantConditionResponse>>;
 }

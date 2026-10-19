@@ -4,6 +4,7 @@ public enum SurveyOrderStatus
 {
     PendingBoundaryVerification,
     AwaitingBaselineAppointment,
+    AwaitingBoundaryCapture,
     BaselineReady,
     BaselineInProgress,
     AwaitingBaselineReview,

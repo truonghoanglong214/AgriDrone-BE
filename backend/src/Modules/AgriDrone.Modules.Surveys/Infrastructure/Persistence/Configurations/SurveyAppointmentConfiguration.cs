@@ -37,7 +37,6 @@ public sealed class SurveyAppointmentConfiguration : IEntityTypeConfiguration<Su
         builder.Property(appointment => appointment.Purpose)
             .HasColumnName("purpose")
             .HasColumnType("system.survey_appointment_purpose")
-            .HasDefaultValueSql("'PAID_SERVICE'::system.survey_appointment_purpose")
             .IsRequired();
         builder.Property(appointment => appointment.RevisionNumber).HasColumnName("revision_number").HasColumnType("integer").HasDefaultValue(1).IsRequired();
         builder.Property(appointment => appointment.PreviousAppointmentId).HasColumnName("previous_appointment_id").HasColumnType("uuid");

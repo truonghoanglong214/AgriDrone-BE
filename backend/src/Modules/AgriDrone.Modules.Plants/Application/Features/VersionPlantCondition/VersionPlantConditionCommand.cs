@@ -9,4 +9,7 @@ public sealed record VersionPlantConditionCommand(
     string Name,
     string? ScientificName,
     string? Description,
-    long ExpectedVersion) : IRequest<Result<PlantConditionResponse>>;
+    long ExpectedVersion,
+    string? DatasetVersion = null,
+    string? AnnotationRuleVersion = null,
+    string? TeamLabelLimitation = null) : IRequest<Result<PlantConditionResponse>>;

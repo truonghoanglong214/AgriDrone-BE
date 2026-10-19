@@ -13,11 +13,12 @@ using AgriDrone.SharedKernel.Application;
 using AgriDrone.SharedKernel.Application.Abstractions.Execution;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Npgsql;
 
 namespace AgriDrone.Modules.Surveys.Application.Features.Approvals.ApproveSurveyRequest;
 
-internal sealed class ApproveSurveyRequestCommandHandler(
+internal sealed partial class ApproveSurveyRequestCommandHandler(
     ISurveyApprovalUnitOfWork unitOfWork,
     ISurveyApprovalRequestRepository requestRepository,
     ISurveyApprovalIdempotencyRepository idempotencyRepository,
@@ -27,11 +28,14 @@ internal sealed class ApproveSurveyRequestCommandHandler(
     ISurveyApprovalOutbox approvalOutbox,
     IAuditWriter auditWriter,
     IExecutionContext executionContext,
-    TimeProvider timeProvider)
+    TimeProvider timeProvider,
+    ILogger<ApproveSurveyRequestCommandHandler> logger)
     : IRequestHandler<
         ApproveSurveyRequestCommand,
         Result<ApproveSurveyRequestResponse>>
 {
+    private const int MaximumTransactionAttempts = 3;
+
     private readonly Dictionary<
         SurveyRequestKind,
         ISurveyRequestKindApprovalOrchestrator> _orchestrators =
@@ -68,24 +72,71 @@ internal sealed class ApproveSurveyRequestCommandHandler(
         var approvedAt = timeProvider.GetUtcNow();
         try
         {
-            return await unitOfWork.ExecuteInTransactionAsync(
-                transactionCancellationToken => ApproveWithinTransactionAsync(
-                    command,
-                    actorId,
-                    idempotencyKey,
-                    commandFingerprint,
-                    approvedAt,
-                    transactionCancellationToken),
-                cancellationToken);
+            for (var attempt = 1; ; attempt++)
+            {
+                try
+                {
+                    return await unitOfWork.ExecuteInTransactionAsync(
+                        transactionCancellationToken =>
+                            ApproveWithinTransactionAsync(
+                                command,
+                                actorId,
+                                idempotencyKey,
+                                commandFingerprint,
+                                approvedAt,
+                                transactionCancellationToken),
+                        cancellationToken);
+                }
+                catch (PostgresException exception)
+                    when (IsRetryableTransactionFailure(exception) &&
+                          attempt < MaximumTransactionAttempts)
+                {
+                    LogApprovalTransactionRetry(
+                        logger,
+                        command.SurveyRequestId,
+                        attempt,
+                        exception.SqlState,
+                        exception);
+                    await Task.Delay(
+                        TimeSpan.FromMilliseconds(50 * attempt),
+                        cancellationToken);
+                }
+                catch (DbUpdateException exception)
+                    when (HasRetryableTransactionFailure(exception) &&
+                          attempt < MaximumTransactionAttempts)
+                {
+                    LogApprovalTransactionRetry(
+                        logger,
+                        command.SurveyRequestId,
+                        attempt,
+                        GetPostgresSqlState(exception),
+                        exception);
+                    await Task.Delay(
+                        TimeSpan.FromMilliseconds(50 * attempt),
+                        cancellationToken);
+                }
+            }
         }
-        catch (DbUpdateConcurrencyException)
+        catch (DbUpdateConcurrencyException exception)
         {
+            LogApprovalConcurrencyFailure(
+                logger,
+                command.SurveyRequestId,
+                command.ExpectedVersion,
+                FormatConcurrencyEntries(exception),
+                exception);
+
+            var error = exception.Entries.Any(entry =>
+                    entry.Entity is SurveyRequest)
+                ? SurveyApprovalError.VersionConflict()
+                : SurveyApprovalError.ConcurrentApproval();
+
             return await ResolveAfterConcurrentFailureAsync(
                 command,
                 actorId,
                 idempotencyKey,
                 commandFingerprint,
-                SurveyApprovalError.VersionConflict(),
+                error,
                 cancellationToken);
         }
         catch (PostgresException exception)
@@ -93,6 +144,11 @@ internal sealed class ApproveSurveyRequestCommandHandler(
                 PostgresErrorCodes.SerializationFailure or
                 PostgresErrorCodes.DeadlockDetected)
         {
+            LogApprovalTransactionFailure(
+                logger,
+                command.SurveyRequestId,
+                exception.SqlState,
+                exception);
             return await ResolveAfterConcurrentFailureAsync(
                 command,
                 actorId,
@@ -103,10 +159,18 @@ internal sealed class ApproveSurveyRequestCommandHandler(
         }
         catch (DbUpdateException exception)
         {
-            var error = exception.HasPostgresSqlState(
-                    PostgresErrorCodes.SerializationFailure) ||
-                exception.HasPostgresSqlState(
-                    PostgresErrorCodes.DeadlockDetected)
+            var isRetryableTransactionFailure =
+                HasRetryableTransactionFailure(exception);
+            if (isRetryableTransactionFailure)
+            {
+                LogApprovalTransactionFailure(
+                    logger,
+                    command.SurveyRequestId,
+                    GetPostgresSqlState(exception),
+                    exception);
+            }
+
+            var error = isRetryableTransactionFailure
                 ? SurveyApprovalError.ConcurrentApproval()
                 : MapPersistenceError(exception);
             if (error is null)
@@ -252,22 +316,6 @@ internal sealed class ApproveSurveyRequestCommandHandler(
                 approval.Order.Id,
                 SurveyCaptureAuthorizationType.FlightPermission,
                 approvedAt));
-        using var newData = SurveyApprovalAuditSnapshot.CreateAfter(
-            surveyRequest,
-            review,
-            approval,
-            command.Checklist.Version);
-
-        auditWriter.AddSystemAdminAction(
-            unitOfWork,
-            actorId,
-            executionContext.CorrelationId,
-            "SurveyRequest",
-            surveyRequest.Id,
-            "APPROVE",
-            oldData,
-            newData,
-            approvedAt);
 
         var eventMessageId = Guid.CreateVersion7();
         var approvalEvent = new SurveyRequestApprovedV1(
@@ -293,6 +341,27 @@ internal sealed class ApproveSurveyRequestCommandHandler(
             approvalEvent);
         approvalOutbox.Add(envelope, surveyRequest.Id.ToString("D"));
 
+        // Persist the state transition inside the still-open transaction so
+        // PostgreSQL can refresh the xmin-backed version before we snapshot
+        // the audit payload and the response used for idempotent replay.
+        await unitOfWork.FlushAsync(cancellationToken);
+
+        using var newData = SurveyApprovalAuditSnapshot.CreateAfter(
+            surveyRequest,
+            review,
+            approval,
+            command.Checklist.Version);
+        auditWriter.AddSystemAdminAction(
+            unitOfWork,
+            actorId,
+            executionContext.CorrelationId,
+            "SurveyRequest",
+            surveyRequest.Id,
+            "APPROVE",
+            oldData,
+            newData,
+            approvedAt);
+
         var response = new ApproveSurveyRequestResponse(
             surveyRequest.Id,
             surveyRequest.RequestNumber,
@@ -309,6 +378,8 @@ internal sealed class ApproveSurveyRequestCommandHandler(
             approval.OwnerInvitationId,
             approval.Order.RequiresBaselineMapping,
             approval.Order.PreviousCompatibleOrderId,
+            approval.Order.PreviousOrderCompatibilityPolicyVersion,
+            approval.Order.PreviousOrderCompatibilityReason,
             approvedAt);
         using var resultSnapshot = SurveyApprovalReplaySnapshot.Create(response);
         idempotencyClaim.Complete(resultSnapshot, approvedAt);
@@ -389,19 +460,16 @@ internal sealed class ApproveSurveyRequestCommandHandler(
         SurveyRequestReviewChecklistInput checklist) =>
         checklist is not null &&
         checklist.Version == SurveyRequestReviewChecklistDefinition.Version &&
-        checklist.ContactValid &&
-        checklist.IsServiceAreaSupported &&
-        checklist.IsPreliminaryLegalAndFlightFeasible;
+        SurveyRequestReviewChecklistDefinition.AreAllAnswersConfirmed(
+            checklist.Answers);
 
     private static JsonDocument CreateChecklistSnapshot(
         SurveyRequestReviewChecklistInput checklist) =>
         JsonSerializer.SerializeToDocument(new
         {
             version = checklist.Version,
-            contactValid = checklist.ContactValid,
-            isServiceAreaSupported = checklist.IsServiceAreaSupported,
-            isPreliminaryLegalAndFlightFeasible =
-                checklist.IsPreliminaryLegalAndFlightFeasible,
+            answers = SurveyRequestReviewChecklistDefinition
+                .CanonicalizeAnswers(checklist.Answers),
             notes = string.IsNullOrWhiteSpace(checklist.Notes)
                 ? null
                 : checklist.Notes.Trim()
@@ -461,4 +529,66 @@ internal sealed class ApproveSurveyRequestCommandHandler(
             ? SurveyApprovalError.OwnerInvitationConflict()
             : null;
     }
+
+    private static string FormatConcurrencyEntries(
+        DbUpdateConcurrencyException exception) =>
+        string.Join(
+            ", ",
+            exception.Entries.Select(entry =>
+            {
+                var values = string.Join(
+                    ", ",
+                    entry.Properties
+                        .Where(property => property.Metadata.IsConcurrencyToken)
+                        .Select(property =>
+                            $"{property.Metadata.Name}: original={property.OriginalValue}, current={property.CurrentValue}"));
+                return values.Length == 0
+                    ? entry.Metadata.ClrType.Name
+                    : $"{entry.Metadata.ClrType.Name} ({values})";
+            }));
+
+    private static bool IsRetryableTransactionFailure(
+        PostgresException exception) =>
+        exception.SqlState is PostgresErrorCodes.SerializationFailure or
+            PostgresErrorCodes.DeadlockDetected;
+
+    private static bool HasRetryableTransactionFailure(
+        DbUpdateException exception) =>
+        exception.HasPostgresSqlState(PostgresErrorCodes.SerializationFailure) ||
+        exception.HasPostgresSqlState(PostgresErrorCodes.DeadlockDetected);
+
+    private static string? GetPostgresSqlState(DbUpdateException exception) =>
+        (exception.InnerException as PostgresException)?.SqlState;
+
+    [LoggerMessage(
+        EventId = 2,
+        Level = LogLevel.Warning,
+        Message = "Retrying survey request {SurveyRequestId} approval after transient database concurrency failure on attempt {Attempt}. PostgreSQL SQL state: {SqlState}.")]
+    private static partial void LogApprovalTransactionRetry(
+        ILogger logger,
+        Guid surveyRequestId,
+        int attempt,
+        string? sqlState,
+        Exception exception);
+
+    [LoggerMessage(
+        EventId = 1,
+        Level = LogLevel.Error,
+        Message = "Survey request {SurveyRequestId} approval hit a persistence concurrency failure for expected version {ExpectedVersion}. Conflicting entities: {EntityTypes}.")]
+    private static partial void LogApprovalConcurrencyFailure(
+        ILogger logger,
+        Guid surveyRequestId,
+        uint expectedVersion,
+        string entityTypes,
+        Exception exception);
+
+    [LoggerMessage(
+        EventId = 3,
+        Level = LogLevel.Error,
+        Message = "Survey request {SurveyRequestId} approval exhausted transaction retries. PostgreSQL SQL state: {SqlState}.")]
+    private static partial void LogApprovalTransactionFailure(
+        ILogger logger,
+        Guid surveyRequestId,
+        string? sqlState,
+        Exception exception);
 }

@@ -4,15 +4,15 @@ using AgriDrone.Api.Contracts.Farms;
 namespace AgriDrone.Api.Contracts.Surveys.Orders;
 
 public sealed record VerifySurveyOrderBoundaryAndScopeRequest(
-    [property: Required] GeoJsonPolygonRequest Boundary,
-    [property: Required]
-    [property: StringLength(2000, MinimumLength = 1)]
+    [param: Required] GeoJsonPolygonRequest Boundary,
+    [param: Required]
+    [param: StringLength(2000, MinimumLength = 1)]
     string Reason,
-    [property: StringLength(1000)] string? EvidenceReference,
-    [property: Required]
-    [property: Range(typeof(uint), "1", "4294967295")]
+    [param: StringLength(1000)] string? EvidenceReference,
+    [param: Required]
+    [param: Range(typeof(uint), "1", "4294967295")]
     uint? ExpectedOrderVersion,
-    [property: Range(1, int.MaxValue)]
+    [param: Range(1, int.MaxValue)]
     int? ExpectedCurrentBoundaryVersionNumber);
 
 public sealed record VerifySurveyOrderBoundaryAndScopeApiResponse(

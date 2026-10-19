@@ -2,6 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-10-07
+- Amended: 2026-10-17 — Baseline appointment precedes same-visit boundary capture and automatic route generation
 - Decision owners: Product, Backend 1, Backend 2
 
 ## Context
@@ -32,18 +33,21 @@ Baseline Phase 5 tính giá theo diện tích và dùng một readiness gate yê
 
 - Một `SurveyOrder` sở hữu cả prerequisite Baseline stage và selected paid-service stage; không tạo Baseline SurveyOrder riêng.
 - Appointment có `Purpose = BaselineMapping | PaidService`. Mỗi order có tối đa một active appointment cho mỗi purpose.
+- Unmapped Farm không yêu cầu approved boundary để đề xuất/xác nhận Baseline appointment. Approval đưa Order vào `AwaitingBaselineAppointment`; Owner confirmation đưa Order vào `AwaitingBoundaryCapture`.
+- Trong chính appointment đã confirm, assigned Manager dùng drone GNSS chấm các góc, finalize/approve `FarmBoundary`, sau đó hệ thống sinh automatic mapping route nằm trong polygon đã approve. Boundary capture và Baseline flight là hai bước liên tiếp trong cùng field visit, không phải hai appointment.
 - Unmapped Farm đi theo chuỗi:
-  `PendingBoundaryVerification → AwaitingBaselineAppointment → BaselineReady → BaselineInProgress → AwaitingBaselineReview → AwaitingPricing → AwaitingPaidAppointment → AwaitingPayment → ReadyForPaidService → InProgress → PendingReview → Completed`.
+  `AwaitingBaselineAppointment → AwaitingBoundaryCapture → BaselineReady → BaselineInProgress → AwaitingBaselineReview → AwaitingPricing → AwaitingPaidAppointment → AwaitingPayment → ReadyForPaidService → InProgress → PendingReview → Completed`.
 - Mapped Farm bỏ qua các trạng thái Baseline và đi từ verified boundary/scope tới `AwaitingPricing`.
 - Paid-service ordering là: confirmed count → pricing snapshot → paid appointment confirmation → payment confirmation → `ReadyForPaidService`.
 - Cancellation được phép trước khi Mission tương ứng bắt đầu. Sau khi work đã bắt đầu, hệ thống dùng failure/abort/compensation state và không giả lịch sử thành `Cancelled`.
 
 ### Purpose-aware readiness
 
-- Baseline readiness yêu cầu approved boundary/scope, confirmed Baseline appointment, assigned active/available/flight-qualified primary SystemManager và safety/pre-flight gates; không yêu cầu price hoặc payment.
+- Baseline appointment proposal/confirmation chỉ yêu cầu Order thuộc unmapped Farm và eligible primary assignment; chưa yêu cầu approved boundary.
+- Baseline readiness tại thời điểm start yêu cầu confirmed Baseline appointment còn hiệu lực, boundary vừa được Manager capture/approve, automatic route plan được sinh từ đúng boundary version và mọi waypoint nằm trong safety-inset polygon, assigned active/available/flight-qualified primary SystemManager cùng safety/pre-flight gates; không yêu cầu price hoặc payment.
 - Paid-service readiness yêu cầu approved boundary/scope, published base map, confirmed active-pole count, immutable price snapshot, confirmed PaidService appointment, confirmed payment, eligible assigned manager, không có pending price adjustment và các safety/pre-flight gates.
 - Readiness là server-owned decision theo `MissionPurpose`; client không được gửi `IsReady` hoặc derived order state.
 
 ## Consequences
 
-`SurveyServicePrice`, `SurveyOrder`, appointment uniqueness, readiness policy, operational-context contract và database constraints phải được rebaseline. ADR-0003 bị supersede đối với pricing unit nhưng giữ nguyên currency/rounding conventions.
+`SurveyServicePrice`, `SurveyOrder`, appointment uniqueness, boundary-capture lifecycle, automatic route-plan snapshot, readiness policy, operational-context contract và database constraints phải được rebaseline. ADR-0003 bị supersede đối với pricing unit nhưng giữ nguyên currency/rounding conventions.

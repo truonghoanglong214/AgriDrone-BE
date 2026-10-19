@@ -1,8 +1,12 @@
 # ADR-0009: Disease Zone và expert-validated treatment recommendation
 
-- Status: Accepted
+- Status: Partially superseded by ADR-0010
 - Date: 2026-10-07
 - Decision owners: Product, Backend 1, AI/GIS
+
+Phần quyết định về `DiseaseZone` vẫn có hiệu lực. Phần treatment recommendation
+theo severity đã được ADR-0010 thay thế cho target Plant Health flow; schema cũ
+chỉ được giữ để đọc dữ liệu tương thích.
 
 ## Context
 

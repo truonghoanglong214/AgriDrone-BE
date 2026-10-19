@@ -7,6 +7,9 @@ internal sealed class SurveyApprovalUnitOfWork(
     SurveyApprovalDbContext context)
     : ISurveyApprovalUnitOfWork
 {
+    public Task FlushAsync(CancellationToken cancellationToken = default) =>
+        context.FlushAsync(cancellationToken);
+
     public Task<T> ExecuteInTransactionAsync<T>(
         Func<CancellationToken, Task<T>> operation,
         CancellationToken cancellationToken = default) =>

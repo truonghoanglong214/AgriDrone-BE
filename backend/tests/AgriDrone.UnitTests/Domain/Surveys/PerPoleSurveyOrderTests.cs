@@ -64,24 +64,31 @@ public sealed class PerPoleSurveyOrderTests
         var managerId = Guid.NewGuid();
         var priceVersionId = Guid.NewGuid();
 
-        order.VerifyBoundaryAndScopeForUnmappedFarm(
+        var captureId = Guid.NewGuid();
+        order.MarkBaselineAppointmentConfirmed(Now.AddMinutes(1));
+        order.RecordBoundaryCapture(
+            captureId,
             boundaryVersionId,
             managerId,
-            Now.AddMinutes(1));
-        order.MarkBaselineAppointmentConfirmed(Now.AddMinutes(2));
-        order.StartBaselineMapping(Now.AddMinutes(3));
-        order.MarkBaselineCandidatesReady(Now.AddMinutes(4));
+            Now.AddMinutes(2));
+        order.ApproveBaselineRoute(
+            Guid.NewGuid(),
+            captureId,
+            boundaryVersionId,
+            Now.AddMinutes(3));
+        order.StartBaselineMapping(Now.AddMinutes(4));
+        order.MarkBaselineCandidatesReady(Now.AddMinutes(5));
         order.RecordBaselinePublication(
             baseMapVersionId,
             ConfirmedSurveyPoleCount.Create(125),
             managerId,
-            Now.AddMinutes(5));
+            Now.AddMinutes(6));
         order.ConfirmPricing(
             priceVersionId,
             PricePerPole.Create(10_000m),
             CurrencyCode.Vnd,
             managerId,
-            Now.AddMinutes(6));
+            Now.AddMinutes(7));
 
         Assert.Equal(SurveyOrderStatus.AwaitingPaidAppointment, order.Status);
         Assert.Equal(boundaryVersionId, order.FarmBoundaryVersionId);
@@ -128,7 +135,7 @@ public sealed class PerPoleSurveyOrderTests
             SurveyOrderDomainErrorCodes.BaselineMappingRequired,
             exception.Code);
         Assert.Equal(
-            SurveyOrderStatus.PendingBoundaryVerification,
+            SurveyOrderStatus.AwaitingBaselineAppointment,
             order.Status);
     }
 
@@ -137,20 +144,28 @@ public sealed class PerPoleSurveyOrderTests
     {
         var managerId = Guid.NewGuid();
         var order = CreateOrder(requiresBaselineMapping: true);
-        order.VerifyBoundaryAndScopeForUnmappedFarm(
-            Guid.NewGuid(),
+        var boundaryId = Guid.NewGuid();
+        var captureId = Guid.NewGuid();
+        order.MarkBaselineAppointmentConfirmed(Now.AddMinutes(1));
+        order.RecordBoundaryCapture(
+            captureId,
+            boundaryId,
             managerId,
-            Now.AddMinutes(1));
-        order.MarkBaselineAppointmentConfirmed(Now.AddMinutes(2));
-        order.StartBaselineMapping(Now.AddMinutes(3));
-        order.MarkBaselineCandidatesReady(Now.AddMinutes(4));
+            Now.AddMinutes(2));
+        order.ApproveBaselineRoute(
+            Guid.NewGuid(),
+            captureId,
+            boundaryId,
+            Now.AddMinutes(3));
+        order.StartBaselineMapping(Now.AddMinutes(4));
+        order.MarkBaselineCandidatesReady(Now.AddMinutes(5));
         order.RecordBaselinePublication(
             Guid.NewGuid(),
             ConfirmedSurveyPoleCount.Create(20),
             managerId,
-            Now.AddMinutes(5));
+            Now.AddMinutes(6));
 
-        order.Cancel(Now.AddMinutes(6));
+        order.Cancel(Now.AddMinutes(7));
 
         Assert.Equal(SurveyOrderStatus.Cancelled, order.Status);
     }
@@ -184,5 +199,7 @@ public sealed class PerPoleSurveyOrderTests
             Guid.NewGuid(),
             requiresBaselineMapping,
             previousCompatibleOrderId: null,
+            previousOrderCompatibilityPolicyVersion: "test.v1",
+            previousOrderCompatibilityReason: "NO_PREVIOUS_PUBLISHED_ORDER",
             createdAt: Now);
 }

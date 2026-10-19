@@ -7,7 +7,11 @@ public sealed record CreatePlantConditionRequest(
     string Name,
     string? ScientificName,
     PlantConditionTypeValue ConditionType,
-    string? Description);
+    string? Description,
+    PlantHealthLabelKindValue? PlantHealthLabelKind = null,
+    string? DatasetVersion = null,
+    string? AnnotationRuleVersion = null,
+    string? TeamLabelLimitation = null);
 
 public enum PlantConditionTypeValue
 {
@@ -22,4 +26,13 @@ public enum PlantConditionTypeValue
 
     [JsonStringEnumMemberName("OTHER")]
     Other
+}
+
+public enum PlantHealthLabelKindValue
+{
+    [JsonStringEnumMemberName("SUSPECTED_DISEASE")]
+    SuspectedDisease,
+
+    [JsonStringEnumMemberName("CONFUSING_NON_DISEASE")]
+    ConfusingNonDisease
 }

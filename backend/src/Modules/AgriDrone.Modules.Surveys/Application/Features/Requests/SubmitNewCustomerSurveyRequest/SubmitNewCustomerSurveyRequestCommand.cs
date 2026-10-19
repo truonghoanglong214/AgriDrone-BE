@@ -7,6 +7,8 @@ namespace AgriDrone.Modules.Surveys.Application.Features.Requests.SubmitNewCusto
 public sealed record SubmitNewCustomerSurveyRequestCommand(
     RequestIdempotency Idempotency,
     Guid SurveyServiceId,
+    string TenantCode,
+    string TenantName,
     string ApplicantName,
     string ApplicantEmail,
     string ApplicantPhone,

@@ -45,7 +45,11 @@ namespace AgriDrone.Modules.Plants.Application.Features.CreatePlantCondition
                 request.ScientificName,
                 request.ConditionType,
                 request.Description,
-                now);
+                now,
+                request.PlantHealthLabelKind,
+                request.DatasetVersion,
+                request.AnnotationRuleVersion,
+                request.TeamLabelLimitation);
 
             plantConditionRepository.Add(plantCondition);
 
@@ -56,6 +60,10 @@ namespace AgriDrone.Modules.Plants.Application.Features.CreatePlantCondition
                 plantCondition.ScientificName,
                 ConditionType = plantCondition.ConditionType.ToString(),
                 plantCondition.Description,
+                plantCondition.PlantHealthLabelKind,
+                plantCondition.DatasetVersion,
+                plantCondition.AnnotationRuleVersion,
+                plantCondition.TeamLabelLimitation,
                 plantCondition.RevisionNumber,
                 plantCondition.IsActive
             });

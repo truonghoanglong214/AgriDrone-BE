@@ -15,6 +15,7 @@ internal static class AgriDroneSchemaDbContextOptions
                 npgsqlOptions =>
                 {
                     npgsqlOptions.UseNetTopologySuite();
+                    PostgreSqlEnumMappings.ConfigureOptions(npgsqlOptions);
                     npgsqlOptions.MigrationsAssembly(
                         typeof(AgriDroneSchemaDbContext).Assembly.FullName);
                     npgsqlOptions.MigrationsHistoryTable(

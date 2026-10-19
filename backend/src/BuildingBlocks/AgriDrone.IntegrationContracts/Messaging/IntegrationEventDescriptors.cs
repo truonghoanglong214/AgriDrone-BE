@@ -150,4 +150,11 @@ public static class IntegrationEventDescriptors
             IntegrationEventTypes.SurveyPriceAdjustmentChangedV1,
             IntegrationSchemaVersions.V1,
             RequiresActorId: true);
+
+    public static IntegrationEventDescriptor<SurveyBoundaryCaptureChangedV1>
+        SurveyBoundaryCaptureChangedV1 { get; } =
+        new(
+            IntegrationEventTypes.SurveyBoundaryCaptureChangedV1,
+            IntegrationSchemaVersions.V1,
+            RequiresActorId: true);
 }
