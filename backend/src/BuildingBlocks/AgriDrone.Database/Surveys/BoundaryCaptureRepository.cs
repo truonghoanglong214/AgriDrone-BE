@@ -249,19 +249,17 @@ internal sealed class BoundaryCaptureRepository(
     {
         await using var command = CreateCommand(
             """
-            SELECT count(DISTINCT authorization.authorization_type)
-            FROM survey.survey_capture_authorizations AS authorization
-            WHERE authorization.survey_order_id = @order_id
-              AND authorization.authorization_type IN (
-                'WRITTEN_DATA_USE_CONSENT'::system.survey_capture_authorization_type,
-                'FLIGHT_PERMISSION'::system.survey_capture_authorization_type)
-              AND authorization.status =
-                'VERIFIED'::system.survey_capture_authorization_status
-              AND authorization.verified_at <= @evaluated_at
-              AND (authorization.expires_at IS NULL OR
-                   @evaluated_at < authorization.expires_at)
-              AND authorization.revoked_at IS NULL
-            """,
+SELECT count(DISTINCT auth.authorization_type)
+FROM survey.survey_capture_authorizations AS auth
+WHERE auth.survey_order_id = @order_id
+  AND auth.authorization_type IN (
+    'WRITTEN_DATA_USE_CONSENT'::system.survey_capture_authorization_type,
+    'FLIGHT_PERMISSION'::system.survey_capture_authorization_type)
+  AND auth.status = 'VERIFIED'::system.survey_capture_authorization_status
+  AND auth.verified_at <= @evaluated_at
+  AND (auth.expires_at IS NULL OR @evaluated_at < auth.expires_at)
+  AND auth.revoked_at IS NULL
+""",
             Id("order_id", surveyOrderId),
             new NpgsqlParameter("evaluated_at", evaluatedAt));
         var value = await command.ExecuteScalarAsync(cancellationToken);
