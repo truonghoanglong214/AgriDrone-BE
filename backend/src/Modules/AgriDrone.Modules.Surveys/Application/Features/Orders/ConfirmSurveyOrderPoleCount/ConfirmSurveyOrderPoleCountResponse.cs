@@ -20,4 +20,5 @@ public sealed record ConfirmSurveyOrderPoleCountResponse(
     Guid SystemManagerProfileId,
     SurveyOrderStatus OrderStatus,
     uint OrderVersion,
-    DateTimeOffset ConfirmedAt);
+    DateTimeOffset ConfirmedAt,
+    decimal? RemainingAmount = null);

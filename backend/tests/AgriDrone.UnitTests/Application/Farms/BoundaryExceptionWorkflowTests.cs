@@ -195,6 +195,38 @@ public sealed class BoundaryExceptionWorkflowTests
         Assert.Equal(exception.Id, result.Value[0].Id);
     }
 
+
+    [Fact]
+    public async Task ClassifyAndRecordPointReturnsExistingUnresolvedExceptionIdWhenSameSourceIsRetried()
+    {
+        var fixture = CreateFixture();
+        var pointNear = _geometryFactory.CreatePoint(new Coordinate(106.10001, 10.05));
+        var command = new ClassifyAndRecordPointCommand(
+            fixture.Farm.Id,
+            pointNear,
+            BoundaryExceptionSource.BaselineCandidate,
+            "retry-source-01",
+            SurveyOrderId: Guid.NewGuid(),
+            MissionId: Guid.NewGuid(),
+            NearBoundaryThresholdMeters: 5.0);
+
+        var firstResult = await fixture.ClassifyHandler.Handle(
+            new ClassifyAndRecordPointRequest(command),
+            CancellationToken.None);
+
+        Assert.True(firstResult.IsSuccess);
+        Assert.NotNull(firstResult.Value.BoundaryExceptionId);
+        Assert.Equal(1, fixture.ExceptionRepo.AddCallCount);
+
+        // Retry with exact same source reference
+        var retryResult = await fixture.ClassifyHandler.Handle(
+            new ClassifyAndRecordPointRequest(command),
+            CancellationToken.None);
+
+        Assert.True(retryResult.IsSuccess);
+        Assert.Equal(firstResult.Value.BoundaryExceptionId, retryResult.Value.BoundaryExceptionId);
+        Assert.Equal(1, fixture.ExceptionRepo.AddCallCount); // Did NOT add a duplicate exception
+    }
     private TestFixture CreateFixture()
     {
         var tenantId = Guid.NewGuid();
@@ -237,7 +269,7 @@ public sealed class BoundaryExceptionWorkflowTests
         var boundaryRepo = new FakeFarmBoundaryRepository { CurrentApproved = approvedBoundary };
         var zoneRepo = new FakeFarmZoneRepository();
         var exceptionRepo = new FakeBoundaryExceptionRepository();
-        var boundaryPolicy = new FarmBoundaryPolicy(boundaryRepo, zoneRepo, farmRepo);
+        var boundaryPolicy = new FarmBoundaryPolicy(boundaryRepo, zoneRepo);
         var unitOfWork = new FakeFarmUnitOfWork();
         var auditWriter = new FakeAuditWriter();
         var execContext = new FakeExecutionContext(tenantId, actorId);
@@ -299,6 +331,10 @@ public sealed class BoundaryExceptionWorkflowTests
             => Task.FromResult(Farm);
         public Task<Farm?> GetByCodeAsync(Guid tenantId, string farmCode, CancellationToken cancellationToken = default)
             => Task.FromResult<Farm?>(null);
+                public List<FarmZone> ActiveZones { get; } = [];
+        public Task<IReadOnlyList<FarmZone>> GetActiveZonesByFarmIdAsync(Guid tenantId, Guid farmId, CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<FarmZone>>(ActiveZones);
+
         public Task<bool> ActiveCodeExistsAsync(Guid tenantId, string code, Guid? excludingFarmId = null, CancellationToken cancellationToken = default)
             => Task.FromResult(false);
         public Task<Farm?> GetByIdIncludingArchivedAsync(Guid tenantId, Guid farmId, CancellationToken cancellationToken = default)
@@ -324,6 +360,10 @@ public sealed class BoundaryExceptionWorkflowTests
     {
         public Task<bool> ActiveBoundaryOverlapsAsync(Guid tenantId, Guid farmId, Polygon boundary, Guid? excludingZoneId = null, CancellationToken cancellationToken = default)
             => Task.FromResult(false);
+                public List<FarmZone> ActiveZones { get; } = [];
+        public Task<IReadOnlyList<FarmZone>> GetActiveZonesByFarmIdAsync(Guid tenantId, Guid farmId, CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<FarmZone>>(ActiveZones);
+
         public Task<bool> ActiveCodeExistsAsync(Guid tenantId, Guid farmId, string code, Guid? excludingZoneId = null, CancellationToken cancellationToken = default)
             => Task.FromResult(false);
         public Task<FarmZone?> GetByIdAsync(Guid tenantId, Guid farmId, Guid zoneId, CancellationToken cancellationToken = default)
@@ -343,6 +383,16 @@ public sealed class BoundaryExceptionWorkflowTests
         public Task<BoundaryException?> GetByIdAsync(Guid tenantId, Guid exceptionId, CancellationToken cancellationToken = default)
         {
             Store.TryGetValue(exceptionId, out var exception);
+            return Task.FromResult(exception);
+        }
+
+        public Task<BoundaryException?> GetUnresolvedBySourceAsync(Guid farmBoundaryVersionId, BoundaryExceptionSource source, string sourceReferenceId, CancellationToken cancellationToken = default)
+        {
+            var exception = Store.Values.FirstOrDefault(e =>
+                e.FarmBoundaryVersionId == farmBoundaryVersionId &&
+                e.Source == source &&
+                e.SourceReferenceId == sourceReferenceId &&
+                e.State != BoundaryExceptionState.Resolved);
             return Task.FromResult(exception);
         }
 

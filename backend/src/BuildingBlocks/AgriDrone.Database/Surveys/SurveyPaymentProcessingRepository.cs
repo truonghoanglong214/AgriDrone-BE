@@ -18,6 +18,7 @@ internal sealed class SurveyPaymentProcessingRepository(
             Guid surveyOrderId,
             Guid actorUserId,
             DateTimeOffset evaluatedAt,
+            PaymentPurpose purpose = PaymentPurpose.FinalBalance,
             CancellationToken cancellationToken = default)
     {
         context.EnsureTransaction();
@@ -39,8 +40,9 @@ internal sealed class SurveyPaymentProcessingRepository(
         var order = await context.SurveyOrders.SingleAsync(
             item => item.Id == surveyOrderId,
             cancellationToken);
-        var appointmentId = await ReadConfirmedPaidAppointmentAsync(
+        var appointmentId = await ReadConfirmedAppointmentForPurposeAsync(
             surveyOrderId,
+            purpose,
             evaluatedAt,
             cancellationToken);
         if (!appointmentId.HasValue)
@@ -49,11 +51,13 @@ internal sealed class SurveyPaymentProcessingRepository(
                 PaymentError.OrderNotReady());
         }
 
+        var purposeString = purpose.ToString();
         var activePayments = await context.SurveyPayments
             .FromSqlInterpolated($$"""
                 SELECT payment.*, payment.xmin
                 FROM survey.survey_payments AS payment
                 WHERE payment.survey_order_id = {{surveyOrderId}}
+                  AND payment.purpose = {{purposeString}}
                   AND payment.status IN (
                     'PENDING'::system.survey_payment_status,
                     'PROCESSING'::system.survey_payment_status,
@@ -412,17 +416,22 @@ internal sealed class SurveyPaymentProcessingRepository(
             cancellationToken);
     }
 
-    private async Task<Guid?> ReadConfirmedPaidAppointmentAsync(
+    private async Task<Guid?> ReadConfirmedAppointmentForPurposeAsync(
         Guid surveyOrderId,
+        PaymentPurpose purpose,
         DateTimeOffset evaluatedAt,
         CancellationToken cancellationToken)
     {
+        var purposeSql = purpose == PaymentPurpose.BaselineDeposit
+            ? "'BASELINE_MAPPING'::system.survey_appointment_purpose"
+            : "'PAID_SERVICE'::system.survey_appointment_purpose";
+
         await using var command = CreateCommand(
-            """
+            $"""
             SELECT appointment.id
             FROM survey.survey_appointments AS appointment
             WHERE appointment.survey_order_id = @order_id
-              AND appointment.purpose = 'PAID_SERVICE'::system.survey_appointment_purpose
+              AND appointment.purpose = {purposeSql}
               AND appointment.status = 'CONFIRMED'::system.survey_appointment_status
               AND appointment.proposed_end_at > @evaluated_at
             FOR SHARE OF appointment

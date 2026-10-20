@@ -25,7 +25,7 @@ public sealed class GetAssignedFarmOperationalContextHandlerTests
     }
 
     [Fact]
-    public async Task HandleReturnsAccessDeniedWhenAccessDenied()
+    public async Task HandleReturnsNotFoundWhenAccessDenied()
     {
         var farmId = Guid.NewGuid();
         var fixture = new TestFixture
@@ -39,7 +39,7 @@ public sealed class GetAssignedFarmOperationalContextHandlerTests
             CancellationToken.None);
 
         Assert.True(result.IsFailure);
-        Assert.Equal("Farm.AccessDenied", result.Error.Code);
+        Assert.Equal("Farm.NotFound", result.Error.Code);
     }
 
     [Fact]

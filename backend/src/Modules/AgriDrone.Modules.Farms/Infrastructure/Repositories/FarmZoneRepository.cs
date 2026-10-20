@@ -1,4 +1,4 @@
-﻿using AgriDrone.Modules.Farms.Domain.Zones;
+using AgriDrone.Modules.Farms.Domain.Zones;
 using AgriDrone.Modules.Farms.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using NetTopologySuite.Geometries;
@@ -11,6 +11,20 @@ namespace AgriDrone.Modules.Farms.Infrastructure.Repositories
     internal sealed class FarmZoneRepository(
         FarmsDbContext context) : IFarmZoneRepository
     {
+        public async Task<IReadOnlyList<FarmZone>> GetActiveZonesByFarmIdAsync(
+            Guid tenantId,
+            Guid farmId,
+            CancellationToken cancellationToken = default)
+        {
+            return await context.FarmZones
+                .Where(fz => fz.Farm.TenantId == tenantId &&
+                             fz.FarmId == farmId &&
+                             fz.DeletedAt == null &&
+                             fz.Farm.DeletedAt == null &&
+                             fz.Status == SharedKernel.Domain.GeneralStatus.Active)
+                .ToListAsync(cancellationToken);
+        }
+
         public Task<bool> ActiveCodeExistsAsync(Guid tenantId, Guid farmId, string code, Guid? excludingZoneId = null, CancellationToken cancellationToken = default)
         {
             var normalizedCode = code.Trim().ToUpperInvariant();

@@ -29,7 +29,8 @@ public sealed record SurveyOrderReadinessSnapshot(
     bool HasFinalizedBoundaryCapture = false,
     bool HasApprovedBaselineRoute = false,
     bool IsBaselineRouteCurrent = false,
-    bool IsBaselineRouteWithinSafetyInset = false)
+    bool IsBaselineRouteWithinSafetyInset = false,
+    SurveyPaymentStatus? DepositPaymentStatus = null)
 {
     public SurveyOrderReadinessSnapshot(
         SurveyOrderStatus OrderStatus,
@@ -77,7 +78,8 @@ public sealed record SurveyOrderReadinessSnapshot(
             HasFinalizedBoundaryCapture: false,
             HasApprovedBaselineRoute: false,
             IsBaselineRouteCurrent: false,
-            IsBaselineRouteWithinSafetyInset: false)
+            IsBaselineRouteWithinSafetyInset: false,
+            DepositPaymentStatus: null)
     {
     }
 }

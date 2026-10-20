@@ -26,12 +26,19 @@ public sealed class SurveyPaymentConfiguration : IEntityTypeConfiguration<Survey
         builder.Property(payment => payment.Provider).HasColumnName("provider").HasColumnType("character varying(50)").HasMaxLength(50).IsRequired();
         builder.Property(payment => payment.ProviderReference).HasColumnName("provider_reference").HasColumnType("character varying(150)").HasMaxLength(150);
         builder.Property(payment => payment.Status).HasColumnName("status").HasColumnType("system.survey_payment_status").IsRequired();
+        builder.Property(payment => payment.Purpose)
+            .HasColumnName("purpose")
+            .HasConversion<string>()
+            .HasColumnType("character varying(50)")
+            .HasMaxLength(50)
+            .HasDefaultValue(PaymentPurpose.FinalBalance)
+            .IsRequired();
         builder.Property(payment => payment.ConfirmedAt).HasColumnName("confirmed_at").HasColumnType("timestamp with time zone");
         builder.Property(payment => payment.Version).IsRowVersion();
         builder.Property(payment => payment.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp with time zone").HasDefaultValueSql("NOW()").IsRequired();
         builder.Property(payment => payment.UpdatedAt).HasColumnName("updated_at").HasColumnType("timestamp with time zone").HasDefaultValueSql("NOW()").IsRequired();
         builder.HasIndex(payment => new { payment.Provider, payment.ProviderReference }).HasDatabaseName("uq_survey_payments_provider_reference").HasFilter("provider_reference IS NOT NULL").IsUnique();
-        builder.HasIndex(payment => payment.SurveyOrderId).HasDatabaseName("uq_survey_payments_one_active_per_order").HasFilter("status IN ('PENDING'::system.survey_payment_status, 'PROCESSING'::system.survey_payment_status, 'CONFIRMED'::system.survey_payment_status, 'ADJUSTMENT_REQUIRED'::system.survey_payment_status)").IsUnique();
+        builder.HasIndex(payment => new { payment.SurveyOrderId, payment.Purpose }).HasDatabaseName("uq_survey_payments_one_active_per_order_purpose").HasFilter("status IN ('PENDING'::system.survey_payment_status, 'PROCESSING'::system.survey_payment_status, 'CONFIRMED'::system.survey_payment_status, 'ADJUSTMENT_REQUIRED'::system.survey_payment_status)").IsUnique();
         builder.HasIndex(payment => new { payment.Status, payment.UpdatedAt }).HasDatabaseName("ix_survey_payments_reconciliation");
         builder.HasOne(payment => payment.SurveyOrder).WithMany(order => order.Payments).HasForeignKey(payment => payment.SurveyOrderId).OnDelete(DeleteBehavior.Restrict).HasConstraintName("fk_survey_payments_orders_order_id");
     }

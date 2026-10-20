@@ -110,4 +110,9 @@ public sealed record SurveyOrderOperationalContextV4(
     IReadOnlyList<OperationalExtraFlightDetail> ExtraFlights,
     CommercialReadinessEvaluation CommercialReadiness,
     OperationalMissionReadiness MissionReadiness,
-    DateTimeOffset EvaluatedAt);
+    DateTimeOffset EvaluatedAt,
+    string? DepositPaymentStatus = null,
+    decimal? DepositAmount = null,
+    decimal? RemainingAmount = null,
+    Guid? DepositPaymentId = null,
+    DateTimeOffset? DepositConfirmedAt = null);

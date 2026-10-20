@@ -15,7 +15,7 @@ public sealed class BoundaryCaptureTests
 
         order.MarkBaselineAppointmentConfirmed(Now.AddMinutes(1));
 
-        Assert.Equal(SurveyOrderStatus.AwaitingBoundaryCapture, order.Status);
+        Assert.Equal(SurveyOrderStatus.AwaitingBaselineDeposit, order.Status);
         Assert.False(SurveyOrder.CanTransition(
             SurveyOrderStatus.AwaitingBaselineAppointment,
             SurveyOrderStatus.BaselineReady));

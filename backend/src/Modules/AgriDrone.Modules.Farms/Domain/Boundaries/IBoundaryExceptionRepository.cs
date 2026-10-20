@@ -7,6 +7,12 @@ internal interface IBoundaryExceptionRepository
         Guid exceptionId,
         CancellationToken cancellationToken = default);
 
+    Task<BoundaryException?> GetUnresolvedBySourceAsync(
+        Guid farmBoundaryVersionId,
+        BoundaryExceptionSource source,
+        string sourceReferenceId,
+        CancellationToken cancellationToken = default);
+
     Task<bool> HasUnresolvedSourceAsync(
         Guid farmBoundaryVersionId,
         BoundaryExceptionSource source,

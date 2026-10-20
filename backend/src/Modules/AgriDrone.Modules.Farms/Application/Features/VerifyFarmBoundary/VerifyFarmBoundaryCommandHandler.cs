@@ -14,6 +14,8 @@ namespace AgriDrone.Modules.Farms.Application.Features.VerifyFarmBoundary;
 internal sealed class VerifyFarmBoundaryCommandHandler(
     IFarmRepository farmRepository,
     IFarmBoundaryRepository boundaryRepository,
+    AgriDrone.Modules.Farms.Domain.Zones.IFarmZoneRepository zoneRepository,
+    AgriDrone.Modules.Farms.Application.Abstractions.Boundaries.IFarmBoundaryPolicy boundaryPolicy,
     IFarmUnitOfWork unitOfWork,
     IAuditWriter auditWriter,
     IExecutionContext executionContext,
@@ -75,6 +77,26 @@ internal sealed class VerifyFarmBoundaryCommandHandler(
                 FarmError.BoundaryConcurrentModification());
         }
 
+        var activeZones = await zoneRepository.GetActiveZonesByFarmIdAsync(
+            tenantId,
+            command.FarmId,
+            cancellationToken);
+
+        foreach (var zone in activeZones)
+        {
+            if (zone.Boundary is not null)
+            {
+                var containment = boundaryPolicy.ValidateZoneWithinBoundary(
+                    zone.Boundary,
+                    command.Boundary);
+
+                if (containment.IsFailure)
+                {
+                    return Result.Failure<VerifyFarmBoundaryResponse>(containment.Error);
+                }
+            }
+        }
+
         var nextVersionNumber = await boundaryRepository.GetNextVersionNumberAsync(
             tenantId,
             command.FarmId,
@@ -124,7 +146,15 @@ internal sealed class VerifyFarmBoundaryCommandHandler(
             newData: auditData,
             createdAt: now);
 
-        await unitOfWork.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+        catch (Microsoft.EntityFrameworkCore.DbUpdateException)
+        {
+            return Result.Failure<VerifyFarmBoundaryResponse>(
+                FarmError.BoundaryConcurrentModification());
+        }
 
         return Result.Success(new VerifyFarmBoundaryResponse(
             newBoundary.Id,

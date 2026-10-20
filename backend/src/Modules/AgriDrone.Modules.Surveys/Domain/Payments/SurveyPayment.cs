@@ -40,6 +40,7 @@ public sealed class SurveyPayment : Entity
     public string Provider { get; private set; } = null!;
     public string? ProviderReference { get; private set; }
     public SurveyPaymentStatus Status { get; private set; }
+    public PaymentPurpose Purpose { get; private set; } = PaymentPurpose.FinalBalance;
     public DateTimeOffset? ConfirmedAt { get; private set; }
     public uint Version { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
@@ -51,7 +52,8 @@ public sealed class SurveyPayment : Entity
         Guid surveyOrderId,
         Money amount,
         string provider,
-        DateTimeOffset createdAt)
+        DateTimeOffset createdAt,
+        PaymentPurpose purpose = PaymentPurpose.FinalBalance)
     {
         DomainGuard.NotEmpty(surveyOrderId);
         DomainGuard.Utc(createdAt);
@@ -79,6 +81,7 @@ public sealed class SurveyPayment : Entity
             Currency = amount.Currency.Value,
             Provider = normalizedProvider,
             Status = SurveyPaymentStatus.Pending,
+            Purpose = purpose,
             CreatedAt = createdAt,
             UpdatedAt = createdAt
         };

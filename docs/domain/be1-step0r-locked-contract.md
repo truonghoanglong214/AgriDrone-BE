@@ -2,7 +2,8 @@
 
 - Status: Approved design baseline
 - Date: 2026-10-07
-- Amended: 2026-10-17 — same-visit boundary capture and automatic Baseline route
+- Amended: 2026-10-17 — same-visit boundary capture and automatic Baseline route (superseded)
+- Amended: 2026-10-20 — Orthophoto-based 4-corner boundary marking: Appointment confirmed -> BaselineReady -> Baseline flight -> Orthophoto -> Mark 4 corners -> Create FarmBoundary -> Approve & publish base map -> AwaitingPricing
 - Implements: ADR-0007 through ADR-0011
 - Implementation status: pre-amendment baseline was `CodeComplete — AwaitingFinalTest`
   as of 2026-10-08; the 2026-10-17 state-order/capture/route amendment is
@@ -48,8 +49,8 @@ All timestamps are UTC `DateTimeOffset`. All mutable business resources carry an
 | From | Source of truth | To |
 |---|---|---|
 | creation for unmapped Farm | approved SurveyRequest orchestration | `AwaitingBaselineAppointment` |
-| `AwaitingBaselineAppointment` | Baseline appointment confirmed by TenantOwner | `AwaitingBoundaryCapture` |
-| `AwaitingBoundaryCapture` | assigned Manager finalizes GNSS corner capture, approves boundary and system persists a valid automatic route plan | `BaselineReady` |
+| `AwaitingBaselineAppointment` | Baseline appointment confirmed by TenantOwner & flight safety pre-checks pass | `BaselineReady` |
+| `AwaitingBoundaryCapture` | (Legacy seam) Manager marks 4 corner points on stitched orthophoto, approves boundary and base map is published | `AwaitingPricing` |
 | creation for mapped Farm | approved SurveyRequest orchestration | `PendingBoundaryVerification` |
 | `PendingBoundaryVerification` | assigned manager verifies boundary/scope and current published map/count | `AwaitingPricing` |
 | `BaselineReady` | BE2 starts Baseline Mapping Mission after readiness re-check | `BaselineInProgress` |

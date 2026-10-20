@@ -105,6 +105,12 @@ public static class SurveyOrderReadinessPolicy
 
         if (snapshot.Purpose == SurveyOperationPurpose.BaselineMapping)
         {
+            if (snapshot.DepositPaymentStatus.HasValue &&
+                snapshot.DepositPaymentStatus.Value != SurveyPaymentStatus.Confirmed)
+            {
+                failures.Add(SurveyOrderReadinessFailure.PaymentNotConfirmed);
+            }
+
             if (!snapshot.HasFinalizedBoundaryCapture)
             {
                 failures.Add(

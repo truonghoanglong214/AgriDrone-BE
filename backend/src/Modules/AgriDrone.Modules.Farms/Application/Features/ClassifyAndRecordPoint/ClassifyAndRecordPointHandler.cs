@@ -75,6 +75,21 @@ internal sealed class ClassifyAndRecordPointHandler(
                 null));
         }
 
+        var existingUnresolved = await exceptionRepository.GetUnresolvedBySourceAsync(
+            currentBoundary.Id,
+            command.Source,
+            command.SourceReferenceId,
+            cancellationToken);
+
+        if (existingUnresolved is not null)
+        {
+            return Result.Success(new ClassifyAndRecordPointResponse(
+                classification,
+                distance,
+                existingUnresolved.Id,
+                existingUnresolved.State.ToString()));
+        }
+
         var initialState = classification == PointBoundaryClassification.OutOfBoundary
             ? BoundaryExceptionState.OutOfBoundary
             : BoundaryExceptionState.NeedsReview;

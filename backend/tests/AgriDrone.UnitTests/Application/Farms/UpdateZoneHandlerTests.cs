@@ -193,7 +193,18 @@ public sealed class UpdateZoneHandlerTests
             farm.Id);
         var farmRepository = new FakeFarmRepository(farm);
         var boundaryRepository = new FakeFarmBoundaryRepository();
-        var boundaryPolicy = new FarmBoundaryPolicy(boundaryRepository, zoneRepository, farmRepository);
+        var approvedBoundary = FarmBoundary.CreateDraft(
+            tenantId,
+            farm.Id,
+            versionNumber: 1,
+            farm.Boundary!,
+            FarmBoundarySource.SystemManager,
+            sourceSurveyRequestId: null,
+            submittedBy: actorId,
+            createdAt: Now.AddDays(-1));
+        approvedBoundary.Approve(actorId, "Initial", Now.AddDays(-1));
+        boundaryRepository.CurrentApproved = approvedBoundary;
+        var boundaryPolicy = new FarmBoundaryPolicy(boundaryRepository, zoneRepository);
         var handler = new UpdateZoneHandler(
             zoneRepository,
             farmRepository,
@@ -271,6 +282,10 @@ public sealed class UpdateZoneHandlerTests
             CancellationToken cancellationToken = default) =>
             Task.FromResult<FarmZone?>(null);
 
+                public List<FarmZone> ActiveZones { get; } = [];
+        public Task<IReadOnlyList<FarmZone>> GetActiveZonesByFarmIdAsync(Guid tenantId, Guid farmId, CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<FarmZone>>(ActiveZones);
+
         public Task<bool> ActiveCodeExistsAsync(
             Guid tenantId,
             Guid farmId,
@@ -312,6 +327,10 @@ public sealed class UpdateZoneHandlerTests
             string code,
             CancellationToken cancellationToken = default) =>
             Task.FromResult<Farm?>(null);
+
+                public List<FarmZone> ActiveZones { get; } = [];
+        public Task<IReadOnlyList<FarmZone>> GetActiveZonesByFarmIdAsync(Guid tenantId, Guid farmId, CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<FarmZone>>(ActiveZones);
 
         public Task<bool> ActiveCodeExistsAsync(
             Guid tenantId,
@@ -414,8 +433,10 @@ public sealed class UpdateZoneHandlerTests
 
     private sealed class FakeFarmBoundaryRepository : IFarmBoundaryRepository
     {
+        public FarmBoundary? CurrentApproved { get; set; }
+
         public Task<FarmBoundary?> GetCurrentApprovedAsync(Guid tenantId, Guid farmId, CancellationToken cancellationToken = default) =>
-            Task.FromResult<FarmBoundary?>(null);
+            Task.FromResult(CurrentApproved);
 
         public Task<FarmBoundary?> GetByIdAsync(Guid tenantId, Guid farmId, Guid boundaryId, CancellationToken cancellationToken = default) =>
             Task.FromResult<FarmBoundary?>(null);

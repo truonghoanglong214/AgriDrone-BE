@@ -4,6 +4,7 @@ using AgriDrone.Api.Mapping;
 using AgriDrone.Modules.Surveys.Application.Features.Appointments.ConfirmSurveyAppointment;
 using AgriDrone.Modules.Surveys.Application.Features.Appointments.RequestSurveyAppointmentReschedule;
 using AgriDrone.Modules.Surveys.Application.Features.Payments.InitiateSurveyPayment;
+using AgriDrone.Modules.Surveys.Domain;
 using AgriDrone.SharedInfrastructure.Authorization;
 using AgriDrone.SharedInfrastructure.Http;
 using MediatR;
@@ -94,15 +95,32 @@ public sealed class TenantOwnerSurveyOrdersController(ISender sender)
         [FromBody] InitiateSurveyPaymentRequest request,
         CancellationToken cancellationToken)
     {
+        var purpose = ParsePaymentPurpose(request.Purpose);
         var result = await sender.Send(
             new InitiateSurveyPaymentCommand(
                 orderId,
-                request.ExpectedOrderVersion!.Value),
+                request.ExpectedOrderVersion!.Value,
+                purpose),
             cancellationToken);
         return result.ToHttpResult(
             HttpContext,
             response => Results.Json(
                 SurveyPaymentResponseMapper.ToResponse(response),
                 statusCode: StatusCodes.Status201Created));
+    }
+
+    private static PaymentPurpose ParsePaymentPurpose(string? purpose)
+    {
+        if (string.IsNullOrWhiteSpace(purpose))
+        {
+            return PaymentPurpose.FinalBalance;
+        }
+
+        return purpose.Trim().ToUpperInvariant() switch
+        {
+            "BASELINE_DEPOSIT" or "BASELINEDEPOSIT" => PaymentPurpose.BaselineDeposit,
+            "FINAL_BALANCE" or "FINALBALANCE" => PaymentPurpose.FinalBalance,
+            _ => Enum.TryParse<PaymentPurpose>(purpose, true, out var parsed) ? parsed : PaymentPurpose.FinalBalance
+        };
     }
 }

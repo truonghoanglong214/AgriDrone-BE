@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text;
 using NetTopologySuite.Geometries;
@@ -7,6 +7,10 @@ namespace AgriDrone.Modules.Farms.Domain.Zones
 {
     internal interface IFarmZoneRepository
     {
+        Task<IReadOnlyList<FarmZone>> GetActiveZonesByFarmIdAsync(
+            Guid tenantId,
+            Guid farmId,
+            CancellationToken cancellationToken = default);
         Task<FarmZone?> GetByIdAsync(
         Guid tenantId,
         Guid farmId,

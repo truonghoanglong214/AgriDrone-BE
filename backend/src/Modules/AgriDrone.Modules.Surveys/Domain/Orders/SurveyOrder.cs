@@ -15,7 +15,14 @@ public sealed class SurveyOrder : AggregateRoot
             },
             [SurveyOrderStatus.AwaitingBaselineAppointment] = new HashSet<SurveyOrderStatus>
             {
+                SurveyOrderStatus.AwaitingBaselineDeposit,
                 SurveyOrderStatus.AwaitingBoundaryCapture,
+                SurveyOrderStatus.Cancelled
+            },
+            [SurveyOrderStatus.AwaitingBaselineDeposit] = new HashSet<SurveyOrderStatus>
+            {
+                SurveyOrderStatus.BaselineReady,
+                SurveyOrderStatus.AwaitingBaselineAppointment,
                 SurveyOrderStatus.Cancelled
             },
             [SurveyOrderStatus.AwaitingBoundaryCapture] = new HashSet<SurveyOrderStatus>
@@ -101,6 +108,11 @@ public sealed class SurveyOrder : AggregateRoot
 
     public string? Currency { get; private set; }
     public decimal? FinalPrice { get; private set; }
+    public SurveyPaymentStatus DepositPaymentStatus { get; private set; } = SurveyPaymentStatus.Pending;
+    public decimal DepositAmount { get; private set; } = 500_000m;
+    public decimal? RemainingAmount { get; private set; }
+    public Guid? DepositPaymentId { get; private set; }
+    public DateTimeOffset? DepositConfirmedAt { get; private set; }
     public Guid? ScopeConfirmedBy { get; private set; }
     public DateTimeOffset? ScopeConfirmedAt { get; private set; }
     public bool RequiresBaselineMapping { get; private set; }
@@ -176,6 +188,10 @@ public sealed class SurveyOrder : AggregateRoot
             Status = requiresBaselineMapping
                 ? SurveyOrderStatus.AwaitingBaselineAppointment
                 : SurveyOrderStatus.PendingBoundaryVerification,
+            DepositPaymentStatus = requiresBaselineMapping
+                ? SurveyPaymentStatus.Pending
+                : SurveyPaymentStatus.Confirmed,
+            DepositAmount = requiresBaselineMapping ? 500_000m : 0m,
             CreatedAt = createdAt,
             UpdatedAt = createdAt
         };
@@ -311,8 +327,68 @@ public sealed class SurveyOrder : AggregateRoot
         ApplyTransition(SurveyOrderStatus.AwaitingPricing, verifiedAt);
     }
 
+    public void SetFarmBoundaryFromOrthophoto(
+        Guid farmBoundaryVersionId,
+        Guid verifiedBy,
+        DateTimeOffset verifiedAt)
+    {
+        DomainGuard.NotEmpty(farmBoundaryVersionId);
+        DomainGuard.NotEmpty(verifiedBy);
+        DomainGuard.Utc(verifiedAt);
+        SurveyTransitionGuard.EnsureTimestamp(verifiedAt, UpdatedAt);
+
+        if (Status is not (
+            SurveyOrderStatus.AwaitingBaselineReview or
+            SurveyOrderStatus.BaselineReady or
+            SurveyOrderStatus.BaselineInProgress or
+            SurveyOrderStatus.PendingBoundaryVerification))
+        {
+            throw new SurveyDomainException(
+                SurveyOrderDomainErrorCodes.InvalidTransition,
+                $"Order in state '{Status}' cannot set farm boundary from orthophoto.");
+        }
+
+        FarmBoundaryVersionId = farmBoundaryVersionId;
+        ScopeConfirmedBy = verifiedBy;
+        ScopeConfirmedAt = verifiedAt;
+        UpdatedAt = verifiedAt;
+        Version++;
+    }
+
     public void MarkBaselineAppointmentConfirmed(DateTimeOffset occurredAt) =>
-        TransitionTo(SurveyOrderStatus.AwaitingBoundaryCapture, occurredAt);
+        TransitionTo(SurveyOrderStatus.AwaitingBaselineDeposit, occurredAt);
+
+    public void RecordBaselineDepositConfirmed(
+        Guid paymentId,
+        decimal amount,
+        DateTimeOffset confirmedAt)
+    {
+        DomainGuard.NotEmpty(paymentId);
+        DomainGuard.Utc(confirmedAt);
+        SurveyTransitionGuard.EnsureTimestamp(confirmedAt, UpdatedAt);
+
+        if (Status != SurveyOrderStatus.AwaitingBaselineDeposit)
+        {
+            throw new SurveyDomainException(
+                SurveyOrderDomainErrorCodes.InvalidTransition,
+                $"Order in state '{Status}' cannot confirm baseline deposit.");
+        }
+
+        if (amount != DepositAmount)
+        {
+            throw new SurveyDomainException(
+                SurveyOrderDomainErrorCodes.InvalidTransition,
+                $"Deposit amount must be {DepositAmount} VND.");
+        }
+
+        DepositPaymentId = paymentId;
+        DepositPaymentStatus = SurveyPaymentStatus.Confirmed;
+        DepositConfirmedAt = confirmedAt;
+        TransitionTo(SurveyOrderStatus.BaselineReady, confirmedAt);
+    }
+
+    public void MarkBaselineReady(DateTimeOffset occurredAt) =>
+        TransitionTo(SurveyOrderStatus.BaselineReady, occurredAt);
 
     public void ReopenBaselineAppointment(DateTimeOffset occurredAt)
     {
@@ -329,7 +405,8 @@ public sealed class SurveyOrder : AggregateRoot
     {
         DomainGuard.NotEmpty(boundaryCaptureSessionId);
         if (!RequiresBaselineMapping ||
-            Status != SurveyOrderStatus.AwaitingBoundaryCapture)
+            (Status != SurveyOrderStatus.AwaitingBoundaryCapture &&
+             Status != SurveyOrderStatus.AwaitingBaselineDeposit))
         {
             throw new SurveyDomainException(
                 SurveyOrderDomainErrorCodes.InvalidTransition,
@@ -437,6 +514,10 @@ public sealed class SurveyOrder : AggregateRoot
         PricePerPoleSnapshot = validatedPrice;
         Currency = currency.Value;
         FinalPrice = finalPrice.Amount;
+        var depositCredit = (RequiresBaselineMapping && DepositPaymentStatus == SurveyPaymentStatus.Confirmed)
+            ? DepositAmount
+            : 0m;
+        RemainingAmount = Math.Max(0m, finalPrice.Amount - depositCredit);
         CaptureOriginalCommercialSnapshot(
             surveyServicePriceId,
             ConfirmedSurveyPoleCount.Value,
@@ -513,6 +594,10 @@ public sealed class SurveyOrder : AggregateRoot
         PricePerPoleSnapshot = validatedPrice;
         Currency = currency.Value;
         FinalPrice = finalPrice.Amount;
+        var depositCredit = (RequiresBaselineMapping && DepositPaymentStatus == SurveyPaymentStatus.Confirmed)
+            ? DepositAmount
+            : 0m;
+        RemainingAmount = Math.Max(0m, finalPrice.Amount - depositCredit);
         CaptureOriginalCommercialSnapshot(
             surveyServicePriceId,
             validatedPoleCount,
@@ -579,6 +664,10 @@ public sealed class SurveyOrder : AggregateRoot
         PricePerPoleSnapshot = pricePerPole;
         Currency = currency.Value;
         FinalPrice = finalPrice.Amount;
+        var depositCredit = (RequiresBaselineMapping && DepositPaymentStatus == SurveyPaymentStatus.Confirmed)
+            ? DepositAmount
+            : 0m;
+        RemainingAmount = Math.Max(0m, finalPrice.Amount - depositCredit);
         PoleCountConfirmedBy = appliedBy;
         PoleCountConfirmedAt = appliedAt;
         PricingConfirmedBy = appliedBy;

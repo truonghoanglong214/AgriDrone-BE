@@ -183,7 +183,8 @@ internal sealed class SurveyOrderOperationalContextV3Query(
             HasFinalizedBoundaryCapture: hasFinalizedBoundaryCapture,
             HasApprovedBaselineRoute: hasApprovedBaselineRoute,
             IsBaselineRouteCurrent: isBaselineRouteCurrent,
-            IsBaselineRouteWithinSafetyInset: isBaselineRouteWithinSafetyInset);
+            IsBaselineRouteWithinSafetyInset: isBaselineRouteWithinSafetyInset,
+            DepositPaymentStatus: order.DepositPaymentStatus);
 
         // BE1 authoritative readiness represents commercial, legal consent/permission, and boundary verification gates
         var decision = SurveyOrderReadinessPolicy.EvaluateCommercialReadiness(snapshot);
@@ -211,6 +212,11 @@ internal sealed class SurveyOrderOperationalContextV3Query(
             hasUnapprovedExtraFlight,
             pendingAdjustment,
             hasValidConsent,
-            hasValidFlightPermission);
+            hasValidFlightPermission,
+            order.DepositPaymentStatus.ToString(),
+            order.DepositAmount,
+            order.RemainingAmount,
+            order.DepositPaymentId,
+            order.DepositConfirmedAt);
     }
 }

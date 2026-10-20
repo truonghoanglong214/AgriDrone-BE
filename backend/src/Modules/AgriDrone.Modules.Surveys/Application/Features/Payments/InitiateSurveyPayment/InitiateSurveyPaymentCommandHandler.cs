@@ -76,6 +76,7 @@ internal sealed class InitiateSurveyPaymentCommandHandler(
             command.SurveyOrderId,
             actorId,
             initiatedAt,
+            command.Purpose,
             cancellationToken);
         if (stateResult.IsFailure)
         {
@@ -95,14 +96,35 @@ internal sealed class InitiateSurveyPaymentCommandHandler(
                 SurveyPaymentCommandSupport.MapDomainError(exception));
         }
 
-        if (order.Status != SurveyOrderStatus.AwaitingPayment ||
-            order.FinalPrice is not > 0 ||
-            string.IsNullOrWhiteSpace(order.Currency) ||
-            order.PricePerPoleSnapshot is null ||
-            order.ConfirmedSurveyPoleCount is null)
+        Money amount;
+        if (command.Purpose == PaymentPurpose.BaselineDeposit)
         {
-            return Result.Failure<InitiateSurveyPaymentResponse>(
-                PaymentError.OrderNotReady());
+            if (order.Status != SurveyOrderStatus.AwaitingBaselineDeposit ||
+                order.DepositPaymentStatus == SurveyPaymentStatus.Confirmed ||
+                order.DepositAmount <= 0)
+            {
+                return Result.Failure<InitiateSurveyPaymentResponse>(
+                    PaymentError.OrderNotReady());
+            }
+
+            amount = Money.Create(order.DepositAmount, CurrencyCode.Vnd);
+        }
+        else
+        {
+            if (order.Status != SurveyOrderStatus.AwaitingPayment ||
+                order.FinalPrice is not > 0 ||
+                string.IsNullOrWhiteSpace(order.Currency) ||
+                order.PricePerPoleSnapshot is null ||
+                order.ConfirmedSurveyPoleCount is null)
+            {
+                return Result.Failure<InitiateSurveyPaymentResponse>(
+                    PaymentError.OrderNotReady());
+            }
+
+            var payableAmount = order.RemainingAmount ?? order.FinalPrice.Value;
+            amount = Money.Create(
+                payableAmount,
+                CurrencyCode.Create(order.Currency));
         }
 
         if (state.ActivePayment is not null)
@@ -111,14 +133,12 @@ internal sealed class InitiateSurveyPaymentCommandHandler(
                 PaymentError.ActivePaymentExists());
         }
 
-        var amount = Money.Create(
-            order.FinalPrice.Value,
-            CurrencyCode.Create(order.Currency));
         var payment = SurveyPayment.Create(
             order.Id,
             amount,
             gateway.Provider,
-            initiatedAt);
+            initiatedAt,
+            command.Purpose);
         var sessionResult = await gateway.CreateSessionAsync(
             new CreatePaymentSession(
                 payment.Id,

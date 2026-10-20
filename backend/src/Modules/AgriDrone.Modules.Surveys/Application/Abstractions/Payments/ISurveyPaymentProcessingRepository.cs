@@ -9,6 +9,7 @@ public interface ISurveyPaymentProcessingRepository
         Guid surveyOrderId,
         Guid actorUserId,
         DateTimeOffset evaluatedAt,
+        PaymentPurpose purpose = PaymentPurpose.FinalBalance,
         CancellationToken cancellationToken = default);
 
     Task<Result<SurveyPaymentEventState>> GetForProviderEventAsync(

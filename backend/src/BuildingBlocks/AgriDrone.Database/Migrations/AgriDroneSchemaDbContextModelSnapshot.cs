@@ -97,7 +97,7 @@ namespace AgriDrone.Database.Migrations
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "survey_appointment_status", new[] { "PROPOSED", "CONFIRMED", "RESCHEDULE_REQUESTED", "CANCELLED", "SUPERSEDED" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "survey_capture_authorization_status", new[] { "PENDING", "VERIFIED", "REVOKED" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "survey_capture_authorization_type", new[] { "WRITTEN_DATA_USE_CONSENT", "FLIGHT_PERMISSION" });
-            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "survey_order_status", new[] { "PENDING_BOUNDARY_VERIFICATION", "AWAITING_BASELINE_APPOINTMENT", "AWAITING_BOUNDARY_CAPTURE", "BASELINE_READY", "BASELINE_IN_PROGRESS", "AWAITING_BASELINE_REVIEW", "AWAITING_PRICING", "AWAITING_PAID_APPOINTMENT", "AWAITING_PAYMENT", "READY_FOR_PAID_SERVICE", "IN_PROGRESS", "PENDING_REVIEW", "COMPLETED", "CANCELLED" });
+            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "survey_order_status", new[] { "PENDING_BOUNDARY_VERIFICATION", "AWAITING_BASELINE_APPOINTMENT", "AWAITING_BASELINE_DEPOSIT", "AWAITING_BOUNDARY_CAPTURE", "BASELINE_READY", "BASELINE_IN_PROGRESS", "AWAITING_BASELINE_REVIEW", "AWAITING_PRICING", "AWAITING_PAID_APPOINTMENT", "AWAITING_PAYMENT", "READY_FOR_PAID_SERVICE", "IN_PROGRESS", "PENDING_REVIEW", "COMPLETED", "CANCELLED" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "survey_payment_status", new[] { "PENDING", "PROCESSING", "CONFIRMED", "FAILED", "REFUNDED", "ADJUSTMENT_REQUIRED" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "survey_pole_count_source", new[] { "BASELINE_PUBLICATION", "CURRENT_PUBLISHED_INVENTORY" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "survey_request_kind", new[] { "NEW_CUSTOMER", "EXISTING_TENANT_NEW_FARM", "EXISTING_FARM_SURVEY" });
@@ -6754,6 +6754,27 @@ namespace AgriDrone.Database.Migrations
                         .HasColumnName("currency")
                         .IsFixedLength();
 
+                    b.Property<decimal>("DepositAmount")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasDefaultValue(500000m)
+                        .HasColumnName("deposit_amount");
+
+                    b.Property<DateTimeOffset?>("DepositConfirmedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deposit_confirmed_at");
+
+                    b.Property<Guid?>("DepositPaymentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("deposit_payment_id");
+
+                    b.Property<SurveyPaymentStatus>("DepositPaymentStatus")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("system.survey_payment_status")
+                        .HasDefaultValue(SurveyPaymentStatus.Pending)
+                        .HasColumnName("deposit_payment_status");
+
                     b.Property<Guid?>("FarmBaseMapVersionId")
                         .HasColumnType("uuid")
                         .HasColumnName("farm_base_map_version_id");
@@ -6843,6 +6864,11 @@ namespace AgriDrone.Database.Migrations
                     b.Property<Guid?>("PricingConfirmedBy")
                         .HasColumnType("uuid")
                         .HasColumnName("pricing_confirmed_by");
+
+                    b.Property<decimal?>("RemainingAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("remaining_amount");
 
                     b.Property<bool>("RequiresBaselineMapping")
                         .HasColumnType("boolean")
@@ -7006,6 +7032,14 @@ namespace AgriDrone.Database.Migrations
                         .HasColumnType("character varying(150)")
                         .HasColumnName("provider_reference");
 
+                    b.Property<string>("Purpose")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasDefaultValue("FinalBalance")
+                        .HasColumnName("purpose");
+
                     b.Property<SurveyPaymentStatus>("Status")
                         .HasColumnType("system.survey_payment_status")
                         .HasColumnName("status");
@@ -7029,11 +7063,6 @@ namespace AgriDrone.Database.Migrations
                     b.HasKey("Id")
                         .HasName("pk_survey_payments");
 
-                    b.HasIndex("SurveyOrderId")
-                        .IsUnique()
-                        .HasDatabaseName("uq_survey_payments_one_active_per_order")
-                        .HasFilter("status IN ('PENDING'::system.survey_payment_status, 'PROCESSING'::system.survey_payment_status, 'CONFIRMED'::system.survey_payment_status, 'ADJUSTMENT_REQUIRED'::system.survey_payment_status)");
-
                     b.HasIndex("Provider", "ProviderReference")
                         .IsUnique()
                         .HasDatabaseName("uq_survey_payments_provider_reference")
@@ -7041,6 +7070,11 @@ namespace AgriDrone.Database.Migrations
 
                     b.HasIndex("Status", "UpdatedAt")
                         .HasDatabaseName("ix_survey_payments_reconciliation");
+
+                    b.HasIndex("SurveyOrderId", "Purpose")
+                        .IsUnique()
+                        .HasDatabaseName("uq_survey_payments_one_active_per_order_purpose")
+                        .HasFilter("status IN ('PENDING'::system.survey_payment_status, 'PROCESSING'::system.survey_payment_status, 'CONFIRMED'::system.survey_payment_status, 'ADJUSTMENT_REQUIRED'::system.survey_payment_status)");
 
                     b.ToTable("survey_payments", "survey", t =>
                         {

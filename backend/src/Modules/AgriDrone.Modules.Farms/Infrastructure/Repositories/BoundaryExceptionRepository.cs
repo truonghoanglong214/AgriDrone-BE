@@ -16,6 +16,18 @@ internal sealed class BoundaryExceptionRepository(FarmsDbContext context)
                                  boundaryException.Id == exceptionId,
             cancellationToken);
 
+    public Task<BoundaryException?> GetUnresolvedBySourceAsync(
+        Guid farmBoundaryVersionId,
+        BoundaryExceptionSource source,
+        string sourceReferenceId,
+        CancellationToken cancellationToken = default)
+        => context.BoundaryExceptions.FirstOrDefaultAsync(
+            boundaryException => boundaryException.FarmBoundaryVersionId == farmBoundaryVersionId &&
+                                 boundaryException.Source == source &&
+                                 boundaryException.SourceReferenceId == sourceReferenceId &&
+                                 boundaryException.State != BoundaryExceptionState.Resolved,
+            cancellationToken);
+
     public Task<bool> HasUnresolvedSourceAsync(
         Guid farmBoundaryVersionId,
         BoundaryExceptionSource source,

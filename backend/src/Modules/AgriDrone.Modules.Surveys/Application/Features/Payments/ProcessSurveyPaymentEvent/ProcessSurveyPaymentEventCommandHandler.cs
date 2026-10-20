@@ -248,30 +248,61 @@ internal sealed class ProcessSurveyPaymentEventCommandHandler(
             return (false, "IGNORED_CURRENT_STATE");
         }
 
-        var amountMatches = payment.Amount == Money.Round(command.Amount) &&
-                            order.FinalPrice == payment.Amount;
-        var currencyMatches = string.Equals(
-                                  payment.Currency,
-                                  command.Currency.Trim(),
-                                  StringComparison.Ordinal) &&
-                              string.Equals(
-                                  order.Currency,
-                                  payment.Currency,
-                                  StringComparison.Ordinal);
-        if (!amountMatches || !currencyMatches)
+        if (payment.Purpose == PaymentPurpose.BaselineDeposit)
         {
-            payment.RequireAdjustment(command.OccurredAt);
-            return (true, "AMOUNT_OR_CURRENCY_MISMATCH");
-        }
+            var amountMatches = payment.Amount == Money.Round(command.Amount) &&
+                                order.DepositAmount == payment.Amount;
+            var currencyMatches = string.Equals(
+                                      payment.Currency,
+                                      command.Currency.Trim(),
+                                      StringComparison.Ordinal) &&
+                                  string.Equals(
+                                      command.Currency.Trim(),
+                                      "VND",
+                                      StringComparison.OrdinalIgnoreCase);
+            if (!amountMatches || !currencyMatches)
+            {
+                payment.RequireAdjustment(command.OccurredAt);
+                return (true, "AMOUNT_OR_CURRENCY_MISMATCH");
+            }
 
-        if (order.Status != SurveyOrderStatus.AwaitingPayment)
+            if (order.Status != SurveyOrderStatus.AwaitingBaselineDeposit)
+            {
+                return (false, "ORDER_NOT_AWAITING_BASELINE_DEPOSIT");
+            }
+
+            payment.Confirm(command.ProviderReference, command.OccurredAt);
+            order.RecordBaselineDepositConfirmed(payment.Id, payment.Amount, command.OccurredAt);
+            return (true, "APPLIED");
+        }
+        else
         {
-            return (false, "ORDER_NOT_AWAITING_PAYMENT");
-        }
+            var expectedBalance = order.RemainingAmount ?? order.FinalPrice;
+            var amountMatches = payment.Amount == Money.Round(command.Amount) &&
+                                expectedBalance == payment.Amount;
+            var currencyMatches = string.Equals(
+                                      payment.Currency,
+                                      command.Currency.Trim(),
+                                      StringComparison.Ordinal) &&
+                                  string.Equals(
+                                      order.Currency,
+                                      payment.Currency,
+                                      StringComparison.Ordinal);
+            if (!amountMatches || !currencyMatches)
+            {
+                payment.RequireAdjustment(command.OccurredAt);
+                return (true, "AMOUNT_OR_CURRENCY_MISMATCH");
+            }
 
-        payment.Confirm(command.ProviderReference, command.OccurredAt);
-        order.MarkPaymentConfirmed(command.OccurredAt);
-        return (true, "APPLIED");
+            if (order.Status != SurveyOrderStatus.AwaitingPayment)
+            {
+                return (false, "ORDER_NOT_AWAITING_PAYMENT");
+            }
+
+            payment.Confirm(command.ProviderReference, command.OccurredAt);
+            order.MarkPaymentConfirmed(command.OccurredAt);
+            return (true, "APPLIED");
+        }
     }
 
     private static ProcessSurveyPaymentEventResponse CreateResponse(

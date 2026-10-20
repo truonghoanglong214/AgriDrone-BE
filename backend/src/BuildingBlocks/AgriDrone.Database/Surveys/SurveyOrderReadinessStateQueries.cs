@@ -38,6 +38,7 @@ internal sealed class SurveyOrderReadinessStateQueries(NpgsqlDataSource dataSour
                 survey_order.price_per_pole_snapshot,
                 survey_order.final_price,
                 survey_order.currency,
+                survey_order.deposit_payment_status::text AS deposit_payment_status,
                 service.service_type::text AS service_type,
                 boundary.id AS approved_boundary_id,
                 base_map.id AS published_base_map_id,
@@ -282,6 +283,9 @@ internal sealed class SurveyOrderReadinessStateQueries(NpgsqlDataSource dataSour
                  expectedCurrency,
                  StringComparison.Ordinal));
 
+        var depositPaymentStatus = ParsePaymentStatus(
+            ReadNullableString(reader, "deposit_payment_status"));
+
         var snapshot = new SurveyOrderReadinessSnapshot(
             ParseOrderStatus(reader.GetString(reader.GetOrdinal("status"))),
             purpose,
@@ -328,7 +332,8 @@ internal sealed class SurveyOrderReadinessStateQueries(NpgsqlDataSource dataSour
             reader.GetBoolean(reader.GetOrdinal(
                 "is_baseline_route_current")),
             reader.GetBoolean(reader.GetOrdinal(
-                "is_baseline_route_within_safety_inset")));
+                "is_baseline_route_within_safety_inset")),
+            depositPaymentStatus);
 
         return Result.Success(new SurveyOrderReadinessState(
             surveyOrderId,

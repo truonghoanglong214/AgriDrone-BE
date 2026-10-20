@@ -5,7 +5,8 @@ namespace AgriDrone.Api.Contracts.Surveys.Payments;
 public sealed record InitiateSurveyPaymentRequest(
     [param: Required]
     [param: Range(typeof(uint), "1", "4294967295")]
-    uint? ExpectedOrderVersion);
+    uint? ExpectedOrderVersion,
+    string? Purpose = null);
 
 public sealed record InitiateSurveyPaymentApiResponse(
     Guid SurveyPaymentId,

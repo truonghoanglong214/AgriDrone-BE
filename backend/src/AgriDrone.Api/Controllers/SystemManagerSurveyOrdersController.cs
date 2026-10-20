@@ -9,6 +9,7 @@ using AgriDrone.Modules.Surveys.Application.Features.Orders.GetAssignedSurveyOrd
 using AgriDrone.Modules.Surveys.Application.Features.Orders.ConfirmSurveyOrderPoleCount;
 using AgriDrone.Modules.Surveys.Application.Features.Orders.GetSurveyOrderBoundaryScope;
 using AgriDrone.Modules.Surveys.Application.Features.Orders.VerifySurveyOrderBoundaryAndScope;
+using AgriDrone.Modules.Surveys.Application.Features.Orders.MarkFarmBoundaryOnOrthophoto;
 using AgriDrone.Modules.Surveys.Application.Features.Payments.RequestPriceAdjustment;
 using AgriDrone.Modules.Surveys.Application.Features.BoundaryCapture;
 using AgriDrone.Modules.Surveys.Application.Features.Adjustments.ScopeAdjustments.RequestScopeAdjustment;
@@ -621,6 +622,37 @@ public sealed class SystemManagerSurveyOrdersController(ISender sender)
             response.ReviewedAt,
             response.Version,
             response.CreatedAt);
+
+    /// <summary>
+    /// Chấm 4 góc ranh giới trên ảnh trực giao Orthophoto sau chuyến bay Baseline Mapping.
+    /// </summary>
+    [HttpPost("{orderId:guid}/farm-boundary/mark-orthophoto-corners")]
+    [ProducesResponseType<MarkFarmBoundaryOnOrthophotoResponse>(
+        StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IResult> MarkOrthophotoCorners(
+        [FromRoute] Guid orderId,
+        [FromBody] MarkOrthophotoCornersRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await sender.Send(
+            new MarkFarmBoundaryOnOrthophotoCommand(
+                orderId,
+                request.Corners,
+                request.ExpectedOrderVersion,
+                request.Reason,
+                request.EvidenceReference),
+            cancellationToken);
+
+        return result.ToHttpResult(
+            HttpContext,
+            response => Results.Ok(response));
+    }
 }
 
 public enum PaidSurveyMissionPurpose

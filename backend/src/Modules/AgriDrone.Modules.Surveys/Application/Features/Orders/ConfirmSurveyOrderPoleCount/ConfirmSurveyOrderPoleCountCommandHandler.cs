@@ -203,7 +203,8 @@ internal sealed class ConfirmSurveyOrderPoleCountCommandHandler(
             state.SystemManagerProfileId,
             order.Status,
             order.Version,
-            confirmedAt));
+            confirmedAt,
+            order.RemainingAmount));
     }
 
     private static AppError MapDomainError(SurveyDomainException exception) =>

@@ -11,8 +11,7 @@ namespace AgriDrone.Modules.Farms.Infrastructure.Boundaries;
 
 internal sealed class FarmBoundaryPolicy(
     IFarmBoundaryRepository boundaryRepository,
-    IFarmZoneRepository zoneRepository,
-    IFarmRepository? farmRepository = null)
+    IFarmZoneRepository zoneRepository)
     : IFarmBoundaryPolicy
 {
     private const double MetersPerDegreeLatitude = 111_320.0;
@@ -105,18 +104,12 @@ internal sealed class FarmBoundaryPolicy(
             farmId,
             cancellationToken);
 
-        Polygon? effectiveBoundary = approvedBoundary?.Geometry;
-
-        if (effectiveBoundary is null && farmRepository is not null)
+        if (approvedBoundary is null)
         {
-            var farm = await farmRepository.GetByIdAsync(tenantId, farmId, cancellationToken);
-            effectiveBoundary = farm?.Boundary;
+            return Result.Failure(FarmError.UnmappedFarmBoundaryRequiresCaptureSession());
         }
 
-        if (effectiveBoundary is null)
-        {
-            return Result.Failure(FarmError.NotFound());
-        }
+        var effectiveBoundary = approvedBoundary.Geometry;
 
         var containmentResult = ValidateZoneWithinBoundary(
             zoneBoundary,

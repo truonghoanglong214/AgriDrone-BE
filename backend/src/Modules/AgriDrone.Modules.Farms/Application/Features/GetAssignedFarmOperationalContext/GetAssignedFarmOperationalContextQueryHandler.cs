@@ -29,7 +29,7 @@ internal sealed class GetAssignedFarmOperationalContextQueryHandler(
 
         if (!access.IsAllowed || access.TenantId is not Guid tenantId)
         {
-            return Result.Failure<FarmOperationalContextResponse>(FarmError.AccessDenied());
+            return Result.Failure<FarmOperationalContextResponse>(FarmError.NotFound());
         }
 
         var dto = await queries.GetAssignedFarmOperationalContextAsync(

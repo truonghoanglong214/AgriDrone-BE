@@ -117,7 +117,7 @@ public sealed class FarmBoundaryPolicyTests
     }
 
     [Fact]
-    public async Task ValidateZoneAsyncReturnsNotFoundWhenNoApprovedBoundaryExists()
+    public async Task ValidateZoneAsyncReturnsUnmappedRequiresCaptureSessionWhenNoApprovedBoundaryExists()
     {
         var boundaryRepo = new FakeFarmBoundaryRepository();
         var zoneRepo = new FakeFarmZoneRepository();
@@ -140,7 +140,7 @@ public sealed class FarmBoundaryPolicyTests
             cancellationToken: CancellationToken.None);
 
         Assert.True(result.IsFailure);
-        Assert.Equal(FarmError.NotFound().Code, result.Error.Code);
+        Assert.Equal(FarmError.UnmappedFarmBoundaryRequiresCaptureSession().Code, result.Error.Code);
     }
 
     [Fact]
@@ -230,6 +230,10 @@ public sealed class FarmBoundaryPolicyTests
             Guid? excludingZoneId = null,
             CancellationToken cancellationToken = default)
             => Task.FromResult(Overlaps);
+
+                public List<FarmZone> ActiveZones { get; } = [];
+        public Task<IReadOnlyList<FarmZone>> GetActiveZonesByFarmIdAsync(Guid tenantId, Guid farmId, CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<FarmZone>>(ActiveZones);
 
         public Task<bool> ActiveCodeExistsAsync(
             Guid tenantId,

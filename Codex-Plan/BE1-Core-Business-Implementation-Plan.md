@@ -4,7 +4,8 @@
 > Rebaseline nghiệp vụ và kiến trúc .NET: 2026-10-06  
 > Hợp nhất kế hoạch phase và implementation: 2026-10-07  
 > Rebaseline theo Capstone proposal v2: 2026-10-15
-> Same-visit Baseline field-flow amendment: 2026-10-17
+> Same-visit Baseline field-flow amendment: 2026-10-17 (superseded)
+> Orthophoto-based 4-corner boundary marking & Baseline Survey Deposit amendment: 2026-10-20 (Duyệt lịch hẹn -> Order chuyển AwaitingBaselineDeposit -> TenantOwner thanh toán tiền cọc khảo sát thực địa -> Cọc Confirmed + an toàn bay hợp lệ -> Order chuyển BaselineReady -> Bay chụp Baseline -> Ghép Orthophoto georeferenced -> Manager chấm 4 góc trên bản đồ tạo FarmBoundary -> Duyệt boundary, AI đếm trụ -> Publish Base Map -> Order chuyển AwaitingPricing: tính FinalPrice = confirmed pole count × PricePerPoleSnapshot và cấn trừ tiền cọc: RemainingAmount = FinalPrice - DepositAmount -> Lịch Paid Service -> Thanh toán nốt RemainingAmount -> ReadyForPaidService; nếu hủy ngang vô cớ sau khi bay Baseline thì không hoàn cọc)
 > Nguồn nghiệp vụ cao nhất: `Codex-Plan/Be-Plan-v2.md`
 > Use case nguồn: `Codex-Plan/BE1-Use-Case-Specification.md`  
 > Kế hoạch kỹ thuật hiện hành: tài liệu này trên `backend/AgriDrone.sln`  
@@ -38,12 +39,16 @@ ExistingFarmSurvey
 
 Flow chung sau approval
 → nếu Farm chưa có base map: Manager đề xuất và Owner confirm Baseline appointment trước khi có boundary
-→ thu thập/xác minh written data-use consent + flight permission trước capture
-→ trong cùng visit: Manager dùng drone GNSS chấm góc → approve FarmBoundary/scope → hệ thống sinh/review route tự động nằm trong boundary → Baseline mission chạy trước payment
+→ Order chuyển sang AwaitingBaselineDeposit; TenantOwner thanh toán tiền cọc khảo sát (Baseline Survey Deposit) để cam kết thực hiện, bảo đảm công sức và chi phí thực địa của SystemManager nếu bị bùng kèo
+→ thu thập/xác minh written data-use consent + flight permission trước chuyến bay
+→ sau khi thanh toán cọc thành công và an toàn bay hợp lệ: Order chuyển BaselineReady
+→ Manager thực hiện chuyến bay Baseline chụp toàn cảnh nông trại (BaselineInProgress)
+→ ảnh chụp được upload ghép thành Orthophoto georeferenced; Manager mở bản đồ Orthophoto chấm 4 góc tạo FarmBoundary; duyệt boundary và AI đếm trụ (AwaitingBaselineReview)
 → SystemManager publish base map và confirm active pole count
-→ BE1 snapshot PricePerPole + pole count và tính FinalPrice
+→ BE1 snapshot PricePerPole + pole count, tính FinalPrice và cấn trừ tiền cọc: RemainingAmount = FinalPrice - DepositAmount; Order chuyển AwaitingPricing
+→ nếu TenantOwner hủy đơn sau khi đã bay Baseline/lập Base Map: tiền cọc không được hoàn lại (non-refundable deposit) để bù đắp chi phí khảo sát thực địa của SystemManager
 → paid-service appointment được confirm/reschedule
-→ TenantOwner initiate sandbox payment; provider/SystemAdmin xác nhận hợp lệ
+→ TenantOwner initiate sandbox payment cho số tiền còn lại (RemainingAmount); provider xác nhận hợp lệ
 → BE1 mở paid-service readiness gate
 → BE2 thực hiện mission/AI
 → BE1 review/publish suspected Plant Health findings + Disease Zones + sourced guidance dưới dạng preliminary result
@@ -60,9 +65,9 @@ Không flow nào được xem là hoàn thành nếu còn đường bypass Surve
 - Ba loại Survey Request và SystemAdmin review.
 - Atomic approval/onboarding/SurveyOrder orchestration.
 - Written data-use consent/flight permission; Baseline appointment trước boundary;
-  `BoundaryCaptureSession` + ordered drone-GNSS samples; immutable
-  FarmBoundary/scope; confirmed pole-count/price snapshot; paid appointment,
-  sandbox payment và purpose-aware readiness policy.
+  Orthophoto 4-corner FarmBoundary; confirmed pole-count/price snapshot;
+  chính sách cọc Baseline (Baseline Survey Deposit), cấn trừ quyết toán cuối
+  và purpose-aware readiness policy.
 - Farm/Zone operational verification theo SystemManager assignment.
 - Farm-level base-map publication và persistent Plant identity.
 - Plant Health suspected finding, Disease Zone và sourced-guidance human review/publication dưới dạng preliminary result; không severity/diagnosis.
@@ -81,6 +86,7 @@ Không flow nào được xem là hoàn thành nếu còn đường bypass Surve
 - Web/mobile UI.
 - Harvest Readiness runtime/API trong MVP; capability này chỉ là Stretch sau gate riêng.
 - Tenant/autonomous flight, in-flight AI, bắt buộc RTK, spraying, cây trồng khác, mọi bệnh thanh long hoặc expert-certified diagnosis.
+- Hạ tầng kỹ thuật cổng thanh toán `AgriDrone.Modules.Payments` (Sandbox gateway adapter, tạo Checkout URL/QR code, webhook endpoints, HMAC-SHA256 signature verification, idempotency claim và phát `PaymentConfirmedIntegrationEvent`) được chuyển giao cho **BE2** triển khai để cân đối khối lượng công việc giữa các thành viên; BE1 chỉ sở hữu nghiệp vụ Order pricing, deposit policy, final settlement intent và readiness gate.
 
 BE1 vẫn phải cung cấp/tiêu thụ contract rõ ràng để BE2 hoàn tất các phần phụ thuộc.
 
@@ -91,10 +97,10 @@ User actors chỉ gồm Public Applicant, SystemAdmin, SystemManager và TenantO
 | Requirement v2 | Step sở hữu | Release evidence |
 |---|---|---|
 | Plant Health là paid service duy nhất; Harvest Readiness là Stretch | R2, 1, 2, 8 | Catalogue/request/API negative tests và runtime DI inventory |
-| Free mandatory Baseline cho Farm chưa mapped; paid flight bị chặn trước payment | 4, 5, 6 | Purpose-aware readiness + E2E |
-| Baseline appointment trước boundary; chấm góc và bay mapping trong cùng field visit | 3, 4, 5 + BE2 | Order-state/capture-session/route-plan contract + one-visit E2E |
+| Baseline khảo sát thực địa yêu cầu cọc cam kết (Deposit deducted from FinalPrice); paid flight bị chặn trước khi thanh toán nốt phần còn lại | 4, 5, 6 | Purpose-aware readiness + E2E |
+| Baseline appointment trước boundary; bay chụp -> ghép Orthophoto -> chấm 4 góc FarmBoundary | 3, 4, 5 + BE2 | Order-state/deposit/orthophoto/route-plan contract + E2E |
 | Written consent và flight permission trước capture | R2, 3, 4, 5 | Versioned evidence, revoke/expiry tests, BE2 re-check contract |
-| Count × PricePerPole snapshot; difference có payment/refund, không silent repricing | 1, 4 | Immutable original snapshot + adjustment settlement ledger tests |
+| Count × PricePerPole snapshot; cấn trừ cọc (RemainingAmount = FinalPrice - DepositAmount); difference có payment/refund, không silent repricing | 1, 4 | Immutable original snapshot + adjustment settlement ledger tests |
 | Scope change audit; extra flight chỉ khi justified | R2, 4, 5 | ScopeAdjustment/ExtraFlightRequest audit và negative start tests |
 | GNSS+grid pole identity, near/outside boundary NeedsReview | 5, 6, 27 | PostGIS/contract tests và RQ1 evidence |
 | 2–3 team-labelled suspected diseases; không severity/diagnosis | R2, 1, 7 | V4 no-severity contract, preliminary result và claim-boundary tests |
@@ -110,7 +116,7 @@ User actors chỉ gồm Public Applicant, SystemAdmin, SystemManager và TenantO
 2. Không đánh dấu use case `Done` chỉ vì entity, table hoặc EF configuration đã tồn tại.
 3. Mỗi mutation phải có domain invariant, authorization, persistence, audit và idempotency/concurrency khi cần. Test tương ứng được ghi vào Final Test Backlog và chỉ viết/chạy ở phase kiểm thử cuối.
 4. System actors không phụ thuộc TenantMembership; TenantOwner không nhận quyền system actor.
-5. Client không được gửi trạng thái derived như `ReadyForOperations`, `Payment.Confirmed` hoặc `Published`; readiness phải phân biệt free Baseline Mapping với paid Plant Health mission.
+5. Client không được gửi trạng thái derived như `ReadyForOperations`, `Payment.Confirmed` hoặc `Published`; readiness Baseline yêu cầu lịch confirmed, authorization hợp lệ và đã thanh toán tiền cọc khảo sát (Deposit Payment); readiness Paid Service yêu cầu Base Map published, snapshot giá/trụ và đã thanh toán đủ số tiền còn lại (RemainingBalance).
 6. Không gọi controller/module khác qua HTTP nội bộ; dùng explicit application port hoặc specialized cross-module unit of work.
 7. Transaction tạo nhiều aggregate bắt buộc phải có boundary rõ; không nối nhiều `SaveChanges` rồi hy vọng tất cả thành công.
 8. Producer dùng PostgreSQL Outbox; consumer/callback dùng Inbox hoặc deduplication record. RabbitMQ/provider chỉ là transport/source event.
@@ -122,16 +128,16 @@ User actors chỉ gồm Public Applicant, SystemAdmin, SystemManager và TenantO
 14. `HARVEST_READINESS` phải disabled/not sellable và bị từ chối ở public catalogue/request/order/payment/processing trong MVP.
 15. Published Plant Health result luôn mang `Suspected`/`Preliminary` và team-label limitation; “published” chỉ là publication state, không phải expert diagnosis.
 16. Written consent và flight permission là fail-closed flight gate. Verbal/message consent chỉ là preliminary evidence, không mở capture.
-17. MVP chỉ bán `PLANT_HEALTH`; Baseline Mapping là free MissionPurpose, Follow-up là relation và Harvest Readiness là Stretch-disabled.
+17. MVP chỉ bán `PLANT_HEALTH`; Baseline Mapping là khảo sát thực địa lập bản đồ cơ sở có thu tiền cọc cam kết (Baseline Survey Deposit khấu trừ vào FinalPrice; không hoàn cọc nếu hủy ngang vô cớ sau khảo sát).
 18. Unmapped Order bắt đầu ở `AwaitingBaselineAppointment`; Baseline appointment
-    không yêu cầu boundary. Owner confirm chuyển sang `AwaitingBoundaryCapture`,
-    không chuyển thẳng `BaselineReady`.
-19. `BoundaryCaptureSession` là evidence của BE1, không phải Mission thứ hai. Chỉ
-    finalize session từ ordered drone-GNSS samples mới được approve operational
-    FarmBoundary cho unmapped Farm; direct client polygon không thay thế capture.
-20. BE2 sinh và sở hữu automatic `BaselineRoutePlan` từ đúng boundary version.
-    Chỉ route đã review/approve, nằm trong safety inset mới cho Order sang
-    `BaselineReady`; client không gửi arbitrary waypoint làm source of truth.
+    không yêu cầu boundary. Owner confirm chuyển sang `AwaitingBaselineDeposit`.
+    Sau khi cọc Confirmed và an toàn bay đạt mới chuyển sang `BaselineReady`.
+19. Chuyến bay Baseline chụp toàn cảnh nông trại; ảnh được ghép thành Orthophoto georeferenced;
+    Manager mở Orthophoto chấm 4 góc ranh giới để hệ thống tạo `FarmBoundary` (WGS84);
+    sau khi duyệt boundary và AI đếm trụ, tiến hành xuất bản Base Map.
+20. Tiền cọc Baseline Survey Deposit là mức cố định do hệ thống cấu hình (mặc định 500.000 VNĐ cho farm chưa có bản đồ). BE1 tính `FinalPrice = ConfirmedSurveyPoleCount × PricePerPoleSnapshot` và cấn trừ
+    tiền cọc: `RemainingAmount = FinalPrice - DepositAmount`. Owner thanh toán số tiền
+    còn lại trước khi mở gate `ReadyForPaidService` cho chuyến bay Plant Health.
 
 ## 4. Phase status, baseline và evidence
 
@@ -150,7 +156,7 @@ User actors chỉ gồm Public Applicant, SystemAdmin, SystemManager và TenantO
 | 6R | Per-pole, purpose readiness, FarmBoundary, Disease Zone/guidance, plant-change | Step 0R + R2 | **RebaselineRequired** | Evidence cũ giữ lại; phần severity/expert recommendation/readiness cũ không còn đạt gate |
 | 7 | Plant Health catalogue/master data và Survey Request | Step 1B–1E, Step 2 + R2 | **RebaselineRequired** | Public chỉ thấy Plant Health; request ngoài Plant Health fail closed |
 | 8 | Approval/onboarding/SurveyOrder | Step 3 + R2 | **RebaselineRequired** | Unmapped Order tạo ở `AwaitingBaselineAppointment`; mapped Order mới dùng `PendingBoundaryVerification`; pending authorization vẫn fail closed |
-| 9 | Consent/permission, Baseline appointment, same-visit boundary capture, pricing/payment/readiness | Step 4 + R2 | **RebaselineRequired** | Confirm appointment → `AwaitingBoundaryCapture`; finalized capture + approved BE2 route → `BaselineReady` |
+| 9 | Consent/permission, Baseline appointment, survey deposit, Orthophoto boundary marking, pricing/payment/readiness | Step 4 + R2 | **RebaselineRequired** | Confirm appointment → `AwaitingBaselineDeposit`; deposit confirmed + safety valid → `BaselineReady` |
 | 10 | Automatic route plan, Order-bound Mission/pre-flight | BE2 implementation + Step 5 BE1 contract | External dependency | BE2 route tham chiếu đúng boundary version/safety inset; BE1 authoritative context/readiness không cho bypass |
 | 11 | Initial Farm base map và persistent Plant identity | Step 6 | NotStarted | Hoàn tất publication V3 atomic, review và count handoff |
 | 12 | Plant Health/Disease Zone/sourced guidance preliminary result | Step 7 | NotStarted | Chỉ Manager-reviewed suspected/preliminary result lộ cho owner; không severity |
@@ -168,7 +174,7 @@ Không xử lý Phase 6R, 7, 8 và 9 song song như bốn backlog độc lập. 
 | 1 | Phase 6R foundation — R2-B/R2-F | No-severity target model; `SourcedGuidance`; preliminary/team-label semantics; V4 health contract; capture-authorization, adjustment-settlement và extra-flight domain/schema seams | R2-A | Domain/contract/migration expand compile; contract cũ bất biến; downstream có interface ổn định |
 | 2 | Phase 7 — Step 1/2 remediation | Plant Health-only catalogue/master data; disable Harvest Readiness; ba request handlers từ chối service khác; checklist chỉ ghi consent/permission feasibility | Phase 6R foundation | Public/admin/OpenAPI đúng service scope; request path không provision và không nhận Stretch service |
 | 3 | Phase 8 — Step 3 remediation | Approval re-check Plant Health; tạo pending capture-authorization requirement; khởi tạo conditional Order state; compatible-order policy có version/reason | Phase 7 | Unmapped → `AwaitingBaselineAppointment`; mapped → `PendingBoundaryVerification`; ba approval flow atomic/retry-safe |
-| 4 | Phase 9 — Step 4 remediation | Appointment-first state transitions; capture-session/finalize boundary; route-plan handoff/approval; verify/revoke permission; pricing/payment/adjustment/extra-flight; readiness fail closed | Phase 8 + Phase 6R seams + BE2 route contract | Một visit: confirm appointment → capture boundary → approve route → BaselineReady; paid gates vẫn truy nguyên và không bypass |
+| 4 | Phase 9 — Step 4 remediation | Baseline deposit payment; bay Baseline chụp toàn cảnh; Orthophoto boundary marking; verify/revoke permission; pricing/balance payment/adjustment/extra-flight; readiness fail closed | Phase 8 + Phase 6R seams + BE2 route contract | Confirm appointment → `AwaitingBaselineDeposit` → deposit confirmed → `BaselineReady` → bay Baseline → Orthophoto chấm 4 góc → `AwaitingPricing`; paid gates vẫn truy nguyên và không bypass |
 | 5 | R2 integration gate | Runtime DI/route inventory, OpenAPI, migration upgrade notes, V4 golden contract backlog và negative scenarios | Hoàn tất 1–4 | R2, 6R, 7, 8, 9 chuyển `CodeComplete — AwaitingFinalTest`; chỉ lúc này mới bắt đầu Step 5 |
 
 Quy tắc phạm vi của thứ tự này:
@@ -289,6 +295,12 @@ AgriDrone.Modules.Surveys/
     Payments/
   DependencyInjection.cs
 
+AgriDrone.Modules.Payments/  # Module kỹ thuật cổng thanh toán do BE2 phụ trách triển khai
+  Domain/ (PaymentTransaction, PaymentWebhookLog, PaymentEvent)
+  Application/ (CreatePaymentSession, ProcessWebhook, Refund)
+  Infrastructure/ (Sandbox/HMAC/Gateway adapters, persistence)
+  DependencyInjection.cs
+
 AgriDrone.Api/
   Contracts/Surveys/
   Controllers/
@@ -304,6 +316,7 @@ AgriDrone.Api/
 
 AgriDrone.IntegrationContracts/
   Surveys/
+  Payments/  # IPaymentSessionService, PaymentConfirmedIntegrationEvent (BE1 gọi, BE2 implement)
   Missions/  # route-plan identity/status contract; implementation thuộc BE2
   Mapping/V2/ và Mapping/V3/
   Health/V2/, Health/V3/ compatibility và Health/V4/ target
@@ -365,12 +378,12 @@ Step 8 được giữ số để trace lịch sử nhưng là **Stretch capabili
   - `Submitted → UnderReview`.
   - `UnderReview → Approved | Rejected`.
   - `Submitted | UnderReview → Withdrawn` theo policy.
-- [ ] Implement lại transition table `SurveyOrder` theo amendment 2026-10-17;
+- [ ] Implement lại transition table `SurveyOrder` theo amendment 2026-10-20 (Deposit + Orthophoto);
   bảng target đã khóa nhưng source hiện hành chưa đạt:
-  - Unmapped Farm: `AwaitingBaselineAppointment → AwaitingBoundaryCapture → BaselineReady → BaselineInProgress → AwaitingBaselineReview → AwaitingPricing`.
+  - Unmapped Farm: `AwaitingBaselineAppointment → AwaitingBaselineDeposit → BaselineReady → BaselineInProgress → AwaitingBaselineReview → AwaitingPricing`.
   - Sau confirmed pole count: `AwaitingPaidAppointment → AwaitingPayment → ReadyForPaidService → InProgress → PendingReview → Completed`.
   - Mapped Farm có thể đi thẳng từ boundary/scope verification tới confirmed pole-count/pricing; không tạo Baseline Mapping giả.
-  - `Cancelled` chỉ từ các trạng thái được phép và không xóa lịch sử.
+  - `Cancelled` chỉ từ các trạng thái được phép và không xóa lịch sử (nếu hủy sau khi đã bay Baseline, khoản tiền cọc không được hoàn lại để bù đắp chi phí khảo sát thực địa của SystemManager).
 - [ ] Thêm `BoundaryCaptureSession`: `InProgress → Finalized | Aborted`; finalized
   session bất biến và giữ ordered samples/evidence.
 - [ ] Khóa route-plan handoff: `Draft → Approved | Rejected | Superseded` thuộc
@@ -504,13 +517,13 @@ Step này sửa baseline/code đã hoàn thành nhưng không còn đúng nghi�
   minh giấy phép của chuyến bay mình thực hiện.
 - [x] `SurveyOrderReadinessSnapshot` và BE2 operational contract thêm consent/permission status + expiry. Mọi Baseline/Plant Health capture fail closed nếu thiếu, expired hoặc revoked.
 
-#### R2-C2 — Appointment-first boundary capture và automatic route handoff
+#### R2-C2 — Baseline appointment, Baseline Survey Deposit và Orthophoto boundary marking
 
 - [ ] Sửa `SurveyOrder.Create`: unmapped Farm khởi tạo
   `AwaitingBaselineAppointment`; mapped Farm mới khởi tạo
   `PendingBoundaryVerification`.
 - [ ] Cho propose/confirm Baseline appointment khi chưa có boundary. Confirm chuyển
-  `AwaitingBaselineAppointment → AwaitingBoundaryCapture`; reschedule/cancel không
+  `AwaitingBaselineAppointment → AwaitingBaselineDeposit`; sau khi cọc Confirmed và an toàn bay đạt mới chuyển `BaselineReady`.
   được tạo trạng thái `BaselineReady` giả.
 - [ ] Thêm `BoundaryCaptureSession` + ordered GNSS samples, operation ID,
   captured-at/accuracy, appointment/Manager/Drone reference và optimistic version.
@@ -1762,9 +1775,9 @@ Final Test Phase tại mục 27.2.
 
 ---
 
-## 12. Step 4 — UC06 Consent/permission, Baseline appointment, same-visit boundary/route, pricing, paid appointment/payment và readiness (Phase 9)
+## 12. Step 4 — UC06 Consent/permission, Baseline appointment, Baseline Survey Deposit, Orthophoto boundary, pricing, paid appointment/payment và readiness (Phase 9)
 
-**Amendment status 2026-10-17:** Step 4 là `RebaselineRequired`. Appointment/
+**Amendment status 2026-10-20:** Step 4 là `RebaselineRequired`. Baseline Survey Deposit và Orthophoto boundary marking đã bổ sung;
 payment foundation cũ được reuse; direct boundary-before-appointment flow không
 còn là target và không được tính `CodeComplete` cho tới khi capture/route gates
 trong mục này được implement.
@@ -1775,9 +1788,9 @@ trong mục này được implement.
 |---|---|---|
 | 4A0 — Capture authorization | Verify written consent và flight permission | Có evidence/version/expiry; thiếu hoặc revoke thì fail closed |
 | 4A — Baseline appointment | Với Farm chưa mapped, Manager đề xuất lịch và TenantOwner confirm trước khi có boundary | Có confirmed field window cho một lần đến Farm |
-| 4B — Same-visit boundary/route/readiness | Trong confirmed appointment, Manager chấm GNSS corners, approve FarmBoundary; hệ thống sinh route tự động trong safety-inset polygon | Baseline có thể ready mà chưa payment; route/boundary cùng version |
-| 4C — Confirm pole count/pricing | Publish baseline hoặc kiểm chứng inventory hiện hữu rồi snapshot giá/trụ | Có count + PricePerPole + FinalPrice bất biến |
-| 4D — Paid appointment/payment | Owner xác nhận lịch paid service và thanh toán | Payment chỉ Confirmed từ trusted evidence |
+| 4B — Baseline flight & Orthophoto boundary | Cọc Confirmed + an toàn bay hợp lệ; drone bay chụp toàn cảnh; ghép Orthophoto, Manager chấm 4 góc FarmBoundary và duyệt | Base map sẵn sàng, AI đếm trụ |
+| 4C — Confirm pole count/pricing snapshot | Publish baseline, snapshot Original giá/trụ, tính FinalPrice và cấn trừ tiền cọc | Có RemainingAmount = FinalPrice - DepositAmount |
+| 4D — Paid appointment & final payment | Owner xác nhận lịch paid service và thanh toán số tiền còn lại (RemainingAmount) | Final payment Confirmed mới mở paid-service readiness |
 | 4E — Adjustment/purpose-aware readiness | Xử lý adjustment/reconciliation và tổng hợp gate cho BE2 | Paid service chỉ ready khi đủ commercial gate |
 
 Thứ tự **xây capability** là `4A0 → 4A → 4B`; thứ tự **business action** cho phép
@@ -1808,7 +1821,7 @@ Với Farm chưa có approved base map/confirmed inventory:
 3. TenantOwner confirm hoặc request reschedule bằng expected Order/appointment
    version; không actor nào tự confirm thay Owner trong normal flow.
 4. Confirm transition Order
-   `AwaitingBaselineAppointment → AwaitingBoundaryCapture`, không sang
+   `AwaitingBaselineAppointment → AwaitingBaselineDeposit`. Sau khi cọc Confirmed và an toàn bay đạt mới sang
    `BaselineReady`.
 5. Reschedule/cancel giữ revision/history và đóng capture/start gate cho window cũ.
 6. Authorization có thể được verify trước hoặc sau confirm, nhưng phải còn hiệu
@@ -1817,9 +1830,9 @@ Với Farm chưa có approved base map/confirmed inventory:
 Farm mapped không tạo Baseline appointment giả; nó đi qua current boundary/scope
 verification rồi tới count/pricing/paid appointment.
 
-#### Phase 4B — Same-visit boundary capture, boundary approval và route gate
+#### Phase 4B — Baseline Survey Deposit, chuyến bay Baseline và chấm 4 góc trên ảnh Orthophoto (FarmBoundary) (2026-10-20 Amendment)
 
-Trong đúng confirmed Baseline appointment:
+Trong đúng confirmed Baseline appointment (Lưu ý: Theo Amendment 2026-10-20, flow chuẩn cho unmapped farm là: Confirm lịch -> Order sang `AwaitingBaselineDeposit` -> TenantOwner nộp cọc Baseline Survey Deposit qua module Payments BE2 -> Cọc Confirmed + an toàn hợp lệ -> Order sang `BaselineReady` -> Drone bay chụp toàn cảnh theo tọa độ ước lượng -> Upload MinIO -> Metashape ghép ảnh trực giao Orthophoto -> Order sang `AwaitingBaselineReview` -> Manager mở ảnh Orthophoto chấm 4 góc tạo `FarmBoundary` -> Duyệt boundary và AI đếm trụ -> Publish Base Map -> Order sang `AwaitingPricing` -> Chốt FinalPrice và cấn trừ tiền cọc: `RemainingAmount = FinalPrice - DepositAmount` -> Lịch Paid Service -> Nộp số tiền còn lại qua module Payments BE2 -> Bay Plant Health; nếu hủy ngang sau khi bay Baseline thì tiền cọc không hoàn lại):
 
 1. Manager chọn operational Drone và gọi `StartBoundaryCaptureSession`; backend
    re-check Order state, window, assignment, authorization và operation ID.
@@ -1871,7 +1884,7 @@ appointment-first capture/route flow.
 1. Nhận confirmed count từ atomic map publication (initial Farm) hoặc authoritative current inventory (mapped Farm).
 2. Assigned manager xác nhận count áp dụng trong approved survey scope cùng evidence/version.
 3. Resolve effective `PricePerPole` ở server time.
-4. Tính `FinalPrice = ConfirmedSurveyPoleCount × PricePerPoleSnapshot` bằng money policy duy nhất.
+4. Tính `FinalPrice = ConfirmedSurveyPoleCount × PricePerPoleSnapshot` và cấn trừ tiền cọc: `RemainingAmount = FinalPrice - DepositAmount` (nếu có nộp cọc khảo sát).
 5. Lưu CountSource/BaseMapVersionId, PriceVersionId, count, PricePerPole, currency và final price; audit/outbox trong cùng boundary.
 6. Khoá snapshot; catalogue/inventory thay đổi sau đó không silent-recalculate order.
 
@@ -1905,12 +1918,12 @@ Tách adapter provider khỏi nghiệp vụ Surveys:
 - Application định nghĩa port tạo payment session và xác thực provider event cần thiết.
 - Infrastructure/Payments chứa sandbox provider adapter, options và signature verification; live-payment mode không thuộc MVP và phải fail startup/feature gate nếu bật nhầm.
 - Feature `InitiateSurveyPayment` chỉ lấy amount/currency từ order snapshot; owner không gửi số tiền authoritative.
-- `InitiateSurveyPayment` re-check Order service là `PLANT_HEALTH`; không thu payment cho Baseline hoặc Stretch-disabled service.
+- Feature `InitiateSurveyPayment` hỗ trợ 2 mục đích thanh toán: (1) `BaselineDeposit`: lấy `DepositAmount` để cọc trước chuyến bay Baseline; (2) `FinalBalance`: lấy `RemainingAmount = FinalPrice - DepositAmount` sau khi đã chốt Base Map và đếm trụ; re-check Order service là `PLANT_HEALTH` và không thu payment cho Stretch-disabled service.
 - Callback endpoint nhận raw provider identifiers, xác thực signature/timestamp trước khi gọi application handler.
 - `ProcessPaymentEvent` claim dedup theo provider + reference + event ID, lưu immutable `PaymentEvent`, rồi mới transition payment.
 - ACK callback chỉ sau commit; invalid signature không được ghi nhận như successful event.
 
-Không bao giờ có endpoint TenantOwner `confirm payment`; Baseline Mapping không tạo payment riêng.
+Không bao giờ có endpoint TenantOwner `confirm payment`; payment chỉ được chuyển trạng thái Confirmed thông qua verified provider callback / webhook. Mọi khoản cọc Baseline hoặc thanh toán còn lại đều tuân thủ cơ chế này.
 
 Checkpoint 2026-10-12: Phase 4D đạt `CodeComplete — AwaitingFinalTest` cho phía BE1.
 Appointment dùng chung lifecycle theo `BaselineMapping`/`PaidService`; manager chỉ
@@ -1942,8 +1955,8 @@ Tạo use case riêng cho request/approve/reject/apply price adjustment và admi
 Tạo một application query/service duy nhất xây `SurveyOrderReadinessSnapshot` từ `MissionPurpose` và trạng thái hiện hành:
 
 1. Mọi purpose tại thời điểm start: written consent + flight permission verified/còn hiệu lực/đúng scope, approved boundary/scope, purpose appointment confirmed/còn hiệu lực, active qualified assignment, drone/schedule/pre-flight/safety hợp lệ. Riêng unmapped Baseline cho phép appointment được confirm trước boundary; trước start phải có thêm route plan sinh từ đúng boundary version và mọi waypoint nằm trong safety-inset polygon.
-2. `BaselineMapping`: Order thật sự requires baseline và chưa có initial map trái policy; không yêu cầu count/price/payment.
-3. `PlantHealth`: current base map + confirmed pole count/price snapshot + sandbox payment đúng amount/currency và Confirmed.
+2. `BaselineMapping`: Order thật sự requires baseline và chưa có initial map trái policy; bắt buộc lịch hẹn đã confirm, an toàn bay/authorization hợp lệ và ĐÃ THANH TOÁN TIỀN CỌC KHẢO SÁT (`DepositPaymentStatus == Confirmed`).
+3. `PlantHealth`: current base map + confirmed pole count/price snapshot + sandbox payment đủ số tiền còn lại (`RemainingAmount`) và Confirmed.
 4. Không có pending scope/price adjustment, unsettled additional payment/refund, unapproved extra flight hoặc trạng thái order cấm purpose tương ứng.
 
 Service gọi domain policy để nhận decision/failure codes, sau đó mới transition order nếu đủ điều kiện. Expose decision qua integration port cho BE2; BE2 không tự copy logic này.

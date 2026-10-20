@@ -39,4 +39,9 @@ public sealed record SurveyOrderOperationalContextV3(
     bool HasUnapprovedExtraFlight = false,
     bool HasPendingAdjustment = false,
     bool HasValidWrittenDataUseConsent = false,
-    bool HasValidFlightPermission = false);
+    bool HasValidFlightPermission = false,
+    string? DepositPaymentStatus = null,
+    decimal? DepositAmount = null,
+    decimal? RemainingAmount = null,
+    Guid? DepositPaymentId = null,
+    DateTimeOffset? DepositConfirmedAt = null);

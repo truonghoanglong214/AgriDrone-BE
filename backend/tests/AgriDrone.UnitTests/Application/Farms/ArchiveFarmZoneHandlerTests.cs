@@ -354,6 +354,10 @@ public sealed class ArchiveFarmZoneHandlerTests
             CancellationToken cancellationToken = default) =>
             Task.FromResult<Farm?>(null);
 
+                public List<FarmZone> ActiveZones { get; } = [];
+        public Task<IReadOnlyList<FarmZone>> GetActiveZonesByFarmIdAsync(Guid tenantId, Guid farmId, CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<FarmZone>>(ActiveZones);
+
         public Task<bool> ActiveCodeExistsAsync(
             Guid tenantId,
             string code,
@@ -388,6 +392,10 @@ public sealed class ArchiveFarmZoneHandlerTests
             string code,
             CancellationToken cancellationToken = default) =>
             Task.FromResult<FarmZone?>(null);
+
+                public List<FarmZone> ActiveZones { get; } = [];
+        public Task<IReadOnlyList<FarmZone>> GetActiveZonesByFarmIdAsync(Guid tenantId, Guid farmId, CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<FarmZone>>(ActiveZones);
 
         public Task<bool> ActiveCodeExistsAsync(
             Guid tenantId,

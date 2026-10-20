@@ -4,6 +4,7 @@ using AgriDrone.Modules.Farms.Application.Errors;
 using AgriDrone.Modules.Farms.Application.Features.VerifyFarmBoundary;
 using AgriDrone.Modules.Farms.Domain.Boundaries;
 using AgriDrone.Modules.Farms.Domain.Farms;
+using AgriDrone.Modules.Farms.Domain.Zones;
 using AgriDrone.SharedInfrastructure.Auditing;
 using AgriDrone.SharedKernel.Application;
 using AgriDrone.SharedKernel.Application.Abstractions.Authorization;
@@ -188,6 +189,45 @@ public sealed class VerifyFarmBoundaryCommandHandlerTests
         Assert.Equal(1, fixture.AuditWriter.UserActionCallCount);
     }
 
+
+    [Fact]
+    public async Task HandleReturnsFailureWhenActiveZoneFallsOutsideNewBoundary()
+    {
+        var fixture = CreateFixture();
+        // Create an active zone located around (106.5, 10.5), far outside the new boundary (106.0 to 106.1)
+        var outsideZonePolygon = _geometryFactory.CreatePolygon([
+            new Coordinate(106.5, 10.5),
+            new Coordinate(106.6, 10.5),
+            new Coordinate(106.6, 10.6),
+            new Coordinate(106.5, 10.6),
+            new Coordinate(106.5, 10.5)
+        ]);
+        outsideZonePolygon.SRID = 4326;
+
+        var zone = FarmZone.Create(
+            fixture.Farm.Id,
+            "ZONE-OUT-01",
+            "Zone Outside",
+            outsideZonePolygon,
+            areaHectares: 2.0m,
+            GeneralStatus.Active,
+            fixture.ActorId,
+            Now.AddDays(-2));
+        fixture.ZoneRepo.ActiveZones.Add(zone);
+
+        var command = new VerifyFarmBoundaryCommand(
+            fixture.Farm.Id,
+            fixture.ValidBoundaryPolygon,
+            "Approval reason",
+            "evidence-01",
+            fixture.Farm.Version,
+            ExpectedCurrentBoundaryVersionNumber: 1);
+
+        var result = await fixture.Handler.Handle(command, CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("FarmZone.BoundaryOutsideFarm", result.Error.Code);
+    }
     private TestFixture CreateFixture()
     {
         var tenantId = Guid.NewGuid();
@@ -236,9 +276,13 @@ public sealed class VerifyFarmBoundaryCommandHandlerTests
         var accessService = new FakeSystemManagerAccessService(tenantId, farmId);
         var timeProvider = new FixedTimeProvider(Now);
 
+        var zoneRepo = new FakeFarmZoneRepository();
+        var boundaryPolicy = new AgriDrone.Modules.Farms.Infrastructure.Boundaries.FarmBoundaryPolicy(boundaryRepo, zoneRepo);
         var handler = new VerifyFarmBoundaryCommandHandler(
             farmRepo,
             boundaryRepo,
+            zoneRepo,
+            boundaryPolicy,
             unitOfWork,
             auditWriter,
             execContext,
@@ -256,6 +300,7 @@ public sealed class VerifyFarmBoundaryCommandHandlerTests
             auditWriter,
             execContext,
             accessService,
+            zoneRepo,
             handler);
     }
 
@@ -270,6 +315,7 @@ public sealed class VerifyFarmBoundaryCommandHandlerTests
         FakeAuditWriter AuditWriter,
         FakeExecutionContext ExecutionContext,
         FakeSystemManagerAccessService AccessService,
+        FakeFarmZoneRepository ZoneRepo,
         VerifyFarmBoundaryCommandHandler Handler);
 
     private sealed class FakeFarmRepository : IFarmRepository
@@ -292,6 +338,22 @@ public sealed class VerifyFarmBoundaryCommandHandlerTests
         public void Update(Farm farm) { }
     }
 
+    private sealed class FakeFarmZoneRepository : AgriDrone.Modules.Farms.Domain.Zones.IFarmZoneRepository
+    {
+        public List<FarmZone> ActiveZones { get; } = [];
+        public Task<IReadOnlyList<FarmZone>> GetActiveZonesByFarmIdAsync(Guid tenantId, Guid farmId, CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<FarmZone>>(ActiveZones);
+        public Task<bool> ActiveCodeExistsAsync(Guid tenantId, Guid farmId, string code, Guid? excludingZoneId = null, CancellationToken cancellationToken = default)
+            => Task.FromResult(false);
+        public Task<bool> ActiveBoundaryOverlapsAsync(Guid tenantId, Guid farmId, Polygon boundary, Guid? excludingZoneId = null, CancellationToken cancellationToken = default)
+            => Task.FromResult(false);
+        public Task<FarmZone?> GetByIdAsync(Guid tenantId, Guid farmId, Guid zoneId, CancellationToken cancellationToken = default)
+            => Task.FromResult<FarmZone?>(null);
+        public Task<FarmZone?> GetByCodeAsync(Guid tenantId, Guid farmId, string code, CancellationToken cancellationToken = default)
+            => Task.FromResult<FarmZone?>(null);
+        public void Add(FarmZone zone) { }
+        public void Update(FarmZone zone) { }
+    }
     private sealed class FakeFarmBoundaryRepository : IFarmBoundaryRepository
     {
         public FarmBoundary? CurrentApproved { get; set; }

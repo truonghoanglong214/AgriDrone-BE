@@ -244,7 +244,8 @@ internal sealed class SurveyOrderOperationalContextV4Query(
             HasFinalizedBoundaryCapture: hasFinalizedBoundaryCapture,
             HasApprovedBaselineRoute: hasApprovedBaselineRoute,
             IsBaselineRouteCurrent: isBaselineRouteCurrent,
-            IsBaselineRouteWithinSafetyInset: isBaselineRouteWithinSafetyInset);
+            IsBaselineRouteWithinSafetyInset: isBaselineRouteWithinSafetyInset,
+            DepositPaymentStatus: order.DepositPaymentStatus);
 
         var commercialDecision = SurveyOrderReadinessPolicy.EvaluateCommercialReadiness(commercialSnapshot);
 
@@ -325,6 +326,11 @@ internal sealed class SurveyOrderOperationalContextV4Query(
             ExtraFlights: extraFlightsSummary,
             CommercialReadiness: commercialReadiness,
             MissionReadiness: missionReadiness,
-            EvaluatedAt: evaluatedAt);
+            EvaluatedAt: evaluatedAt,
+            DepositPaymentStatus: order.DepositPaymentStatus.ToString(),
+            DepositAmount: order.DepositAmount,
+            RemainingAmount: order.RemainingAmount,
+            DepositPaymentId: order.DepositPaymentId,
+            DepositConfirmedAt: order.DepositConfirmedAt);
     }
 }

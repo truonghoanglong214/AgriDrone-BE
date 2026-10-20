@@ -122,6 +122,28 @@ public sealed class SurveyOrderConfiguration : IEntityTypeConfiguration<SurveyOr
         builder.Property(order => order.PricePerHaSnapshot).HasColumnName("price_per_ha_snapshot").HasColumnType("numeric(18,2)").HasPrecision(18, 2);
         builder.Property(order => order.Currency).HasColumnName("currency").HasColumnType("character(3)").HasMaxLength(3).IsFixedLength();
         builder.Property(order => order.FinalPrice).HasColumnName("final_price").HasColumnType("numeric(18,2)").HasPrecision(18, 2);
+        builder.Property(order => order.DepositPaymentStatus)
+            .HasColumnName("deposit_payment_status")
+            .HasColumnType("system.survey_payment_status")
+            .HasSentinel((SurveyPaymentStatus)(-1))
+            .HasDefaultValue(SurveyPaymentStatus.Pending)
+            .IsRequired();
+        builder.Property(order => order.DepositAmount)
+            .HasColumnName("deposit_amount")
+            .HasColumnType("numeric(18,2)")
+            .HasPrecision(18, 2)
+            .HasDefaultValue(500000m)
+            .IsRequired();
+        builder.Property(order => order.RemainingAmount)
+            .HasColumnName("remaining_amount")
+            .HasColumnType("numeric(18,2)")
+            .HasPrecision(18, 2);
+        builder.Property(order => order.DepositPaymentId)
+            .HasColumnName("deposit_payment_id")
+            .HasColumnType("uuid");
+        builder.Property(order => order.DepositConfirmedAt)
+            .HasColumnName("deposit_confirmed_at")
+            .HasColumnType("timestamp with time zone");
         builder.Property(order => order.ScopeConfirmedBy).HasColumnName("scope_confirmed_by").HasColumnType("uuid");
         builder.Property(order => order.ScopeConfirmedAt).HasColumnName("scope_confirmed_at").HasColumnType("timestamp with time zone");
         builder.Property(order => order.RequiresBaselineMapping).HasColumnName("requires_baseline_mapping").HasColumnType("boolean");
