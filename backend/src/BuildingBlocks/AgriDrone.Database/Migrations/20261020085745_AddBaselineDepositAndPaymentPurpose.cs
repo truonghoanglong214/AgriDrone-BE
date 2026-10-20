@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using AgriDrone.Modules.Surveys.Domain;
 using Microsoft.EntityFrameworkCore.Migrations;
 
@@ -212,6 +212,14 @@ namespace AgriDrone.Database.Migrations
                 precision: 18,
                 scale: 2,
                 nullable: true);
+
+            migrationBuilder.Sql(
+                """
+                UPDATE survey.survey_orders
+                SET deposit_amount = 0,
+                    deposit_payment_status = 'CONFIRMED'::system.survey_payment_status
+                WHERE requires_baseline_mapping = false;
+                """);
 
             migrationBuilder.CreateIndex(
                 name: "uq_survey_payments_one_active_per_order_purpose",

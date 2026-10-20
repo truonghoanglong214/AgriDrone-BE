@@ -105,44 +105,23 @@ public static class SurveyOrderReadinessPolicy
 
         if (snapshot.Purpose == SurveyOperationPurpose.BaselineMapping)
         {
-            if (snapshot.DepositPaymentStatus.HasValue &&
-                snapshot.DepositPaymentStatus.Value != SurveyPaymentStatus.Confirmed)
+            if (snapshot.DepositPaymentStatus != SurveyPaymentStatus.Confirmed)
             {
                 failures.Add(SurveyOrderReadinessFailure.PaymentNotConfirmed);
             }
-
-            if (!snapshot.HasFinalizedBoundaryCapture)
-            {
-                failures.Add(
-                    SurveyOrderReadinessFailure.BoundaryCaptureNotFinalized);
-            }
-
-            if (!snapshot.HasApprovedBaselineRoute)
-            {
-                failures.Add(
-                    SurveyOrderReadinessFailure.BaselineRouteNotApproved);
-            }
-
-            if (!snapshot.IsBaselineRouteCurrent)
-            {
-                failures.Add(SurveyOrderReadinessFailure.BaselineRouteStale);
-            }
-
-            if (!snapshot.IsBaselineRouteWithinSafetyInset)
-            {
-                failures.Add(
-                    SurveyOrderReadinessFailure.BaselineRouteOutsideSafetyInset);
-            }
         }
 
-        if (!snapshot.HasApprovedFarmBoundary)
+        if (snapshot.Purpose == SurveyOperationPurpose.PlantHealth)
         {
-            failures.Add(SurveyOrderReadinessFailure.BoundaryNotApproved);
-        }
+            if (!snapshot.HasApprovedFarmBoundary)
+            {
+                failures.Add(SurveyOrderReadinessFailure.BoundaryNotApproved);
+            }
 
-        if (!snapshot.IsScopeConfirmed)
-        {
-            failures.Add(SurveyOrderReadinessFailure.ScopeNotConfirmed);
+            if (!snapshot.IsScopeConfirmed)
+            {
+                failures.Add(SurveyOrderReadinessFailure.ScopeNotConfirmed);
+            }
         }
 
         if (!snapshot.HasValidWrittenDataUseConsent)

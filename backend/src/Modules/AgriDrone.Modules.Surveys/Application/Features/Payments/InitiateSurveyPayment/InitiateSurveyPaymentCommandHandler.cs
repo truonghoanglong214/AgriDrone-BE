@@ -122,6 +122,51 @@ internal sealed class InitiateSurveyPaymentCommandHandler(
             }
 
             var payableAmount = order.RemainingAmount ?? order.FinalPrice.Value;
+            if (payableAmount == 0)
+            {
+                order.MarkPaymentConfirmed(initiatedAt);
+
+                using var zeroData = JsonSerializer.SerializeToDocument(new
+                {
+                    orderId = order.Id,
+                    remainingAmount = 0m,
+                    provider = "SETTLEMENT",
+                    providerReference = "ZERO_BALANCE_SETTLED",
+                    status = "CONFIRMED"
+                });
+                auditWriter.AddUserAction(
+                    unitOfWork,
+                    order.TenantId,
+                    order.FarmId,
+                    actorId,
+                    executionContext.CorrelationId,
+                    nameof(SurveyOrder),
+                    order.Id,
+                    "SETTLE_ZERO_BALANCE_SURVEY_PAYMENT",
+                    null,
+                    zeroData,
+                    initiatedAt);
+
+                await unitOfWork.FlushAsync(cancellationToken);
+
+                return Result.Success(new InitiateSurveyPaymentResponse(
+                    Guid.Empty,
+                    order.Id,
+                    state.PaidServiceAppointmentId,
+                    0m,
+                    order.Currency ?? "VND",
+                    "SETTLEMENT",
+                    "ZERO_BALANCE_SETTLED",
+                    "CONFIRMED",
+                    new Uri("about:blank"),
+                    string.Empty,
+                    initiatedAt,
+                    0,
+                    order.Version,
+                    initiatedAt,
+                    state.PaidServiceAppointmentId));
+            }
+
             amount = Money.Create(
                 payableAmount,
                 CurrencyCode.Create(order.Currency));
@@ -214,7 +259,8 @@ internal sealed class InitiateSurveyPaymentCommandHandler(
             session.ExpiresAt,
             payment.Version,
             order.Version,
-            initiatedAt));
+            initiatedAt,
+            state.PaidServiceAppointmentId));
     }
 
     private static bool IsConflict(string? sqlState) => sqlState is

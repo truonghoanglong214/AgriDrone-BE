@@ -325,6 +325,7 @@ public sealed class SystemManagerSurveyOrdersController(ISender sender)
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    [Obsolete("Legacy GNSS boundary capture route approval is deprecated. Use orthophoto 4-corner boundary marking via POST /api/system-manager/survey-orders/{orderId}/farm-boundary/mark-orthophoto-corners instead.")]
     public async Task<IResult> ApproveBaselineRoutePlan(
         [FromRoute] Guid orderId,
         [FromRoute] Guid routePlanId,
@@ -529,6 +530,8 @@ public sealed class SystemManagerSurveyOrdersController(ISender sender)
                 SurveyOrderStatus.PendingBoundaryVerification,
             SurveyOrderStatusFilterValue.AWAITING_BASELINE_APPOINTMENT =>
                 SurveyOrderStatus.AwaitingBaselineAppointment,
+            SurveyOrderStatusFilterValue.AWAITING_BASELINE_DEPOSIT =>
+                SurveyOrderStatus.AwaitingBaselineDeposit,
             SurveyOrderStatusFilterValue.AWAITING_BOUNDARY_CAPTURE =>
                 SurveyOrderStatus.AwaitingBoundaryCapture,
             SurveyOrderStatusFilterValue.BASELINE_READY =>

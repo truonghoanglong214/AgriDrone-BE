@@ -1,5 +1,6 @@
 using AgriDrone.IntegrationContracts.Surveys;
 using AgriDrone.Modules.Farms.Domain.Boundaries;
+using AgriDrone.Modules.Farms.Domain.Farms;
 using AgriDrone.Modules.Farms.Domain.Maps;
 using AgriDrone.Modules.Farms.Domain.Zones;
 using AgriDrone.Modules.Surveys.Domain;
@@ -33,6 +34,24 @@ internal sealed class SurveyOrderOperationalContextV3Query(
             .SingleOrDefaultAsync(value => value.Id == surveyOrderId, cancellationToken);
         if (order is null) return null;
 
+        var farm = await db.Set<Farm>().AsNoTracking()
+            .FirstOrDefaultAsync(f => f.Id == order.FarmId && f.TenantId == order.TenantId, cancellationToken);
+        var candidateCenterLongitude = farm?.CenterPoint?.X;
+        var candidateCenterLatitude = farm?.CenterPoint?.Y;
+        var approximateAreaHa = farm?.AreaHectares;
+        double? surveyRadiusMeters = null;
+        if (candidateCenterLongitude.HasValue && candidateCenterLatitude.HasValue)
+        {
+            if (approximateAreaHa.HasValue && approximateAreaHa.Value > 0)
+            {
+                surveyRadiusMeters = Math.Round(Math.Sqrt((double)approximateAreaHa.Value * 10000.0 / Math.PI) * 1.2, 1);
+            }
+            else
+            {
+                surveyRadiusMeters = 150.0;
+            }
+        }
+
         var appointmentPurpose = purpose == SurveyOperationPurpose.BaselineMapping
             ? SurveyAppointmentPurpose.BaselineMapping
             : SurveyAppointmentPurpose.PaidService;
@@ -40,7 +59,11 @@ internal sealed class SurveyOrderOperationalContextV3Query(
             .Where(value => value.Purpose == appointmentPurpose)
             .OrderByDescending(value => value.UpdatedAt)
             .FirstOrDefault();
+        var paymentPurpose = purpose == SurveyOperationPurpose.BaselineMapping
+            ? PaymentPurpose.BaselineDeposit
+            : PaymentPurpose.FinalBalance;
         var payment = order.Payments
+            .Where(value => value.Purpose == paymentPurpose)
             .OrderByDescending(value => value.UpdatedAt)
             .FirstOrDefault();
         var access = await managerAccess.ResolveFarmAccessAsync(order.FarmId, cancellationToken);
@@ -146,13 +169,14 @@ internal sealed class SurveyOrderOperationalContextV3Query(
             .Select(z => z.Id)
             .ToListAsync(cancellationToken);
 
+        var expectedPayableAmount = order.RemainingAmount ?? order.FinalPrice;
         var isPaymentAmountAndCurrencyMatched = purpose == SurveyOperationPurpose.BaselineMapping
             || (payment is not null
-                && order.FinalPrice.HasValue
-                && payment.Amount == order.FinalPrice.Value
+                && expectedPayableAmount.HasValue
+                && payment.Amount == expectedPayableAmount.Value
                 && string.Equals(payment.Currency, order.Currency, StringComparison.OrdinalIgnoreCase));
 
-        var safetyChecksSatisfied = boundaryApproved && managerReady;
+        var safetyChecksSatisfied = (purpose == SurveyOperationPurpose.BaselineMapping || boundaryApproved) && managerReady;
 
         var snapshot = new SurveyOrderReadinessSnapshot(
             OrderStatus: order.Status,
@@ -217,6 +241,10 @@ internal sealed class SurveyOrderOperationalContextV3Query(
             order.DepositAmount,
             order.RemainingAmount,
             order.DepositPaymentId,
-            order.DepositConfirmedAt);
+            order.DepositConfirmedAt,
+            candidateCenterLongitude,
+            candidateCenterLatitude,
+            approximateAreaHa,
+            surveyRadiusMeters);
     }
 }

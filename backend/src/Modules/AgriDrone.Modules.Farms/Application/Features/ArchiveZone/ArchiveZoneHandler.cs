@@ -41,69 +41,74 @@ internal sealed class ArchiveZoneHandler(
             return Result.Failure(FarmZoneError.NotFound());
         }
 
-        var zone = await farmZoneRepository.GetByIdAsync(
-            tenantId,
-            request.FarmId,
-            request.ZoneId,
+        return await unitOfWork.ExecuteInTransactionAsync(
+            async token =>
+            {
+                var zone = await farmZoneRepository.GetByIdAsync(
+                    tenantId,
+                    request.FarmId,
+                    request.ZoneId,
+                    token);
+
+                if (zone is null)
+                {
+                    return Result.Failure(FarmZoneError.NotFound());
+                }
+
+                if (zone.Version != request.ExpectedVersion)
+                {
+                    return Result.Failure(FarmZoneError.ConcurrentUpdate());
+                }
+
+                var dependencies = await dependencyQuery.GetForZoneAsync(
+                    tenantId,
+                    request.FarmId,
+                    request.ZoneId,
+                    token);
+
+                if (dependencies.HasAny)
+                {
+                    return Result.Failure(
+                        FarmZoneError.ActiveDependenciesExist(
+                            dependencies.ActiveMissionCount,
+                            dependencies.PublishedMapCount,
+                            dependencies.StableReasonCodes));
+                }
+
+                using var oldData = CreateAuditData(zone);
+
+                farmZoneRepository.Update(zone);
+
+                var now = timeProvider.GetUtcNow();
+                zone.Archive(now);
+
+                using var newData = CreateAuditData(zone);
+
+                auditWriter.AddUserAction(
+                    sink: unitOfWork,
+                    tenantId: tenantId,
+                    farmId: request.FarmId,
+                    actorId: actorId,
+                    correlationId: executionContext.CorrelationId,
+                    entityType: nameof(FarmZone),
+                    entityId: zone.Id,
+                    action: "ARCHIVE",
+                    oldData: oldData,
+                    newData: newData,
+                    createdAt: now);
+
+                try
+                {
+                    await unitOfWork.SaveChangesAsync(token);
+                }
+                catch (DbUpdateConcurrencyException)
+                {
+                    return Result.Failure(FarmZoneError.ConcurrentUpdate());
+                }
+
+                return Result.Success();
+            },
             cancellationToken);
-
-        if (zone is null)
-        {
-            return Result.Failure(FarmZoneError.NotFound());
-        }
-
-        if (zone.Version != request.ExpectedVersion)
-        {
-            return Result.Failure(FarmZoneError.ConcurrentUpdate());
-        }
-
-        var dependencies = await dependencyQuery.GetForZoneAsync(
-            tenantId,
-            request.FarmId,
-            request.ZoneId,
-            cancellationToken);
-
-        if (dependencies.HasAny)
-        {
-            return Result.Failure(
-                FarmZoneError.ActiveDependenciesExist(
-                    dependencies.ActiveMissionCount,
-                    dependencies.PublishedMapCount,
-                    dependencies.StableReasonCodes));
-        }
-
-        using var oldData = CreateAuditData(zone);
-
-        farmZoneRepository.Update(zone);
-
-        var now = timeProvider.GetUtcNow();
-        zone.Archive(now);
-
-        using var newData = CreateAuditData(zone);
-
-        auditWriter.AddUserAction(
-            sink: unitOfWork,
-            tenantId: tenantId,
-            farmId: request.FarmId,
-            actorId: actorId,
-            correlationId: executionContext.CorrelationId,
-            entityType: nameof(FarmZone),
-            entityId: zone.Id,
-            action: "ARCHIVE",
-            oldData: oldData,
-            newData: newData,
-            createdAt: now);
-
-        try
-        {
-            await unitOfWork.SaveChangesAsync(cancellationToken);
-        }
-        catch (DbUpdateConcurrencyException)
-        {
-            return Result.Failure(FarmZoneError.ConcurrentUpdate());
-        }
-
-        return Result.Success();
     }
 
     private static JsonDocument CreateAuditData(FarmZone zone) =>

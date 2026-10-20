@@ -228,6 +228,8 @@ internal static class SurveyRequestResponseMapper
                 "PENDING_BOUNDARY_VERIFICATION",
             SurveyOrderStatus.AwaitingBaselineAppointment =>
                 "AWAITING_BASELINE_APPOINTMENT",
+            SurveyOrderStatus.AwaitingBaselineDeposit =>
+                "AWAITING_BASELINE_DEPOSIT",
             SurveyOrderStatus.AwaitingBoundaryCapture =>
                 "AWAITING_BOUNDARY_CAPTURE",
             SurveyOrderStatus.BaselineReady => "BASELINE_READY",

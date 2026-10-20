@@ -40,14 +40,27 @@ internal sealed class ProcessSurveyPaymentEventCommandHandler(
                 cancellationToken);
         }
         catch (PostgresException exception) when (
-            exception.SqlState == PostgresErrorCodes.UniqueViolation)
+            exception.SqlState == PostgresErrorCodes.UniqueViolation &&
+            IsDedupConstraint(exception.ConstraintName))
         {
             return Result.Success(Duplicate(command));
         }
         catch (DbUpdateException exception) when (
-            exception.HasPostgresSqlState(PostgresErrorCodes.UniqueViolation))
+            exception.InnerException is PostgresException pgEx &&
+            pgEx.SqlState == PostgresErrorCodes.UniqueViolation &&
+            IsDedupConstraint(pgEx.ConstraintName))
         {
             return Result.Success(Duplicate(command));
+        }
+        catch (PostgresException exception) when (
+            exception.SqlState == PostgresErrorCodes.UniqueViolation)
+        {
+            return Conflict();
+        }
+        catch (DbUpdateException exception) when (
+            exception.HasPostgresSqlState(PostgresErrorCodes.UniqueViolation))
+        {
+            return Conflict();
         }
         catch (DbUpdateConcurrencyException)
         {
@@ -211,7 +224,14 @@ internal sealed class ProcessSurveyPaymentEventCommandHandler(
             }
 
             payment.Refund(command.OccurredAt);
-            order.RevokePaidServiceReadiness(command.OccurredAt);
+            if (payment.Purpose == PaymentPurpose.BaselineDeposit)
+            {
+                order.RevokeBaselineDeposit(command.OccurredAt);
+            }
+            else
+            {
+                order.RevokePaidServiceReadiness(command.OccurredAt);
+            }
             return (true, eventType == SurveyPaymentCommandSupport.ChargebackEvent
                 ? "CHARGEBACK_APPLIED"
                 : "REFUND_APPLIED");
@@ -343,4 +363,8 @@ internal sealed class ProcessSurveyPaymentEventCommandHandler(
     private static Result<ProcessSurveyPaymentEventResponse> Conflict() =>
         Result.Failure<ProcessSurveyPaymentEventResponse>(
             PaymentError.PersistenceConflict());
+
+    private static bool IsDedupConstraint(string? constraintName) =>
+        constraintName is "uq_payment_events_provider_dedup" or
+                          "uq_payment_events_provider_reference_event";
 }

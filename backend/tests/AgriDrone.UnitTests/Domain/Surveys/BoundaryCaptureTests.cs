@@ -16,9 +16,7 @@ public sealed class BoundaryCaptureTests
         order.MarkBaselineAppointmentConfirmed(Now.AddMinutes(1));
 
         Assert.Equal(SurveyOrderStatus.AwaitingBaselineDeposit, order.Status);
-        Assert.False(SurveyOrder.CanTransition(
-            SurveyOrderStatus.AwaitingBaselineAppointment,
-            SurveyOrderStatus.BaselineReady));
+        Assert.Equal(SurveyPaymentStatus.Pending, order.DepositPaymentStatus);
     }
 
     [Fact]
@@ -127,10 +125,10 @@ public sealed class BoundaryCaptureTests
     }
 
     [Fact]
-    public void BaselineReadinessReportsCaptureAndRouteFailures()
+    public void BaselineReadinessRequiresBaselineReadyAndConfirmedDeposit()
     {
         var decision = SurveyOrderReadinessPolicy.Evaluate(new(
-            OrderStatus: SurveyOrderStatus.AwaitingBoundaryCapture,
+            OrderStatus: SurveyOrderStatus.AwaitingBaselineDeposit,
             Purpose: SurveyOperationPurpose.BaselineMapping,
             RequiresBaselineMapping: true,
             HasApprovedFarmBoundary: false,
@@ -152,19 +150,14 @@ public sealed class BoundaryCaptureTests
             IsPaymentAmountAndCurrencyMatched: true,
             SafetyChecksSatisfied: false,
             HasValidWrittenDataUseConsent: true,
-            HasValidFlightPermission: true));
+            HasValidFlightPermission: true,
+            DepositPaymentStatus: SurveyPaymentStatus.Pending));
 
         Assert.Contains(
-            SurveyOrderReadinessFailure.BoundaryCaptureNotFinalized,
+            SurveyOrderReadinessFailure.OrderNotEligible,
             decision.Failures);
         Assert.Contains(
-            SurveyOrderReadinessFailure.BaselineRouteNotApproved,
-            decision.Failures);
-        Assert.Contains(
-            SurveyOrderReadinessFailure.BaselineRouteStale,
-            decision.Failures);
-        Assert.Contains(
-            SurveyOrderReadinessFailure.BaselineRouteOutsideSafetyInset,
+            SurveyOrderReadinessFailure.PaymentNotConfirmed,
             decision.Failures);
     }
 

@@ -36,7 +36,7 @@
             "description": "OK"
           }
         },
-        "security": [ ]
+        "security": []
       }
     },
     "/api/auth/forgot-password": {
@@ -70,7 +70,7 @@
             "description": "OK"
           }
         },
-        "security": [ ]
+        "security": []
       }
     },
     "/api/auth/reset-password": {
@@ -104,7 +104,7 @@
             "description": "OK"
           }
         },
-        "security": [ ]
+        "security": []
       }
     },
     "/api/auth/select-tenant": {
@@ -138,7 +138,7 @@
             "description": "OK"
           }
         },
-        "security": [ ]
+        "security": []
       }
     },
     "/api/farms": {
@@ -1906,7 +1906,7 @@
             }
           }
         },
-        "security": [ ]
+        "security": []
       }
     },
     "/api/public/survey-services": {
@@ -1947,7 +1947,7 @@
             }
           }
         },
-        "security": [ ]
+        "security": []
       }
     },
     "/api/integrations/payments/{provider}/callbacks": {
@@ -2134,7 +2134,7 @@
             }
           }
         },
-        "security": [ ]
+        "security": []
       }
     },
     "/api/system/drones": {
@@ -2450,7 +2450,7 @@
             "description": "OK"
           }
         },
-        "security": [ ]
+        "security": []
       }
     },
     "/api/auth/system-manager-invitations/accept": {
@@ -2482,7 +2482,7 @@
             "description": "OK"
           }
         },
-        "security": [ ]
+        "security": []
       }
     },
     "/api/system-manager/farms/{farmId}/missions/{missionId}/field-notes": {
@@ -6776,7 +6776,7 @@
             "description": "OK"
           }
         },
-        "security": [ ]
+        "security": []
       }
     },
     "/invitations/accept": {
@@ -6810,7 +6810,7 @@
             "description": "OK"
           }
         },
-        "security": [ ]
+        "security": []
       }
     },
     "/api/tenants/current/transfer-ownership": {
@@ -7599,6 +7599,122 @@
           }
         }
       }
+    },
+    "/api/system-manager/survey-orders/{orderId}/farm-boundary/mark-orthophoto-corners": {
+      "post": {
+        "tags": [
+          "SystemManagerSurveyOrders"
+        ],
+        "summary": "Chấm 4 góc ranh giới trên ảnh trực giao Orthophoto sau chuyến bay Baseline Mapping.",
+        "description": "SystemManager chấm đúng 4 góc theo thứ tự [1, 2, 3, 4] trên ảnh trực giao Orthophoto. Hệ thống kiểm tra tọa độ WGS84, diện tích 0.01-5000 ha và cập nhật FarmBoundaryVersion vào Order.",
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarkOrthophotoCornersRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarkOrthophotoCornersRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarkOrthophotoCornersRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarkFarmBoundaryOnOrthophotoResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarkFarmBoundaryOnOrthophotoResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -8083,7 +8199,7 @@
             "type": "string",
             "nullable": true
           },
-          "answers": { },
+          "answers": {},
           "suitableForFlight": {
             "type": "boolean"
           },
@@ -8725,6 +8841,11 @@
           "initiatedAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "appointmentId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
           }
         },
         "additionalProperties": false
@@ -8736,6 +8857,11 @@
             "type": "integer",
             "format": "int32",
             "nullable": true
+          },
+          "purpose": {
+            "type": "string",
+            "nullable": true,
+            "description": "Mục đích thanh toán: BASELINE_DEPOSIT (tiền cọc 500k) hoặc FINAL_BALANCE (quyết toán số dư còn lại)."
           }
         },
         "additionalProperties": false
@@ -8767,7 +8893,7 @@
       "ManagePreflightChecklistDefinitionRequest": {
         "type": "object",
         "properties": {
-          "items": { }
+          "items": {}
         },
         "additionalProperties": false
       },
@@ -9167,7 +9293,7 @@
             "nullable": true
           }
         },
-        "additionalProperties": { }
+        "additionalProperties": {}
       },
       "ProcessMetashapeRequest": {
         "type": "object",
@@ -10082,6 +10208,7 @@
         "enum": [
           "PENDING_BOUNDARY_VERIFICATION",
           "AWAITING_BASELINE_APPOINTMENT",
+          "AWAITING_BASELINE_DEPOSIT",
           "BASELINE_READY",
           "BASELINE_IN_PROGRESS",
           "AWAITING_BASELINE_REVIEW",
@@ -10560,7 +10687,7 @@
             "type": "string",
             "nullable": true
           },
-          "checklistSnapshot": { },
+          "checklistSnapshot": {},
           "reason": {
             "type": "string",
             "nullable": true
@@ -11301,6 +11428,74 @@
           }
         },
         "additionalProperties": false
+      },
+      "CornerPointDto": {
+        "type": "object",
+        "properties": {
+          "sequence": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "longitude": {
+            "type": "number",
+            "format": "double"
+          },
+          "latitude": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "additionalProperties": false
+      },
+      "MarkOrthophotoCornersRequest": {
+        "type": "object",
+        "properties": {
+          "expectedOrderVersion": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "corners": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CornerPointDto"
+            }
+          },
+          "reason": {
+            "type": "string",
+            "nullable": true
+          },
+          "evidenceReference": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "MarkFarmBoundaryOnOrthophotoResponse": {
+        "type": "object",
+        "properties": {
+          "surveyOrderId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "farmBoundaryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "boundaryVersionNumber": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "orderVersion": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "markedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false
       }
     },
     "securitySchemes": {
@@ -11314,7 +11509,7 @@
   },
   "security": [
     {
-      "Bearer": [ ]
+      "Bearer": []
     }
   ],
   "tags": [

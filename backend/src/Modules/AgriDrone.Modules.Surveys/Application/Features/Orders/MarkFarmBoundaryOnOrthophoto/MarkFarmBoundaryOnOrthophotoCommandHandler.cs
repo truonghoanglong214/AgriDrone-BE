@@ -46,10 +46,18 @@ internal sealed class MarkFarmBoundaryOnOrthophotoCommandHandler(
         }
 
         var orderedCorners = command.Corners.OrderBy(c => c.Sequence).ToList();
+        if (!orderedCorners.Select(c => c.Sequence).SequenceEqual([1, 2, 3, 4]))
+        {
+            return Result.Failure<MarkFarmBoundaryOnOrthophotoResponse>(
+                SurveyBoundaryVerificationError.InvalidGeometry(
+                    "Corners must have sequences exactly 1, 2, 3, and 4."));
+        }
+
         for (var i = 0; i < 4; i++)
         {
             var corner = orderedCorners[i];
-            if (corner.Longitude is < -180 or > 180 ||
+            if (!double.IsFinite(corner.Longitude) || !double.IsFinite(corner.Latitude) ||
+                corner.Longitude is < -180 or > 180 ||
                 corner.Latitude is < -90 or > 90)
             {
                 return Result.Failure<MarkFarmBoundaryOnOrthophotoResponse>(
@@ -89,6 +97,21 @@ internal sealed class MarkFarmBoundaryOnOrthophotoCommandHandler(
             return Result.Failure<MarkFarmBoundaryOnOrthophotoResponse>(
                 SurveyBoundaryVerificationError.InvalidGeometry(
                     $"Failed to construct valid polygon from corners: {ex.Message}"));
+        }
+
+        var areaHectares = CalculateMetricAreaHectares(polygon);
+        if (areaHectares < 0.01)
+        {
+            return Result.Failure<MarkFarmBoundaryOnOrthophotoResponse>(
+                SurveyBoundaryVerificationError.InvalidGeometry(
+                    $"Marked boundary area ({areaHectares:F4} ha) is below the minimum allowed threshold of 0.01 hectares (100 m²)."));
+        }
+
+        if (areaHectares > 5000.0)
+        {
+            return Result.Failure<MarkFarmBoundaryOnOrthophotoResponse>(
+                SurveyBoundaryVerificationError.InvalidGeometry(
+                    $"Marked boundary area ({areaHectares:F2} ha) exceeds the maximum allowed threshold of 5000 hectares."));
         }
 
         var markedAt = timeProvider.GetUtcNow();
@@ -157,6 +180,15 @@ internal sealed class MarkFarmBoundaryOnOrthophotoCommandHandler(
                 SurveyOrderError.VersionConflict());
         }
 
+        if (order.Status is not (
+            SurveyOrderStatus.AwaitingBaselineReview or
+            SurveyOrderStatus.PendingBoundaryVerification))
+        {
+            return Result.Failure<MarkFarmBoundaryOnOrthophotoResponse>(
+                SurveyOrderError.InvalidTransition(
+                    $"Order in state '{order.Status}' cannot set farm boundary from orthophoto. Must be in AwaitingBaselineReview."));
+        }
+
         var boundaryResult = await boundaryRepository.StageApprovedBoundaryAsync(
             order,
             polygon,
@@ -212,5 +244,38 @@ internal sealed class MarkFarmBoundaryOnOrthophotoCommandHandler(
             boundaryResult.Value.VersionNumber,
             order.Version,
             markedAt));
+    }
+
+    private static double CalculateMetricAreaHectares(Polygon polygon)
+    {
+        var coords = polygon.ExteriorRing.Coordinates;
+        if (coords.Length < 4)
+        {
+            return 0.0;
+        }
+
+        var refLat = 0.0;
+        for (var i = 0; i < coords.Length - 1; i++)
+        {
+            refLat += coords[i].Y;
+        }
+        refLat /= (coords.Length - 1);
+
+        var latRad = refLat * Math.PI / 180.0;
+        const double metersPerDegreeLat = 111_320.0;
+        var metersPerDegreeLon = metersPerDegreeLat * Math.Cos(latRad);
+
+        var areaSquareMeters = 0.0;
+        for (var i = 0; i < coords.Length - 1; i++)
+        {
+            var x1 = coords[i].X * metersPerDegreeLon;
+            var y1 = coords[i].Y * metersPerDegreeLat;
+            var x2 = coords[i + 1].X * metersPerDegreeLon;
+            var y2 = coords[i + 1].Y * metersPerDegreeLat;
+            areaSquareMeters += (x1 * y2) - (x2 * y1);
+        }
+
+        areaSquareMeters = Math.Abs(areaSquareMeters) / 2.0;
+        return areaSquareMeters / 10_000.0;
     }
 }

@@ -1,5 +1,6 @@
 using AgriDrone.IntegrationContracts.Surveys;
 using AgriDrone.Modules.Farms.Domain.Boundaries;
+using AgriDrone.Modules.Farms.Domain.Farms;
 using AgriDrone.Modules.Farms.Domain.Maps;
 using AgriDrone.Modules.Farms.Domain.Zones;
 using AgriDrone.Modules.Surveys.Domain;
@@ -35,6 +36,24 @@ internal sealed class SurveyOrderOperationalContextV4Query(
 
         if (order is null) return null;
 
+        var farm = await db.Set<Farm>().AsNoTracking()
+            .FirstOrDefaultAsync(f => f.Id == order.FarmId && f.TenantId == order.TenantId, cancellationToken);
+        var candidateCenterLongitude = farm?.CenterPoint?.X;
+        var candidateCenterLatitude = farm?.CenterPoint?.Y;
+        var approximateAreaHa = farm?.AreaHectares;
+        double? surveyRadiusMeters = null;
+        if (candidateCenterLongitude.HasValue && candidateCenterLatitude.HasValue)
+        {
+            if (approximateAreaHa.HasValue && approximateAreaHa.Value > 0)
+            {
+                surveyRadiusMeters = Math.Round(Math.Sqrt((double)approximateAreaHa.Value * 10000.0 / Math.PI) * 1.2, 1);
+            }
+            else
+            {
+                surveyRadiusMeters = 150.0;
+            }
+        }
+
         var appointmentPurpose = purpose == SurveyOperationPurpose.BaselineMapping
             ? SurveyAppointmentPurpose.BaselineMapping
             : SurveyAppointmentPurpose.PaidService;
@@ -44,7 +63,12 @@ internal sealed class SurveyOrderOperationalContextV4Query(
             .OrderByDescending(value => value.UpdatedAt)
             .FirstOrDefault();
 
+        var paymentPurpose = purpose == SurveyOperationPurpose.BaselineMapping
+            ? PaymentPurpose.BaselineDeposit
+            : PaymentPurpose.FinalBalance;
+
         var payment = order.Payments
+            .Where(value => value.Purpose == paymentPurpose)
             .OrderByDescending(value => value.UpdatedAt)
             .FirstOrDefault();
 
@@ -207,11 +231,11 @@ internal sealed class SurveyOrderOperationalContextV4Query(
             .Select(z => z.Id)
             .ToListAsync(cancellationToken);
 
-        // Authoritative payment amount & currency match
+        var expectedPayableAmount = order.RemainingAmount ?? order.FinalPrice;
         var isPaymentAmountAndCurrencyMatched = purpose == SurveyOperationPurpose.BaselineMapping
             || (payment is not null
-                && order.FinalPrice.HasValue
-                && payment.Amount == order.FinalPrice.Value
+                && expectedPayableAmount.HasValue
+                && payment.Amount == expectedPayableAmount.Value
                 && string.Equals(payment.Currency, order.Currency, StringComparison.OrdinalIgnoreCase));
 
         // Commercial Readiness evaluation (BE1 authoritative)
@@ -285,13 +309,13 @@ internal sealed class SurveyOrderOperationalContextV4Query(
             RequiresBaselineMapping: order.RequiresBaselineMapping,
             ScopeZoneIds: scopeZoneIds,
             ScopeConfirmedAt: order.ScopeConfirmedAt,
-            OriginalSurveyPoleCount: order.ConfirmedSurveyPoleCount?.Value,
+            OriginalSurveyPoleCount: order.OriginalConfirmedPoleCount?.Value,
             ConfirmedSurveyPoleCount: order.ConfirmedSurveyPoleCount?.Value,
             SurveyServicePriceId: order.SurveyServicePriceId,
-            OriginalPricePerPole: order.PricePerPoleSnapshot?.Amount,
+            OriginalPricePerPole: order.OriginalPricePerPoleSnapshot?.Amount,
             PricePerPole: order.PricePerPoleSnapshot?.Amount,
             Currency: order.Currency,
-            OriginalTotalPrice: order.FinalPrice,
+            OriginalTotalPrice: order.OriginalFinalPrice,
             FinalPrice: order.FinalPrice,
             AppointmentId: appointment?.Id,
             AppointmentPurpose: appointment?.Purpose.ToString(),
@@ -331,6 +355,10 @@ internal sealed class SurveyOrderOperationalContextV4Query(
             DepositAmount: order.DepositAmount,
             RemainingAmount: order.RemainingAmount,
             DepositPaymentId: order.DepositPaymentId,
-            DepositConfirmedAt: order.DepositConfirmedAt);
+            DepositConfirmedAt: order.DepositConfirmedAt,
+            CandidateCenterLongitude: candidateCenterLongitude,
+            CandidateCenterLatitude: candidateCenterLatitude,
+            ApproximateAreaHa: approximateAreaHa,
+            SurveyRadiusMeters: surveyRadiusMeters);
     }
 }

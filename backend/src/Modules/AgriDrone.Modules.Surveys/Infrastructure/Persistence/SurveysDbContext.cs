@@ -44,6 +44,8 @@ internal sealed class SurveysDbContext(DbContextOptions<SurveysDbContext> option
 
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
 
+    public DbSet<InboxMessage> InboxMessages => Set<InboxMessage>();
+
     public void AddAuditLog(AuditLog auditLog)
     {
         ArgumentNullException.ThrowIfNull(auditLog);
@@ -63,11 +65,29 @@ internal sealed class SurveysDbContext(DbContextOptions<SurveysDbContext> option
         return result;
     }
 
+    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+    {
+        configurationBuilder
+            .Properties<System.Text.Json.JsonDocument>()
+            .HaveConversion<JsonDocumentStringConverter>();
+    }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.HasDefaultSchema("survey");
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(SurveysDbContext).Assembly);
         modelBuilder.ApplyConfiguration(new AuditLogConfiguration());
         modelBuilder.ApplyConfiguration(new OutboxMessageConfiguration());
+        modelBuilder.ApplyConfiguration(new InboxMessageConfiguration());
+    }
+
+    private sealed class JsonDocumentStringConverter : Microsoft.EntityFrameworkCore.Storage.ValueConversion.ValueConverter<System.Text.Json.JsonDocument, string>
+    {
+        public JsonDocumentStringConverter()
+            : base(
+                doc => doc == null ? "{}" : doc.RootElement.GetRawText(),
+                text => System.Text.Json.JsonDocument.Parse(string.IsNullOrWhiteSpace(text) ? "{}" : text, default))
+        {
+        }
     }
 }

@@ -37,6 +37,7 @@ internal sealed class SurveyOrderReadinessStateQueries(NpgsqlDataSource dataSour
                 survey_order.confirmed_survey_pole_count,
                 survey_order.price_per_pole_snapshot,
                 survey_order.final_price,
+                survey_order.remaining_amount,
                 survey_order.currency,
                 survey_order.deposit_payment_status::text AS deposit_payment_status,
                 service.service_type::text AS service_type,
@@ -200,6 +201,10 @@ internal sealed class SurveyOrderReadinessStateQueries(NpgsqlDataSource dataSour
                 SELECT item.status, item.amount, item.currency
                 FROM survey.survey_payments AS item
                 WHERE item.survey_order_id = survey_order.id
+                  AND item.purpose = CASE
+                      WHEN @appointment_purpose = 'BASELINE_MAPPING' THEN 'BaselineDeposit'
+                      ELSE 'FinalBalance'
+                  END
                 ORDER BY item.created_at DESC
                 LIMIT 1
             ) AS payment ON TRUE
@@ -267,7 +272,7 @@ internal sealed class SurveyOrderReadinessStateQueries(NpgsqlDataSource dataSour
             ReadNullableString(reader, "failsafe_notes") is null;
         var paymentStatus = ParsePaymentStatus(
             ReadNullableString(reader, "payment_status"));
-        var expectedAmount = ReadNullableDecimal(reader, "final_price");
+        var expectedAmount = ReadNullableDecimal(reader, "remaining_amount") ?? ReadNullableDecimal(reader, "final_price");
         var paymentAmount = ReadNullableDecimal(reader, "payment_amount");
         var expectedCurrency = ReadNullableString(reader, "currency")?.Trim();
         var paymentCurrency = ReadNullableString(

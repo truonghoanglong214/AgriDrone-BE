@@ -108,6 +108,7 @@ internal sealed class RequestSurveyAppointmentRescheduleCommandHandler(
             if (appointment.Purpose == SurveyAppointmentPurpose.BaselineMapping &&
                 previousOrderStatus is
                     SurveyOrderStatus.AwaitingBoundaryCapture or
+                    SurveyOrderStatus.AwaitingBaselineDeposit or
                     SurveyOrderStatus.BaselineReady)
             {
                 order.ReopenBaselineAppointment(requestedAt);

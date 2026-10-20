@@ -41,71 +41,76 @@ internal sealed class ArchiveFarmHandler(
             return Result.Failure(FarmError.NotFound());
         }
 
-        var farm = await farmRepository.GetByIdAsync(
-            tenantId,
-            request.FarmId,
+        return await unitOfWork.ExecuteInTransactionAsync(
+            async token =>
+            {
+                var farm = await farmRepository.GetByIdAsync(
+                    tenantId,
+                    request.FarmId,
+                    token);
+
+                if (farm is null)
+                {
+                    return Result.Failure(FarmError.NotFound());
+                }
+
+                if (farm.Version != request.ExpectedVersion)
+                {
+                    return Result.Failure(FarmError.ConcurrentUpdate());
+                }
+
+                var dependencies = await dependencyQuery.GetForFarmAsync(
+                    tenantId,
+                    request.FarmId,
+                    token);
+
+                if (dependencies.HasAny)
+                {
+                    return Result.Failure(
+                        FarmError.ActiveDependenciesExist(
+                            dependencies.ActiveZoneCount,
+                            dependencies.ActiveMissionCount,
+                            dependencies.ActiveSurveyOrderCount,
+                            dependencies.PublishedMapCount,
+                            dependencies.PublishedResultCount,
+                            dependencies.RetentionHistoryCount,
+                            dependencies.StableReasonCodes));
+                }
+
+                using var oldData = CreateAuditData(farm);
+
+                farmRepository.Update(farm);
+
+                var now = timeProvider.GetUtcNow();
+                farm.Archive(now);
+
+                using var newData = CreateAuditData(farm);
+
+                auditWriter.AddUserAction(
+                    sink: unitOfWork,
+                    tenantId: tenantId,
+                    farmId: farm.Id,
+                    actorId: actorId,
+                    correlationId: executionContext.CorrelationId,
+                    entityType: nameof(Farm),
+                    entityId: farm.Id,
+                    action: "ARCHIVE",
+                    oldData: oldData,
+                    newData: newData,
+                    createdAt: now);
+
+                try
+                {
+                    await unitOfWork.SaveChangesAsync(token);
+                }
+                catch (DbUpdateConcurrencyException)
+                {
+                    return Result.Failure(FarmError.ConcurrentUpdate());
+                }
+
+                return Result.Success();
+            },
             cancellationToken);
-
-        if (farm is null)
-        {
-            return Result.Failure(FarmError.NotFound());
-        }
-
-        if (farm.Version != request.ExpectedVersion)
-        {
-            return Result.Failure(FarmError.ConcurrentUpdate());
-        }
-
-        var dependencies = await dependencyQuery.GetForFarmAsync(
-            tenantId,
-            request.FarmId,
-            cancellationToken);
-
-        if (dependencies.HasAny)
-        {
-            return Result.Failure(
-                FarmError.ActiveDependenciesExist(
-                    dependencies.ActiveZoneCount,
-                    dependencies.ActiveMissionCount,
-                    dependencies.ActiveSurveyOrderCount,
-                    dependencies.PublishedMapCount,
-                    dependencies.PublishedResultCount,
-                    dependencies.RetentionHistoryCount,
-                    dependencies.StableReasonCodes));
-        }
-
-        using var oldData = CreateAuditData(farm);
-
-        farmRepository.Update(farm);
-
-        var now = timeProvider.GetUtcNow();
-        farm.Archive(now);
-
-        using var newData = CreateAuditData(farm);
-
-        auditWriter.AddUserAction(
-            sink: unitOfWork,
-            tenantId: tenantId,
-            farmId: farm.Id,
-            actorId: actorId,
-            correlationId: executionContext.CorrelationId,
-            entityType: nameof(Farm),
-            entityId: farm.Id,
-            action: "ARCHIVE",
-            oldData: oldData,
-            newData: newData,
-            createdAt: now);
-
-        try
-        {
-            await unitOfWork.SaveChangesAsync(cancellationToken);
-        }
-        catch (DbUpdateConcurrencyException)
-        {
-            return Result.Failure(FarmError.ConcurrentUpdate());
-        }
-
-        return Result.Success();
     }
 
     private static JsonDocument CreateAuditData(Farm farm) =>

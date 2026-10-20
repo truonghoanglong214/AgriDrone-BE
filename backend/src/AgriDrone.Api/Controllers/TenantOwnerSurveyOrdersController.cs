@@ -95,7 +95,14 @@ public sealed class TenantOwnerSurveyOrdersController(ISender sender)
         [FromBody] InitiateSurveyPaymentRequest request,
         CancellationToken cancellationToken)
     {
-        var purpose = ParsePaymentPurpose(request.Purpose);
+        if (!TryParsePaymentPurpose(request.Purpose, out var purpose))
+        {
+            return Results.Problem(
+                statusCode: StatusCodes.Status400BadRequest,
+                title: "Invalid payment purpose",
+                detail: $"The payment purpose '{request.Purpose}' is invalid. Allowed values: BASELINE_DEPOSIT, FINAL_BALANCE.");
+        }
+
         var result = await sender.Send(
             new InitiateSurveyPaymentCommand(
                 orderId,
@@ -109,18 +116,27 @@ public sealed class TenantOwnerSurveyOrdersController(ISender sender)
                 statusCode: StatusCodes.Status201Created));
     }
 
-    private static PaymentPurpose ParsePaymentPurpose(string? purpose)
+    private static bool TryParsePaymentPurpose(string? purpose, out PaymentPurpose parsedPurpose)
     {
         if (string.IsNullOrWhiteSpace(purpose))
         {
-            return PaymentPurpose.FinalBalance;
+            parsedPurpose = PaymentPurpose.FinalBalance;
+            return true;
         }
 
-        return purpose.Trim().ToUpperInvariant() switch
+        switch (purpose.Trim().ToUpperInvariant())
         {
-            "BASELINE_DEPOSIT" or "BASELINEDEPOSIT" => PaymentPurpose.BaselineDeposit,
-            "FINAL_BALANCE" or "FINALBALANCE" => PaymentPurpose.FinalBalance,
-            _ => Enum.TryParse<PaymentPurpose>(purpose, true, out var parsed) ? parsed : PaymentPurpose.FinalBalance
-        };
+            case "BASELINE_DEPOSIT":
+            case "BASELINEDEPOSIT":
+                parsedPurpose = PaymentPurpose.BaselineDeposit;
+                return true;
+            case "FINAL_BALANCE":
+            case "FINALBALANCE":
+                parsedPurpose = PaymentPurpose.FinalBalance;
+                return true;
+            default:
+                parsedPurpose = default;
+                return false;
+        }
     }
 }

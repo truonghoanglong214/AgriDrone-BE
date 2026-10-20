@@ -189,6 +189,64 @@ public sealed class FarmBoundaryPolicyTests
         Assert.Equal(FarmZoneError.BoundaryOverlaps().Code, result.Error.Code);
     }
 
+    [Fact]
+    public void CalculateDistanceToBoundaryMetersReturnsAccurateGeodesicDistanceForHorizontalEdge()
+    {
+        var policy = CreatePolicy();
+        var farmBoundary = CreatePolygon([
+            new Coordinate(106.0, 10.0),
+            new Coordinate(106.1, 10.0),
+            new Coordinate(106.1, 10.1),
+            new Coordinate(106.0, 10.1),
+            new Coordinate(106.0, 10.0)
+        ]);
+        // 0.0001 degrees North of the top edge at latitude 10.1
+        var point = _geometryFactory.CreatePoint(new Coordinate(106.05, 10.1001));
+
+        var distance = policy.CalculateDistanceToBoundaryMeters(point, farmBoundary);
+
+        // Expected distance: 0.0001 * 111,320 = 11.132 meters
+        Assert.InRange(distance, 11.12, 11.14);
+    }
+
+    [Fact]
+    public void CalculateDistanceToBoundaryMetersReturnsAccurateGeodesicDistanceForVerticalEdge()
+    {
+        var policy = CreatePolicy();
+        var farmBoundary = CreatePolygon([
+            new Coordinate(106.0, 10.0),
+            new Coordinate(106.1, 10.0),
+            new Coordinate(106.1, 10.1),
+            new Coordinate(106.0, 10.1),
+            new Coordinate(106.0, 10.0)
+        ]);
+        // 0.0001 degrees East of the right edge at longitude 106.1, latitude 10.05
+        var point = _geometryFactory.CreatePoint(new Coordinate(106.1001, 10.05));
+
+        var distance = policy.CalculateDistanceToBoundaryMeters(point, farmBoundary);
+
+        // Expected distance: 0.0001 * 111,320 * cos(10.05°) ≈ 10.96 meters
+        Assert.InRange(distance, 10.95, 10.97);
+    }
+
+    [Fact]
+    public void CalculateDistanceToBoundaryMetersReturnsZeroWhenPointIsOnEdge()
+    {
+        var policy = CreatePolicy();
+        var farmBoundary = CreatePolygon([
+            new Coordinate(106.0, 10.0),
+            new Coordinate(106.1, 10.0),
+            new Coordinate(106.1, 10.1),
+            new Coordinate(106.0, 10.1),
+            new Coordinate(106.0, 10.0)
+        ]);
+        var pointOnEdge = _geometryFactory.CreatePoint(new Coordinate(106.05, 10.0));
+
+        var distance = policy.CalculateDistanceToBoundaryMeters(pointOnEdge, farmBoundary);
+
+        Assert.Equal(0.0, distance, precision: 4);
+    }
+
     private static FarmBoundaryPolicy CreatePolicy()
     {
         return new FarmBoundaryPolicy(new FakeFarmBoundaryRepository(), new FakeFarmZoneRepository());

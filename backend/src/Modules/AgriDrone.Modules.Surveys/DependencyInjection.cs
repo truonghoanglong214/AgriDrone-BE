@@ -1,4 +1,7 @@
 using AgriDrone.IntegrationContracts.Farms;
+using AgriDrone.IntegrationContracts.Mapping;
+using AgriDrone.IntegrationContracts.Messaging;
+using AgriDrone.IntegrationContracts.Missions;
 using AgriDrone.Modules.Surveys.Application.Abstractions.Messaging;
 using AgriDrone.Modules.Surveys.Application.Abstractions.Approvals;
 using AgriDrone.Modules.Surveys.Application.Abstractions.Payments;
@@ -14,12 +17,15 @@ using AgriDrone.Modules.Surveys.Domain;
 using AgriDrone.Modules.Surveys.Infrastructure.Approvals;
 using AgriDrone.Modules.Surveys.Infrastructure.Health;
 using AgriDrone.Modules.Surveys.Infrastructure.Messaging;
+using AgriDrone.Modules.Surveys.Infrastructure.Messaging.Consumers;
 using AgriDrone.Modules.Surveys.Infrastructure.Payments;
 using AgriDrone.Modules.Surveys.Infrastructure.Persistence;
 using AgriDrone.Modules.Surveys.Infrastructure.Persistence.Repositories;
 using AgriDrone.Modules.Surveys.Infrastructure.Queries;
 using AgriDrone.Modules.Surveys.Infrastructure.Requests;
 using AgriDrone.SharedInfrastructure.Auditing;
+using AgriDrone.SharedInfrastructure.Messaging;
+using AgriDrone.SharedInfrastructure.Messaging.Consumers;
 using AgriDrone.SharedInfrastructure.Persistence;
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
@@ -155,6 +161,25 @@ public static class DependencyInjection
             ExistingTenantNewFarmApprovalOrchestrator>();
         services.AddScoped<ISurveyRequestKindApprovalOrchestrator,
             ExistingFarmSurveyApprovalOrchestrator>();
+
+        // Integration Event Consumers for Lifecycle Synchronization
+        services.AddScoped<
+            IIntegrationMessageHandler<BaselineMissionStartedV1>,
+            BaselineMissionStartedHandler>();
+        services.AddIntegrationConsumer<BaselineMissionStartedProcessor>(
+            IntegrationConsumerNames.Be1BaselineMissionStartedV1);
+
+        services.AddScoped<
+            IIntegrationMessageHandler<BaselineOrthophotoCompletedV1>,
+            BaselineOrthophotoCompletedHandler>();
+        services.AddIntegrationConsumer<BaselineOrthophotoCompletedProcessor>(
+            IntegrationConsumerNames.Be1BaselineOrthophotoCompletedV1);
+
+        services.AddScoped<
+            IIntegrationMessageHandler<BaselineMappingCandidatesReadyV3>,
+            BaselineMappingCandidatesReadyV3Handler>();
+        services.AddIntegrationConsumer<BaselineMappingCandidatesReadyV3Processor>(
+            IntegrationConsumerNames.Be1BaselineMappingCandidatesReadyV3);
 
         services.TryAddSingleton(TimeProvider.System);
 

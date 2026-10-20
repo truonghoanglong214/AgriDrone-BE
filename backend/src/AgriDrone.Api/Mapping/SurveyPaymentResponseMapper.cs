@@ -26,7 +26,8 @@ internal static class SurveyPaymentResponseMapper
             response.ExpiresAt,
             response.PaymentVersion,
             response.OrderVersion,
-            response.InitiatedAt);
+            response.InitiatedAt,
+            response.AppointmentId ?? response.PaidServiceAppointmentId);
 
     public static SurveyPaymentCallbackResponse ToResponse(
         ProcessSurveyPaymentEventResponse response) => new(

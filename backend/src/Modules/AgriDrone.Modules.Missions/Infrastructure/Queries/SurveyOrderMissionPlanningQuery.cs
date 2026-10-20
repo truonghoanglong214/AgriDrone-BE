@@ -84,7 +84,7 @@ internal sealed class SurveyOrderMissionPlanningQuery(
             failure is not ("OrderNotEligible" or "AppointmentNotConfirmed" or
                 "AppointmentPurposeMismatch"));
         var canPlan = purposeMatches && planningStatusAllowed &&
-                      source.FarmBoundaryVersionId.HasValue &&
+                      (isBaselinePlanning || source.FarmBoundaryVersionId.HasValue) &&
                       source.PrimarySystemManagerId.HasValue &&
                       !planningFailures.Any();
         var canSchedule = canPlan && source.AppointmentStatus == "Confirmed" &&

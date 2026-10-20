@@ -175,6 +175,7 @@ internal sealed class SurveyPaymentProcessingRepository(
 
         var activePayment = await ReadLatestPaymentAsync(
             surveyOrderId,
+            PaymentPurpose.FinalBalance,
             cancellationToken);
         return Result.Success(new SurveyPriceAdjustmentRequestState(
             order,
@@ -220,6 +221,7 @@ internal sealed class SurveyPaymentProcessingRepository(
             cancellationToken);
         var activePayment = await ReadLatestPaymentAsync(
             surveyOrderId,
+            PaymentPurpose.FinalBalance,
             cancellationToken);
         return Result.Success(new SurveyPriceAdjustmentReviewState(
             order,
@@ -383,6 +385,7 @@ internal sealed class SurveyPaymentProcessingRepository(
 
     private async Task<SurveyPayment?> ReadLatestPaymentAsync(
         Guid surveyOrderId,
+        PaymentPurpose purpose,
         CancellationToken cancellationToken)
     {
         var paymentIds = new List<Guid>();
@@ -391,11 +394,13 @@ internal sealed class SurveyPaymentProcessingRepository(
             SELECT payment.id
             FROM survey.survey_payments AS payment
             WHERE payment.survey_order_id = @order_id
+              AND payment.purpose = @purpose
             ORDER BY payment.created_at DESC
             LIMIT 1
             FOR UPDATE OF payment
             """,
-            Id("order_id", surveyOrderId)))
+            Id("order_id", surveyOrderId),
+            Text("purpose", purpose.ToString())))
         await using (var reader = await command.ExecuteReaderAsync(
             cancellationToken))
         {

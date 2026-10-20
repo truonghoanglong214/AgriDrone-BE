@@ -44,4 +44,8 @@ public sealed record SurveyOrderOperationalContextV3(
     decimal? DepositAmount = null,
     decimal? RemainingAmount = null,
     Guid? DepositPaymentId = null,
-    DateTimeOffset? DepositConfirmedAt = null);
+    DateTimeOffset? DepositConfirmedAt = null,
+    double? CandidateCenterLongitude = null,
+    double? CandidateCenterLatitude = null,
+    decimal? ApproximateAreaHa = null,
+    double? SurveyRadiusMeters = null);

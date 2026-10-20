@@ -81,6 +81,7 @@ public sealed record ApproveBaselineRoutePlanRequest
     [Range(typeof(decimal), "0", "500")]
     public decimal SafetyInsetMeters { get; init; }
 
+    [Obsolete("Client assertion of safety inset is deprecated and ignored. Safety insets must be validated server-side by the route planning engine.")]
     public bool IsWithinSafetyInset { get; init; }
 
     [Required]

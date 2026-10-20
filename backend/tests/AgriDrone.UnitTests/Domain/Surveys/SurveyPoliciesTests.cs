@@ -36,14 +36,14 @@ public sealed class SurveyPoliciesTests
     }
 
     [Fact]
-    public void BaselineReadinessDoesNotRequirePriceOrPayment()
+    public void BaselineReadinessRequiresDepositConfirmationButNotFinalPriceOrBaseMap()
     {
         var decision = SurveyOrderReadinessPolicy.Evaluate(new(
             OrderStatus: SurveyOrderStatus.BaselineReady,
             Purpose: SurveyOperationPurpose.BaselineMapping,
             RequiresBaselineMapping: true,
-            HasApprovedFarmBoundary: true,
-            IsScopeConfirmed: true,
+            HasApprovedFarmBoundary: false,
+            IsScopeConfirmed: false,
             HasPublishedFarmBaseMap: false,
             HasConfirmedPoleCount: false,
             HasPriceSnapshot: false,
@@ -62,10 +62,7 @@ public sealed class SurveyPoliciesTests
             SafetyChecksSatisfied: true,
             HasValidWrittenDataUseConsent: true,
             HasValidFlightPermission: true,
-            HasFinalizedBoundaryCapture: true,
-            HasApprovedBaselineRoute: true,
-            IsBaselineRouteCurrent: true,
-            IsBaselineRouteWithinSafetyInset: true));
+            DepositPaymentStatus: SurveyPaymentStatus.Confirmed));
 
         Assert.True(decision.IsReady);
         Assert.Empty(decision.Failures);

@@ -22,4 +22,5 @@ public sealed record InitiateSurveyPaymentApiResponse(
     DateTimeOffset ExpiresAt,
     uint PaymentVersion,
     uint OrderVersion,
-    DateTimeOffset InitiatedAt);
+    DateTimeOffset InitiatedAt,
+    Guid? AppointmentId = null);

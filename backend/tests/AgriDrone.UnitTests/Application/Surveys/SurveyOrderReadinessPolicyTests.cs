@@ -17,59 +17,45 @@ public sealed class SurveyOrderReadinessPolicyTests
     }
 
     [Fact]
-    public void EvaluateReturnsFailureWhenBaselineMappingLacksFinalizedBoundaryCapture()
+    public void EvaluateReturnsFailureWhenBaselineMappingDepositNotConfirmed()
     {
         var snapshot = CreateValidSnapshot(SurveyOperationPurpose.BaselineMapping) with
         {
-            HasFinalizedBoundaryCapture = false
+            DepositPaymentStatus = SurveyPaymentStatus.Pending
         };
 
         var decision = SurveyOrderReadinessPolicy.Evaluate(snapshot);
 
         Assert.False(decision.IsReady);
-        Assert.Contains(SurveyOrderReadinessFailure.BoundaryCaptureNotFinalized, decision.Failures);
+        Assert.Contains(SurveyOrderReadinessFailure.PaymentNotConfirmed, decision.Failures);
     }
 
     [Fact]
-    public void EvaluateReturnsFailureWhenBaselineRouteNotApproved()
+    public void EvaluateReturnsFailureWhenPlantHealthBoundaryNotApproved()
     {
-        var snapshot = CreateValidSnapshot(SurveyOperationPurpose.BaselineMapping) with
+        var snapshot = CreateValidSnapshot(SurveyOperationPurpose.PlantHealth) with
         {
-            HasApprovedBaselineRoute = false
+            HasApprovedFarmBoundary = false
         };
 
         var decision = SurveyOrderReadinessPolicy.Evaluate(snapshot);
 
         Assert.False(decision.IsReady);
-        Assert.Contains(SurveyOrderReadinessFailure.BaselineRouteNotApproved, decision.Failures);
+        Assert.Contains(SurveyOrderReadinessFailure.BoundaryNotApproved, decision.Failures);
     }
 
     [Fact]
-    public void EvaluateReturnsFailureWhenBaselineRouteIsStale()
+    public void EvaluateReturnsFailureWhenPlantHealthScopeNotConfirmed()
     {
-        var snapshot = CreateValidSnapshot(SurveyOperationPurpose.BaselineMapping) with
+        var snapshot = CreateValidSnapshot(SurveyOperationPurpose.PlantHealth) with
         {
-            IsBaselineRouteCurrent = false
+            IsScopeConfirmed = false
         };
 
         var decision = SurveyOrderReadinessPolicy.Evaluate(snapshot);
 
         Assert.False(decision.IsReady);
-        Assert.Contains(SurveyOrderReadinessFailure.BaselineRouteStale, decision.Failures);
-    }
-
-    [Fact]
-    public void EvaluateReturnsFailureWhenBaselineRouteOutsideSafetyInset()
-    {
-        var snapshot = CreateValidSnapshot(SurveyOperationPurpose.BaselineMapping) with
-        {
-            IsBaselineRouteWithinSafetyInset = false
-        };
-
-        var decision = SurveyOrderReadinessPolicy.Evaluate(snapshot);
-
-        Assert.False(decision.IsReady);
-        Assert.Contains(SurveyOrderReadinessFailure.BaselineRouteOutsideSafetyInset, decision.Failures);
+        Assert.Contains(SurveyOrderReadinessFailure.ScopeNotConfirmed, decision.Failures);
     }
 
     [Fact]
@@ -208,8 +194,8 @@ public sealed class SurveyOrderReadinessPolicyTests
             OrderStatus: orderStatus,
             Purpose: purpose,
             RequiresBaselineMapping: isBaseline,
-            HasApprovedFarmBoundary: true,
-            IsScopeConfirmed: true,
+            HasApprovedFarmBoundary: !isBaseline,
+            IsScopeConfirmed: !isBaseline,
             HasPublishedFarmBaseMap: !isBaseline,
             HasConfirmedPoleCount: true,
             HasPriceSnapshot: true,
@@ -230,9 +216,10 @@ public sealed class SurveyOrderReadinessPolicyTests
             HasValidFlightPermission: true,
             HasPendingFinancialSettlement: false,
             HasUnapprovedExtraFlight: false,
-            HasFinalizedBoundaryCapture: isBaseline,
-            HasApprovedBaselineRoute: isBaseline,
-            IsBaselineRouteCurrent: isBaseline,
-            IsBaselineRouteWithinSafetyInset: isBaseline);
+            HasFinalizedBoundaryCapture: false,
+            HasApprovedBaselineRoute: false,
+            IsBaselineRouteCurrent: false,
+            IsBaselineRouteWithinSafetyInset: false,
+            DepositPaymentStatus: isBaseline ? SurveyPaymentStatus.Confirmed : null);
     }
 }

@@ -1,4 +1,5 @@
 using AgriDrone.IntegrationContracts.Mapping;
+using AgriDrone.IntegrationContracts.Missions;
 using AgriDrone.IntegrationContracts.Notifications;
 using AgriDrone.IntegrationContracts.Health;
 using AgriDrone.IntegrationContracts.HarvestReadiness;
@@ -157,4 +158,18 @@ public static class IntegrationEventDescriptors
             IntegrationEventTypes.SurveyBoundaryCaptureChangedV1,
             IntegrationSchemaVersions.V1,
             RequiresActorId: true);
+
+    public static IntegrationEventDescriptor<BaselineMissionStartedV1>
+        BaselineMissionStartedV1 { get; } =
+        new(
+            IntegrationEventTypes.BaselineMissionStartedV1,
+            IntegrationSchemaVersions.V1,
+            RequiresActorId: false);
+
+    public static IntegrationEventDescriptor<BaselineOrthophotoCompletedV1>
+        BaselineOrthophotoCompletedV1 { get; } =
+        new(
+            IntegrationEventTypes.BaselineOrthophotoCompletedV1,
+            IntegrationSchemaVersions.V1,
+            RequiresActorId: false);
 }

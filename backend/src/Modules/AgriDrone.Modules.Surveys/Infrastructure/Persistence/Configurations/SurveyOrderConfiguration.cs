@@ -55,6 +55,16 @@ public sealed class SurveyOrderConfiguration : IEntityTypeConfiguration<SurveyOr
                     "ck_survey_orders_previous_compatibility_decision",
                     "(previous_order_compatibility_policy_version IS NULL AND previous_order_compatibility_reason IS NULL) OR " +
                     "(length(btrim(previous_order_compatibility_policy_version)) > 0 AND length(btrim(previous_order_compatibility_reason)) > 0)");
+                table.HasCheckConstraint(
+                    "ck_survey_orders_deposit_nonnegative",
+                    "deposit_amount >= 0");
+                table.HasCheckConstraint(
+                    "ck_survey_orders_remaining_amount_nonnegative",
+                    "remaining_amount IS NULL OR remaining_amount >= 0");
+                table.HasCheckConstraint(
+                    "ck_survey_orders_deposit_consistency",
+                    "(requires_baseline_mapping = false AND deposit_amount = 0 AND deposit_payment_status = 'CONFIRMED'::system.survey_payment_status) OR " +
+                    "(requires_baseline_mapping = true AND deposit_amount > 0)");
             });
         builder.HasKey(order => order.Id).HasName("pk_survey_orders");
         builder.HasAlternateKey(order => new { order.Id, order.TenantId, order.FarmId }).HasName("uq_survey_orders_id_tenant_farm");
@@ -126,13 +136,12 @@ public sealed class SurveyOrderConfiguration : IEntityTypeConfiguration<SurveyOr
             .HasColumnName("deposit_payment_status")
             .HasColumnType("system.survey_payment_status")
             .HasSentinel((SurveyPaymentStatus)(-1))
-            .HasDefaultValue(SurveyPaymentStatus.Pending)
             .IsRequired();
         builder.Property(order => order.DepositAmount)
             .HasColumnName("deposit_amount")
             .HasColumnType("numeric(18,2)")
             .HasPrecision(18, 2)
-            .HasDefaultValue(500000m)
+            .HasSentinel(-1m)
             .IsRequired();
         builder.Property(order => order.RemainingAmount)
             .HasColumnName("remaining_amount")

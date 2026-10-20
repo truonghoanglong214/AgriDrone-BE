@@ -93,7 +93,8 @@ internal sealed class ApplyPriceAdjustmentCommandHandler(
                             actorId,
                             appliedAt);
                         if (payment?.Status == SurveyPaymentStatus.Confirmed &&
-                            (payment.Amount != adjustment.NewFinalPrice ||
+                            payment.Purpose == PaymentPurpose.FinalBalance &&
+                            (payment.Amount != (order.RemainingAmount ?? adjustment.NewFinalPrice) ||
                              !string.Equals(
                                  payment.Currency,
                                  adjustment.Currency,

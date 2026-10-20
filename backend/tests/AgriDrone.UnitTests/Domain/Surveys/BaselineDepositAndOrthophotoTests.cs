@@ -225,6 +225,116 @@ public sealed class BaselineDepositAndOrthophotoTests
         Assert.Contains(SurveyOrderReadinessFailure.PaymentNotConfirmed, decision.Failures);
     }
 
+    [Fact]
+    public void SetFarmBoundaryFromOrthophotoInBaselineReadyOrInProgressThrowsDomainException()
+    {
+        var order = CreateOrder(requiresBaselineMapping: true);
+        var paymentId = Guid.NewGuid();
+        var managerId = Guid.NewGuid();
+        var boundaryId = Guid.NewGuid();
+
+        order.MarkBaselineAppointmentConfirmed(Now.AddMinutes(1));
+        order.RecordBaselineDepositConfirmed(paymentId, 500_000m, Now.AddMinutes(5));
+        Assert.Equal(SurveyOrderStatus.BaselineReady, order.Status);
+
+        // Cannot mark boundary in BaselineReady
+        var ex1 = Assert.Throws<SurveyDomainException>(() =>
+            order.SetFarmBoundaryFromOrthophoto(boundaryId, managerId, Now.AddMinutes(10)));
+        Assert.Equal(SurveyOrderDomainErrorCodes.InvalidTransition, ex1.Code);
+
+        // Start flight
+        order.StartBaselineMapping(Now.AddHours(1));
+        Assert.Equal(SurveyOrderStatus.BaselineInProgress, order.Status);
+
+        // Cannot mark boundary in BaselineInProgress
+        var ex2 = Assert.Throws<SurveyDomainException>(() =>
+            order.SetFarmBoundaryFromOrthophoto(boundaryId, managerId, Now.AddHours(1).AddMinutes(30)));
+        Assert.Equal(SurveyOrderDomainErrorCodes.InvalidTransition, ex2.Code);
+
+        // But once candidates / orthophoto is ready -> AwaitingBaselineReview -> ALLOWED
+        order.MarkBaselineCandidatesReady(Now.AddHours(2));
+        Assert.Equal(SurveyOrderStatus.AwaitingBaselineReview, order.Status);
+        order.SetFarmBoundaryFromOrthophoto(boundaryId, managerId, Now.AddHours(3));
+        Assert.Equal(boundaryId, order.FarmBoundaryVersionId);
+    }
+
+    [Fact]
+    public void RescheduleFromAwaitingBaselineDepositTransitionsToAwaitingBaselineAppointment()
+    {
+        var order = CreateOrder(requiresBaselineMapping: true);
+        order.MarkBaselineAppointmentConfirmed(Now.AddMinutes(1));
+        Assert.Equal(SurveyOrderStatus.AwaitingBaselineDeposit, order.Status);
+
+        order.ReopenBaselineAppointment(Now.AddMinutes(10));
+        Assert.Equal(SurveyOrderStatus.AwaitingBaselineAppointment, order.Status);
+    }
+
+    [Fact]
+    public void RescheduleFromBaselineReadyPreservesConfirmedDepositAndConfirmingNewAppointmentTransitionsBackToBaselineReady()
+    {
+        var order = CreateOrder(requiresBaselineMapping: true);
+        var paymentId = Guid.NewGuid();
+
+        // Initial appointment & deposit
+        order.MarkBaselineAppointmentConfirmed(Now.AddMinutes(1));
+        order.RecordBaselineDepositConfirmed(paymentId, 500_000m, Now.AddMinutes(5));
+        Assert.Equal(SurveyOrderStatus.BaselineReady, order.Status);
+        Assert.Equal(SurveyPaymentStatus.Confirmed, order.DepositPaymentStatus);
+
+        // Reschedule
+        order.ReopenBaselineAppointment(Now.AddMinutes(30));
+        Assert.Equal(SurveyOrderStatus.AwaitingBaselineAppointment, order.Status);
+        Assert.Equal(SurveyPaymentStatus.Confirmed, order.DepositPaymentStatus); // Deposit remains confirmed!
+
+        // Confirm new appointment -> directly transitions to BaselineReady!
+        order.MarkBaselineAppointmentConfirmed(Now.AddHours(1));
+        Assert.Equal(SurveyOrderStatus.BaselineReady, order.Status);
+    }
+
+    [Fact]
+    public void RevokingBaselineDepositRefundBeforeFlightTransitionsToAwaitingBaselineDeposit()
+    {
+        var order = CreateOrder(requiresBaselineMapping: true);
+        var paymentId = Guid.NewGuid();
+
+        order.MarkBaselineAppointmentConfirmed(Now.AddMinutes(1));
+        order.RecordBaselineDepositConfirmed(paymentId, 500_000m, Now.AddMinutes(5));
+        Assert.Equal(SurveyOrderStatus.BaselineReady, order.Status);
+
+        // Refund deposit before flight
+        order.RevokeBaselineDeposit(Now.AddMinutes(15));
+        Assert.Equal(SurveyOrderStatus.AwaitingBaselineDeposit, order.Status);
+        Assert.Equal(SurveyPaymentStatus.Refunded, order.DepositPaymentStatus);
+        Assert.Null(order.DepositPaymentId);
+        Assert.Null(order.DepositConfirmedAt);
+    }
+
+    [Fact]
+    public void RevokingBaselineDepositRefundAfterFlightRemovesDepositCreditFromRemainingAmount()
+    {
+        var order = CreateOrder(requiresBaselineMapping: true);
+        var paymentId = Guid.NewGuid();
+        var managerId = Guid.NewGuid();
+        var priceId = Guid.NewGuid();
+
+        order.MarkBaselineAppointmentConfirmed(Now.AddMinutes(1));
+        order.RecordBaselineDepositConfirmed(paymentId, 500_000m, Now.AddMinutes(5));
+        order.StartBaselineMapping(Now.AddHours(1));
+        order.MarkBaselineCandidatesReady(Now.AddHours(2));
+        order.SetFarmBoundaryFromOrthophoto(Guid.NewGuid(), managerId, Now.AddHours(3));
+        order.RecordBaselinePublication(Guid.NewGuid(), ConfirmedSurveyPoleCount.Create(100), managerId, Now.AddHours(4));
+
+        // 100 poles * 20,000 = 2,000,000 VND; Deposit credit: 500,000 VND => Remaining: 1,500,000 VND
+        order.ConfirmPricing(priceId, PricePerPole.Create(20_000m), CurrencyCode.Vnd, managerId, Now.AddHours(5));
+        Assert.Equal(1_500_000m, order.RemainingAmount);
+
+        // Post-flight chargeback/refund of deposit
+        order.RevokeBaselineDeposit(Now.AddHours(6));
+        Assert.Equal(SurveyPaymentStatus.Refunded, order.DepositPaymentStatus);
+        // Deposit credit is now removed: RemainingAmount must be full FinalPrice (2,000,000 VND)
+        Assert.Equal(2_000_000m, order.RemainingAmount);
+    }
+
     private static SurveyOrder CreateOrder(bool requiresBaselineMapping) =>
         SurveyOrder.Create(
             $"SO-{Guid.NewGuid():N}"[..20],

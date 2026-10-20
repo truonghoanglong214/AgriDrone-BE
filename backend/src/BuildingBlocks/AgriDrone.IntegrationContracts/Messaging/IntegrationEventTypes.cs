@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text;
 
@@ -68,5 +68,11 @@ namespace AgriDrone.IntegrationContracts.Messaging
 
         public const string SurveyBoundaryCaptureChangedV1 =
             "survey.boundary-capture-changed.v1";
+
+        public const string BaselineMissionStartedV1 =
+            "mission.baseline-started.v1";
+
+        public const string BaselineOrthophotoCompletedV1 =
+            "mission.baseline-orthophoto-completed.v1";
     }
 }

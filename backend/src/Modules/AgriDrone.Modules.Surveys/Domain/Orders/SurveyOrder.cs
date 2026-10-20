@@ -16,6 +16,7 @@ public sealed class SurveyOrder : AggregateRoot
             [SurveyOrderStatus.AwaitingBaselineAppointment] = new HashSet<SurveyOrderStatus>
             {
                 SurveyOrderStatus.AwaitingBaselineDeposit,
+                SurveyOrderStatus.BaselineReady,
                 SurveyOrderStatus.AwaitingBoundaryCapture,
                 SurveyOrderStatus.Cancelled
             },
@@ -34,6 +35,7 @@ public sealed class SurveyOrder : AggregateRoot
             [SurveyOrderStatus.BaselineReady] = new HashSet<SurveyOrderStatus>
             {
                 SurveyOrderStatus.BaselineInProgress,
+                SurveyOrderStatus.AwaitingBaselineDeposit,
                 SurveyOrderStatus.AwaitingBaselineAppointment,
                 SurveyOrderStatus.Cancelled
             },
@@ -339,13 +341,11 @@ public sealed class SurveyOrder : AggregateRoot
 
         if (Status is not (
             SurveyOrderStatus.AwaitingBaselineReview or
-            SurveyOrderStatus.BaselineReady or
-            SurveyOrderStatus.BaselineInProgress or
             SurveyOrderStatus.PendingBoundaryVerification))
         {
             throw new SurveyDomainException(
                 SurveyOrderDomainErrorCodes.InvalidTransition,
-                $"Order in state '{Status}' cannot set farm boundary from orthophoto.");
+                $"Order in state '{Status}' cannot set farm boundary from orthophoto. Must be in AwaitingBaselineReview.");
         }
 
         FarmBoundaryVersionId = farmBoundaryVersionId;
@@ -355,8 +355,14 @@ public sealed class SurveyOrder : AggregateRoot
         Version++;
     }
 
-    public void MarkBaselineAppointmentConfirmed(DateTimeOffset occurredAt) =>
-        TransitionTo(SurveyOrderStatus.AwaitingBaselineDeposit, occurredAt);
+    public void MarkBaselineAppointmentConfirmed(DateTimeOffset occurredAt)
+    {
+        var targetStatus = DepositPaymentStatus == SurveyPaymentStatus.Confirmed
+            ? SurveyOrderStatus.BaselineReady
+            : SurveyOrderStatus.AwaitingBaselineDeposit;
+
+        TransitionTo(targetStatus, occurredAt);
+    }
 
     public void RecordBaselineDepositConfirmed(
         Guid paymentId,
@@ -622,6 +628,28 @@ public sealed class SurveyOrder : AggregateRoot
         if (Status == SurveyOrderStatus.ReadyForPaidService)
         {
             TransitionTo(SurveyOrderStatus.AwaitingPayment, occurredAt);
+        }
+    }
+
+    public void RevokeBaselineDeposit(DateTimeOffset occurredAt)
+    {
+        SurveyTransitionGuard.EnsureTimestamp(occurredAt, UpdatedAt);
+        DepositPaymentStatus = SurveyPaymentStatus.Refunded;
+        DepositPaymentId = null;
+        DepositConfirmedAt = null;
+
+        if (Status == SurveyOrderStatus.BaselineReady)
+        {
+            TransitionTo(SurveyOrderStatus.AwaitingBaselineDeposit, occurredAt);
+        }
+        else
+        {
+            if (FinalPrice.HasValue)
+            {
+                RemainingAmount = FinalPrice.Value;
+            }
+            UpdatedAt = occurredAt;
+            Version++;
         }
     }
 

@@ -1832,30 +1832,32 @@ verification rồi tới count/pricing/paid appointment.
 
 #### Phase 4B — Baseline Survey Deposit, chuyến bay Baseline và chấm 4 góc trên ảnh Orthophoto (FarmBoundary) (2026-10-20 Amendment)
 
-Trong đúng confirmed Baseline appointment (Lưu ý: Theo Amendment 2026-10-20, flow chuẩn cho unmapped farm là: Confirm lịch -> Order sang `AwaitingBaselineDeposit` -> TenantOwner nộp cọc Baseline Survey Deposit qua module Payments BE2 -> Cọc Confirmed + an toàn hợp lệ -> Order sang `BaselineReady` -> Drone bay chụp toàn cảnh theo tọa độ ước lượng -> Upload MinIO -> Metashape ghép ảnh trực giao Orthophoto -> Order sang `AwaitingBaselineReview` -> Manager mở ảnh Orthophoto chấm 4 góc tạo `FarmBoundary` -> Duyệt boundary và AI đếm trụ -> Publish Base Map -> Order sang `AwaitingPricing` -> Chốt FinalPrice và cấn trừ tiền cọc: `RemainingAmount = FinalPrice - DepositAmount` -> Lịch Paid Service -> Nộp số tiền còn lại qua module Payments BE2 -> Bay Plant Health; nếu hủy ngang sau khi bay Baseline thì tiền cọc không hoàn lại):
+Theo quy định nghiệp vụ mới nhất tại `Be-Plan-v2.md` và Amendment 2026-10-20, luồng chuẩn cho farm chưa có bản đồ (unmapped farm) được thực hiện như sau:
 
-1. Manager chọn operational Drone và gọi `StartBoundaryCaptureSession`; backend
-   re-check Order state, window, assignment, authorization và operation ID.
-2. Mobile gửi ordered GNSS samples theo từng đợt bằng session version. Server
-   deduplicate retry, giữ sequence/captured-at/accuracy và hỗ trợ reload/resume.
-3. Manager review preview polygon rồi finalize. Backend tự đóng ring, validate
-   SRID 4326, minimum distinct points, validity/non-self-intersection, area và
-   Farm ownership.
-4. `IBoundaryCaptureFinalizationUnitOfWork` commit finalized session, immutable
-   approved FarmBoundary version, audit và Outbox. Order vẫn
-   `AwaitingBoundaryCapture` vì chưa có route an toàn.
-5. BE1 gọi typed BE2 route-planning port bằng immutable boundary ID/version và
-   planning parameters; BE2 sinh/persist grid/waypoints trong safety inset.
-6. Manager review route overlay. Cross-module coordinator re-check mọi segment/
-   waypoint, boundary/capture/appointment version và transition Order
-   `AwaitingBoundaryCapture → BaselineReady` trong cùng commit với route approval.
-7. Boundary thay đổi hoặc appointment superseded làm route stale/superseded và
-   đóng readiness. Không client nào được gửi arbitrary waypoint để mở gate.
-8. BE2 prepare/start truyền MissionPurpose/route identity, re-check authoritative
-   readiness ngay trước flight; Baseline không yêu cầu payment.
+1. **Lên lịch hẹn & Chuyển trạng thái cọc:**
+   Manager đề xuất lịch hẹn Baseline Mapping. Khi TenantOwner xác nhận, Order chuyển `AwaitingBaselineAppointment → AwaitingBaselineDeposit`.
+2. **Nộp tiền cọc khảo sát (Baseline Survey Deposit):**
+   TenantOwner thanh toán khoản cọc cam kết cố định 500.000 VNĐ (`DepositAmount = 500_000m`) qua module Payments (BE2).
+3. **Mở khóa chuyến bay Baseline:**
+   Khi cổng thanh toán xác nhận tiền cọc `Confirmed` + Giấy đồng ý sử dụng dữ liệu (`WrittenDataUseConsent`) & Giấy phép bay (`FlightPermission`) hợp lệ + Drone/phi công/preflight sẵn sàng $\rightarrow$ Order chuyển sang `BaselineReady`.
+   *(Lưu ý: Tại thời điểm này, Farm chưa có official `FarmBoundary`. Drone bay khảo sát toàn cảnh dựa trên tọa độ ước lượng / candidate location của nông trại).*
+4. **Bay chụp ảnh toàn cảnh:**
+   Drone thực hiện chuyến bay khảo sát (`BaselineInProgress`) chụp tập ảnh aerial imagery của toàn bộ nông trại. Ảnh được upload lên MinIO và pipeline Metashape xử lý ghép thành ảnh trực giao georeferenced Orthophoto. Sau khi hoàn tất ghép ảnh, Order chuyển sang `AwaitingBaselineReview`.
+5. **Chấm 4 góc ranh giới trên bản đồ Orthophoto:**
+   SystemManager mở ảnh trực giao Orthophoto, chấm 4 điểm góc thực tế của nông trại (`MarkFarmBoundaryOnOrthophoto`). Hệ thống chuyển đổi tọa độ pixel thành Polygon WGS84 (SRID 4326), lưu trữ phiên bản `FarmBoundary` được duyệt và cập nhật vào SurveyOrder.
+6. **Đếm trụ AI & Xuất bản Base Map:**
+   Module AI xử lý đếm và định danh các trụ thanh long trong phạm vi ranh giới. SystemManager rà soát, phê duyệt số trụ và xuất bản bản đồ cơ sở nông trại (`FarmBaseMapPublishedV3`).
+7. **Định giá & Cấn trừ cọc:**
+   Order chuyển sang `AwaitingPricing`. Hệ thống snapshot đơn giá theo trụ, tính tổng giá trị:
+   $$\text{FinalPrice} = \text{ConfirmedSurveyPoleCount} \times \text{PricePerPoleSnapshot}$$
+   Đồng thời tự động cấn trừ 100% tiền cọc 500.000 VNĐ đã nộp:
+   $$\text{RemainingAmount} = \max(0, \text{FinalPrice} - \text{DepositAmount})$$
+8. **Đặt lịch dịch vụ & Thanh toán số dư:**
+   TenantOwner xác nhận lịch hẹn dịch vụ có phí (Plant Health) và thanh toán nốt số tiền còn lại (`RemainingAmount`). Sau khi thanh toán số dư `Confirmed`, Order chuyển sang `ReadyForPaidService` để drone bay dịch vụ chính thức.
+9. **Chính sách phạt cọc (Non-refundable deposit):**
+   Nếu TenantOwner hủy đơn sau khi đã bay Baseline, khoản cọc 500.000 VNĐ không được hoàn lại để bù đắp chi phí khảo sát thực địa của SystemManager.
 
-Boundary capture và automatic Baseline Mapping là hai hoạt động liên tiếp trong
-cùng field visit, không phải hai appointment hoặc hai chuyến đi tới Farm.
+*(Toàn bộ luồng cũ `BoundaryCaptureSession` đi chấm GNSS thực địa trước khi bay, yêu cầu official FarmBoundary trước Baseline và giả định Baseline miễn phí chính thức bị superseded).*
 
 Data model tối thiểu:
 
@@ -1979,34 +1981,27 @@ database rồi gọi domain policy. Migration/evidence tại
 `20261012024731_Phase9CommercialAdjustmentReadiness` và
 `docs/operations/be1-step4e-commercial-readiness-report.md`.
 
-### 12.1. Baseline appointment trước boundary
+### 12.1. Baseline appointment và đặt cọc khảo sát (Baseline Deposit)
 
-- [x] Source cũ đã có create/confirm/reschedule appointment purpose
-  `BaselineMapping`; giữ revision/audit foundation.
-- [ ] Cho propose/confirm khi `FarmBoundaryVersionId = null` và Order ở
-  `AwaitingBaselineAppointment`.
-- [ ] Confirm chuyển Order tới `AwaitingBoundaryCapture`; reschedule/cancel đóng
-  capture/route/start gate của appointment cũ.
-- [ ] Work queue/read model trả nullable boundary, current appointment ID/version
-  và `AWAITING_BOUNDARY_CAPTURE` wire token ổn định.
+- [x] Source có create/confirm/reschedule appointment purpose `BaselineMapping`; giữ revision/audit foundation.
+- [x] Cho phép propose/confirm khi `FarmBoundaryVersionId = null` và Order ở `AwaitingBaselineAppointment`.
+- [x] Confirm Baseline appointment chuyển Order tới `AwaitingBaselineDeposit`.
+- [x] TenantOwner thanh toán cọc cam kết cố định 500.000 VNĐ (`DepositAmount = 500_000m`, `PaymentPurpose = BaselineDeposit`). Khi cọc `Confirmed` + Giấy phép bay & Cam kết dữ liệu hợp lệ $\rightarrow$ Order chuyển sang `BaselineReady`.
+- [x] Reschedule/cancel đóng readiness gate và cập nhật appointment lifecycle tương ứng.
+- [x] Work queue/read model trả nullable boundary, candidate survey envelope (`CandidateCenterLongitude/Latitude`, `ApproximateAreaHa`, `SurveyRadiusMeters`).
 
-### 12.2. Same-visit boundary capture và automatic route gate
+### 12.2. Khảo sát toàn cảnh, Orthophoto và Chấm 4 góc ranh giới (Orthophoto Boundary Marking)
 
-- [x] Assigned SystemManager query được Order/Farm/current FarmBoundary/Zone scope.
-- [ ] Thêm `BoundaryCaptureSession` gắn confirmed Baseline appointment,
-  Manager, Drone, operation ID và ordered GNSS samples.
-- [ ] Sync samples retry/offline-safe; finalize validate/close polygon, lưu evidence
-  rồi mới approve immutable FarmBoundary version.
-- [ ] Direct `VerifyBoundaryAndScope` chỉ dành cho mapped-Farm/correction path và
-  từ chối unmapped flow cố bypass session.
-- [ ] Gọi BE2 sinh/duyệt `BaselineRoutePlan` từ đúng boundary version; mọi
-  waypoint/segment nằm trong safety inset và client không gửi arbitrary route.
-- [ ] Chỉ matching approved route mới transition `AwaitingBoundaryCapture →
-  BaselineReady`; boundary/appointment đổi làm route stale và đóng gate.
-- [ ] Detection/candidate ngoài hoặc gần biên dùng
-  `OutOfBoundary/NeedsReview`, không tự assign Farm.
-- [ ] Baseline và Plant Health đều yêu cầu written consent + flight permission
-  hợp lệ; payment chỉ áp dụng Plant Health.
+- [x] Assigned SystemManager query được Order/Farm/candidate envelope/Zone scope.
+- [x] Drone bay khảo sát dựa trên Candidate Survey Envelope (không bắt buộc FarmBoundary trước chuyến bay).
+- [x] Tích hợp sự kiện `BaselineMissionStartedV1` ($\rightarrow$ Order `BaselineInProgress`) và `BaselineOrthophotoCompletedV1` ($\rightarrow$ Order `AwaitingBaselineReview`).
+- [x] SystemManager mở bản đồ ảnh trực giao Orthophoto và chấm 4 điểm góc (`MarkFarmBoundaryOnOrthophoto`). Hệ thống kiểm tra:
+  - Sequence thứ tự góc nghiêm ngặt `[1, 2, 3, 4]`.
+  - Tọa độ hữu hạn WGS84, 4 góc phân biệt.
+  - Đa giác đơn giản, diện tích hệ mét $0.01\text{ ha} \le \text{Area} \le 5000\text{ ha}$.
+  - Duyệt và gắn `FarmBoundaryVersionId` vào Order atomically.
+- [x] AI đếm trụ trong ranh giới đã duyệt $\rightarrow$ SystemManager duyệt số trụ và xuất bản Base Map $\rightarrow$ Order chuyển sang `AwaitingPricing` (cấn trừ cọc tự động).
+- [x] Detection/candidate ngoài hoặc gần biên dùng `OutOfBoundary/NeedsReview` dựa trên khoảng cách trắc địa cục bộ chuẩn xác (`FarmBoundaryPolicy`).
 
 ### 12.3. Confirmed pole-count và price snapshot
 
@@ -2107,7 +2102,7 @@ Command contract tối thiểu cho flow mới:
 | Command | Input authoritative từ client | Server phải derive/re-check |
 |---|---|---|
 | Propose Baseline appointment | purpose, proposed start/end, expected Order/current appointment versions | Farm/assignment, `RequiresBaselineMapping`, boundary được phép null |
-| Confirm appointment | expected Order + appointment versions | Owner qua Order→Farm→Tenant; transition tới `AwaitingBoundaryCapture` |
+| Confirm appointment | expected Order + appointment versions | Owner qua Order→Farm→Tenant; transition tới `AwaitingBaselineDeposit` |
 | Start capture session | appointmentId, droneId, operationId, expected Order version | current window, assignment, authorization, Drone eligibility |
 | Sync samples | operationId, expected session version, ordered sequence/lon/lat/capturedAt/accuracy | dedup, WGS84/range, session mutable/current |
 | Finalize capture | reason/evidence, expected Order/session/current boundary versions | close/validate polygon, ownership, immutable approved boundary |
@@ -2127,13 +2122,10 @@ Chưa viết/chạy trong Step 4. Toàn bộ backlog kiểm thử của Step 4 �
 
 ### Definition of Done Step 4
 
-- Flow unmapped chạy từ consent/permission + Baseline appointment confirmation →
-  cùng field visit capture/approve boundary → generate/approve automatic route →
-  free Baseline → confirmed pole count/pricing → paid appointment/sandbox payment
-  → ready for Plant Health.
-- Không cần boundary để propose/confirm Baseline appointment; bắt buộc matching
-  boundary/route trước prepare/start và không phát sinh chuyến đi riêng để nhập boundary.
-- BE2 nhận authoritative readiness decision và failure reasons.
+- Flow unmapped chạy chuẩn: Consent/permission + Baseline appointment $\rightarrow$ Nộp cọc 500.000 VNĐ $\rightarrow$ `BaselineReady` $\rightarrow$ Bay chụp toàn cảnh nông trại $\rightarrow$ Ghép ảnh Orthophoto $\rightarrow$ Manager chấm 4 góc tạo `FarmBoundary` $\rightarrow$ Duyệt boundary và AI đếm trụ $\rightarrow$ Xuất bản Base Map V3 $\rightarrow$ Chốt `FinalPrice` và cấn trừ tiền cọc (`RemainingAmount = FinalPrice - DepositAmount`) $\rightarrow$ Hẹn lịch dịch vụ trả phí $\rightarrow$ Thanh toán nốt số dư `RemainingAmount` $\rightarrow$ `ReadyForPaidService`.
+- Chuyến bay Baseline không yêu cầu official `FarmBoundary` trước khi bay; ranh giới nông trại được thành lập từ ảnh trực giao Orthophoto sau chuyến bay.
+- Chuyến bay Baseline bắt buộc tiền cọc 500.000 VNĐ (`DepositPaymentStatus == Confirmed`); chuyến bay Paid Service bắt buộc thanh toán đủ số dư `RemainingAmount`.
+- BE2 nhận authoritative readiness decision và failure reasons chính xác cho từng mục đích (Baseline Mapping vs Plant Health).
 - Không actor/client nào tự set payment/order ready.
 - Original count/price snapshot không đổi; mọi difference truy được adjustment → additional payment/refund; extra flight có approval/evidence.
 - Exit gate Phase 9 đạt trên PostgreSQL thực.
@@ -2685,7 +2677,7 @@ Step này được thực hiện tăng dần trong Steps 1–9, sau đó có gat
 
 - [ ] SystemAdmin: request inbox, manager availability, payment reconciliation và operational exceptions.
 - [ ] SystemManager: assigned Orders theo
-  `AwaitingBaselineAppointment`/`AwaitingBoundaryCapture`, capture/route pending,
+  `AwaitingBaselineAppointment`/`AwaitingBaselineDeposit`/`AwaitingBaselineReview`,
   paid appointments, count confirmation, processing/Disease Zone/change-report
   review và publication actions.
 - [ ] TenantOwner: requests, purpose appointments, payment/order/change-report status và published results.
@@ -2938,17 +2930,15 @@ Step 0R–4 có evidence baseline cũ nhưng đang `RebaselineRequired`. Thứ t
 1. Sửa `SurveyOrderStatus`/transition/migration và approval factory: unmapped →
    `AwaitingBaselineAppointment`; mapped → `PendingBoundaryVerification`.
 2. Sửa appointment handlers/read models/OpenAPI: Baseline propose/confirm không
-   cần boundary; confirm → `AwaitingBoundaryCapture`.
+   cần boundary; confirm → `AwaitingBaselineDeposit` → thanh toán cọc → `BaselineReady`.
 3. Giữ SystemAdmin verify/revoke authorization API, bổ sung assigned-manager read
    status và bắt buộc consent/flight permission còn hiệu lực trước session start.
-4. Implement `BoundaryCaptureSession`, ordered/offline GNSS sample sync,
-   finalize/abort và atomic FarmBoundary approval; giữ direct polygon endpoint chỉ
-   cho mapped/correction path.
-5. Khóa typed port với BE2 và implement automatic `BaselineRoutePlan` generation,
-   review/approval, safety-inset containment và atomic Order `BaselineReady` gate.
-6. Mở rộng `SurveyOrderOperationalContextV3`/readiness bằng appointment,
-   capture-session, boundary và route identities/versions; prepare/start re-check
-   route stale/missing/out-of-inset.
+4. Implement khảo sát toàn cảnh dựa trên Candidate Survey Envelope, ghép ảnh Orthophoto,
+   và SystemManager chấm 4 góc ranh giới (`MarkFarmBoundaryOnOrthophoto`) để phê duyệt FarmBoundary.
+5. Khóa typed port và integration contracts (`BaselineMissionStartedV1`, `BaselineOrthophotoCompletedV1`)
+   với BE2 và tự động đồng bộ vòng đời đơn hàng.
+6. Mở rộng `SurveyOrderOperationalContextV3`/`V4` và readiness bằng Candidate Survey Envelope,
+   bổ sung mục đích thanh toán (`PaymentPurpose`) phân biệt cọc và số dư.
 7. Hoàn tất các R2 còn lại: Plant Health-only/no severity,
    immutable original snapshot, adjustment settlement/refund và extra flight.
 8. Chạy R2 integration gate; cập nhật R2/6R/7/8/9 thành
@@ -2958,8 +2948,8 @@ Step 0R–4 có evidence baseline cũ nhưng đang `RebaselineRequired`. Thứ t
 10. Nối producer initial-map publication ở Step 6C vào
    `SurveyOrder.RecordBaselinePublication`; không nhận authoritative count từ client.
 11. Không bắt đầu paid Plant Health mission/result flow trước khi Baseline
-   appointment → consent/permission → same-visit capture boundary → approved route
-   → Baseline → map/count → price → paid appointment/payment đã hoàn chỉnh về code và
+   appointment → deposit 500k → Baseline flight → Orthophoto 4-corner boundary marking
+   → Base map/count → price → paid appointment/payment đã hoàn chỉnh về code và
    contract; integration test xác nhận ở Final Test Phase.
 
 Trong Step 4 chỉ build/compile, cập nhật migration/OpenAPI/evidence và bổ sung
@@ -2973,13 +2963,12 @@ Chỉ đánh dấu kế hoạch `Done` khi:
 - [ ] Ba request kinds và flow chung chạy end-to-end.
 - [ ] Không có public/tenant path tạo trực tiếp Tenant/Farm/Mission/Drone.
 - [ ] Unmapped Order khởi tạo `AwaitingBaselineAppointment`; confirm lịch khi
-  boundary còn null chuyển `AwaitingBoundaryCapture`, không sang thẳng ready.
-- [ ] Trong một confirmed visit, Manager sync GNSS corners, finalize approved
-  boundary, review BE2-generated in-boundary route rồi mới start Baseline; không
-  cần chuyến đi riêng chỉ để nhập boundary.
+  boundary còn null chuyển `AwaitingBaselineDeposit`, nộp cọc 500.000 VNĐ confirmed chuyển `BaselineReady`.
+- [ ] Drone bay khảo sát toàn cảnh nông trại dựa trên Candidate Survey Envelope, ghép ảnh
+  Orthophoto, Manager chấm 4 góc tạo FarmBoundary chuẩn xác, AI đếm trụ xuất bản Base Map.
 - [ ] Purpose-aware gate không thể bypass: mọi flight cần consent/permission +
-  appointment/boundary/manager/safety; Baseline cần matching approved route, paid
-  Plant Health cần thêm count-price/payment.
+  appointment/manager/safety; Baseline flight cần candidate envelope + cọc confirmed,
+  paid Plant Health cần thêm count-price/payment.
 - [ ] Initial Farm bắt buộc có Baseline Mapping; repeat survey không rebuild map.
 - [ ] Persistent Plant IDs và same-service follow-up được chứng minh.
 - [ ] Plant Health suspected findings, Disease Zones và sourced guidance đều human-reviewed/published preliminary, không severity/diagnosis và giữ full provenance.
@@ -3124,7 +3113,8 @@ Không viết lại test lịch sử 0R; bổ sung R2 tests chứng minh target 
 - [ ] Duplicate/concurrent refund/chargeback callback idempotent, giữ PaymentEvent và chỉ đóng Order gate khi paid flight chưa bắt đầu.
 - [ ] Appointment cancel/reschedule, refund/chargeback và pending adjustment đóng gate.
 - [ ] Direct readiness/handler invocation không bypass rule.
-- [ ] Baseline không payment vẫn pass nhưng thiếu consent/permission phải fail; Plant Health thiếu payment phải fail; Harvest Readiness luôn disabled trong MVP.
+- [ ] Baseline bắt buộc cọc 500.000 VNĐ Confirmed + consent/permission hợp lệ; nếu thiếu cọc phải fail với PaymentNotConfirmed; không bắt buộc official FarmBoundary trước chuyến bay Baseline.
+- [ ] Plant Health bắt buộc thanh toán đủ số tiền còn lại (RemainingAmount ?? FinalPrice), đã xuất bản Base Map và duyệt FarmBoundary; Harvest Readiness luôn disabled trong MVP.
 - [ ] Mỗi readiness failure code có ít nhất một test; state đổi sau khi snapshot được đọc phải được re-check.
 - [ ] Concurrent appointment/capture/boundary/route/count/payment mutations trả conflict đúng.
 
@@ -3136,8 +3126,7 @@ Không viết lại test lịch sử 0R; bổ sung R2 tests chứng minh target 
 - [ ] Outside/near-boundary points không tự gán Plant/Farm; correction cần manager decision và audit.
 - [ ] Archive không làm mất history/provenance.
 - [ ] Contract tests producer/consumer với BE2 prepare/start Mission pass.
-- [ ] Operational context cho phép boundary/route null ở appointment stage nhưng
-  bắt buộc capture/boundary/route identities khớp trước Baseline prepare/start.
+- [ ] Operational context cho phép boundary null cho Baseline mapping; chỉ bắt buộc approved FarmBoundary và Base Map trước khi bay Plant Health.
 
 #### Step 6 — Farm base map và persistent Plant identity
 

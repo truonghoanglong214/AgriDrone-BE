@@ -44,16 +44,52 @@ internal sealed class FarmBoundaryPolicy(
         ArgumentNullException.ThrowIfNull(point);
         ArgumentNullException.ThrowIfNull(boundary);
 
-        // Distance in degrees to the exterior ring of the polygon
         var exteriorRing = boundary.ExteriorRing;
-        var distanceDegrees = point.Distance(exteriorRing);
+        var coords = exteriorRing.Coordinates;
+        if (coords.Length < 2)
+        {
+            return 0.0;
+        }
 
-        // Convert degree distance to approximate meters using average latitude
         var latRad = point.Y * Math.PI / 180.0;
         var metersPerDegreeLongitude = MetersPerDegreeLatitude * Math.Cos(latRad);
-        var averageMetersPerDegree = (MetersPerDegreeLatitude + metersPerDegreeLongitude) / 2.0;
 
-        return distanceDegrees * averageMetersPerDegree;
+        var minDistanceSquared = double.MaxValue;
+
+        for (var i = 0; i < coords.Length - 1; i++)
+        {
+            var x1 = (coords[i].X - point.X) * metersPerDegreeLongitude;
+            var y1 = (coords[i].Y - point.Y) * MetersPerDegreeLatitude;
+            var x2 = (coords[i + 1].X - point.X) * metersPerDegreeLongitude;
+            var y2 = (coords[i + 1].Y - point.Y) * MetersPerDegreeLatitude;
+
+            var dx = x2 - x1;
+            var dy = y2 - y1;
+            var segmentLengthSquared = (dx * dx) + (dy * dy);
+
+            double distanceSquared;
+            if (segmentLengthSquared <= double.Epsilon)
+            {
+                distanceSquared = (x1 * x1) + (y1 * y1);
+            }
+            else
+            {
+                var t = ((-x1 * dx) - (y1 * dy)) / segmentLengthSquared;
+                var tClamped = Math.Clamp(t, 0.0, 1.0);
+
+                var closestX = x1 + (tClamped * dx);
+                var closestY = y1 + (tClamped * dy);
+
+                distanceSquared = (closestX * closestX) + (closestY * closestY);
+            }
+
+            if (distanceSquared < minDistanceSquared)
+            {
+                minDistanceSquared = distanceSquared;
+            }
+        }
+
+        return Math.Sqrt(minDistanceSquared);
     }
 
     public Result ValidateZoneWithinBoundary(
