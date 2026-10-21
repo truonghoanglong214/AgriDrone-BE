@@ -133,6 +133,21 @@ internal sealed class ProcessSurveyPaymentEventCommandHandler(
                 PaymentError.ProviderMismatch());
         }
 
+        if (payment.Status == SurveyPaymentStatus.Confirmed &&
+            string.Equals(
+                command.EventType.Trim(),
+                SurveyPaymentCommandSupport.SucceededEvent,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return Result.Success(CreateResponse(
+                command,
+                payment,
+                order,
+                duplicate: true,
+                transitionApplied: false,
+                "ALREADY_CONFIRMED_IGNORED"));
+        }
+
         var previousPaymentStatus = payment.Status;
         var previousOrderStatus = order.Status;
         var (transitionApplied, disposition) = ApplyEvent(

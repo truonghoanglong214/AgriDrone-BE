@@ -2,6 +2,7 @@ using AgriDrone.Modules.Missions.Application.Abstractions.Media;
 using AgriDrone.Modules.Missions.Application.Abstractions.Missions;
 using AgriDrone.Modules.Missions.Application.Features.Media.CompleteUploadSession;
 using AgriDrone.Modules.Missions.Application.Features.Media.CreateUploadSession;
+using AgriDrone.Modules.Missions.Application.Features.Media.StartMultipartUpload;
 using AgriDrone.Modules.Missions.Domain.Media;
 using AgriDrone.Modules.Missions.Domain.Missions;
 using AgriDrone.SharedKernel.Application;
@@ -15,6 +16,7 @@ internal sealed class UploadMissionMediaCommandHandler(
     IDroneMissionRepository missions,
     IMediaUploadSessionRepository sessions,
     IObjectStorageWriter writer,
+    IMultipartObjectStorage multipartStorage,
     ISystemManagerAccessService managerAccessService,
     IExecutionContext executionContext,
     ISender sender)
@@ -102,9 +104,32 @@ internal sealed class UploadMissionMediaCommandHandler(
             request.MissionId, created.Value.UploadSessionId, cancellationToken)
             ?? throw new InvalidOperationException("Persisted upload session was not found.");
         content.Position = 0;
-        // Transfer failures leave a tracked Pending session for a subsequent retry.
-        await writer.UploadAsync(session.StorageUri, content, content.Length,
-            mimeType, cancellationToken);
+        // Large individual files use server-side multipart storage uploads.
+        // Small files in a large folder continue to use a regular object upload.
+        if (content.Length >
+            MultipartUploadPolicy.ServerSideMultipartThresholdBytes)
+        {
+            var started = await sender.Send(new StartMultipartUploadCommand(
+                request.TenantId, request.FarmId, request.MissionId,
+                session.Id), cancellationToken);
+            if (started.IsFailure)
+                return Result.Failure<CompleteUploadSessionResult>(started.Error);
+
+            if (session.MultipartUploadId is null)
+                throw new InvalidOperationException(
+                    "Multipart upload was started without a persisted upload id.");
+
+            await UploadMultipartPartsAsync(session, content,
+                session.MultipartUploadId, started.Value.UploadedParts,
+                cancellationToken);
+        }
+        else
+        {
+            // Transfer failures leave a tracked Pending session for a subsequent retry.
+            await writer.UploadAsync(session.StorageUri, content, content.Length,
+                mimeType, cancellationToken);
+        }
+
         return await Complete(session.Id);
 
         Task<Result<CompleteUploadSessionResult>> Complete(Guid sessionId) =>
@@ -115,4 +140,56 @@ internal sealed class UploadMissionMediaCommandHandler(
     private static Result<CompleteUploadSessionResult> InvalidFile(string message) =>
         Result.Failure<CompleteUploadSessionResult>(
             AppError.Validation("MediaUpload.InvalidFile", message));
+
+    private async Task UploadMultipartPartsAsync(
+        MediaUploadSession session,
+        Stream content,
+        string uploadId,
+        IReadOnlyList<MultipartUploadedPart> uploadedParts,
+        CancellationToken cancellationToken)
+    {
+        var existingParts = uploadedParts.ToDictionary(part => part.Number);
+        var partCount = MultipartUploadPolicy.PartCount(session.FileSizeBytes);
+        content.Position = 0;
+
+        for (var partNumber = 1; partNumber <= partCount; partNumber++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var sizeBytes = partNumber == partCount
+                ? session.FileSizeBytes - (long)(partCount - 1) *
+                  MultipartUploadPolicy.PartSizeBytes
+                : MultipartUploadPolicy.PartSizeBytes;
+
+            if (existingParts.TryGetValue(partNumber, out var existingPart) &&
+                existingPart.SizeBytes == sizeBytes &&
+                !string.IsNullOrWhiteSpace(existingPart.ETag))
+            {
+                content.Seek(sizeBytes, SeekOrigin.Current);
+                continue;
+            }
+
+            await using var partContent = new MemoryStream(
+                checked((int)sizeBytes));
+            var remaining = sizeBytes;
+            var buffer = new byte[64 * 1024];
+            while (remaining > 0)
+            {
+                var read = await content.ReadAsync(
+                    buffer.AsMemory(0, (int)Math.Min(buffer.Length, remaining)),
+                    cancellationToken);
+                if (read == 0)
+                    throw new EndOfStreamException(
+                        "The uploaded file ended before all multipart data was read.");
+
+                await partContent.WriteAsync(buffer.AsMemory(0, read),
+                    cancellationToken);
+                remaining -= read;
+            }
+
+            partContent.Position = 0;
+            await multipartStorage.UploadPartAsync(session.StorageUri,
+                uploadId, partNumber, partContent, sizeBytes,
+                cancellationToken);
+        }
+    }
 }

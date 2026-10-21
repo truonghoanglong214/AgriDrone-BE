@@ -26,6 +26,9 @@ public sealed class MissionMediaController(
     ISystemManagerAccessService managerAccessService,
     ILogger<MissionMediaController> logger) : ControllerBase
 {
+    private const long MaximumBatchFileSizeBytes =
+        5L * 1024 * 1024 * 1024;
+    private const long MultipartRequestOverheadBytes = 1024L * 1024;
     private static readonly Action<ILogger, Guid, int, Exception?> LogTransferFailure =
         LoggerMessage.Define<Guid, int>(LogLevel.Error, new EventId(1, "MediaTransferFailed"),
             "Media upload interrupted for mission {MissionId}, file {Index}");
@@ -140,9 +143,10 @@ public sealed class MissionMediaController(
 
     /// <summary>Upload một hoặc nhiều ảnh/video trực tiếp cho Mission.</summary>
     /// <remarks>
-    /// Gửi file nhỏ trong trường files, tối đa 50 MiB tổng request.
-    /// File lớn và video sử dụng upload-sessions để truyền trực tiếp tới storage.
-    /// Backend tính SHA-256, upload MinIO và hoàn tất media.
+    /// Gửi nhiều file trong trường files, tổng dữ liệu file tối đa 5 GiB.
+    /// Backend tính SHA-256; file lớn hơn 50 MiB được upload multipart nội bộ,
+    /// file nhỏ được upload trực tiếp. FE không cần gọi API upload session riêng.
+    /// Backend hoàn tất media sau khi xác minh file trên storage.
     /// CapturedAt tùy chọn; nếu gửi thì cần một giá trị UTC cho mỗi file, đúng thứ tự Files. Mission phải đã kết thúc
     /// chuyến bay. Gửi lại cùng nội dung trong cùng Mission trả media đã hoàn tất.
     /// Telemetry và finalize upload được thực hiện qua API riêng.
@@ -153,8 +157,10 @@ public sealed class MissionMediaController(
     [HttpPost]
     [Authorize(Policy = AccessAuthorizationPolicies.SystemManager)]
     [Consumes("multipart/form-data")]
-    [RequestSizeLimit(51L * 1024 * 1024)]
-    [RequestFormLimits(MultipartBodyLengthLimit = 50L * 1024 * 1024)]
+    [RequestSizeLimit(MaximumBatchFileSizeBytes + MultipartRequestOverheadBytes)]
+    [RequestFormLimits(
+        MultipartBodyLengthLimit = MaximumBatchFileSizeBytes +
+                                   MultipartRequestOverheadBytes)]
     [ProducesResponseType(typeof(IReadOnlyList<UploadMissionMediaItemResponse>), 200)]
     [ProducesResponseType(typeof(IReadOnlyList<UploadMissionMediaItemResponse>), 207)]
     public async Task<IResult> Upload([FromRoute] Guid farmId, [FromRoute] Guid missionId,
@@ -167,9 +173,9 @@ public sealed class MissionMediaController(
             access.FarmId != farmId)
             return Results.Forbid();
 
-        if (request.Files.Sum(file => file.Length) > 50L * 1024 * 1024)
+        if (request.Files.Sum(file => file.Length) > MaximumBatchFileSizeBytes)
             return Results.Problem(statusCode: StatusCodes.Status413PayloadTooLarge,
-                detail: "Use upload sessions when total file size exceeds 50 MiB.");
+                detail: "Total file size must not exceed 5 GiB per request.");
 
         if (request.CapturedAt.Count != 0 &&
             request.CapturedAt.Count != request.Files.Count)

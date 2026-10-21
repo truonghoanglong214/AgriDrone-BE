@@ -695,7 +695,7 @@
           "MissionMedia"
         ],
         "summary": "Upload một hoặc nhiều ảnh/video trực tiếp cho Mission.",
-        "description": "Gửi 1–20 file trong trường files. JPEG/PNG tối đa 50 MiB mỗi file;\r\nMP4/MOV tối đa 5 GiB. Tổng dữ liệu file tối đa 5 GiB mỗi request.\r\nBackend tính SHA-256, upload MinIO và hoàn tất media.\r\nKhông cần gửi metadata, operationId hay version. Mission phải đã kết thúc\r\nchuyến bay. Gửi lại cùng nội dung trong cùng Mission trả media đã hoàn tất.\r\nTelemetry và finalize upload được thực hiện qua API riêng.\r\nXử lý tuần tự; khi một file lỗi, dừng và đánh dấu các file còn lại NotAttempted.\r\nFile đã Completed được giữ lại. HTTP 200 nếu tất cả thành công, 207 nếu\r\ncó lỗi. Response chứa kết quả theo index (bắt đầu từ 0) và tên từng file.",
+        "description": "Gửi nhiều file trong trường files. JPEG/PNG tối đa 50 MiB mỗi file;\r\nMP4/MOV tối đa 5 GiB. Tổng dữ liệu file tối đa 5 GiB mỗi request.\r\nBackend tính SHA-256; file lớn hơn 50 MiB được upload multipart nội bộ, file nhỏ được upload trực tiếp. FE không cần gửi metadata, operationId, version hay gọi riêng API upload session. Mission phải đã kết thúc\r\nchuyến bay. Gửi lại cùng nội dung trong cùng Mission trả media đã hoàn tất.\r\nTelemetry và finalize upload được thực hiện qua API riêng.\r\nXử lý tuần tự; khi một file lỗi, dừng và đánh dấu các file còn lại NotAttempted.\r\nFile đã Completed được giữ lại. HTTP 200 nếu tất cả thành công, 207 nếu\r\ncó lỗi. Response chứa kết quả theo index (bắt đầu từ 0) và tên từng file.",
         "parameters": [
           {
             "name": "farmId",

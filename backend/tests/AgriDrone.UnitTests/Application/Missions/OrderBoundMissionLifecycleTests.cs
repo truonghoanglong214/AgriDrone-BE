@@ -101,13 +101,15 @@ public sealed class OrderBoundMissionLifecycleTests
         mission.CompletePreflight(Guid.NewGuid(), "v1", answers, true, null,
             Guid.NewGuid(), Now.AddMinutes(-5));
 
-        Assert.True(mission.Reschedule(Now.AddHours(1), Now.AddHours(2), Now));
+        Assert.True(mission.Reschedule(
+            Now.AddHours(1), Now.AddHours(2), mission.DroneId, Now));
 
         Assert.Null(mission.PreflightOperationId);
         Assert.Null(mission.PreflightChecklistAnswers);
         Assert.Throws<InvalidOperationException>(() =>
             mission.StartFlight(Guid.NewGuid(), Now.AddHours(1)));
-        Assert.False(mission.Reschedule(Now.AddHours(1), Now.AddHours(2), Now));
+        Assert.False(mission.Reschedule(
+            Now.AddHours(1), Now.AddHours(2), mission.DroneId, Now));
     }
 
     private static DroneMission CreateScheduledMission()

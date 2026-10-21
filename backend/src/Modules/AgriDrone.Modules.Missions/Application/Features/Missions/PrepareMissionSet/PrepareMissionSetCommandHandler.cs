@@ -64,10 +64,7 @@ internal sealed class PrepareMissionSetCommandHandler(
             order.ScopeZoneIds.Any(zoneId => zoneId == Guid.Empty) ||
             order.ScopeZoneIds.Distinct().Count() !=
             order.ScopeZoneIds.Count ||
-            order.FarmBoundaryVersionId is null ||
-            order.FarmBoundaryVersionId == Guid.Empty ||
-            (!order.RequiresBaselineMapping &&
-             order.CurrentBaseMapVersionId is null))
+            (order.FarmBoundaryVersionId == Guid.Empty))
         {
             return Result.Failure<PrepareMissionSetResult>(
                 PrepareMissionSetErrors.InvalidOrderContext());
@@ -201,12 +198,12 @@ internal sealed class PrepareMissionSetCommandHandler(
                 order.TenantId,
                 order.FarmId,
                 order.ScopeZoneIds,
-                order.FarmBoundaryVersionId!.Value,
+                order.FarmBoundaryVersionId,
                 request.DroneId,
                 actorId,
                 BuildMissionCode(order.SurveyOrderId, purpose),
                 purpose,
-                request.OperationId,
+                request.IdempotencyKey,
                 sourceMapVersionId,
                 false,
                 flightParameters,
@@ -281,7 +278,7 @@ internal sealed class PrepareMissionSetCommandHandler(
             mission.ScheduledEndAt,
             mission.RequiresBaselineCompletion,
             mission.SourceMapVersionId,
-            mission.PreparationOperationId
+            IdempotencyKey = mission.PreparationOperationId
         });
         auditWriter.AddUserAction(
             unitOfWork,
@@ -360,8 +357,9 @@ internal sealed class PrepareMissionSetCommandHandler(
                 return purpose == MissionPurpose.BaselineMapping
                     ? PrepareMissionSetErrors.BaselineWindowRequired()
                     : PrepareMissionSetErrors.ServiceWindowRequired();
-            if (window.StartAt < context.AppointmentStartAt ||
-                window.EndAt > context.AppointmentEndAt)
+            if (!window.Overlaps(
+                    context.AppointmentStartAt,
+                    context.AppointmentEndAt))
                 return PrepareMissionSetErrors.ScheduleOutsideAppointment();
         }
 
@@ -389,7 +387,6 @@ internal sealed class PrepareMissionSetCommandHandler(
         existing.Any(mission =>
             mission.TenantId != order.TenantId ||
             mission.FarmId != order.FarmId ||
-            mission.FarmBoundaryVersionId != order.FarmBoundaryVersionId ||
             !mission.ScopeZoneIds.Order().SequenceEqual(order.ScopeZoneIds.Order()) ||
             mission.Purpose is not { } purpose ||
             !expectedPurposes.Contains(purpose) ||

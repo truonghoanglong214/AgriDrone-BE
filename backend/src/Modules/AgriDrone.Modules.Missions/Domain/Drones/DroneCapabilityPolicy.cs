@@ -47,4 +47,5 @@ public static class DroneCapabilityPolicy
         }
         return true;
     }
+
 }

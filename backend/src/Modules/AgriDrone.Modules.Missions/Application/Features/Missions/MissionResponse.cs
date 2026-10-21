@@ -32,7 +32,7 @@ public sealed record MissionResponse(
     IReadOnlyCollection<Guid> ScopeZoneIds,
     bool RequiresBaselineCompletion,
     Guid? PreflightOperationId,
-    string? PreflightChecklistVersion,
+    int? PreflightChecklistVersion,
     JsonElement? PreflightChecklistAnswers,
     bool? PreflightSuitableForFlight,
     string? PreflightNotes,

@@ -3,6 +3,7 @@ using AgriDrone.Modules.Missions.Application.Abstractions;
 using AgriDrone.Modules.Missions.Application.Abstractions.MissionPlanning;
 using AgriDrone.Modules.Missions.Application.Abstractions.Missions;
 using AgriDrone.Modules.Missions.Application.Features.Missions.TransitionMission;
+using AgriDrone.Modules.Missions.Application.Features.Missions.PrepareMissionSet;
 using AgriDrone.Modules.Missions.Domain.Drones;
 using AgriDrone.Modules.Missions.Domain.Missions;
 using AgriDrone.SharedInfrastructure.Auditing;
@@ -51,12 +52,6 @@ internal sealed class RescheduleOrderMissionCommandHandler(
         if (mission.Version != request.ExpectedVersion)
             return Result.Failure<MissionResponse>(MissionError.VersionConflict(
                 request.ExpectedVersion, mission.Version));
-        if (!recovering && request.ReplacementDroneId is not null)
-            return Result.Failure<MissionResponse>(MissionOperationError.ReplacementDroneOnlyOnRecovery());
-        if (!recovering && mission.ScheduledAt == request.StartAt &&
-            mission.ScheduledEndAt == request.EndAt)
-            return Result.Success(MissionResponseMapper.Map(mission));
-
         SurveyOrderMissionPlanningContext? order;
         try
         {
@@ -75,7 +70,8 @@ internal sealed class RescheduleOrderMissionCommandHandler(
             purpose == MissionPurpose.HarvestReadiness &&
             order.SelectedService != SurveyServiceType.HarvestReadiness)
             return Result.Failure<MissionResponse>(MissionOperationError.InvalidOrderContext());
-        if (order.FarmBoundaryVersionId != mission.FarmBoundaryVersionId ||
+        if (purpose != MissionPurpose.BaselineMapping &&
+            order.FarmBoundaryVersionId != mission.FarmBoundaryVersionId ||
             order.ScopeZoneIds is null ||
             !order.ScopeZoneIds.Order().SequenceEqual(mission.ScopeZoneIds.Order()) ||
             access.ManagerProfileId is null ||
@@ -84,18 +80,34 @@ internal sealed class RescheduleOrderMissionCommandHandler(
         if (!order.IsReadyForOperations || !order.IsReadyToSchedule)
             return Result.Failure<MissionResponse>(MissionOperationError.OrderNotReady(
                 order.ReadinessFailureCode));
-        if (request.StartAt < order.AppointmentStartAt ||
-            request.EndAt > order.AppointmentEndAt)
+        var scheduleWindow = MissionScheduleWindow.ForDate(request.ScheduledDate);
+        if (!scheduleWindow.Overlaps(
+                order.AppointmentStartAt,
+                order.AppointmentEndAt))
             return Result.Failure<MissionResponse>(MissionOperationError.AppointmentWindowClosed());
+        if (!recovering && mission.ScheduledAt == scheduleWindow.StartAt &&
+            mission.ScheduledEndAt == scheduleWindow.EndAt &&
+            (request.ReplacementDroneId is null ||
+             request.ReplacementDroneId == mission.DroneId))
+            return Result.Success(MissionResponseMapper.Map(mission));
         if (purpose != MissionPurpose.BaselineMapping &&
             mission.SourceMapVersionId != order.CurrentBaseMapVersionId)
             return Result.Failure<MissionResponse>(MissionOperationError.BaselineNotCompleted());
 
         if (recovering)
         {
-            if (mission.EndedAt is null ||
-                request.StartAt <= mission.EndedAt ||
-                request.StartAt <= clock.GetUtcNow())
+            if (mission.EndedAt is null)
+                return Result.Failure<MissionResponse>(
+                    MissionOperationError.RecoveryWindowRequired());
+            var nowForRecovery = clock.GetUtcNow();
+            var recoveryStart = scheduleWindow.StartAt;
+            if (recoveryStart <= mission.EndedAt.Value)
+                recoveryStart = mission.EndedAt.Value.AddTicks(1);
+            if (recoveryStart <= nowForRecovery)
+                recoveryStart = nowForRecovery.AddTicks(1);
+            scheduleWindow = new MissionScheduleWindow(
+                recoveryStart, scheduleWindow.EndAt);
+            if (scheduleWindow.StartAt >= scheduleWindow.EndAt)
                 return Result.Failure<MissionResponse>(
                     MissionOperationError.RecoveryWindowRequired());
             var notes = await fieldNotes.ListAsync(tenantId, request.FarmId,
@@ -107,13 +119,11 @@ internal sealed class RescheduleOrderMissionCommandHandler(
                     MissionOperationError.RecoveryDecisionRequired());
         }
 
-        var selectedDroneId = recovering
-            ? request.ReplacementDroneId ?? mission.DroneId
-            : mission.DroneId;
+        var selectedDroneId = request.ReplacementDroneId ?? mission.DroneId;
         if (selectedDroneId == Guid.Empty)
             return Result.Failure<MissionResponse>(MissionError.DroneNotAvailable(selectedDroneId));
         var available = await drones.GetAvailableExcludingMissionAsync(
-            request.StartAt, request.EndAt, mission.Id, cancellationToken);
+            scheduleWindow.StartAt, scheduleWindow.EndAt, mission.Id, cancellationToken);
         if (available.All(drone => drone.Id != selectedDroneId ||
             !DroneCapabilityPolicy.Supports(drone.Specifications, purpose)))
             return Result.Failure<MissionResponse>(MissionError.DroneNotAvailable(selectedDroneId));
@@ -134,9 +144,10 @@ internal sealed class RescheduleOrderMissionCommandHandler(
         }
         if (recovering)
             mission.RecoverFailedFlight(selectedDroneId,
-                request.StartAt, request.EndAt, now);
+                scheduleWindow.StartAt, scheduleWindow.EndAt, now);
         else
-            mission.Reschedule(request.StartAt, request.EndAt, now);
+            mission.Reschedule(scheduleWindow.StartAt, scheduleWindow.EndAt,
+                selectedDroneId, now);
         using var oldData = JsonSerializer.SerializeToDocument(new
         {
             Status = oldStatus.ToString(),

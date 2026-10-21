@@ -11,11 +11,10 @@ internal sealed class CompleteMissionPreflightCommandValidator
         RuleFor(command => command.FarmId).NotEmpty();
         RuleFor(command => command.MissionId).NotEmpty();
         RuleFor(command => command.OperationId).NotEmpty();
-        RuleFor(command => command.ExpectedVersion).GreaterThan(0u);
+        RuleFor(command => command.ExpectedMissionVersion).GreaterThan(0u);
         RuleFor(command => command.ChecklistDefinitionId).NotEmpty();
         RuleFor(command => command.ChecklistVersion)
-            .NotEmpty()
-            .MaximumLength(100);
+            .GreaterThan(0);
         RuleFor(command => command.Answers)
             .Cascade(CascadeMode.Stop)
             .NotNull()
@@ -24,9 +23,6 @@ internal sealed class CompleteMissionPreflightCommandValidator
                 document.RootElement.ValueKind == JsonValueKind.Object)
             .WithMessage("Checklist answers must be a JSON object.");
         RuleFor(command => command.Notes).MaximumLength(2000);
-        RuleFor(command => command.UnsuitableConditionNotes).MaximumLength(2000);
-        RuleFor(command => command.FailsafeNotes).MaximumLength(2000);
-        RuleFor(command => command.FlightAuthorizationEvidence).MaximumLength(2000);
         RuleFor(command => command.DeviceCompletedAt)
             .Must(value => !value.HasValue || value.Value.Offset == TimeSpan.Zero)
             .WithMessage("Device completion time must be UTC.");

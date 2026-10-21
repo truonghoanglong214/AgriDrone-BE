@@ -70,16 +70,15 @@ internal sealed class CompleteMissionPreflightCommandHandler(
                 request.ChecklistVersion,
                 request.Answers,
                 request.SuitableForFlight,
-                request.Notes ?? request.UnsuitableConditionNotes ?? request.FailsafeNotes)
+                request.Notes)
                 && savedChecklist is not null && savedChecklist.MatchesPayload(
                     request.ChecklistDefinitionId,
                     request.Answers,
-                    request.UnsuitableConditionNotes ??
-                        (request.SuitableForFlight ? null : request.Notes),
-                    request.FailsafeNotes,
+                    null,
+                    null,
                     actorId,
                     request.DeviceCompletedAt,
-                    request.FlightAuthorizationEvidence)
+                    null)
                 ? Result.Success(new CompleteMissionPreflightResult(
                     MissionResponseMapper.Map(mission),
                     true))
@@ -94,11 +93,11 @@ internal sealed class CompleteMissionPreflightCommandHandler(
                 CompleteMissionPreflightError.InvalidStatus(mission.Status));
         }
 
-        if (mission.Version != request.ExpectedVersion)
+        if (mission.Version != request.ExpectedMissionVersion)
         {
             return Result.Failure<CompleteMissionPreflightResult>(
                 MissionError.VersionConflict(
-                    request.ExpectedVersion,
+                    request.ExpectedMissionVersion,
                     mission.Version));
         }
 
@@ -107,18 +106,14 @@ internal sealed class CompleteMissionPreflightCommandHandler(
             "DRONE_PRE_FLIGHT",
             cancellationToken);
         if (definition is null ||
-            !string.Equals(
-                request.ChecklistVersion,
-                $"v{definition.VersionNumber}",
-                StringComparison.Ordinal))
+            request.ChecklistVersion != definition.VersionNumber)
         {
             return Result.Failure<CompleteMissionPreflightResult>(
                 CompleteMissionPreflightError.StaleChecklistDefinition());
         }
 
         if (mission.PreflightOperationId.HasValue &&
-            string.Equals(mission.PreflightChecklistVersion,
-                request.ChecklistVersion, StringComparison.Ordinal))
+            mission.PreflightChecklistVersion == $"v{request.ChecklistVersion}")
         {
             return Result.Failure<CompleteMissionPreflightResult>(
                 CompleteMissionPreflightError.AlreadyCompleted());
@@ -140,12 +135,12 @@ internal sealed class CompleteMissionPreflightCommandHandler(
         }
 
         if (request.SuitableForFlight &&
-            (request.Answers.RootElement.EnumerateObject().Any(answer =>
-                 answer.Value.ValueKind == JsonValueKind.False) ||
-             string.IsNullOrWhiteSpace(request.FlightAuthorizationEvidence) ||
-             string.IsNullOrWhiteSpace(request.FailsafeNotes)))
+            request.Answers.RootElement.EnumerateObject().Any(answer =>
+                answer.Value.ValueKind == JsonValueKind.False))
             return Result.Failure<CompleteMissionPreflightResult>(
-                CompleteMissionPreflightError.SafetyEvidenceRequired());
+                AppError.Validation(
+                    "MissionPreflight.SuitableAnswersRequired",
+                    "A checklist cannot be marked suitable when an answer is false."));
 
         var now = timeProvider.GetUtcNow();
         if (mission.PreflightOperationId.HasValue)
@@ -157,10 +152,10 @@ internal sealed class CompleteMissionPreflightCommandHandler(
         }
         mission.CompletePreflight(
             request.OperationId,
-            request.ChecklistVersion,
+            $"v{request.ChecklistVersion}",
             request.Answers,
             request.SuitableForFlight,
-            request.Notes ?? request.UnsuitableConditionNotes ?? request.FailsafeNotes,
+            request.Notes,
             actorId,
             now);
 
@@ -169,13 +164,11 @@ internal sealed class CompleteMissionPreflightCommandHandler(
             definition,
             request.OperationId,
             request.Answers,
-            request.UnsuitableConditionNotes ??
-                (request.SuitableForFlight ? null : request.Notes),
-            request.FailsafeNotes,
+            null,
+            null,
             actorId,
             request.DeviceCompletedAt ?? now,
-            now,
-            request.FlightAuthorizationEvidence);
+            now);
         checklistRepository.AddCompleted(checklist);
 
         using var auditData = JsonSerializer.SerializeToDocument(new
@@ -187,8 +180,7 @@ internal sealed class CompleteMissionPreflightCommandHandler(
             mission.PreflightNotes,
             mission.PreflightConfirmedAt,
             ChecklistDefinitionId = definition.Id,
-            ChecklistVersion = definition.VersionNumber,
-            request.FlightAuthorizationEvidence
+            ChecklistVersion = definition.VersionNumber
         });
         auditWriter.AddUserAction(
             unitOfWork,

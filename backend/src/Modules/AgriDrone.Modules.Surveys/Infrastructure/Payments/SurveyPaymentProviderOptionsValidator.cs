@@ -1,3 +1,4 @@
+using AgriDrone.Modules.Surveys.Application.Abstractions.Payments;
 using Microsoft.Extensions.Options;
 
 namespace AgriDrone.Modules.Surveys.Infrastructure.Payments;
@@ -16,7 +17,10 @@ internal sealed class SurveyPaymentProviderOptionsValidator
             failures.Add("SurveyPayments:Provider is required and must not exceed 50 characters.");
         }
 
-        if (options.Enabled &&
+        var isSePay = string.Equals(
+            options.Provider?.Trim(), "sepay", StringComparison.OrdinalIgnoreCase);
+
+        if (options.Enabled && !isSePay &&
             (!Uri.TryCreate(
                  options.CheckoutBaseUrl,
                  UriKind.Absolute,
@@ -26,7 +30,7 @@ internal sealed class SurveyPaymentProviderOptionsValidator
             failures.Add("SurveyPayments:CheckoutBaseUrl must be an absolute HTTP or HTTPS URL.");
         }
 
-        if (options.Enabled &&
+        if (options.Enabled && !isSePay &&
             (string.IsNullOrEmpty(options.SigningSecret) ||
              options.SigningSecret.Length < 32))
         {
