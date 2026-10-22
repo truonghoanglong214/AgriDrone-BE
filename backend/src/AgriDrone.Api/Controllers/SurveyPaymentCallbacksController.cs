@@ -21,12 +21,10 @@ public sealed class SurveyPaymentCallbacksController(
     TimeProvider timeProvider)
     : ControllerBase
 {
-    private const string TimestampHeader = "X-SePay-Timestamp";
-    private const string SignatureHeader = "X-SePay-Signature";
     private readonly SurveyPaymentProviderOptions _options = options.Value;
 
-    /// <summary>Nhận callback thanh toán đã ký từ provider.</summary>
-    [HttpPost("{provider}/callbacks")]
+    /// <summary>Nhận IPN xác nhận thanh toán từ SePay Payment Gateway.</summary>
+    [HttpPost("sepay/ipn")]
     [Consumes("application/json")]
     [ProducesResponseType<SurveyPaymentCallbackResponse>(
         StatusCodes.Status200OK)]
@@ -36,11 +34,13 @@ public sealed class SurveyPaymentCallbacksController(
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     [ProducesResponseType(StatusCodes.Status413PayloadTooLarge)]
     [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
-    public async Task<IResult> ProcessCallback(
-        [FromRoute] string provider,
-        [FromHeader(Name = TimestampHeader)] string? timestamp,
-        [FromHeader(Name = SignatureHeader)] string? signature,
-        [FromHeader(Name = "Authorization")] string? authorization,
+    public Task<IResult> ProcessSePayIpn(
+        [FromHeader(Name = "X-Secret-Key")] string? secretKey,
+        CancellationToken cancellationToken) =>
+        ProcessSePayIpnAsync(secretKey, cancellationToken);
+
+    private async Task<IResult> ProcessSePayIpnAsync(
+        string? secretKey,
         CancellationToken cancellationToken)
     {
         if (Request.ContentLength.HasValue &&
@@ -78,12 +78,12 @@ public sealed class SurveyPaymentCallbacksController(
             checked((int)payloadBuffer.Length));
         var receivedAt = timeProvider.GetUtcNow();
         var verification = callbackVerifier.Verify(
-            provider,
+            "sepay",
             rawPayload,
-            timestamp,
-            signature,
-            authorization,
-            receivedAt);
+            timestamp: null,
+            signature: null,
+            authorization: secretKey is null ? null : $"X-Secret-Key {secretKey}",
+            receivedAt: receivedAt);
         if (!verification.IsValid || verification.Event is null)
         {
             if (verification.IsValid)

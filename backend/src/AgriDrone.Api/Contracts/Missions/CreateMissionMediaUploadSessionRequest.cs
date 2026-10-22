@@ -3,7 +3,7 @@
 namespace AgriDrone.Api.Contracts.Missions;
 
 public sealed record CreateMissionMediaUploadSessionRequest(
-    Guid OperationId,
+    Guid IdempotencyKey,
     string FileName,
     string MimeType,
     MediaType MediaType,

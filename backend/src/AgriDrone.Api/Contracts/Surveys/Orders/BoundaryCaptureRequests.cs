@@ -8,7 +8,7 @@ public sealed record StartBoundaryCaptureRequest
     public Guid? DroneId { get; init; }
 
     [Required]
-    public Guid? OperationId { get; init; }
+    public Guid? IdempotencyKey { get; init; }
 
     [Required]
     public uint? ExpectedOrderVersion { get; init; }
@@ -17,7 +17,7 @@ public sealed record StartBoundaryCaptureRequest
 public sealed record BoundaryCaptureSampleRequest
 {
     [Required]
-    public Guid? ClientOperationId { get; init; }
+    public Guid? ClientIdempotencyKey { get; init; }
 
     [Range(0, int.MaxValue)]
     public int SequenceNumber { get; init; }

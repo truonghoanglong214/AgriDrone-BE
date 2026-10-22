@@ -23,7 +23,7 @@ public sealed class MissionTelemetryController(
     /// Nhận từ 2 đến 50.000 điểm GPS có SequenceNumber và RecordedAt UTC tăng
     /// dần. Các điểm phải nằm trong khoảng StartedAt đến EndedAt của Mission
     /// đang Uploading. Mỗi Mission giữ một telemetry import; request có
-    /// OperationId có thể giữ nguyên khi chọn lại segment trước Finalize;
+    /// IdempotencyKey có thể giữ nguyên khi retry cùng payload/ý định import;
     /// cùng payload sẽ trả kết quả cũ, payload khác sẽ thay import hiện tại.
     /// </remarks>
     [HttpPost("api/missions/{missionId:guid}/farms/{farmId:guid}/telemetry/imports")]
@@ -59,7 +59,7 @@ public sealed class MissionTelemetryController(
             tenantId,
             farmId,
             missionId,
-            request.OperationId,
+            request.IdempotencyKey,
             request.SourceFileName,
             request.SourceChecksum,
             request.ExpectedMissionVersion,

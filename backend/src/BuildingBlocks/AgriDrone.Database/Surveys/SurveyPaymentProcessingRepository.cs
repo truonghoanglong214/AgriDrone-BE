@@ -114,7 +114,7 @@ internal sealed class SurveyPaymentProcessingRepository(
                   AND payment.status IN (
                     'PENDING'::system.survey_payment_status,
                     'PROCESSING'::system.survey_payment_status,
-                    'CONFIRMED'::system.survey_payment_status,
+                    'PAID'::system.survey_payment_status,
                     'ADJUSTMENT_REQUIRED'::system.survey_payment_status)
                 FOR UPDATE OF payment
                 """)

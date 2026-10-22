@@ -201,7 +201,7 @@ public sealed class SurveyOrderReadinessPolicyTests
             HasPriceSnapshot: true,
             AppointmentPurpose: isBaseline ? SurveyAppointmentPurpose.BaselineMapping : SurveyAppointmentPurpose.PaidService,
             AppointmentStatus: SurveyAppointmentStatus.Confirmed,
-            PaymentStatus: isBaseline ? null : SurveyPaymentStatus.Confirmed,
+            PaymentStatus: isBaseline ? null : SurveyPaymentStatus.Paid,
             HasActiveQualifiedPrimaryManager: true,
             IsPrimaryManagerAvailable: true,
             IsAppointmentCurrent: true,
@@ -220,6 +220,6 @@ public sealed class SurveyOrderReadinessPolicyTests
             HasApprovedBaselineRoute: false,
             IsBaselineRouteCurrent: false,
             IsBaselineRouteWithinSafetyInset: false,
-            DepositPaymentStatus: isBaseline ? SurveyPaymentStatus.Confirmed : null);
+            DepositPaymentStatus: isBaseline ? SurveyPaymentStatus.Paid : null);
     }
 }

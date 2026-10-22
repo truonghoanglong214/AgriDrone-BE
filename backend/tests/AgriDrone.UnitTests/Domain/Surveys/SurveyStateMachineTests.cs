@@ -92,10 +92,10 @@ public sealed class SurveyStateMachineTests
             SurveyAppointmentStatus.Proposed));
         Assert.True(SurveyPayment.CanTransition(
             SurveyPaymentStatus.Processing,
-            SurveyPaymentStatus.Confirmed));
+            SurveyPaymentStatus.Paid));
         Assert.False(SurveyPayment.CanTransition(
             SurveyPaymentStatus.Failed,
-            SurveyPaymentStatus.Confirmed));
+            SurveyPaymentStatus.Paid));
         Assert.True(PriceAdjustment.CanTransition(
             PriceAdjustmentStatus.Pending,
             PriceAdjustmentStatus.Approved));
@@ -213,7 +213,7 @@ public sealed class SurveyStateMachineTests
         payment.StartProcessing(Now.AddMinutes(1));
         payment.Confirm(" provider-01 ", Now.AddMinutes(2));
 
-        Assert.Equal(SurveyPaymentStatus.Confirmed, payment.Status);
+        Assert.Equal(SurveyPaymentStatus.Paid, payment.Status);
         Assert.Equal("provider-01", payment.ProviderReference);
         Assert.Equal(Now.AddMinutes(2), payment.ConfirmedAt);
     }

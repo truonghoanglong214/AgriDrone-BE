@@ -3,7 +3,6 @@ using System.Numerics;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using AgriDrone.Modules.Surveys.Application.Abstractions.Payments;
 using AgriDrone.Modules.Surveys.Application.Errors;
 using AgriDrone.Modules.Surveys.Domain;
@@ -13,53 +12,85 @@ using Microsoft.Extensions.Options;
 namespace AgriDrone.Integrations.SePay;
 
 internal sealed class SePayPaymentService(
+    IHttpClientFactory httpClientFactory,
     IOptions<SePayOptions> sePayOptions,
     IOptions<SurveyPaymentProviderOptions> paymentOptions)
     : ISurveyPaymentGateway, ISurveyPaymentCallbackVerifier
 {
     private const string ProviderName = "sepay";
-    private static readonly JsonSerializerOptions SerializerOptions = new()
-    {
-        PropertyNameCaseInsensitive = true
-    };
+    private const string IpnSecretKeyScheme = "X-Secret-Key ";
 
     private readonly SePayOptions _sePayOptions = sePayOptions.Value;
     private readonly SurveyPaymentProviderOptions _paymentOptions = paymentOptions.Value;
 
     public string Provider => ProviderName;
 
-    public Task<Result<PaymentSessionResult>> CreateSessionAsync(
+    public async Task<Result<PaymentSessionResult>> CreateSessionAsync(
         CreatePaymentSession request,
         CancellationToken cancellationToken = default)
     {
-        cancellationToken.ThrowIfCancellationRequested();
         if (!IsActive || request.Currency != "VND" ||
             request.Amount != decimal.Truncate(request.Amount))
         {
-            return Task.FromResult(
-                Result.Failure<PaymentSessionResult>(PaymentError.ProviderUnavailable()));
+            return Result.Failure<PaymentSessionResult>(PaymentError.ProviderUnavailable());
         }
 
         var providerReference =
             $"{_sePayOptions.PaymentCodePrefix}{ToBase36(request.PaymentId)}"
                 .ToUpperInvariant();
-        var expiresAt = request.RequestedAt.AddMinutes(
-            _paymentOptions.SessionLifetimeMinutes);
-        var query = string.Join('&',
-            $"acc={Uri.EscapeDataString(_sePayOptions.BankAccountNumber.Trim())}",
-            $"bank={Uri.EscapeDataString(_sePayOptions.BankShortName.Trim())}",
-            $"amount={request.Amount.ToString("0", CultureInfo.InvariantCulture)}",
-            $"des={Uri.EscapeDataString(providerReference)}",
-            $"template={Uri.EscapeDataString(_sePayOptions.QrTemplate)}",
-            "showinfo=true",
-            $"holder={Uri.EscapeDataString(StripDiacritics(_sePayOptions.AccountHolder.Trim()))}");
-        var qrUrl = new Uri($"https://vietqr.app/img?{query}");
+        var fields = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["order_amount"] = request.Amount.ToString("0", CultureInfo.InvariantCulture),
+            ["merchant"] = _sePayOptions.MerchantId.Trim(),
+            ["currency"] = "VND",
+            ["operation"] = "PURCHASE",
+            ["order_description"] = $"AgriDrone payment {request.OrderNumber}",
+            ["order_invoice_number"] = providerReference,
+            ["payment_method"] = "BANK_TRANSFER",
+            ["success_url"] = _sePayOptions.SuccessUrl.Trim(),
+            ["error_url"] = _sePayOptions.ErrorUrl.Trim(),
+            ["cancel_url"] = _sePayOptions.CancelUrl.Trim()
+        };
+        fields["signature"] = CreateCheckoutSignature(fields, _sePayOptions.SecretKey);
 
-        return Task.FromResult(Result.Success(new PaymentSessionResult(
-            providerReference,
-            qrUrl,
-            providerReference,
-            expiresAt)));
+        var checkoutEndpoint = _sePayOptions.Environment == "Production"
+            ? "https://pay.sepay.vn/v1/checkout/init"
+            : "https://pay-sandbox.sepay.vn/v1/checkout/init";
+        try
+        {
+            using var content = new FormUrlEncodedContent(fields);
+            using var response = await httpClientFactory.CreateClient("SePayCheckout")
+                .PostAsync(checkoutEndpoint, content, cancellationToken);
+
+            if ((int)response.StatusCode is < 300 or >= 400 ||
+                response.Headers.Location is null)
+            {
+                return Result.Failure<PaymentSessionResult>(
+                    PaymentError.ProviderUnavailable());
+            }
+
+            var redirectUrl = response.Headers.Location.IsAbsoluteUri
+                ? response.Headers.Location
+                : new Uri(new Uri(checkoutEndpoint), response.Headers.Location);
+            var expiresAt = request.RequestedAt.AddMinutes(
+                _paymentOptions.SessionLifetimeMinutes);
+
+            return Result.Success(new PaymentSessionResult(
+                providerReference,
+                redirectUrl,
+                providerReference,
+                expiresAt));
+        }
+        catch (HttpRequestException)
+        {
+            return Result.Failure<PaymentSessionResult>(
+                PaymentError.ProviderUnavailable());
+        }
+        catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return Result.Failure<PaymentSessionResult>(
+                PaymentError.ProviderUnavailable());
+        }
     }
 
     public PaymentCallbackVerificationResult Verify(
@@ -77,17 +108,10 @@ internal sealed class SePayPaymentService(
                 "PaymentCallback.ProviderNotSupported");
         }
 
-        if (!HasValidApiKey(authorization))
-        {
-            return PaymentCallbackVerificationResult.Invalid(
-                "PaymentCallback.ApiKeyInvalid");
-        }
-
-        SePayCallbackPayload? callback;
+        JsonDocument document;
         try
         {
-            callback = JsonSerializer.Deserialize<SePayCallbackPayload>(
-                rawPayload, SerializerOptions);
+            document = JsonDocument.Parse(rawPayload);
         }
         catch (JsonException)
         {
@@ -95,27 +119,68 @@ internal sealed class SePayPaymentService(
                 "PaymentCallback.PayloadInvalid");
         }
 
-        if (callback is null || callback.Id <= 0 ||
-            string.IsNullOrWhiteSpace(callback.TransferType))
+        using (document)
+        {
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object ||
+                !root.TryGetProperty("notification_type", out _))
+            {
+                return PaymentCallbackVerificationResult.Invalid(
+                    "PaymentCallback.PayloadInvalid");
+            }
+
+            return VerifyPaymentGatewayIpn(root, rawPayload, authorization, receivedAt);
+        }
+    }
+
+    private PaymentCallbackVerificationResult VerifyPaymentGatewayIpn(
+        JsonElement root,
+        string rawPayload,
+        string? authorization,
+        DateTimeOffset receivedAt)
+    {
+        if (!HasValidSecret(
+                authorization,
+                IpnSecretKeyScheme,
+                _sePayOptions.IpnSecretKey))
+        {
+            return PaymentCallbackVerificationResult.Invalid(
+                "PaymentCallback.SecretInvalid");
+        }
+
+        var notificationType = GetString(root, "notification_type");
+        if (!string.Equals(notificationType, "ORDER_PAID", StringComparison.OrdinalIgnoreCase))
+        {
+            return PaymentCallbackVerificationResult.Ignored();
+        }
+
+        if (!TryGetObject(root, "order", out var order) ||
+            !TryGetObject(root, "transaction", out var transaction))
         {
             return PaymentCallbackVerificationResult.Invalid(
                 "PaymentCallback.PayloadInvalid");
         }
 
-        var providerReference = FindProviderReference(
-            callback.Code,
-            callback.Content,
-            _sePayOptions.PaymentCodePrefix);
-        if (!string.Equals(callback.TransferType, "in", StringComparison.OrdinalIgnoreCase) ||
-            providerReference is null ||
-            !string.Equals(callback.AccountNumber?.Trim(),
-                _sePayOptions.BankAccountNumber.Trim(), StringComparison.Ordinal))
+        var orderStatus = GetString(order, "order_status");
+        var transactionStatus = GetString(transaction, "transaction_status");
+        if (!string.Equals(orderStatus, "CAPTURED", StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(transactionStatus, "APPROVED", StringComparison.OrdinalIgnoreCase))
         {
             return PaymentCallbackVerificationResult.Ignored();
         }
 
-        if (callback.TransferAmount <= 0 ||
-            !TryParseTransactionDate(callback.TransactionDate, out var occurredAt) ||
+        var providerReference = GetString(order, "order_invoice_number");
+        var eventId = GetString(transaction, "id") ??
+                      GetString(transaction, "transaction_id") ??
+                      GetString(order, "id");
+        var currency = GetString(transaction, "transaction_currency") ??
+                       GetString(order, "order_currency");
+        if (string.IsNullOrWhiteSpace(providerReference) ||
+            string.IsNullOrWhiteSpace(eventId) ||
+            string.IsNullOrWhiteSpace(currency) ||
+            !TryGetDecimal(transaction, "transaction_amount", out var amount) ||
+            amount <= 0 ||
+            !TryGetTransactionDate(transaction, root, out var occurredAt) ||
             occurredAt > receivedAt.AddMinutes(_paymentOptions.CallbackToleranceMinutes))
         {
             return PaymentCallbackVerificationResult.Invalid(
@@ -124,20 +189,17 @@ internal sealed class SePayPaymentService(
 
         try
         {
-            var reference = providerReference;
-            var eventId = callback.Id.ToString(CultureInfo.InvariantCulture);
-            _ = PaymentEventIdentity.Create(provider, reference, eventId);
-            var payload = JsonDocument.Parse(rawPayload);
+            _ = PaymentEventIdentity.Create(ProviderName, providerReference, eventId);
             return PaymentCallbackVerificationResult.Valid(
                 new VerifiedSurveyPaymentEvent(
                     ProviderName,
-                    reference,
-                    eventId,
+                    providerReference.Trim(),
+                    eventId.Trim(),
                     "payment.succeeded",
-                    Money.Round(callback.TransferAmount),
-                    "VND",
+                    Money.Round(amount),
+                    currency.Trim().ToUpperInvariant(),
                     occurredAt,
-                    payload));
+                    JsonDocument.Parse(rawPayload)));
         }
         catch (Exception exception) when (exception is ArgumentException or JsonException)
         {
@@ -151,54 +213,103 @@ internal sealed class SePayPaymentService(
         string.Equals(_paymentOptions.Provider.Trim(), ProviderName,
             StringComparison.OrdinalIgnoreCase);
 
-    private bool HasValidApiKey(string? authorization)
+    private static string CreateCheckoutSignature(
+        Dictionary<string, string> fields,
+        string secretKey)
     {
-        const string scheme = "Apikey ";
-        if (string.IsNullOrWhiteSpace(authorization) ||
-            !authorization.StartsWith(scheme, StringComparison.OrdinalIgnoreCase))
+        string[] signedFieldNames =
+        [
+            "order_amount", "merchant", "currency", "operation",
+            "order_description", "order_invoice_number", "customer_id",
+            "payment_method", "success_url", "error_url", "cancel_url"
+        ];
+        var signedString = string.Join(',', signedFieldNames
+            .Where(fields.ContainsKey)
+            .Select(name => $"{name}={fields[name]}"));
+        var signature = HMACSHA256.HashData(
+            Encoding.UTF8.GetBytes(secretKey),
+            Encoding.UTF8.GetBytes(signedString));
+        return Convert.ToBase64String(signature);
+    }
+
+    private static bool HasValidSecret(
+        string? headerValue,
+        string scheme,
+        string expectedSecret)
+    {
+        if (string.IsNullOrWhiteSpace(headerValue) ||
+            !headerValue.StartsWith(scheme, StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }
 
-        var received = Encoding.UTF8.GetBytes(authorization[scheme.Length..].Trim());
-        var expected = Encoding.UTF8.GetBytes(_sePayOptions.ApiKey);
+        var received = Encoding.UTF8.GetBytes(headerValue[scheme.Length..].Trim());
+        var expected = Encoding.UTF8.GetBytes(expectedSecret);
         return received.Length == expected.Length &&
                CryptographicOperations.FixedTimeEquals(received, expected);
     }
 
-    private static string? FindProviderReference(
-        string? code,
-        string? content,
-        string paymentCodePrefix)
-    {
-        var prefix = paymentCodePrefix.Trim();
-        if (MatchesPaymentReference(code, prefix))
-        {
-            return code!.Trim().ToUpperInvariant();
-        }
+    private static bool TryGetObject(
+        JsonElement parent,
+        string name,
+        out JsonElement value) =>
+        parent.TryGetProperty(name, out value) &&
+        value.ValueKind == JsonValueKind.Object;
 
-        if (string.IsNullOrWhiteSpace(content))
+    private static string? GetString(JsonElement parent, string name)
+    {
+        if (!parent.TryGetProperty(name, out var value))
         {
             return null;
         }
 
-        var pattern = $"(?<![A-Za-z0-9]){Regex.Escape(prefix)}[A-Za-z0-9]+(?![A-Za-z0-9])";
-        var matches = Regex.Matches(
-                content,
-                pattern,
-                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)
-            .Select(match => match.Value.ToUpperInvariant())
-            .Distinct(StringComparer.Ordinal)
-            .ToArray();
-
-        return matches.Length == 1 ? matches[0] : null;
+        return value.ValueKind switch
+        {
+            JsonValueKind.String => value.GetString(),
+            JsonValueKind.Number => value.GetRawText(),
+            _ => null
+        };
     }
 
-    private static bool MatchesPaymentReference(string? value, string prefix) =>
-        !string.IsNullOrWhiteSpace(value) &&
-        value.Trim().StartsWith(prefix, StringComparison.OrdinalIgnoreCase) &&
-        value.Trim().Length > prefix.Length &&
-        value.Trim().All(char.IsAsciiLetterOrDigit);
+    private static bool TryGetDecimal(
+        JsonElement parent,
+        string name,
+        out decimal value)
+    {
+        value = default;
+        var raw = GetString(parent, name);
+        return decimal.TryParse(raw, NumberStyles.Number,
+            CultureInfo.InvariantCulture, out value);
+    }
+
+    private static bool TryGetTransactionDate(
+        JsonElement transaction,
+        JsonElement root,
+        out DateTimeOffset occurredAt)
+    {
+        if (TryParseTransactionDate(GetString(transaction, "transaction_date"),
+                out occurredAt))
+        {
+            return true;
+        }
+
+        if (long.TryParse(GetString(root, "timestamp"), NumberStyles.Integer,
+                CultureInfo.InvariantCulture, out var timestamp))
+        {
+            try
+            {
+                occurredAt = DateTimeOffset.FromUnixTimeSeconds(timestamp);
+                return true;
+            }
+            catch (ArgumentOutOfRangeException)
+            {
+                // Return false below for invalid provider timestamps.
+            }
+        }
+
+        occurredAt = default;
+        return false;
+    }
 
     private static bool TryParseTransactionDate(
         string? transactionDate,
@@ -230,30 +341,4 @@ internal sealed class SePayPaymentService(
 
         return characters.ToString();
     }
-
-    private static string StripDiacritics(string value)
-    {
-        var normalized = value.Normalize(NormalizationForm.FormD)
-            .Replace('đ', 'd').Replace('Đ', 'D');
-        var result = new StringBuilder(normalized.Length);
-        foreach (var character in normalized)
-        {
-            if (CharUnicodeInfo.GetUnicodeCategory(character) !=
-                UnicodeCategory.NonSpacingMark)
-            {
-                result.Append(character);
-            }
-        }
-
-        return result.ToString().Normalize(NormalizationForm.FormC);
-    }
-
-    private sealed record SePayCallbackPayload(
-        long Id,
-        string? TransactionDate,
-        string? AccountNumber,
-        string? Code,
-        string? Content,
-        string? TransferType,
-        decimal TransferAmount);
 }

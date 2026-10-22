@@ -105,7 +105,7 @@ public static class SurveyOrderReadinessPolicy
 
         if (snapshot.Purpose == SurveyOperationPurpose.BaselineMapping)
         {
-            if (snapshot.DepositPaymentStatus != SurveyPaymentStatus.Confirmed)
+            if (snapshot.DepositPaymentStatus != SurveyPaymentStatus.Paid)
             {
                 failures.Add(SurveyOrderReadinessFailure.PaymentNotConfirmed);
             }
@@ -210,7 +210,7 @@ public static class SurveyOrderReadinessPolicy
         {
             failures.Add(SurveyOrderReadinessFailure.PaymentRevoked);
         }
-        else if (snapshot.PaymentStatus != SurveyPaymentStatus.Confirmed)
+        else if (snapshot.PaymentStatus != SurveyPaymentStatus.Paid)
         {
             failures.Add(SurveyOrderReadinessFailure.PaymentNotConfirmed);
         }

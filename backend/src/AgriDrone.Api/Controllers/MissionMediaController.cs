@@ -34,7 +34,7 @@ public sealed class MissionMediaController(
             "Media upload interrupted for mission {MissionId}, file {Index}");
 
     /// <summary>Create or renew a direct-to-storage upload session for an assigned manager.</summary>
-    /// <remarks>Tạo hoặc lấy lại phiên upload trực tiếp lên storage bằng OperationId. CapturedAt là tùy chọn; nếu gửi phải là UTC trong khoảng bay. Client dùng UploadUri được trả về để gửi file, sau đó gọi complete; ExpectedMissionVersion kiểm soát thay đổi đồng thời.</remarks>
+    /// <remarks>Tạo hoặc lấy lại phiên upload trực tiếp lên storage bằng IdempotencyKey. Giữ nguyên key khi retry cùng file/ý định upload. CapturedAt là tùy chọn; nếu gửi phải là UTC trong khoảng bay. Client dùng UploadUri được trả về để gửi file, sau đó gọi complete; ExpectedMissionVersion kiểm soát thay đổi đồng thời.</remarks>
     [HttpPost("upload-sessions")]
     [Authorize(Policy = AccessAuthorizationPolicies.SystemManager)]
     public async Task<IResult> CreateUploadSession(
@@ -47,7 +47,7 @@ public sealed class MissionMediaController(
             return Results.Forbid();
 
         var result = await sender.Send(new CreateUploadSessionCommand(
-            tenantId, farmId, missionId, request.OperationId, request.FileName,
+            tenantId, farmId, missionId, request.IdempotencyKey, request.FileName,
             request.MimeType, request.MediaType, request.FileSizeBytes,
             request.Sha256Checksum, request.ExpectedMissionVersion,
             request.CapturedAt), cancellationToken);
@@ -74,7 +74,7 @@ public sealed class MissionMediaController(
             return Results.Forbid();
 
         var created = await sender.Send(new CreateUploadSessionCommand(
-            tenantId, farmId, missionId, request.OperationId, request.FileName,
+            tenantId, farmId, missionId, request.IdempotencyKey, request.FileName,
             request.MimeType, request.MediaType, request.FileSizeBytes,
             request.Sha256Checksum, request.ExpectedMissionVersion,
             request.CapturedAt),

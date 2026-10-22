@@ -3,7 +3,7 @@ using System.Text.Json;
 namespace AgriDrone.Api.Contracts.Missions;
 
 public sealed record CompleteMissionPreflightRequest(
-    Guid OperationId,
+    Guid IdempotencyKey,
     uint ExpectedMissionVersion,
     Guid ChecklistDefinitionId,
     int ChecklistVersion,

@@ -65,7 +65,6 @@ builder.Services.AddSwaggerGen(options =>
 {
     options.OperationFilter<LegacyEndpointOperationFilter>();
     options.OperationFilter<AllowAnonymousOperationFilter>();
-    options.OperationFilter<SurveyPaymentCallbackOperationFilter>();
 
     var xmlFileName =
         $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";

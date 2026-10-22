@@ -1,7 +1,7 @@
 ﻿namespace AgriDrone.Api.Contracts.Missions;
 
 public sealed record ImportMissionTelemetryRequest(
-    Guid OperationId,
+    Guid IdempotencyKey,
     string SourceFileName,
     string SourceChecksum,
     uint ExpectedMissionVersion,

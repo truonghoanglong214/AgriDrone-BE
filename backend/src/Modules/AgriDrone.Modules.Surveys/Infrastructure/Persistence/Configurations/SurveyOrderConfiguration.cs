@@ -63,7 +63,7 @@ public sealed class SurveyOrderConfiguration : IEntityTypeConfiguration<SurveyOr
                     "remaining_amount IS NULL OR remaining_amount >= 0");
                 table.HasCheckConstraint(
                     "ck_survey_orders_deposit_consistency",
-                    "(requires_baseline_mapping = false AND deposit_amount = 0 AND deposit_payment_status = 'CONFIRMED'::system.survey_payment_status) OR " +
+                    "(requires_baseline_mapping = false AND deposit_amount = 0 AND deposit_payment_status = 'PAID'::system.survey_payment_status) OR " +
                     "(requires_baseline_mapping = true AND deposit_amount > 0)");
             });
         builder.HasKey(order => order.Id).HasName("pk_survey_orders");

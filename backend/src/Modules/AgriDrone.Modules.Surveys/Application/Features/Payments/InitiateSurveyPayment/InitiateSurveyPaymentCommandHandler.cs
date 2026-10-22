@@ -100,7 +100,7 @@ internal sealed class InitiateSurveyPaymentCommandHandler(
         if (command.Purpose == PaymentPurpose.BaselineDeposit)
         {
             if (order.Status != SurveyOrderStatus.AwaitingBaselineDeposit ||
-                order.DepositPaymentStatus == SurveyPaymentStatus.Confirmed ||
+                order.DepositPaymentStatus == SurveyPaymentStatus.Paid ||
                 order.DepositAmount <= 0)
             {
                 return Result.Failure<InitiateSurveyPaymentResponse>(
@@ -132,7 +132,7 @@ internal sealed class InitiateSurveyPaymentCommandHandler(
                     remainingAmount = 0m,
                     provider = "SETTLEMENT",
                     providerReference = "ZERO_BALANCE_SETTLED",
-                    status = "CONFIRMED"
+                    status = "PAID"
                 });
                 auditWriter.AddUserAction(
                     unitOfWork,
@@ -157,7 +157,7 @@ internal sealed class InitiateSurveyPaymentCommandHandler(
                     order.Currency ?? "VND",
                     "SETTLEMENT",
                     "ZERO_BALANCE_SETTLED",
-                    "CONFIRMED",
+                    "PAID",
                     new Uri("about:blank"),
                     string.Empty,
                     initiatedAt,

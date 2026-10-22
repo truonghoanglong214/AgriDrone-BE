@@ -16,6 +16,12 @@ public static class DependencyInjection
             .Bind(configuration.GetSection(SePayOptions.SectionName))
             .ValidateOnStart();
         services.AddSingleton<IValidateOptions<SePayOptions>, SePayOptionsValidator>();
+        services.AddHttpClient("SePayCheckout")
+            .ConfigureHttpClient(client => client.Timeout = TimeSpan.FromSeconds(20))
+            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+            {
+                AllowAutoRedirect = false
+            });
 
         var isSePayProvider = string.Equals(
             configuration["SurveyPayments:Provider"]?.Trim(),

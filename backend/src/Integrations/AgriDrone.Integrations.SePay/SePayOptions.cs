@@ -4,10 +4,12 @@ public sealed class SePayOptions
 {
     public const string SectionName = "SePay";
 
-    public string ApiKey { get; set; } = string.Empty;
-    public string BankAccountNumber { get; set; } = string.Empty;
-    public string BankShortName { get; set; } = string.Empty;
-    public string AccountHolder { get; set; } = string.Empty;
+    public string Environment { get; set; } = "Sandbox";
+    public string MerchantId { get; set; } = string.Empty;
+    public string SecretKey { get; set; } = string.Empty;
+    public string IpnSecretKey { get; set; } = string.Empty;
+    public string SuccessUrl { get; set; } = string.Empty;
+    public string ErrorUrl { get; set; } = string.Empty;
+    public string CancelUrl { get; set; } = string.Empty;
     public string PaymentCodePrefix { get; set; } = "AGD";
-    public string QrTemplate { get; set; } = "compact";
 }

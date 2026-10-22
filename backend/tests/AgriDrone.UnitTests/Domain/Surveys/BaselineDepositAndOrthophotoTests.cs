@@ -44,7 +44,7 @@ public sealed class BaselineDepositAndOrthophotoTests
         order.RecordBaselineDepositConfirmed(paymentId, 500_000m, confirmedAt);
 
         Assert.Equal(SurveyOrderStatus.BaselineReady, order.Status);
-        Assert.Equal(SurveyPaymentStatus.Confirmed, order.DepositPaymentStatus);
+        Assert.Equal(SurveyPaymentStatus.Paid, order.DepositPaymentStatus);
         Assert.Equal(paymentId, order.DepositPaymentId);
         Assert.Equal(confirmedAt, order.DepositConfirmedAt);
     }
@@ -160,7 +160,7 @@ public sealed class BaselineDepositAndOrthophotoTests
         Assert.False(order.RequiresBaselineMapping);
         Assert.Equal(SurveyOrderStatus.PendingBoundaryVerification, order.Status);
         Assert.Equal(0m, order.DepositAmount);
-        Assert.Equal(SurveyPaymentStatus.Confirmed, order.DepositPaymentStatus);
+        Assert.Equal(SurveyPaymentStatus.Paid, order.DepositPaymentStatus);
     }
 
     [Fact]
@@ -279,12 +279,12 @@ public sealed class BaselineDepositAndOrthophotoTests
         order.MarkBaselineAppointmentConfirmed(Now.AddMinutes(1));
         order.RecordBaselineDepositConfirmed(paymentId, 500_000m, Now.AddMinutes(5));
         Assert.Equal(SurveyOrderStatus.BaselineReady, order.Status);
-        Assert.Equal(SurveyPaymentStatus.Confirmed, order.DepositPaymentStatus);
+        Assert.Equal(SurveyPaymentStatus.Paid, order.DepositPaymentStatus);
 
         // Reschedule
         order.ReopenBaselineAppointment(Now.AddMinutes(30));
         Assert.Equal(SurveyOrderStatus.AwaitingBaselineAppointment, order.Status);
-        Assert.Equal(SurveyPaymentStatus.Confirmed, order.DepositPaymentStatus); // Deposit remains confirmed!
+        Assert.Equal(SurveyPaymentStatus.Paid, order.DepositPaymentStatus); // Deposit remains paid!
 
         // Confirm new appointment -> directly transitions to BaselineReady!
         order.MarkBaselineAppointmentConfirmed(Now.AddHours(1));

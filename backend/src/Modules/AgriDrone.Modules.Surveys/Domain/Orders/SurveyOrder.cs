@@ -192,7 +192,7 @@ public sealed class SurveyOrder : AggregateRoot
                 : SurveyOrderStatus.PendingBoundaryVerification,
             DepositPaymentStatus = requiresBaselineMapping
                 ? SurveyPaymentStatus.Pending
-                : SurveyPaymentStatus.Confirmed,
+                : SurveyPaymentStatus.Paid,
             DepositAmount = requiresBaselineMapping ? 10_000m : 0m,
             CreatedAt = createdAt,
             UpdatedAt = createdAt
@@ -357,7 +357,7 @@ public sealed class SurveyOrder : AggregateRoot
 
     public void MarkBaselineAppointmentConfirmed(DateTimeOffset occurredAt)
     {
-        var targetStatus = DepositPaymentStatus == SurveyPaymentStatus.Confirmed
+        var targetStatus = DepositPaymentStatus == SurveyPaymentStatus.Paid
             ? SurveyOrderStatus.BaselineReady
             : SurveyOrderStatus.AwaitingBaselineDeposit;
 
@@ -388,7 +388,7 @@ public sealed class SurveyOrder : AggregateRoot
         }
 
         DepositPaymentId = paymentId;
-        DepositPaymentStatus = SurveyPaymentStatus.Confirmed;
+        DepositPaymentStatus = SurveyPaymentStatus.Paid;
         DepositConfirmedAt = confirmedAt;
         TransitionTo(SurveyOrderStatus.BaselineReady, confirmedAt);
     }
@@ -520,7 +520,7 @@ public sealed class SurveyOrder : AggregateRoot
         PricePerPoleSnapshot = validatedPrice;
         Currency = currency.Value;
         FinalPrice = finalPrice.Amount;
-        var depositCredit = (RequiresBaselineMapping && DepositPaymentStatus == SurveyPaymentStatus.Confirmed)
+        var depositCredit = (RequiresBaselineMapping && DepositPaymentStatus == SurveyPaymentStatus.Paid)
             ? DepositAmount
             : 0m;
         RemainingAmount = Math.Max(0m, finalPrice.Amount - depositCredit);
@@ -600,7 +600,7 @@ public sealed class SurveyOrder : AggregateRoot
         PricePerPoleSnapshot = validatedPrice;
         Currency = currency.Value;
         FinalPrice = finalPrice.Amount;
-        var depositCredit = (RequiresBaselineMapping && DepositPaymentStatus == SurveyPaymentStatus.Confirmed)
+        var depositCredit = (RequiresBaselineMapping && DepositPaymentStatus == SurveyPaymentStatus.Paid)
             ? DepositAmount
             : 0m;
         RemainingAmount = Math.Max(0m, finalPrice.Amount - depositCredit);
@@ -692,7 +692,7 @@ public sealed class SurveyOrder : AggregateRoot
         PricePerPoleSnapshot = pricePerPole;
         Currency = currency.Value;
         FinalPrice = finalPrice.Amount;
-        var depositCredit = (RequiresBaselineMapping && DepositPaymentStatus == SurveyPaymentStatus.Confirmed)
+        var depositCredit = (RequiresBaselineMapping && DepositPaymentStatus == SurveyPaymentStatus.Paid)
             ? DepositAmount
             : 0m;
         RemainingAmount = Math.Max(0m, finalPrice.Amount - depositCredit);

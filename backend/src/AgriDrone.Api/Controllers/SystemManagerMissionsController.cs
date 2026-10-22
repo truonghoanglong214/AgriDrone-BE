@@ -118,7 +118,7 @@ public sealed class SystemManagerMissionsController(
             mission => Results.Ok(new { mission.Id, mission.Version }));
     }
 
-    /// <remarks>Lưu câu trả lời checklist theo OperationId, ExpectedMissionVersion và ChecklistVersion. Nếu xác nhận phù hợp để bay, cần ghi bằng chứng điều kiện cho phép bay và phương án failsafe; quyết định không bay được lưu để theo dõi.</remarks>
+    /// <remarks>Lưu câu trả lời checklist theo IdempotencyKey, ExpectedMissionVersion và ChecklistVersion. FE giữ nguyên key khi retry cùng lần gửi checklist. Nếu xác nhận phù hợp để bay, các câu trả lời checklist phải đạt điều kiện cấu hình.</remarks>
     [HttpPost("preflight")]
     public async Task<IResult> CompletePreflight(
         [FromRoute] Guid farmId,
@@ -139,7 +139,7 @@ public sealed class SystemManagerMissionsController(
             new CompleteMissionPreflightCommand(
                 farmId,
                 missionId,
-                request.OperationId,
+                request.IdempotencyKey,
                 request.ExpectedMissionVersion,
                 request.ChecklistDefinitionId,
                 request.ChecklistVersion,
@@ -180,7 +180,7 @@ public sealed class SystemManagerMissionsController(
         CancellationToken cancellationToken) =>
         Transition(farmId, missionId, MissionStatus.FlightFailed,
             request.ExpectedMissionVersion, request.Reason, cancellationToken,
-            request.IncidentOperationId, request.IncidentType,
+            request.IncidentIdempotencyKey, request.IncidentType,
             request.IncidentOutcome, request.RecoveryDecision,
             request.EvidenceReference);
 
