@@ -6,7 +6,6 @@ namespace AgriDrone.Modules.Missions.Application.Features.Missions.ScheduleMissi
 public sealed record ScheduleMissionCommand(
     Guid FarmId,
     Guid MissionId,
-    DateTimeOffset ScheduledAt,
-    DateTimeOffset ScheduledEndAt,
+    DateOnly ScheduledDate,
     uint ExpectedVersion)
     : IRequest<Result<MissionResponse>>;

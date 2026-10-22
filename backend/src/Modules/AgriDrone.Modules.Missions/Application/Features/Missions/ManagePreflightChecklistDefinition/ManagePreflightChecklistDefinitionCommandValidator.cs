@@ -7,8 +7,10 @@ internal sealed class ManagePreflightChecklistDefinitionCommandValidator
 {
     public ManagePreflightChecklistDefinitionCommandValidator()
     {
-        RuleFor(command => command.Items).NotNull()
-            .Must(items => items is not null && items.RootElement.ValueKind == System.Text.Json.JsonValueKind.Array)
-            .WithMessage("Checklist items must be a JSON array.");
+        RuleFor(command => command)
+            .Must(command => command.Items is not null ||
+                command.ItemsToAdd is not null ||
+                command.KeysToRemove is { Count: > 0 })
+            .WithMessage("Provide checklist items or at least one condition to add or remove.");
     }
 }

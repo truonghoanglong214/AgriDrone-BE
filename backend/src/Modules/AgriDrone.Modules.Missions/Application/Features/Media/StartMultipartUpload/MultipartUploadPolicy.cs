@@ -4,6 +4,8 @@ namespace AgriDrone.Modules.Missions.Application.Features.Media.StartMultipartUp
 
 internal static class MultipartUploadPolicy
 {
+    public const long ServerSideMultipartThresholdBytes =
+        50L * 1024 * 1024;
     public const long PartSizeBytes = 8L * 1024 * 1024;
 
     public static int PartCount(long fileSizeBytes) =>

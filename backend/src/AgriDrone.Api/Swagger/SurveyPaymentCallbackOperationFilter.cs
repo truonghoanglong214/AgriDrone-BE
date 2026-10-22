@@ -32,15 +32,16 @@ internal sealed class SurveyPaymentCallbackOperationFilter : IOperationFilter
             }
         };
 
-        foreach (var parameter in (operation.Parameters ?? [])
-                     .OfType<OpenApiParameter>()
-                     .Where(parameter =>
-                         parameter.In == ParameterLocation.Header &&
-                         parameter.Name?.StartsWith(
-                             "X-AgriDrone-Payment-",
-                             StringComparison.Ordinal) == true))
+        operation.Parameters ??= [];
+        var authorizationParameter = operation.Parameters
+            .OfType<OpenApiParameter>()
+            .FirstOrDefault(parameter => parameter.In == ParameterLocation.Header &&
+                parameter.Name == "Authorization");
+        if (authorizationParameter is not null)
         {
-            parameter.Required = true;
+            authorizationParameter.Required = false;
+            authorizationParameter.Description =
+                "For SePay, use `Apikey <API_KEY>`. Other configured providers may require the timestamp and signature headers.";
         }
     }
 }

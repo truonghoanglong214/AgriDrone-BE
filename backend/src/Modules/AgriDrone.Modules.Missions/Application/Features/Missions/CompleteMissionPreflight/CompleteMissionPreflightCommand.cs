@@ -8,14 +8,11 @@ public sealed record CompleteMissionPreflightCommand(
     Guid FarmId,
     Guid MissionId,
     Guid OperationId,
-    uint ExpectedVersion,
+    uint ExpectedMissionVersion,
     Guid ChecklistDefinitionId,
-    string ChecklistVersion,
+    int ChecklistVersion,
     JsonDocument Answers,
     bool SuitableForFlight,
     string? Notes,
-    DateTimeOffset? DeviceCompletedAt = null,
-    string? UnsuitableConditionNotes = null,
-    string? FailsafeNotes = null,
-    string? FlightAuthorizationEvidence = null)
+    DateTimeOffset? DeviceCompletedAt = null)
     : IRequest<Result<CompleteMissionPreflightResult>>;

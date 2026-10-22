@@ -25,54 +25,45 @@ public sealed class SystemManagerWorkController(ISender sender) : ControllerBase
         return result.ToHttpResult(HttpContext, Results.Ok);
     }
 
-    /// <remarks>Chuẩn bị mission theo SurveyOrder authoritative. Farm cần baseline sẽ có BaselineMapping trước; mission dịch vụ trả phí chỉ được bổ sung khi đủ điều kiện bản đồ, số trụ, giá và payment. BaselineStartAt/EndAt và ServiceStartAt/EndAt là hai cặp lịch độc lập; khi chưa có lịch phù hợp mission có thể ở Draft. OperationId hỗ trợ gọi lại an toàn.</remarks>
+    /// <remarks>Chuẩn bị mission theo SurveyOrder authoritative. Chỉ chọn ngày bay theo giờ Việt Nam; giờ bắt đầu và kết thúc thực tế được ghi khi chuyển trạng thái chuyến bay. Gửi Idempotency-Key dạng UUID trong header và dùng lại đúng key đó khi retry.</remarks>
     [HttpPost("survey-orders/{surveyOrderId:guid}/missions/prepare")]
     public async Task<IResult> PrepareMissionSet(
         Guid surveyOrderId,
         [FromBody] PrepareMissionSetRequest request,
+        [FromHeader(Name = "Idempotency-Key")] Guid idempotencyKey,
         CancellationToken cancellationToken)
     {
-        MissionScheduleWindow? serviceWindow = null;
-        if (request.ServiceStartAt.HasValue || request.ServiceEndAt.HasValue)
+        if (idempotencyKey == Guid.Empty)
         {
-            if (!request.ServiceStartAt.HasValue || !request.ServiceEndAt.HasValue)
+            return Results.ValidationProblem(new Dictionary<string, string[]>
             {
-                return Results.ValidationProblem(new Dictionary<string, string[]>
-                {
-                    ["serviceWindow"] =
-                    ["ServiceStartAt and ServiceEndAt must be supplied together."]
-                });
-            }
-
-            serviceWindow = new MissionScheduleWindow(
-                request.ServiceStartAt.Value,
-                request.ServiceEndAt.Value);
+                ["Idempotency-Key"] = ["A non-empty UUID idempotency key is required."]
+            });
+        }
+        if ((request.ServiceDate is DateOnly invalidServiceDate &&
+             invalidServiceDate == default) ||
+            (request.BaselineDate is DateOnly invalidBaselineDate &&
+             invalidBaselineDate == default))
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["serviceDate"] = ["A supplied mission date must be a valid calendar date."],
+                ["baselineDate"] = ["A supplied mission date must be a valid calendar date."]
+            });
         }
 
-        MissionScheduleWindow? baselineWindow = null;
-        if (request.BaselineStartAt.HasValue ||
-            request.BaselineEndAt.HasValue)
-        {
-            if (!request.BaselineStartAt.HasValue ||
-                !request.BaselineEndAt.HasValue)
-            {
-                return Results.ValidationProblem(new Dictionary<string, string[]>
-                {
-                    ["baselineWindow"] =
-                    ["BaselineStartAt and BaselineEndAt must be supplied together."]
-                });
-            }
-
-            baselineWindow = new MissionScheduleWindow(
-                request.BaselineStartAt.Value,
-                request.BaselineEndAt.Value);
-        }
+        var serviceWindow = request.ServiceDate is DateOnly serviceDate
+            ? MissionScheduleWindow.ForDate(serviceDate)
+            : null;
+        var baselineWindow = request.BaselineDate is DateOnly baselineDate
+            ? MissionScheduleWindow.ForDate(baselineDate)
+            : null;
 
         var result = await sender.Send(
             new PrepareMissionSetCommand(
                 surveyOrderId,
                 request.DroneId,
-                request.OperationId,
+                idempotencyKey,
                 serviceWindow,
                 baselineWindow),
             cancellationToken);

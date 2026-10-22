@@ -111,7 +111,7 @@ public sealed class SurveyOrder : AggregateRoot
     public string? Currency { get; private set; }
     public decimal? FinalPrice { get; private set; }
     public SurveyPaymentStatus DepositPaymentStatus { get; private set; } = SurveyPaymentStatus.Pending;
-    public decimal DepositAmount { get; private set; } = 500_000m;
+    public decimal DepositAmount { get; private set; } = 10_000m;
     public decimal? RemainingAmount { get; private set; }
     public Guid? DepositPaymentId { get; private set; }
     public DateTimeOffset? DepositConfirmedAt { get; private set; }
@@ -193,7 +193,7 @@ public sealed class SurveyOrder : AggregateRoot
             DepositPaymentStatus = requiresBaselineMapping
                 ? SurveyPaymentStatus.Pending
                 : SurveyPaymentStatus.Confirmed,
-            DepositAmount = requiresBaselineMapping ? 500_000m : 0m,
+            DepositAmount = requiresBaselineMapping ? 10_000m : 0m,
             CreatedAt = createdAt,
             UpdatedAt = createdAt
         };

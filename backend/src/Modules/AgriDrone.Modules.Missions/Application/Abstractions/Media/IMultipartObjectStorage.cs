@@ -9,6 +9,10 @@ public interface IMultipartObjectStorage
         int partNumber, TimeSpan lifetime,
         CancellationToken cancellationToken = default);
 
+    Task<MultipartUploadedPart> UploadPartAsync(string storageUri,
+        string uploadId, int partNumber, Stream content, long sizeBytes,
+        CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<MultipartUploadedPart>> ListPartsAsync(
         string storageUri, string uploadId,
         CancellationToken cancellationToken = default);

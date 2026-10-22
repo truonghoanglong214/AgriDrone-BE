@@ -9,6 +9,7 @@ public interface ISurveyPaymentCallbackVerifier
         string rawPayload,
         string? timestamp,
         string? signature,
+        string? authorization,
         DateTimeOffset receivedAt);
 }
 
@@ -23,6 +24,9 @@ public sealed record PaymentCallbackVerificationResult(
     public static PaymentCallbackVerificationResult Valid(
         VerifiedSurveyPaymentEvent paymentEvent) =>
         new(true, null, paymentEvent);
+
+    public static PaymentCallbackVerificationResult Ignored() =>
+        new(true, null, null);
 }
 
 public sealed record VerifiedSurveyPaymentEvent(

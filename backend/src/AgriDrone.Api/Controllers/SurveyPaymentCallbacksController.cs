@@ -1,9 +1,8 @@
 using System.Text;
 using AgriDrone.Api.Contracts.Surveys.Payments;
-using AgriDrone.Api.Mapping;
 using AgriDrone.Modules.Surveys.Application.Abstractions.Payments;
+using AgriDrone.Modules.Surveys.Application.Errors;
 using AgriDrone.Modules.Surveys.Application.Features.Payments.ProcessSurveyPaymentEvent;
-using AgriDrone.Modules.Surveys.Infrastructure.Payments;
 using AgriDrone.SharedInfrastructure.Http;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -22,8 +21,8 @@ public sealed class SurveyPaymentCallbacksController(
     TimeProvider timeProvider)
     : ControllerBase
 {
-    private const string TimestampHeader = "X-AgriDrone-Payment-Timestamp";
-    private const string SignatureHeader = "X-AgriDrone-Payment-Signature";
+    private const string TimestampHeader = "X-SePay-Timestamp";
+    private const string SignatureHeader = "X-SePay-Signature";
     private readonly SurveyPaymentProviderOptions _options = options.Value;
 
     /// <summary>Nhận callback thanh toán đã ký từ provider.</summary>
@@ -41,6 +40,7 @@ public sealed class SurveyPaymentCallbacksController(
         [FromRoute] string provider,
         [FromHeader(Name = TimestampHeader)] string? timestamp,
         [FromHeader(Name = SignatureHeader)] string? signature,
+        [FromHeader(Name = "Authorization")] string? authorization,
         CancellationToken cancellationToken)
     {
         if (Request.ContentLength.HasValue &&
@@ -82,9 +82,15 @@ public sealed class SurveyPaymentCallbacksController(
             rawPayload,
             timestamp,
             signature,
+            authorization,
             receivedAt);
         if (!verification.IsValid || verification.Event is null)
         {
+            if (verification.IsValid)
+            {
+                return Results.Ok(new { success = true });
+            }
+
             return Results.Problem(
                 statusCode: StatusCodes.Status401Unauthorized,
                 title: "Invalid payment callback",
@@ -109,10 +115,14 @@ public sealed class SurveyPaymentCallbacksController(
                 receivedAt,
                 payload),
             cancellationToken);
+        if (result.IsFailure && result.Error.Code == PaymentError.NotFoundCode)
+        {
+            return Results.Ok(new SurveyPaymentCallbackResponse(true));
+        }
+
         return result.ToHttpResult(
             HttpContext,
-            response => Results.Ok(
-                SurveyPaymentResponseMapper.ToResponse(response)));
+            _ => Results.Ok(new SurveyPaymentCallbackResponse(true)));
     }
 
     private IResult PayloadTooLarge() => Results.Problem(

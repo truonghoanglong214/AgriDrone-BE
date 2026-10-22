@@ -14,6 +14,11 @@ internal sealed class DisabledObjectStorage : IObjectStorage, IObjectStorageWrit
         CancellationToken cancellationToken = default) =>
         Task.FromException<Uri>(CreateDisabledException());
 
+    public Task<MultipartUploadedPart> UploadPartAsync(string storageUri,
+        string uploadId, int partNumber, Stream content, long sizeBytes,
+        CancellationToken cancellationToken = default) =>
+        Task.FromException<MultipartUploadedPart>(CreateDisabledException());
+
     public Task<IReadOnlyList<MultipartUploadedPart>> ListPartsAsync(
         string storageUri, string uploadId,
         CancellationToken cancellationToken = default) =>

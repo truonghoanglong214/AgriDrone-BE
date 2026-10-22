@@ -1,4 +1,4 @@
-namespace AgriDrone.Modules.Surveys.Infrastructure.Payments;
+namespace AgriDrone.Modules.Surveys.Application.Abstractions.Payments;
 
 public sealed class SurveyPaymentProviderOptions
 {

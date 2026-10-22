@@ -158,8 +158,9 @@ internal sealed class TransitionMissionCommandHandler(
             mission.Purpose == MissionPurpose.HarvestReadiness &&
             order.SelectedService != SurveyServiceType.HarvestReadiness)
             return MissionOperationError.InvalidOrderContext();
-        if (order.FarmBoundaryVersionId is null ||
-            order.FarmBoundaryVersionId != mission.FarmBoundaryVersionId ||
+        if ((mission.Purpose != MissionPurpose.BaselineMapping &&
+             (order.FarmBoundaryVersionId is null ||
+              order.FarmBoundaryVersionId != mission.FarmBoundaryVersionId)) ||
             order.ScopeZoneIds is null ||
             !order.ScopeZoneIds.Order().SequenceEqual(mission.ScopeZoneIds.Order()) ||
             managerProfileId is null ||
@@ -193,10 +194,8 @@ internal sealed class TransitionMissionCommandHandler(
             completedChecklist.ChecklistDefinitionId != currentChecklist.Id ||
             completedChecklist.CompletedBy != mission.PreflightConfirmedBy ||
             completedChecklist.Responses.RootElement.EnumerateObject().Any(answer =>
-                answer.Value.ValueKind == JsonValueKind.False) ||
-            string.IsNullOrWhiteSpace(completedChecklist.FlightAuthorizationEvidence) ||
-            string.IsNullOrWhiteSpace(completedChecklist.FailsafeNotes))
-            return MissionOperationError.SafetyEvidenceRequired();
+                answer.Value.ValueKind == JsonValueKind.False))
+            return MissionOperationError.PreflightRequired();
         if (mission.RequiresBaselineCompletion && mission.SourceMapVersionId is null)
             return MissionOperationError.BaselineNotCompleted();
         if (mission.Purpose is MissionPurpose.PlantHealth or MissionPurpose.HarvestReadiness &&

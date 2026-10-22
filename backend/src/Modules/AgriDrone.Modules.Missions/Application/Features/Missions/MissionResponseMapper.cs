@@ -35,10 +35,16 @@ internal static class MissionResponseMapper
             mission.ScopeZoneIds,
             mission.RequiresBaselineCompletion,
             mission.PreflightOperationId,
-            mission.PreflightChecklistVersion,
+            ParseChecklistVersion(mission.PreflightChecklistVersion),
             mission.PreflightChecklistAnswers?.RootElement.Clone(),
             mission.PreflightSuitableForFlight,
             mission.PreflightNotes,
             mission.FarmBoundaryVersionId);
     }
+
+    private static int? ParseChecklistVersion(string? value) =>
+        value is not null && value.StartsWith('v') &&
+        int.TryParse(value.AsSpan(1), out var version)
+            ? version
+            : null;
 }

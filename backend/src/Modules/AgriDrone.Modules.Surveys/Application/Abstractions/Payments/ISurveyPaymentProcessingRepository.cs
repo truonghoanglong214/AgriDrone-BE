@@ -5,6 +5,15 @@ namespace AgriDrone.Modules.Surveys.Application.Abstractions.Payments;
 
 public interface ISurveyPaymentProcessingRepository
 {
+    Task<Result<IReadOnlyList<SurveyPayment>>> GetOwnerPaymentHistoryAsync(
+        Guid surveyOrderId,
+        Guid actorUserId,
+        CancellationToken cancellationToken = default);
+
+    Task<Result<IReadOnlyList<SurveyPayment>>> GetSystemAdminPaymentHistoryAsync(
+        Guid surveyOrderId,
+        CancellationToken cancellationToken = default);
+
     Task<Result<SurveyPaymentOwnerState>> GetForOwnerInitiationAsync(
         Guid surveyOrderId,
         Guid actorUserId,

@@ -9,7 +9,7 @@ internal sealed class PrepareMissionSetCommandValidator
     {
         RuleFor(command => command.SurveyOrderId).NotEmpty();
         RuleFor(command => command.DroneId).NotEmpty();
-        RuleFor(command => command.OperationId).NotEmpty();
+        RuleFor(command => command.IdempotencyKey).NotEmpty();
         RuleFor(command => command.ServiceWindow)
             .Must(IsValidWindow)
             .When(command => command.ServiceWindow is not null)
