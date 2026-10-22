@@ -35,9 +35,11 @@ public sealed class RabbitMqOptions
     public List<RabbitMqConsumerOptions> Consumers { get; set; } = [];
 
     internal RabbitMqConsumerOptions GetConsumer(string consumerName) =>
-        Consumers.Single(consumer =>
+        Consumers.SingleOrDefault(consumer =>
             string.Equals(
                 consumer.Name,
                 consumerName,
-                StringComparison.Ordinal));
+                StringComparison.Ordinal))
+        ?? throw new InvalidOperationException(
+            $"RabbitMQ consumer configuration for '{consumerName}' was not found in '{SectionName}:Consumers'.");
 }

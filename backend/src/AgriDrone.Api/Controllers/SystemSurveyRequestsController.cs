@@ -236,9 +236,7 @@ public sealed class SystemSurveyRequestsController(ISender sender)
                 [SurveyRequestReviewChecklistDefinition.ConsentFeasibilityCode] =
                     checklist.ConsentFeasibility,
                 [SurveyRequestReviewChecklistDefinition.FlightPermissionFeasibilityCode] =
-                    checklist.FlightPermissionFeasibility,
-                [SurveyRequestReviewChecklistDefinition.EligibleManagerAvailableCode] =
-                    checklist.EligibleManagerAvailable
+                    checklist.FlightPermissionFeasibility
             },
             checklist.Notes);
 }

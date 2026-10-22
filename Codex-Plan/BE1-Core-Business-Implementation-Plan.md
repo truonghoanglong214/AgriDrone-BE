@@ -2228,6 +2228,9 @@ Chưa viết/chạy trong Step 5. Toàn bộ backlog kiểm thử của Step 5 �
 
 ## 14. Step 6 — UC08 Farm base map và persistent Plant identity (Phase 11)
 
+> Kế hoạch triển khai chi tiết và source audit ngày 2026-10-21:
+> `docs/plans/be1-step6-implementation-plan.md`.
+
 ### 14.0. Chia phase và cách triển khai Step 6
 
 | Phase | Mục tiêu | Gate |

@@ -12,8 +12,11 @@ using AgriDrone.Modules.Surveys.Application.Features.Adjustments.AdjustmentSettl
 using AgriDrone.Modules.Surveys.Application.Features.Adjustments.AdjustmentSettlements.FailAdjustmentSettlement;
 using AgriDrone.Modules.Surveys.Application.Features.Adjustments.ExtraFlights.RequestExtraFlight;
 using AgriDrone.Modules.Surveys.Application.Features.Adjustments.ExtraFlights.ReviewExtraFlight;
+using AgriDrone.Modules.Surveys.Application.Features.Orders.GetSystemAdminSurveyOrders;
+using AgriDrone.Modules.Surveys.Domain;
 using AgriDrone.SharedInfrastructure.Authorization;
 using AgriDrone.SharedInfrastructure.Http;
+using AgriDrone.SharedKernel.Application.Pagination;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -26,6 +29,33 @@ namespace AgriDrone.Api.Controllers;
 public sealed class SystemSurveyOrdersController(ISender sender)
     : ControllerBase
 {
+    /// <summary>Lấy danh sách tất cả SurveyOrder trong toàn hệ thống (dành cho SystemAdmin).</summary>
+    /// <remarks>
+    /// Hỗ trợ phân trang và lọc theo Status, TenantId, FarmId.
+    /// </remarks>
+    [HttpGet]
+    [ProducesResponseType<PagedResult<SystemAdminSurveyOrderApiResponse>>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<IResult> GetAllSurveyOrders(
+        [FromQuery] GetSystemAdminSurveyOrdersRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await sender.Send(
+            new GetSystemAdminSurveyOrdersQuery(
+                MapStatus(request.Status),
+                request.TenantId,
+                request.FarmId,
+                request.PageNumber,
+                request.PageSize),
+            cancellationToken);
+
+        return result.ToHttpResult(
+            HttpContext,
+            page => Results.Ok(SurveyOrderResponseMapper.ToResponse(page)));
+    }
+
     [HttpPost("{orderId:guid}/price-adjustments/{adjustmentId:guid}/approve")]
     [ProducesResponseType<ReviewedPriceAdjustmentApiResponse>(
         StatusCodes.Status200OK)]
@@ -322,4 +352,45 @@ public sealed class SystemSurveyOrdersController(ISender sender)
             response.ReviewedAt,
             response.Version,
             response.CreatedAt);
+
+    private static SurveyOrderStatus? MapStatus(
+        SurveyOrderStatusFilterValue? status) =>
+        status switch
+        {
+            null => null,
+            SurveyOrderStatusFilterValue.PENDING_BOUNDARY_VERIFICATION =>
+                SurveyOrderStatus.PendingBoundaryVerification,
+            SurveyOrderStatusFilterValue.AWAITING_BASELINE_APPOINTMENT =>
+                SurveyOrderStatus.AwaitingBaselineAppointment,
+            SurveyOrderStatusFilterValue.AWAITING_BASELINE_DEPOSIT =>
+                SurveyOrderStatus.AwaitingBaselineDeposit,
+            SurveyOrderStatusFilterValue.AWAITING_BOUNDARY_CAPTURE =>
+                SurveyOrderStatus.AwaitingBoundaryCapture,
+            SurveyOrderStatusFilterValue.BASELINE_READY =>
+                SurveyOrderStatus.BaselineReady,
+            SurveyOrderStatusFilterValue.BASELINE_IN_PROGRESS =>
+                SurveyOrderStatus.BaselineInProgress,
+            SurveyOrderStatusFilterValue.AWAITING_BASELINE_REVIEW =>
+                SurveyOrderStatus.AwaitingBaselineReview,
+            SurveyOrderStatusFilterValue.AWAITING_PRICING =>
+                SurveyOrderStatus.AwaitingPricing,
+            SurveyOrderStatusFilterValue.AWAITING_PAID_APPOINTMENT =>
+                SurveyOrderStatus.AwaitingPaidAppointment,
+            SurveyOrderStatusFilterValue.AWAITING_PAYMENT =>
+                SurveyOrderStatus.AwaitingPayment,
+            SurveyOrderStatusFilterValue.READY_FOR_PAID_SERVICE =>
+                SurveyOrderStatus.ReadyForPaidService,
+            SurveyOrderStatusFilterValue.IN_PROGRESS =>
+                SurveyOrderStatus.InProgress,
+            SurveyOrderStatusFilterValue.PENDING_REVIEW =>
+                SurveyOrderStatus.PendingReview,
+            SurveyOrderStatusFilterValue.COMPLETED =>
+                SurveyOrderStatus.Completed,
+            SurveyOrderStatusFilterValue.CANCELLED =>
+                SurveyOrderStatus.Cancelled,
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(status),
+                status,
+                "Unsupported survey-order status.")
+        };
 }

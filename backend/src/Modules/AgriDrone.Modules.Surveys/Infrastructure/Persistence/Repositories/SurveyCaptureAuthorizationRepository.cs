@@ -14,4 +14,12 @@ internal sealed class SurveyCaptureAuthorizationRepository(SurveysDbContext cont
         context.SurveyCaptureAuthorizations.SingleOrDefaultAsync(
             item => item.SurveyOrderId == surveyOrderId && item.Type == type,
             cancellationToken);
+
+    public async Task<IReadOnlyList<SurveyCaptureAuthorization>> ListByOrderIdAsync(
+        Guid surveyOrderId,
+        CancellationToken cancellationToken = default) =>
+        await context.SurveyCaptureAuthorizations
+            .Where(item => item.SurveyOrderId == surveyOrderId)
+            .OrderBy(item => item.Type)
+            .ToListAsync(cancellationToken);
 }

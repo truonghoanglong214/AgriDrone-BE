@@ -91,6 +91,14 @@ public sealed class GetAssignedSurveyOrdersQueryHandlerTests
             Filter = filter;
             return Task.FromResult(response);
         }
+
+        public Task<PagedResult<SystemManagerSurveyOrderItem>> GetAllAsync(
+            SystemAdminSurveyOrderFilter filter,
+            PagedRequest page,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(response ?? new PagedResult<SystemManagerSurveyOrderItem>([], 1, 20, 0));
+        }
     }
 
     private sealed class FakeExecutionContext(Guid actorId) : IExecutionContext

@@ -10,10 +10,20 @@ public interface ISystemManagerSurveyOrderQueries
         SystemManagerSurveyOrderFilter filter,
         PagedRequest page,
         CancellationToken cancellationToken = default);
+
+    Task<PagedResult<SystemManagerSurveyOrderItem>> GetAllAsync(
+        SystemAdminSurveyOrderFilter filter,
+        PagedRequest page,
+        CancellationToken cancellationToken = default);
 }
 
 public sealed record SystemManagerSurveyOrderFilter(
     SurveyOrderStatus? Status = null);
+
+public sealed record SystemAdminSurveyOrderFilter(
+    SurveyOrderStatus? Status = null,
+    Guid? TenantId = null,
+    Guid? FarmId = null);
 
 public sealed record SystemManagerSurveyOrderItem(
     Guid SurveyOrderId,

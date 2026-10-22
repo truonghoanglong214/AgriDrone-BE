@@ -8,4 +8,8 @@ public interface ISurveyCaptureAuthorizationRepository
         Guid surveyOrderId,
         SurveyCaptureAuthorizationType type,
         CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<SurveyCaptureAuthorization>> ListByOrderIdAsync(
+        Guid surveyOrderId,
+        CancellationToken cancellationToken = default);
 }

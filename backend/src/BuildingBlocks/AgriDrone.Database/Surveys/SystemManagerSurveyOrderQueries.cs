@@ -113,6 +113,87 @@ internal sealed class SystemManagerSurveyOrderQueries(
             .ToPagedResultAsync(page, cancellationToken);
     }
 
+    public async Task<PagedResult<SystemManagerSurveyOrderItem>> GetAllAsync(
+        SystemAdminSurveyOrderFilter filter,
+        PagedRequest page,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(filter);
+        EnsureValidPage(page);
+
+        var orders =
+            from order in context.Set<SurveyOrder>().AsNoTracking()
+            join farm in context.Set<Farm>().AsNoTracking()
+                on new { order.TenantId, order.FarmId }
+                equals new { farm.TenantId, FarmId = farm.Id }
+            join service in context.Set<SurveyService>().AsNoTracking()
+                on order.SurveyServiceId equals service.Id
+            where farm.DeletedAt == null
+            select new { Order = order, Farm = farm, Service = service };
+
+        if (filter.Status.HasValue)
+        {
+            orders = orders.Where(row =>
+                row.Order.Status == filter.Status.Value);
+        }
+
+        if (filter.TenantId.HasValue)
+        {
+            orders = orders.Where(row =>
+                row.Order.TenantId == filter.TenantId.Value);
+        }
+
+        if (filter.FarmId.HasValue)
+        {
+            orders = orders.Where(row =>
+                row.Order.FarmId == filter.FarmId.Value);
+        }
+
+        return await orders
+            .OrderByDescending(row => row.Order.CreatedAt)
+            .ThenByDescending(row => row.Order.Id)
+            .Select(row => new SystemManagerSurveyOrderItem(
+                row.Order.Id,
+                row.Order.OrderNumber,
+                row.Order.TenantId,
+                row.Order.FarmId,
+                row.Farm.Code,
+                row.Farm.Name,
+                row.Order.SurveyServiceId,
+                row.Service.Code,
+                row.Service.Name,
+                row.Order.Status,
+                row.Order.Version,
+                row.Order.RequiresBaselineMapping,
+                row.Order.FarmBoundaryVersionId,
+                row.Order.BoundaryCaptureSessionId,
+                row.Order.BaselineRoutePlanId,
+                row.Order.Appointments
+                    .Where(item => item.Status == SurveyAppointmentStatus.Proposed ||
+                                   item.Status == SurveyAppointmentStatus.Confirmed ||
+                                   item.Status == SurveyAppointmentStatus.RescheduleRequested)
+                    .OrderByDescending(item => item.RevisionNumber)
+                    .Select(item => (Guid?)item.Id)
+                    .FirstOrDefault(),
+                row.Order.Appointments
+                    .Where(item => item.Status == SurveyAppointmentStatus.Proposed ||
+                                   item.Status == SurveyAppointmentStatus.Confirmed ||
+                                   item.Status == SurveyAppointmentStatus.RescheduleRequested)
+                    .OrderByDescending(item => item.RevisionNumber)
+                    .Select(item => (uint?)item.Version)
+                    .FirstOrDefault(),
+                row.Order.Appointments
+                    .Where(item => item.Status == SurveyAppointmentStatus.Proposed ||
+                                   item.Status == SurveyAppointmentStatus.Confirmed ||
+                                   item.Status == SurveyAppointmentStatus.RescheduleRequested)
+                    .OrderByDescending(item => item.RevisionNumber)
+                    .Select(item => (SurveyAppointmentStatus?)item.Status)
+                    .FirstOrDefault(),
+                row.Order.CreatedAt,
+                row.Order.UpdatedAt))
+            .ToPagedResultAsync(page, cancellationToken);
+    }
+
     private static void EnsureValidPage(PagedRequest page)
     {
         ArgumentNullException.ThrowIfNull(page);

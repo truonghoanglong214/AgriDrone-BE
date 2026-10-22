@@ -33,8 +33,4 @@ public sealed record SurveyRequestReviewChecklistRequest(
     [property: JsonRequired]
     [property: JsonPropertyName("flight-permission-feasibility")]
     bool FlightPermissionFeasibility,
-    [param: Required]
-    [property: JsonRequired]
-    [property: JsonPropertyName("eligible-manager-available")]
-    bool EligibleManagerAvailable,
     string? Notes);

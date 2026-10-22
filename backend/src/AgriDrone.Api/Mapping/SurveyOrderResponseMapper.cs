@@ -1,6 +1,7 @@
 using AgriDrone.Api.Contracts.Surveys.Orders;
 using AgriDrone.Modules.Surveys.Application.Features.Orders.GetSurveyOrderBoundaryScope;
 using AgriDrone.Modules.Surveys.Application.Features.Orders.GetAssignedSurveyOrders;
+using AgriDrone.Modules.Surveys.Application.Features.Orders.GetSystemAdminSurveyOrders;
 using AgriDrone.Modules.Surveys.Application.Features.Orders.ConfirmSurveyOrderPoleCount;
 using AgriDrone.Modules.Surveys.Application.Features.Orders.VerifySurveyOrderBoundaryAndScope;
 using AgriDrone.Modules.Surveys.Domain;
@@ -10,6 +11,35 @@ namespace AgriDrone.Api.Mapping;
 
 internal static class SurveyOrderResponseMapper
 {
+    public static PagedResult<SystemAdminSurveyOrderApiResponse> ToResponse(
+        PagedResult<SystemAdminSurveyOrderResponse> page) =>
+        new(
+            page.Items.Select(response => new SystemAdminSurveyOrderApiResponse(
+                    response.SurveyOrderId,
+                    response.OrderNumber,
+                    response.TenantId,
+                    response.FarmId,
+                    response.FarmCode,
+                    response.FarmName,
+                    response.SurveyServiceId,
+                    response.SurveyServiceCode,
+                    response.SurveyServiceName,
+                    MapStatus(response.Status),
+                    response.OrderVersion,
+                    response.RequiresBaselineMapping,
+                    response.FarmBoundaryVersionId,
+                    response.BoundaryCaptureSessionId,
+                    response.BaselineRoutePlanId,
+                    response.CurrentAppointmentId,
+                    response.CurrentAppointmentVersion,
+                    response.CurrentAppointmentStatus?.ToString().ToUpperInvariant(),
+                    response.CreatedAt,
+                    response.UpdatedAt))
+                .ToArray(),
+            page.PageNumber,
+            page.PageSize,
+            page.TotalCount);
+
     public static PagedResult<AssignedSurveyOrderApiResponse> ToResponse(
         PagedResult<AssignedSurveyOrderResponse> page) =>
         new(

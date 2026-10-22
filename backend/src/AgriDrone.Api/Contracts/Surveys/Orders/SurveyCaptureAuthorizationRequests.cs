@@ -19,7 +19,10 @@ public sealed record SurveyCaptureAuthorizationApiResponse(
     Guid SurveyOrderId,
     string Type,
     string Status,
+    string? EvidenceReference,
+    DateTimeOffset? IssuedAt,
     DateTimeOffset? VerifiedAt,
     DateTimeOffset? ExpiresAt,
     DateTimeOffset? RevokedAt,
+    Guid? VerifiedBy,
     uint Version);

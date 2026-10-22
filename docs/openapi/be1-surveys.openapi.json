@@ -7715,6 +7715,358 @@
           }
         }
       }
+    },
+    "/api/system-admin/survey-orders": {
+      "get": {
+        "tags": [
+          "SystemSurveyOrders"
+        ],
+        "summary": "Lấy danh sách tất cả SurveyOrder trong toàn hệ thống (dành cho SystemAdmin).",
+        "description": "Hỗ trợ phân trang và lọc theo Status, TenantId, FarmId.",
+        "parameters": [
+          {
+            "name": "Status",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/SurveyOrderStatusFilterValue"
+            }
+          },
+          {
+            "name": "TenantId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "FarmId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "PageNumber",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "PageSize",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemAdminSurveyOrderApiResponsePagedResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/system-admin/survey-orders/{orderId}/capture-authorizations/consent/verify": {
+      "put": {
+        "tags": [
+          "SystemSurveyOrderAuthorizations"
+        ],
+        "summary": "Xác thực văn bản đồng ý sử dụng dữ liệu nông trại (Consent).",
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifySurveyCaptureAuthorizationRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifySurveyCaptureAuthorizationRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifySurveyCaptureAuthorizationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SurveyCaptureAuthorizationApiResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "Conflict"
+          }
+        }
+      }
+    },
+    "/api/system-admin/survey-orders/{orderId}/capture-authorizations/consent/revoke": {
+      "put": {
+        "tags": [
+          "SystemSurveyOrderAuthorizations"
+        ],
+        "summary": "Thu hồi văn bản đồng ý sử dụng dữ liệu nông trại (Consent).",
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevokeSurveyCaptureAuthorizationRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevokeSurveyCaptureAuthorizationRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevokeSurveyCaptureAuthorizationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SurveyCaptureAuthorizationApiResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "Conflict"
+          }
+        }
+      }
+    },
+    "/api/system-admin/survey-orders/{orderId}/capture-authorizations/flight-permission/verify": {
+      "put": {
+        "tags": [
+          "SystemSurveyOrderAuthorizations"
+        ],
+        "summary": "Xác thực giấy phép bay từ cơ quan có thẩm quyền (Flight Permission).",
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifySurveyCaptureAuthorizationRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifySurveyCaptureAuthorizationRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifySurveyCaptureAuthorizationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SurveyCaptureAuthorizationApiResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "Conflict"
+          }
+        }
+      }
+    },
+    "/api/system-admin/survey-orders/{orderId}/capture-authorizations/flight-permission/revoke": {
+      "put": {
+        "tags": [
+          "SystemSurveyOrderAuthorizations"
+        ],
+        "summary": "Thu hồi giấy phép bay (Flight Permission).",
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevokeSurveyCaptureAuthorizationRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevokeSurveyCaptureAuthorizationRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevokeSurveyCaptureAuthorizationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SurveyCaptureAuthorizationApiResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "Conflict"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -10709,7 +11061,6 @@
           "consent-feasibility",
           "contact-valid",
           "dragon-fruit-farm-confirmed",
-          "eligible-manager-available",
           "flight-permission-feasibility",
           "service-area-supported"
         ],
@@ -10731,9 +11082,6 @@
             "type": "boolean"
           },
           "flight-permission-feasibility": {
-            "type": "boolean"
-          },
-          "eligible-manager-available": {
             "type": "boolean"
           },
           "notes": {
@@ -11493,6 +11841,134 @@
           "markedAt": {
             "type": "string",
             "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      },
+      "SystemAdminSurveyOrderApiResponse": {
+        "type": "object",
+        "properties": {
+          "surveyOrderId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "orderNumber": {
+            "type": "string",
+            "nullable": true
+          },
+          "tenantId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "farmId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "farmCode": {
+            "type": "string",
+            "nullable": true
+          },
+          "farmName": {
+            "type": "string",
+            "nullable": true
+          },
+          "surveyServiceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "surveyServiceCode": {
+            "type": "string",
+            "nullable": true
+          },
+          "surveyServiceName": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "nullable": true
+          },
+          "orderVersion": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "requiresBaselineMapping": {
+            "type": "boolean"
+          },
+          "farmBoundaryVersionId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "boundaryCaptureSessionId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "baselineRoutePlanId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "currentAppointmentId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "currentAppointmentVersion": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "currentAppointmentStatus": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      },
+      "SystemAdminSurveyOrderApiResponsePagedResult": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SystemAdminSurveyOrderApiResponse"
+            },
+            "nullable": true
+          },
+          "pageNumber": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pageSize": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalPages": {
+            "type": "integer",
+            "format": "int32",
+            "readOnly": true
+          },
+          "hasPreviousPage": {
+            "type": "boolean",
+            "readOnly": true
+          },
+          "hasNextPage": {
+            "type": "boolean",
+            "readOnly": true
           }
         },
         "additionalProperties": false

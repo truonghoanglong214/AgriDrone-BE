@@ -2,7 +2,7 @@ namespace AgriDrone.Modules.Surveys.Application.Features.Requests.Common;
 
 public static class SurveyRequestReviewChecklistDefinition
 {
-    public const string Version = "survey-request-review.v5";
+    public const string Version = "survey-request-review.v6";
     public const string ContactValidCode = "contact-valid";
     public const string DragonFruitFarmConfirmedCode =
         "dragon-fruit-farm-confirmed";
@@ -14,8 +14,6 @@ public static class SurveyRequestReviewChecklistDefinition
         "consent-feasibility";
     public const string FlightPermissionFeasibilityCode =
         "flight-permission-feasibility";
-    public const string EligibleManagerAvailableCode =
-        "eligible-manager-available";
 
     public static IReadOnlyList<SurveyRequestReviewChecklistItem> Items { get; } =
     [
@@ -36,10 +34,7 @@ public static class SurveyRequestReviewChecklistDefinition
             "Written data-use consent appears obtainable; this does not verify consent."),
         new(
             FlightPermissionFeasibilityCode,
-            "Flight permission appears obtainable; this does not verify permission."),
-        new(
-            EligibleManagerAvailableCode,
-            "An active, available and flight-qualified SystemManager exists for approval review.")
+            "Flight permission appears obtainable; this does not verify permission.")
     ];
 
     private static IReadOnlyList<string> RequiredCodes { get; } = Items

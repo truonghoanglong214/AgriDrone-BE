@@ -12,20 +12,19 @@ public sealed class SurveyApprovalApiContractTests
     [Fact]
     public void ReviewChecklistContainsOnlyManualApprovalChecks()
     {
-        Assert.Equal("survey-request-review.v5",
+        Assert.Equal("survey-request-review.v6",
             SurveyRequestReviewChecklistDefinition.Version);
         Assert.Equal(
             [
-                "contact-valid",
-                "dragon-fruit-farm-confirmed",
-                "service-area-supported",
                 "candidate-location-sufficient",
                 "consent-feasibility",
+                "contact-valid",
+                "dragon-fruit-farm-confirmed",
                 "flight-permission-feasibility",
-                "eligible-manager-available"
+                "service-area-supported"
             ],
             SurveyRequestReviewChecklistDefinition.Items.Select(
-                item => item.Code));
+                item => item.Code).OrderBy(code => code, StringComparer.Ordinal));
         Assert.DoesNotContain(
             SurveyRequestReviewChecklistDefinition.Items,
             item => item.Code.Contains(
@@ -49,7 +48,6 @@ public sealed class SurveyApprovalApiContractTests
                 "CandidateLocationSufficient",
                 "ConsentFeasibility",
                 "FlightPermissionFeasibility",
-                "EligibleManagerAvailable",
                 "Notes"
             },
             typeof(SurveyRequestReviewChecklistRequest)
@@ -68,8 +66,7 @@ public sealed class SurveyApprovalApiContractTests
             ["service-area-supported"] = true,
             ["candidate-location-sufficient"] = true,
             ["consent-feasibility"] = true,
-            ["flight-permission-feasibility"] = true,
-            ["eligible-manager-available"] = true
+            ["flight-permission-feasibility"] = true
         };
 
         Assert.True(
@@ -100,7 +97,6 @@ public sealed class SurveyApprovalApiContractTests
             CandidateLocationSufficient: true,
             ConsentFeasibility: true,
             FlightPermissionFeasibility: true,
-            EligibleManagerAvailable: true,
             Notes: null);
 
         using var json = JsonDocument.Parse(JsonSerializer.Serialize(payload));
@@ -153,7 +149,6 @@ public sealed class SurveyApprovalApiContractTests
     [InlineData("CandidateLocationSufficient")]
     [InlineData("ConsentFeasibility")]
     [InlineData("FlightPermissionFeasibility")]
-    [InlineData("EligibleManagerAvailable")]
     public void ChecklistRequiredMetadataIsOnConstructorParameters(
         string parameterName)
     {
