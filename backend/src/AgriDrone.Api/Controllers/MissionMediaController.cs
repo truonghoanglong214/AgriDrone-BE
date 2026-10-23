@@ -34,20 +34,27 @@ public sealed class MissionMediaController(
             "Media upload interrupted for mission {MissionId}, file {Index}");
 
     /// <summary>Create or renew a direct-to-storage upload session for an assigned manager.</summary>
-    /// <remarks>Tạo hoặc lấy lại phiên upload trực tiếp lên storage bằng IdempotencyKey. Giữ nguyên key khi retry cùng file/ý định upload. CapturedAt là tùy chọn; nếu gửi phải là UTC trong khoảng bay. Client dùng UploadUri được trả về để gửi file, sau đó gọi complete; ExpectedMissionVersion kiểm soát thay đổi đồng thời.</remarks>
+    /// <remarks>Tạo hoặc lấy lại phiên upload trực tiếp lên storage bằng Idempotency-Key header. Giữ nguyên key khi retry cùng file/ý định upload. CapturedAt là tùy chọn; nếu gửi phải là UTC trong khoảng bay. Client dùng UploadUri được trả về để gửi file, sau đó gọi complete; ExpectedMissionVersion kiểm soát thay đổi đồng thời.</remarks>
     [HttpPost("upload-sessions")]
     [Authorize(Policy = AccessAuthorizationPolicies.SystemManager)]
     public async Task<IResult> CreateUploadSession(
         [FromRoute] Guid farmId, [FromRoute] Guid missionId,
         [FromBody] CreateMissionMediaUploadSessionRequest request,
+        [FromHeader(Name = "Idempotency-Key")] Guid idempotencyKey,
         CancellationToken cancellationToken)
     {
+        if (idempotencyKey == Guid.Empty)
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["Idempotency-Key"] = ["A non-empty UUID idempotency key is required."]
+            });
+
         var access = await managerAccessService.ResolveFarmAccessAsync(farmId, cancellationToken);
         if (!access.IsAllowed || access.TenantId is not Guid tenantId || access.FarmId != farmId)
             return Results.Forbid();
 
         var result = await sender.Send(new CreateUploadSessionCommand(
-            tenantId, farmId, missionId, request.IdempotencyKey, request.FileName,
+            tenantId, farmId, missionId, idempotencyKey, request.FileName,
             request.MimeType, request.MediaType, request.FileSizeBytes,
             request.Sha256Checksum, request.ExpectedMissionVersion,
             request.CapturedAt), cancellationToken);
@@ -65,8 +72,15 @@ public sealed class MissionMediaController(
     public async Task<IResult> StartMultipartUpload(
         [FromRoute] Guid farmId, [FromRoute] Guid missionId,
         [FromBody] CreateMissionMediaUploadSessionRequest request,
+        [FromHeader(Name = "Idempotency-Key")] Guid idempotencyKey,
         CancellationToken cancellationToken)
     {
+        if (idempotencyKey == Guid.Empty)
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["Idempotency-Key"] = ["A non-empty UUID idempotency key is required."]
+            });
+
         var access = await managerAccessService.ResolveFarmAccessAsync(farmId,
             cancellationToken);
         if (!access.IsAllowed || access.TenantId is not Guid tenantId ||
@@ -74,7 +88,7 @@ public sealed class MissionMediaController(
             return Results.Forbid();
 
         var created = await sender.Send(new CreateUploadSessionCommand(
-            tenantId, farmId, missionId, request.IdempotencyKey, request.FileName,
+            tenantId, farmId, missionId, idempotencyKey, request.FileName,
             request.MimeType, request.MediaType, request.FileSizeBytes,
             request.Sha256Checksum, request.ExpectedMissionVersion,
             request.CapturedAt),

@@ -23,7 +23,7 @@ public sealed class MissionTelemetryController(
     /// Nhận từ 2 đến 50.000 điểm GPS có SequenceNumber và RecordedAt UTC tăng
     /// dần. Các điểm phải nằm trong khoảng StartedAt đến EndedAt của Mission
     /// đang Uploading. Mỗi Mission giữ một telemetry import; request có
-    /// IdempotencyKey có thể giữ nguyên khi retry cùng payload/ý định import;
+    /// Idempotency-Key header có thể giữ nguyên khi retry cùng payload/ý định import;
     /// cùng payload sẽ trả kết quả cũ, payload khác sẽ thay import hiện tại.
     /// </remarks>
     [HttpPost("api/missions/{missionId:guid}/farms/{farmId:guid}/telemetry/imports")]
@@ -32,8 +32,17 @@ public sealed class MissionTelemetryController(
         [FromRoute] Guid farmId,
         Guid missionId,
         [FromBody] ImportMissionTelemetryRequest request,
+        [FromHeader(Name = "Idempotency-Key")] Guid idempotencyKey,
         CancellationToken cancellationToken)
     {
+        if (idempotencyKey == Guid.Empty)
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["Idempotency-Key"] = ["A non-empty UUID idempotency key is required."]
+            });
+        }
+
         var access = await managerAccessService.ResolveFarmAccessAsync(farmId, cancellationToken);
         if (!access.IsAllowed || access.TenantId is not Guid tenantId || access.FarmId != farmId)
         {
@@ -59,7 +68,7 @@ public sealed class MissionTelemetryController(
             tenantId,
             farmId,
             missionId,
-            request.IdempotencyKey,
+            idempotencyKey,
             request.SourceFileName,
             request.SourceChecksum,
             request.ExpectedMissionVersion,

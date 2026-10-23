@@ -118,14 +118,23 @@ public sealed class SystemManagerMissionsController(
             mission => Results.Ok(new { mission.Id, mission.Version }));
     }
 
-    /// <remarks>Lưu câu trả lời checklist theo IdempotencyKey, ExpectedMissionVersion và ChecklistVersion. FE giữ nguyên key khi retry cùng lần gửi checklist. Nếu xác nhận phù hợp để bay, các câu trả lời checklist phải đạt điều kiện cấu hình.</remarks>
+    /// <remarks>Lưu câu trả lời checklist theo Idempotency-Key header, ExpectedMissionVersion và ChecklistVersion. FE giữ nguyên header key khi retry cùng lần gửi checklist. Nếu xác nhận phù hợp để bay, các câu trả lời checklist phải đạt điều kiện cấu hình.</remarks>
     [HttpPost("preflight")]
     public async Task<IResult> CompletePreflight(
         [FromRoute] Guid farmId,
         [FromRoute] Guid missionId,
         [FromBody] CompleteMissionPreflightRequest request,
+        [FromHeader(Name = "Idempotency-Key")] Guid idempotencyKey,
         CancellationToken cancellationToken)
     {
+        if (idempotencyKey == Guid.Empty)
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["Idempotency-Key"] = ["A non-empty UUID idempotency key is required."]
+            });
+        }
+
         if (request.Answers.ValueKind != JsonValueKind.Object)
         {
             return Results.ValidationProblem(new Dictionary<string, string[]>
@@ -139,7 +148,7 @@ public sealed class SystemManagerMissionsController(
             new CompleteMissionPreflightCommand(
                 farmId,
                 missionId,
-                request.IdempotencyKey,
+                idempotencyKey,
                 request.ExpectedMissionVersion,
                 request.ChecklistDefinitionId,
                 request.ChecklistVersion,
@@ -171,18 +180,29 @@ public sealed class SystemManagerMissionsController(
         Transition(farmId, missionId, MissionStatus.FlightCompleted,
             request.ExpectedMissionVersion, null, cancellationToken);
 
-    /// <remarks>Ghi chuyến bay thất bại cùng Reason, loại sự cố, kết quả xử lý, quyết định recovery và tham chiếu bằng chứng trong một giao dịch; đồng thời chuyển drone sang bảo trì.</remarks>
+    /// <remarks>Ghi chuyến bay thất bại cùng Idempotency-Key header, Reason, loại sự cố, kết quả xử lý, quyết định recovery và tham chiếu bằng chứng trong một giao dịch; đồng thời chuyển drone sang bảo trì.</remarks>
     [HttpPost("fail-flight")]
-    public Task<IResult> FailFlight(
+    public async Task<IResult> FailFlight(
         [FromRoute] Guid farmId,
         [FromRoute] Guid missionId,
         [FromBody] FailFlightMissionRequest request,
-        CancellationToken cancellationToken) =>
-        Transition(farmId, missionId, MissionStatus.FlightFailed,
+        [FromHeader(Name = "Idempotency-Key")] Guid idempotencyKey,
+        CancellationToken cancellationToken)
+    {
+        if (idempotencyKey == Guid.Empty)
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["Idempotency-Key"] = ["A non-empty UUID idempotency key is required."]
+            });
+        }
+
+        return await Transition(farmId, missionId, MissionStatus.FlightFailed,
             request.ExpectedMissionVersion, request.Reason, cancellationToken,
-            request.IncidentIdempotencyKey, request.IncidentType,
+            idempotencyKey, request.IncidentType,
             request.IncidentOutcome, request.RecoveryDecision,
             request.EvidenceReference);
+    }
 
     /// <remarks>Hủy mission ở trạng thái Draft hoặc Scheduled; yêu cầu Reason để lưu vết quyết định.</remarks>
     [HttpPost("cancel")]
