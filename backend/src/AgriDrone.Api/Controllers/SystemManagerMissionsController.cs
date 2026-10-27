@@ -107,11 +107,12 @@ public sealed class SystemManagerMissionsController(
     {
         var access = await managerAccessService.ResolveFarmAccessAsync(
             farmId, cancellationToken);
-        if (!access.IsAllowed || access.FarmId != farmId)
+        if (!access.IsAllowed || access.TenantId is not Guid tenantId ||
+            access.FarmId != farmId)
             return Results.Forbid();
 
         var result = await sender.Send(
-            new GetMissionDetailsQuery(farmId, missionId),
+            new GetMissionDetailsQuery(tenantId, farmId, missionId),
             cancellationToken);
         return result.ToHttpResult(
             HttpContext,

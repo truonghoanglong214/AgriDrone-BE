@@ -20,10 +20,12 @@ public sealed class MissionTelemetryController(
 {
     /// <summary>Nhập telemetry đã chuẩn hóa để tạo đường bay thực tế.</summary>
     /// <remarks>
-    /// Nhận từ 2 đến 50.000 điểm GPS có SequenceNumber và RecordedAt UTC tăng
-    /// dần. Các điểm phải nằm trong khoảng StartedAt đến EndedAt của Mission
-    /// đang Uploading. Mỗi Mission giữ một telemetry import; request có
-    /// Idempotency-Key header có thể giữ nguyên khi retry cùng payload/ý định import;
+    /// Nhận một hoặc nhiều segment đã decode, tổng cộng từ 2 đến 50.000 điểm.
+    /// Backend gộp điểm và sắp xếp theo RecordedAt UTC, sau đó đánh lại
+    /// SequenceNumber liên tục. Các điểm phải nằm trong khoảng StartedAt đến
+    /// EndedAt của Mission FlightCompleted hoặc Uploading. Import đầu tiên từ
+    /// FlightCompleted sẽ chuyển Mission sang Uploading. Mỗi Mission giữ một telemetry import;
+    /// request có Idempotency-Key header có thể giữ nguyên khi retry cùng payload;
     /// cùng payload sẽ trả kết quả cũ, payload khác sẽ thay import hiện tại.
     /// </remarks>
     [HttpPost("api/missions/{missionId:guid}/farms/{farmId:guid}/telemetry/imports")]
@@ -49,18 +51,22 @@ public sealed class MissionTelemetryController(
             return Results.Forbid();
         }
 
-        var points = request.Points?
-            .Select(point =>
-                new ImportTelemetryPoint(
-                    point.SequenceNumber,
-                    point.RecordedAt,
-                    point.Longitude,
-                    point.Latitude,
-                    point.AltitudeM,
-                    point.AltitudeReference,
-                    point.HeadingDeg,
-                    point.SpeedMps,
-                    point.HorizontalAccuracyM))
+        var segments = request.Segments?
+            .Select(segment => new ImportTelemetrySegment(
+                segment.SegmentIndex,
+                segment.Points?
+                    .Select(point => new ImportTelemetryPoint(
+                        point.SequenceNumber,
+                        point.RecordedAt,
+                        point.Longitude,
+                        point.Latitude,
+                        point.AltitudeM,
+                        point.AltitudeReference,
+                        point.HeadingDeg,
+                        point.SpeedMps,
+                        point.HorizontalAccuracyM))
+                    .ToArray()
+                    ?? []))
             .ToArray()
             ?? [];
 
@@ -72,8 +78,7 @@ public sealed class MissionTelemetryController(
             request.SourceFileName,
             request.SourceChecksum,
             request.ExpectedMissionVersion,
-            points,
-            request.SegmentIndex);
+            segments);
 
         var result = await sender.Send(
             command,
