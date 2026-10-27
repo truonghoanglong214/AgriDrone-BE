@@ -1,6 +1,7 @@
 using AgriDrone.Modules.Farms.Domain.Farms;
 using AgriDrone.Modules.Farms.Domain.Boundaries;
 using AgriDrone.Modules.Farms.Domain.Maps;
+using AgriDrone.Modules.Farms.Domain.Maps.Staging;
 using AgriDrone.Modules.Farms.Domain.Zones;
 using AgriDrone.Modules.Farms.Infrastructure.Persistence.Configurations;
 using AgriDrone.Modules.Plants.Domain.Conditions;
@@ -35,6 +36,15 @@ public sealed class MappingPublicationDbContext(
         Set<FarmBaseMapVersion>();
 
     public DbSet<ZoneMapVersion> ZoneMapVersions => Set<ZoneMapVersion>();
+
+    public DbSet<MappingCandidateBatch> MappingCandidateBatches =>
+        Set<MappingCandidateBatch>();
+
+    public DbSet<MappingCandidateZone> MappingCandidateZones =>
+        Set<MappingCandidateZone>();
+
+    public DbSet<MappingCandidate> MappingCandidates =>
+        Set<MappingCandidate>();
 
     public DbSet<HealthLevel> HealthLevels => Set<HealthLevel>();
 
@@ -85,6 +95,9 @@ public sealed class MappingPublicationDbContext(
         modelBuilder.ApplyConfiguration(new BoundaryExceptionConfiguration());
         modelBuilder.ApplyConfiguration(new FarmBaseMapVersionConfiguration());
         modelBuilder.ApplyConfiguration(new ZoneMapVersionConfiguration());
+        modelBuilder.ApplyConfiguration(new MappingCandidateBatchConfiguration());
+        modelBuilder.ApplyConfiguration(new MappingCandidateZoneConfiguration());
+        modelBuilder.ApplyConfiguration(new MappingCandidateConfiguration());
         modelBuilder.ApplyConfiguration(new HealthLevelConfiguration());
         modelBuilder.ApplyConfiguration(new PlantConfiguration());
         modelBuilder.ApplyConfiguration(new PlantChangeEventConfiguration());

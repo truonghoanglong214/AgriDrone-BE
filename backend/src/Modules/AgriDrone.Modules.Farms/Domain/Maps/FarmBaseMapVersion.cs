@@ -18,6 +18,9 @@ public sealed class FarmBaseMapVersion : AggregateRoot
     public int VersionNumber { get; private set; }
     public Guid SourceSurveyOrderId { get; private set; }
     public Guid? SourceMissionGroupId { get; private set; }
+    public Guid? SourceMissionId { get; private set; }
+    public Guid? FarmBoundaryVersionId { get; private set; }
+    public Guid? HandoffId { get; private set; }
     public FarmBaseMapStatus Status { get; private set; }
     public Guid? PublishedBy { get; private set; }
     public DateTimeOffset? PublishedAt { get; private set; }
@@ -41,10 +44,27 @@ public sealed class FarmBaseMapVersion : AggregateRoot
             VersionNumber = context.VersionNumber,
             SourceSurveyOrderId = context.SourceSurveyOrderId,
             SourceMissionGroupId = context.SourceMissionGroupId,
+            SourceMissionId = context.SourceMissionId,
+            FarmBoundaryVersionId = context.FarmBoundaryVersionId,
+            HandoffId = context.HandoffId,
             Status = FarmBaseMapStatus.Draft,
             CreatedAt = createdAt,
             UpdatedAt = createdAt
         };
+    }
+
+    public void SetPublicationProvenance(
+        Guid? sourceMissionId,
+        Guid? farmBoundaryVersionId,
+        Guid? handoffId)
+    {
+        if (sourceMissionId.HasValue) DomainGuard.NotEmpty(sourceMissionId.Value);
+        if (farmBoundaryVersionId.HasValue) DomainGuard.NotEmpty(farmBoundaryVersionId.Value);
+        if (handoffId.HasValue) DomainGuard.NotEmpty(handoffId.Value);
+
+        SourceMissionId = sourceMissionId ?? SourceMissionId;
+        FarmBoundaryVersionId = farmBoundaryVersionId ?? FarmBoundaryVersionId;
+        HandoffId = handoffId ?? HandoffId;
     }
 
     public void Publish(Guid publishedBy, DateTimeOffset publishedAt)
@@ -72,7 +92,10 @@ public sealed record FarmBaseMapPublicationContext
         Guid tenantId,
         Guid farmId,
         int versionNumber,
-        Guid? sourceMissionGroupId)
+        Guid? sourceMissionGroupId = null,
+        Guid? sourceMissionId = null,
+        Guid? farmBoundaryVersionId = null,
+        Guid? handoffId = null)
     {
         DomainGuard.NotEmpty(sourceSurveyOrderId);
         DomainGuard.NotEmpty(tenantId);
@@ -85,11 +108,29 @@ public sealed record FarmBaseMapPublicationContext
             DomainGuard.NotEmpty(sourceMissionGroupId.Value);
         }
 
+        if (sourceMissionId.HasValue)
+        {
+            DomainGuard.NotEmpty(sourceMissionId.Value);
+        }
+
+        if (farmBoundaryVersionId.HasValue)
+        {
+            DomainGuard.NotEmpty(farmBoundaryVersionId.Value);
+        }
+
+        if (handoffId.HasValue)
+        {
+            DomainGuard.NotEmpty(handoffId.Value);
+        }
+
         SourceSurveyOrderId = sourceSurveyOrderId;
         TenantId = tenantId;
         FarmId = farmId;
         VersionNumber = versionNumber;
         SourceMissionGroupId = sourceMissionGroupId;
+        SourceMissionId = sourceMissionId;
+        FarmBoundaryVersionId = farmBoundaryVersionId;
+        HandoffId = handoffId;
     }
 
     public Guid SourceSurveyOrderId { get; }
@@ -97,6 +138,9 @@ public sealed record FarmBaseMapPublicationContext
     public Guid FarmId { get; }
     public int VersionNumber { get; }
     public Guid? SourceMissionGroupId { get; }
+    public Guid? SourceMissionId { get; }
+    public Guid? FarmBoundaryVersionId { get; }
+    public Guid? HandoffId { get; }
 }
 
 public interface IFarmBaseMapPublicationService

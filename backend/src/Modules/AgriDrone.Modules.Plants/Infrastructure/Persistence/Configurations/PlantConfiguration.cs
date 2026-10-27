@@ -111,6 +111,10 @@ public sealed class PlantConfiguration : IEntityTypeConfiguration<Plant>
             .HasColumnName("created_from_mission_id")
             .HasColumnType("uuid");
 
+        builder.Property(plant => plant.ReplacedPlantId)
+            .HasColumnName("replaced_plant_id")
+            .HasColumnType("uuid");
+
         builder.Property(plant => plant.CreatedAt)
             .HasColumnName("created_at")
             .HasColumnType("timestamp with time zone")
@@ -168,5 +172,11 @@ public sealed class PlantConfiguration : IEntityTypeConfiguration<Plant>
             .HasForeignKey(plant => plant.CurrentHealthLevelId)
             .OnDelete(DeleteBehavior.Restrict)
             .HasConstraintName("fk_plants_health_levels_current_health_level_id");
+
+        builder.HasOne<Plant>()
+            .WithMany()
+            .HasForeignKey(plant => plant.ReplacedPlantId)
+            .OnDelete(DeleteBehavior.SetNull)
+            .HasConstraintName("fk_plants_replaced_plant_id");
     }
 }

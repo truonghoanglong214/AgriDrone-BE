@@ -2,6 +2,7 @@ using AgriDrone.Modules.Farms.Application.Abstractions.Persistence;
 using AgriDrone.Modules.Farms.Domain.Farms;
 using AgriDrone.Modules.Farms.Domain.Boundaries;
 using AgriDrone.Modules.Farms.Domain.Maps;
+using AgriDrone.Modules.Farms.Domain.Maps.Staging;
 using AgriDrone.Modules.Farms.Domain.Zones;
 using AgriDrone.SharedInfrastructure.Auditing;
 using AgriDrone.SharedInfrastructure.Persistence.Configurations;
@@ -23,6 +24,12 @@ internal sealed class FarmsDbContext(DbContextOptions<FarmsDbContext> options)
     public DbSet<ZoneMapVersion> ZoneMapVersions => Set<ZoneMapVersion>();
 
     public DbSet<FarmBaseMapVersion> FarmBaseMapVersions => Set<FarmBaseMapVersion>();
+
+    public DbSet<MappingCandidateBatch> MappingCandidateBatches => Set<MappingCandidateBatch>();
+
+    public DbSet<MappingCandidateZone> MappingCandidateZones => Set<MappingCandidateZone>();
+
+    public DbSet<MappingCandidate> MappingCandidates => Set<MappingCandidate>();
 
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 

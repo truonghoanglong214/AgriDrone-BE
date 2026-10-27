@@ -175,12 +175,6 @@ public static class DependencyInjection
         services.AddIntegrationConsumer<BaselineOrthophotoCompletedProcessor>(
             IntegrationConsumerNames.Be1BaselineOrthophotoCompletedV1);
 
-        services.AddScoped<
-            IIntegrationMessageHandler<BaselineMappingCandidatesReadyV3>,
-            BaselineMappingCandidatesReadyV3Handler>();
-        services.AddIntegrationConsumer<BaselineMappingCandidatesReadyV3Processor>(
-            IntegrationConsumerNames.Be1BaselineMappingCandidatesReadyV3);
-
         services.TryAddSingleton(TimeProvider.System);
 
         var assembly = typeof(DependencyInjection).Assembly;

@@ -106,6 +106,8 @@ public sealed class Plant : AggregateRoot
 
     public Guid? CreatedFromMissionId { get; private set; }
 
+    public Guid? ReplacedPlantId { get; private set; }
+
     public DateTimeOffset CreatedAt { get; private set; }
 
     public DateTimeOffset UpdatedAt { get; private set; }
@@ -199,6 +201,25 @@ public sealed class Plant : AggregateRoot
             locationAccuracyM,
             healthLevelId,
             registeredAt);
+    }
+
+    public void LinkReplacedPlant(Guid replacedPlantId)
+    {
+        DomainGuard.NotEmpty(replacedPlantId);
+        ReplacedPlantId = replacedPlantId;
+    }
+
+    public void Retire(PlantLifecycleStatus status, DateTimeOffset retiredAt)
+    {
+        DomainGuard.Utc(retiredAt);
+        if (status is not (PlantLifecycleStatus.Removed or PlantLifecycleStatus.Dead))
+        {
+            throw new ArgumentOutOfRangeException(nameof(status), "Retire status must be Removed or Dead.");
+        }
+
+        LifecycleStatus = status;
+        RetiredAt = retiredAt;
+        UpdatedAt = retiredAt;
     }
 
     public void ApplyPublishedMapPosition(
@@ -374,5 +395,4 @@ public sealed class Plant : AggregateRoot
                 parameterName,
                 "Latitude must be between -90 and 90 degrees.");
     }
-
 }
