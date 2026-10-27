@@ -64,13 +64,15 @@ internal sealed class ImportTelemetryCommandHandler(
                 AppError.Conflict("MissionTelemetry.MissionNotOrderBound",
                     "Legacy Missions cannot accept new telemetry."));
 
-        var orderedInput = request.Points
-            .OrderBy(point => point.SequenceNumber)
+        var orderedInput = request.Segments
+            .SelectMany(segment => segment.Points)
+            .OrderBy(point => point.RecordedAt)
+            .Select((point, sequenceNumber) =>
+                point with { SequenceNumber = sequenceNumber })
             .ToArray();
 
         using var selectedSegmentJson =
             CreateSelectedSegmentJson(
-                request.SegmentIndex,
                 orderedInput);
 
         var existingOperation =
@@ -86,14 +88,14 @@ internal sealed class ImportTelemetryCommandHandler(
             (existingOperation.MatchesPayload(
                  request.SourceFileName,
                  request.SourceChecksum,
-                 request.Points.Count,
+                 orderedInput.Length,
                  selectedSegmentJson) ||
              (existingOperation.SelectedSegmentJson is null &&
               mission.Status != MissionStatus.Uploading &&
               existingOperation.MatchesPayload(
                   request.SourceFileName,
                   request.SourceChecksum,
-                  request.Points.Count))))
+                  orderedInput.Length))))
         {
             return Result.Success(
                 MapResult(
@@ -102,7 +104,8 @@ internal sealed class ImportTelemetryCommandHandler(
                     reusedOperation: true));
         }
 
-        if (mission.Status != MissionStatus.Uploading)
+        if (mission.Status is not MissionStatus.FlightCompleted and
+            not MissionStatus.Uploading)
         {
             return Result.Failure<ImportTelemetryResult>(
                 ImportTelemetryError
@@ -144,6 +147,9 @@ internal sealed class ImportTelemetryCommandHandler(
         }
 
         var now = timeProvider.GetUtcNow();
+
+        if (mission.Status == MissionStatus.FlightCompleted)
+            mission.StartUploading(now);
 
         var telemetryPoints = orderedInput
             .Select(point =>
@@ -238,13 +244,12 @@ internal sealed class ImportTelemetryCommandHandler(
     }
 
     internal static JsonDocument CreateSelectedSegmentJson(
-        int? segmentIndex,
         IReadOnlyList<ImportTelemetryPoint> points)
     {
         return JsonSerializer.SerializeToDocument(
             new
             {
-                segmentIndex,
+                segmentIndex = (int?)null,
                 points = points.Select(point => new
                 {
                     timestamp = point.RecordedAt
@@ -252,10 +257,8 @@ internal sealed class ImportTelemetryCommandHandler(
                         .ToString(
                             "yyyy-MM-dd HH:mm:ss",
                             CultureInfo.InvariantCulture),
-                    lat = Math.Truncate(point.Latitude * 1_000_000d) /
-                        1_000_000d,
-                    lon = Math.Truncate(point.Longitude * 1_000_000d) /
-                        1_000_000d,
+                    lat = point.Latitude,
+                    lon = point.Longitude,
                     alt = point.AltitudeM
                 }).ToArray()
             },

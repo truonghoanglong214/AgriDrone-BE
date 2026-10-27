@@ -5,9 +5,6 @@ namespace AgriDrone.Modules.Missions.Application.Features.Missions.CompleteMissi
 
 internal static class CompleteMissionPreflightError
 {
-    public static AppError SafetyEvidenceRequired() =>
-        AppError.Validation("MissionPreflight.SafetyEvidenceRequired",
-            "A suitable flight requires affirmative safety answers, authorization evidence and failsafe procedures.");
     public static AppError StaleChecklistDefinition() =>
         AppError.Conflict(
             "MissionPreflight.StaleChecklistDefinition",

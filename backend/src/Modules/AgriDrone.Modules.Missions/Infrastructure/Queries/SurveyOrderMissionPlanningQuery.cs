@@ -76,17 +76,12 @@ internal sealed class SurveyOrderMissionPlanningQuery(
                     source.AppointmentEndAt.HasValue;
         var isBaselinePlanning = source.RequiresBaselineMapping &&
                                  source.FarmBaseMapVersionId is null;
-        var planningStatusAllowed = isBaselinePlanning
-            ? source.OrderStatus is "BaselineReady"
-            : source.OrderStatus is "AwaitingPaidAppointment" or "AwaitingPayment" or
-                "ReadyForPaidService";
-        var planningFailures = source.ReadinessFailures.Where(failure =>
-            failure is not ("OrderNotEligible" or "AppointmentNotConfirmed" or
-                "AppointmentPurposeMismatch"));
-        var canPlan = purposeMatches && planningStatusAllowed &&
-                      (isBaselinePlanning || source.FarmBoundaryVersionId.HasValue) &&
-                      source.PrimarySystemManagerId.HasValue &&
-                      !planningFailures.Any();
+        var appointmentConfirmed = source.AppointmentStatus == "Confirmed" &&
+                                   source.AppointmentStartAt.HasValue &&
+                                   source.AppointmentEndAt.HasValue &&
+                                   source.AppointmentEndAt.Value >
+                                   source.AppointmentStartAt.Value;
+        var canPlan = purposeMatches && appointmentConfirmed;
         var canSchedule = canPlan && source.AppointmentStatus == "Confirmed" &&
                           source.AppointmentStartAt.HasValue &&
                           source.AppointmentEndAt.HasValue &&

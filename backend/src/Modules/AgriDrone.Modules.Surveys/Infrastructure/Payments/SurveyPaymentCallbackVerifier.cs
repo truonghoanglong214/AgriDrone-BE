@@ -24,6 +24,7 @@ internal sealed class SurveyPaymentCallbackVerifier(
         string rawPayload,
         string? timestamp,
         string? signature,
+        string? authorization,
         DateTimeOffset receivedAt)
     {
         if (!_options.Enabled ||

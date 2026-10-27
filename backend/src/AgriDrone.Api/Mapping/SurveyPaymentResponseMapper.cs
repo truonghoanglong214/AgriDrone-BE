@@ -1,16 +1,38 @@
 using AgriDrone.Api.Contracts.Surveys.Payments;
 using AgriDrone.Modules.Surveys.Application.Features.Payments.InitiateSurveyPayment;
-using AgriDrone.Modules.Surveys.Application.Features.Payments.ProcessSurveyPaymentEvent;
 using AgriDrone.Modules.Surveys.Application.Features.Payments.RequestPriceAdjustment;
 using AgriDrone.Modules.Surveys.Application.Features.Payments.ApprovePriceAdjustment;
 using AgriDrone.Modules.Surveys.Application.Features.Payments.RejectPriceAdjustment;
 using AgriDrone.Modules.Surveys.Application.Features.Payments.ApplyPriceAdjustment;
 using AgriDrone.Modules.Surveys.Application.Features.Payments.ReconcileSurveyPayment;
+using AgriDrone.Modules.Surveys.Application.Features.Payments.GetSurveyPaymentHistory;
 
 namespace AgriDrone.Api.Mapping;
 
 internal static class SurveyPaymentResponseMapper
 {
+    public static SurveyPaymentHistoryApiResponse ToResponse(
+        SurveyPaymentHistoryResponse response) => new(
+            response.SurveyOrderId,
+            response.Payments.Select(payment => new SurveyPaymentHistoryItemApiResponse(
+                payment.SurveyPaymentId,
+                payment.Purpose,
+                payment.Amount,
+                payment.Currency,
+                payment.Provider,
+                payment.ProviderReference,
+                payment.Status,
+                payment.CreatedAt,
+                payment.UpdatedAt,
+                payment.ConfirmedAt,
+                payment.PaymentVersion,
+                payment.Events.Select(paymentEvent =>
+                    new SurveyPaymentHistoryEventApiResponse(
+                        paymentEvent.EventType,
+                        paymentEvent.OccurredAt,
+                        paymentEvent.ReceivedAt)).ToArray()))
+                .ToArray());
+
     public static InitiateSurveyPaymentApiResponse ToResponse(
         InitiateSurveyPaymentResponse response) => new(
             response.SurveyPaymentId,
@@ -28,21 +50,6 @@ internal static class SurveyPaymentResponseMapper
             response.OrderVersion,
             response.InitiatedAt,
             response.AppointmentId ?? response.PaidServiceAppointmentId);
-
-    public static SurveyPaymentCallbackResponse ToResponse(
-        ProcessSurveyPaymentEventResponse response) => new(
-            response.SurveyPaymentId,
-            response.SurveyOrderId,
-            response.Provider,
-            response.ProviderReference,
-            response.ProviderEventId,
-            response.EventType,
-            response.PaymentStatus,
-            response.OrderStatus,
-            response.Duplicate,
-            response.TransitionApplied,
-            response.Disposition,
-            response.ProcessedAt);
 
     public static RequestedPriceAdjustmentApiResponse ToResponse(
         RequestPriceAdjustmentResponse response) => new(

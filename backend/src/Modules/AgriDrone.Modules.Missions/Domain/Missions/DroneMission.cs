@@ -255,7 +255,7 @@ public sealed class DroneMission : AggregateRoot
         Guid tenantId,
         Guid farmId,
         IReadOnlyCollection<Guid> scopeZoneIds,
-        Guid farmBoundaryVersionId,
+        Guid? farmBoundaryVersionId,
         Guid droneId,
         Guid pilotUserId,
         string missionCode,
@@ -270,7 +270,10 @@ public sealed class DroneMission : AggregateRoot
         DomainGuard.NotEmpty(surveyOrderId);
         DomainGuard.NotEmpty(tenantId);
         DomainGuard.NotEmpty(farmId);
-        DomainGuard.NotEmpty(farmBoundaryVersionId);
+        if (farmBoundaryVersionId is Guid boundaryId)
+        {
+            DomainGuard.NotEmpty(boundaryId);
+        }
         DomainGuard.NotEmpty(droneId);
         DomainGuard.NotEmpty(pilotUserId);
         DomainGuard.NotEmpty(preparationOperationId);
@@ -487,23 +490,26 @@ public sealed class DroneMission : AggregateRoot
     }
 
     public bool Reschedule(DateTimeOffset scheduledAt,
-        DateTimeOffset scheduledEndAt, DateTimeOffset changedAt)
+        DateTimeOffset scheduledEndAt, Guid droneId, DateTimeOffset changedAt)
     {
         DomainGuard.Utc(scheduledAt);
         DomainGuard.Utc(scheduledEndAt);
+        DomainGuard.NotEmpty(droneId);
         DomainGuard.Utc(changedAt);
         EnsureStatus(MissionStatus.Scheduled);
         if (SurveyOrderId is null)
             throw new InvalidOperationException("Only an order-bound mission can be rescheduled here.");
         if (scheduledEndAt <= scheduledAt)
             throw new ArgumentException("Scheduled end time must be after its start time.");
-        if (ScheduledAt == scheduledAt && ScheduledEndAt == scheduledEndAt)
+        if (ScheduledAt == scheduledAt && ScheduledEndAt == scheduledEndAt &&
+            DroneId == droneId)
             return false;
 
         if (PreflightOperationId.HasValue)
             ReplaceStalePreflight(changedAt);
         ScheduledAt = scheduledAt;
         ScheduledEndAt = scheduledEndAt;
+        DroneId = droneId;
         UpdatedAt = changedAt;
         return true;
     }
@@ -541,7 +547,7 @@ public sealed class DroneMission : AggregateRoot
 
     public bool MatchesPreflightOperation(
         Guid operationId,
-        string checklistVersion,
+        int checklistVersion,
         JsonDocument answers,
         bool suitableForFlight,
         string? notes)
@@ -550,7 +556,7 @@ public sealed class DroneMission : AggregateRoot
         return PreflightOperationId == operationId &&
                string.Equals(
                    PreflightChecklistVersion,
-                   checklistVersion.Trim(),
+                   $"v{checklistVersion}",
                    StringComparison.Ordinal) &&
                PreflightSuitableForFlight == suitableForFlight &&
                string.Equals(

@@ -64,6 +64,28 @@ internal sealed class MinioMultipartObjectStorage : IMultipartObjectStorage, IDi
         return new Uri(url);
     }
 
+    public async Task<MultipartUploadedPart> UploadPartAsync(
+        string storageUri, string uploadId, int partNumber, Stream content,
+        long sizeBytes, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(content);
+        ArgumentOutOfRangeException.ThrowIfLessThan(partNumber, 1);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(partNumber, 10_000);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(sizeBytes);
+
+        var response = await _client.UploadPartAsync(new UploadPartRequest
+        {
+            BucketName = _options.Bucket,
+            Key = GetObjectKey(storageUri),
+            UploadId = uploadId,
+            PartNumber = partNumber,
+            InputStream = content,
+            PartSize = sizeBytes
+        }, cancellationToken);
+
+        return new MultipartUploadedPart(partNumber, sizeBytes, response.ETag);
+    }
+
     public async Task<IReadOnlyList<MultipartUploadedPart>> ListPartsAsync(
         string storageUri, string uploadId,
         CancellationToken cancellationToken = default)

@@ -24,10 +24,6 @@ internal sealed class ImportTelemetryCommandValidator
         RuleFor(command => command.ExpectedMissionVersion)
             .GreaterThan(0u);
 
-        RuleFor(command => command.SegmentIndex)
-            .GreaterThanOrEqualTo(0)
-            .When(command => command.SegmentIndex.HasValue);
-
         RuleFor(command => command.SourceFileName)
             .Cascade(CascadeMode.Stop)
             .NotEmpty()
@@ -46,101 +42,73 @@ internal sealed class ImportTelemetryCommandValidator
                 "SourceChecksum must contain 64 " +
                 "hexadecimal characters.");
 
-        RuleFor(command => command.Points)
+        RuleFor(command => command.Segments)
             .Cascade(CascadeMode.Stop)
             .NotNull()
-            .Must(points => points.Count >= 2)
+            .Must(segments => segments.Count > 0)
+            .WithMessage("At least one telemetry segment must be selected.")
+            .Must(HaveUniqueSegmentIndexes)
+            .WithMessage("Selected segment indexes must be unique and non-negative.")
+            .Must(HaveValidPointCount)
             .WithMessage(
-                "At least two telemetry points are required.")
-            .Must(points =>
-                points.Count <= MaximumPointCount)
+                "The selected segments must contain between 2 and " +
+                $"{MaximumPointCount} total points.")
+            .Must(HaveUniqueRecordedAt)
             .WithMessage(
-                $"A telemetry import cannot exceed " +
-                $"{MaximumPointCount} points.")
-            .Must(HaveStrictlyIncreasingSequenceAndTime)
-            .WithMessage(
-                "Sequence numbers and timestamps must " +
-                "increase strictly in request order.");
+                "Telemetry point timestamps must be unique across selected segments.");
 
-        RuleForEach(command => command.Points)
+        RuleForEach(command => command.Segments)
             .ChildRules(point =>
             {
-                point.RuleFor(value =>
-                        value.SequenceNumber)
+                point.RuleFor(segment => segment.SegmentIndex)
                     .GreaterThanOrEqualTo(0);
 
-                point.RuleFor(value =>
-                        value.RecordedAt)
-                    .Must(IsUtc)
-                    .WithMessage(
-                        "RecordedAt must be a non-default " +
-                        "UTC timestamp.");
+                point.RuleFor(segment => segment.Points)
+                    .NotNull()
+                    .Must(points => points.Count > 0)
+                    .WithMessage("A selected segment must contain at least one point.");
 
-                point.RuleFor(value =>
-                        value.Longitude)
-                    .Must(longitude =>
-                        double.IsFinite(longitude) &&
-                        longitude is >= -180 and <= 180)
-                    .WithMessage(
-                        "Longitude must be finite and in " +
-                        "the range [-180, 180].");
+                point.RuleForEach(segment => segment.Points)
+                    .ChildRules(telemetryPoint =>
+                    {
+                        telemetryPoint.RuleFor(value => value.RecordedAt)
+                            .Must(IsUtc)
+                            .WithMessage("RecordedAt must be a non-default UTC timestamp.");
 
-                point.RuleFor(value =>
-                        value.Latitude)
-                    .Must(latitude =>
-                        double.IsFinite(latitude) &&
-                        latitude is >= -90 and <= 90)
-                    .WithMessage(
-                        "Latitude must be finite and in " +
-                        "the range [-90, 90].");
+                        telemetryPoint.RuleFor(value => value.Longitude)
+                            .Must(longitude =>
+                                double.IsFinite(longitude) &&
+                                longitude is >= -180 and <= 180)
+                            .WithMessage("Longitude must be finite and in the range [-180, 180].");
 
-                point.RuleFor(value =>
-                        value.AltitudeM)
-                    .Must(altitude =>
-                        !altitude.HasValue ||
-                        altitude.Value is
-                            >= -999_999.999m and
-                            <= 999_999.999m)
-                    .WithMessage(
-                        "Altitude is outside the " +
-                        "supported range.");
+                        telemetryPoint.RuleFor(value => value.Latitude)
+                            .Must(latitude =>
+                                double.IsFinite(latitude) &&
+                                latitude is >= -90 and <= 90)
+                            .WithMessage("Latitude must be finite and in the range [-90, 90].");
 
-                point.RuleFor(value =>
-                        value.AltitudeReference)
-                    .Must(reference =>
-                        !reference.HasValue ||
-                        Enum.IsDefined(reference.Value))
-                    .WithMessage(
-                        "AltitudeReference is invalid.");
+                        telemetryPoint.RuleFor(value => value.AltitudeM)
+                            .Must(altitude =>
+                                !altitude.HasValue ||
+                                altitude.Value is >= -999_999.999m and <= 999_999.999m)
+                            .WithMessage("Altitude is outside the supported range.");
 
-                point.RuleFor(value =>
-                        value.HeadingDeg)
-                    .Must(heading =>
-                        !heading.HasValue ||
-                        heading.Value is >= 0 and < 360)
-                    .WithMessage(
-                        "HeadingDeg must be in the " +
-                        "range [0, 360).");
+                        telemetryPoint.RuleFor(value => value.AltitudeReference)
+                            .Must(reference => !reference.HasValue || Enum.IsDefined(reference.Value))
+                            .WithMessage("AltitudeReference is invalid.");
 
-                point.RuleFor(value =>
-                        value.SpeedMps)
-                    .Must(speed =>
-                        !speed.HasValue ||
-                        speed.Value is
-                            >= 0 and <= 99_999.999m)
-                    .WithMessage(
-                        "SpeedMps is outside the " +
-                        "supported range.");
+                        telemetryPoint.RuleFor(value => value.HeadingDeg)
+                            .Must(heading => !heading.HasValue || heading.Value is >= 0 and < 360)
+                            .WithMessage("HeadingDeg must be in the range [0, 360).");
 
-                point.RuleFor(value =>
-                        value.HorizontalAccuracyM)
-                    .Must(accuracy =>
-                        !accuracy.HasValue ||
-                        accuracy.Value is
-                            >= 0 and <= 99_999.999m)
-                    .WithMessage(
-                        "HorizontalAccuracyM is outside " +
-                        "the supported range.");
+                        telemetryPoint.RuleFor(value => value.SpeedMps)
+                            .Must(speed => !speed.HasValue || speed.Value is >= 0 and <= 99_999.999m)
+                            .WithMessage("SpeedMps is outside the supported range.");
+
+                        telemetryPoint.RuleFor(value => value.HorizontalAccuracyM)
+                            .Must(accuracy => !accuracy.HasValue || accuracy.Value is >= 0 and <= 99_999.999m)
+                            .WithMessage("HorizontalAccuracyM is outside the supported range.");
+                    });
             });
     }
 
@@ -160,28 +128,28 @@ internal sealed class ImportTelemetryCommandValidator
                recordedAt.Offset == TimeSpan.Zero;
     }
 
-    private static bool
-        HaveStrictlyIncreasingSequenceAndTime(
-            IReadOnlyList<ImportTelemetryPoint> points)
+    private static bool HaveUniqueSegmentIndexes(
+        IReadOnlyList<ImportTelemetrySegment> segments)
     {
-        if (points.Count < 2)
-        {
-            return true;
-        }
+        return segments.All(segment => segment.SegmentIndex >= 0) &&
+               segments.Select(segment => segment.SegmentIndex).Distinct().Count() == segments.Count;
+    }
 
-        for (var index = 1;
-             index < points.Count;
-             index++)
-        {
-            if (points[index].SequenceNumber <=
-                    points[index - 1].SequenceNumber ||
-                points[index].RecordedAt <=
-                    points[index - 1].RecordedAt)
-            {
-                return false;
-            }
-        }
+    private static bool HaveValidPointCount(
+        IReadOnlyList<ImportTelemetrySegment> segments)
+    {
+        var pointCount = segments.Sum(segment => segment.Points.Count);
+        return pointCount is >= 2 and <= MaximumPointCount;
+    }
 
-        return true;
+    private static bool HaveUniqueRecordedAt(
+        IReadOnlyList<ImportTelemetrySegment> segments)
+    {
+        var timestamps = segments
+            .SelectMany(segment => segment.Points)
+            .Select(point => point.RecordedAt)
+            .ToArray();
+
+        return timestamps.Distinct().Count() == timestamps.Length;
     }
 }

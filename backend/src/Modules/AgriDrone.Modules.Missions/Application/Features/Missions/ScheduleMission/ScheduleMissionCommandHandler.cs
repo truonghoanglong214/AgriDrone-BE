@@ -1,6 +1,7 @@
 ﻿using System.Text.Json;
 using AgriDrone.Modules.Missions.Application.Abstractions;
 using AgriDrone.Modules.Missions.Application.Abstractions.Missions;
+using AgriDrone.Modules.Missions.Application.Features.Missions.PrepareMissionSet;
 using AgriDrone.Modules.Missions.Domain.Drones;
 using AgriDrone.Modules.Missions.Domain.Missions;
 using AgriDrone.SharedInfrastructure.Auditing;
@@ -66,11 +67,11 @@ internal sealed class ScheduleMissionCommandHandler(
                     MissionStatus.Scheduled));
         }
 
-        var availableDrones =
-            await droneQueries.GetAvailableAsync(
-                request.ScheduledAt,
-                request.ScheduledEndAt,
-                cancellationToken);
+        var scheduleWindow = MissionScheduleWindow.ForDate(request.ScheduledDate);
+        var availableDrones = await droneQueries.GetAvailableAsync(
+            scheduleWindow.StartAt,
+            scheduleWindow.EndAt,
+            cancellationToken);
 
         var droneIsAvailable = availableDrones.Any(
             drone => drone.Id == mission.DroneId &&
@@ -92,8 +93,8 @@ internal sealed class ScheduleMissionCommandHandler(
         var now = timeProvider.GetUtcNow();
 
         mission.Schedule(
-            request.ScheduledAt,
-            request.ScheduledEndAt,
+            scheduleWindow.StartAt,
+            scheduleWindow.EndAt,
             now);
 
         using var oldData =

@@ -19,9 +19,6 @@ public sealed class LegacyEndpointSafetyTests
     {
         { typeof(TenantOwnershipController), nameof(TenantOwnershipController.TransferOwnership) },
         { typeof(FarmController), nameof(FarmController.CreateFarm) },
-        { typeof(MissionsController), nameof(MissionsController.CreateMission) },
-        { typeof(MissionsController), nameof(MissionsController.ScheduleMission) },
-        { typeof(MissionsController), nameof(MissionsController.TransitionMission) }
     };
 
     public static TheoryData<Type, string> RetainedEndpoints => new()
@@ -33,7 +30,7 @@ public sealed class LegacyEndpointSafetyTests
         { typeof(TenantInvitationController), nameof(TenantInvitationController.PreviewTenantInvitation) },
         { typeof(TenantInvitationController), nameof(TenantInvitationController.AcceptTenantInvitation) },
         { typeof(FarmController), nameof(FarmController.GetFarmById) },
-        { typeof(MissionsController), nameof(MissionsController.GetMissionDetails) }
+        { typeof(SystemManagerMissionsController), nameof(SystemManagerMissionsController.GetMissionVersion) }
     };
 
     [Theory]
@@ -81,7 +78,7 @@ public sealed class LegacyEndpointSafetyTests
             .Select(attribute => attribute.RouteName)
             .ToArray();
 
-        Assert.Equal(6, routeNames.Length);
+        Assert.Equal(3, routeNames.Length);
         Assert.Equal(routeNames.Length, routeNames.Distinct().Count());
         Assert.All(routeNames, route => Assert.DoesNotContain('{', route));
     }
@@ -228,6 +225,7 @@ public sealed class LegacyEndpointSafetyTests
         Assert.DoesNotContain("SystemHarvestQualityGradeController", apiTypeNames);
         Assert.DoesNotContain("TenantMembershipController", apiTypeNames);
         Assert.DoesNotContain("SystemTenantMembershipController", apiTypeNames);
+        Assert.DoesNotContain("MissionsController", apiTypeNames);
         Assert.Null(typeof(AuthController).GetMethod("Register"));
         Assert.Null(typeof(TenantInvitationController).GetMethod("InviteTenantAdmin"));
         Assert.Null(typeof(TenantInvitationController).GetMethod("InviteTenantMember"));

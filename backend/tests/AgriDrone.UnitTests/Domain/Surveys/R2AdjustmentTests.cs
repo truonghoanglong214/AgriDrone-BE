@@ -165,7 +165,7 @@ public sealed class R2AdjustmentTests
             HasPriceSnapshot: true,
             AppointmentPurpose: SurveyAppointmentPurpose.PaidService,
             AppointmentStatus: SurveyAppointmentStatus.Confirmed,
-            PaymentStatus: SurveyPaymentStatus.Confirmed,
+            PaymentStatus: SurveyPaymentStatus.Paid,
             HasActiveQualifiedPrimaryManager: true,
             IsPrimaryManagerAvailable: true,
             IsAppointmentCurrent: true,

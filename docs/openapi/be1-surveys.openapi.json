@@ -912,7 +912,7 @@
           "MissionMedia"
         ],
         "summary": "Upload một hoặc nhiều ảnh/video trực tiếp cho Mission.",
-        "description": "Gửi file nhỏ trong trường files, tối đa 50 MiB tổng request.\r\nFile lớn và video sử dụng upload-sessions để truyền trực tiếp tới storage.\r\nBackend tính SHA-256, upload MinIO và hoàn tất media.\r\nCapturedAt tùy chọn; nếu gửi thì cần một giá trị UTC cho mỗi file, đúng thứ tự Files. Mission phải đã kết thúc\r\nchuyến bay. Gửi lại cùng nội dung trong cùng Mission trả media đã hoàn tất.\r\nTelemetry và finalize upload được thực hiện qua API riêng.\r\nXử lý tuần tự; khi một file lỗi, dừng và đánh dấu các file còn lại NotAttempted.\r\nFile đã Completed được giữ lại. HTTP 200 nếu tất cả thành công, 207 nếu\r\ncó lỗi. Response chứa kết quả theo index (bắt đầu từ 0) và tên từng file.",
+        "description": "Gửi nhiều file trong trường files, tổng dữ liệu file tối đa 5 GiB mỗi request.\r\nBackend tính SHA-256; file lớn hơn 50 MiB được upload multipart nội bộ, file nhỏ được upload trực tiếp. FE không cần gọi riêng API upload session.\r\nCapturedAt tùy chọn; nếu gửi thì cần một giá trị UTC cho mỗi file, đúng thứ tự Files. Mission phải đã kết thúc\r\nchuyến bay. Gửi lại cùng nội dung trong cùng Mission trả media đã hoàn tất.\r\nTelemetry và finalize upload được thực hiện qua API riêng.\r\nXử lý tuần tự; khi một file lỗi, dừng và đánh dấu các file còn lại NotAttempted.\r\nFile đã Completed được giữ lại. HTTP 200 nếu tất cả thành công, 207 nếu\r\ncó lỗi. Response chứa kết quả theo index (bắt đầu từ 0) và tên từng file.",
         "parameters": [
           {
             "name": "farmId",
@@ -1966,17 +1966,26 @@
             }
           },
           {
-            "name": "X-AgriDrone-Payment-Timestamp",
+            "name": "X-SePay-Timestamp",
             "in": "header",
-            "required": true,
+            "required": false,
             "schema": {
               "type": "string"
             }
           },
           {
-            "name": "X-AgriDrone-Payment-Signature",
+            "name": "X-SePay-Signature",
             "in": "header",
-            "required": true,
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "description": "For SePay, use `Apikey <API_KEY>`. Other configured providers may require the timestamp and signature headers.",
+            "required": false,
             "schema": {
               "type": "string"
             }
@@ -4634,11 +4643,20 @@
         "tags": [
           "SystemManagerWork"
         ],
-        "description": "Chuẩn bị mission theo SurveyOrder authoritative. Farm cần baseline sẽ có BaselineMapping trước; mission dịch vụ trả phí chỉ được bổ sung khi đủ điều kiện bản đồ, số trụ, giá và payment. BaselineStartAt/EndAt và ServiceStartAt/EndAt là hai cặp lịch độc lập; khi chưa có lịch phù hợp mission có thể ở Draft. OperationId hỗ trợ gọi lại an toàn.",
+        "description": "Chuẩn bị mission theo SurveyOrder authoritative. Chỉ chọn ngày bay theo giờ Việt Nam; giờ bắt đầu và kết thúc thực tế được ghi khi chuyển trạng thái chuyến bay. Gửi Idempotency-Key dạng UUID trong header và dùng lại đúng key đó khi retry.",
         "parameters": [
           {
             "name": "surveyOrderId",
             "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
             "required": true,
             "schema": {
               "type": "string",
@@ -4912,6 +4930,119 @@
         "responses": {
           "200": {
             "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/system-admin/survey-orders/{orderId}/payments": {
+      "get": {
+        "tags": [
+          "SystemSurveyOrders"
+        ],
+        "summary": "System Admin xem lịch sử thanh toán của SurveyOrder.",
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "surveyOrderId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "payments": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "surveyPaymentId": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "purpose": {
+                            "type": "string"
+                          },
+                          "amount": {
+                            "type": "number"
+                          },
+                          "currency": {
+                            "type": "string"
+                          },
+                          "provider": {
+                            "type": "string"
+                          },
+                          "providerReference": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "status": {
+                            "type": "string"
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "updatedAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "confirmedAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "nullable": true
+                          },
+                          "paymentVersion": {
+                            "type": "integer",
+                            "format": "int32"
+                          },
+                          "events": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "eventType": {
+                                  "type": "string"
+                                },
+                                "occurredAt": {
+                                  "type": "string",
+                                  "format": "date-time"
+                                },
+                                "receivedAt": {
+                                  "type": "string",
+                                  "format": "date-time"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
           }
         }
       }
@@ -7189,6 +7320,122 @@
       }
     },
     "/api/tenant-owner/survey-orders/{orderId}/payments": {
+      "get": {
+        "tags": [
+          "TenantOwnerSurveyOrders"
+        ],
+        "summary": "Lấy lịch sử thanh toán của SurveyOrder.",
+        "description": "Chỉ TenantOwner thuộc tenant sở hữu SurveyOrder mới xem được. Kết quả gồm các lần thanh toán tiền cọc và số dư cuối cùng cùng trạng thái, thời điểm và sự kiện callback đã nhận.",
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "surveyOrderId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "payments": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "surveyPaymentId": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "purpose": {
+                            "type": "string",
+                            "enum": [
+                              "BASELINE_DEPOSIT",
+                              "FINAL_BALANCE"
+                            ]
+                          },
+                          "amount": {
+                            "type": "number"
+                          },
+                          "currency": {
+                            "type": "string"
+                          },
+                          "provider": {
+                            "type": "string"
+                          },
+                          "providerReference": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "status": {
+                            "type": "string"
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "updatedAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "confirmedAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "nullable": true
+                          },
+                          "paymentVersion": {
+                            "type": "integer",
+                            "format": "int32"
+                          },
+                          "events": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "eventType": {
+                                  "type": "string"
+                                },
+                                "occurredAt": {
+                                  "type": "string",
+                                  "format": "date-time"
+                                },
+                                "receivedAt": {
+                                  "type": "string",
+                                  "format": "date-time"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      },
       "post": {
         "tags": [
           "TenantOwnerSurveyOrders"
@@ -9213,7 +9460,7 @@
           "purpose": {
             "type": "string",
             "nullable": true,
-            "description": "Mục đích thanh toán: BASELINE_DEPOSIT (tiền cọc 500k) hoặc FINAL_BALANCE (quyết toán số dư còn lại)."
+            "description": "Mục đích thanh toán: BASELINE_DEPOSIT (tiền cọc 10.000đ) hoặc FINAL_BALANCE (quyết toán số dư còn lại)."
           }
         },
         "additionalProperties": false
@@ -9573,28 +9820,14 @@
             "type": "string",
             "format": "uuid"
           },
-          "operationId": {
+          "serviceDate": {
             "type": "string",
-            "format": "uuid"
-          },
-          "serviceStartAt": {
-            "type": "string",
-            "format": "date-time",
+            "format": "date",
             "nullable": true
           },
-          "serviceEndAt": {
+          "baselineDate": {
             "type": "string",
-            "format": "date-time",
-            "nullable": true
-          },
-          "baselineStartAt": {
-            "type": "string",
-            "format": "date-time",
-            "nullable": true
-          },
-          "baselineEndAt": {
-            "type": "string",
-            "format": "date-time",
+            "format": "date",
             "nullable": true
           }
         },
@@ -10068,13 +10301,9 @@
             "type": "integer",
             "format": "int32"
           },
-          "startAt": {
+          "scheduledDate": {
             "type": "string",
-            "format": "date-time"
-          },
-          "endAt": {
-            "type": "string",
-            "format": "date-time"
+            "format": "date"
           },
           "replacementDroneId": {
             "type": "string",
@@ -10205,13 +10434,9 @@
       "ScheduleMissionRequest": {
         "type": "object",
         "properties": {
-          "scheduledAt": {
+          "scheduledDate": {
             "type": "string",
-            "format": "date-time"
-          },
-          "scheduledEndAt": {
-            "type": "string",
-            "format": "date-time"
+            "format": "date"
           },
           "expectedVersion": {
             "type": "integer",
@@ -10633,7 +10858,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "Provider-neutral payment callback payload. The signature covers the exact\r\nrequest JSON as `{unixTimestamp}.{rawJson}` using HMAC-SHA256."
+        "description": "Provider-neutral payment callback payload. SePay callbacks authenticate with `Authorization: Apikey <API_KEY>`. Other configured providers may use timestamped HMAC-SHA256 headers."
       },
       "SurveyPaymentCallbackResponse": {
         "type": "object",

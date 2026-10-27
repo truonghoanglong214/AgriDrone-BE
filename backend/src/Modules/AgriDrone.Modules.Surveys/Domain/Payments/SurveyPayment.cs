@@ -10,24 +10,24 @@ public sealed class SurveyPayment : Entity
             [SurveyPaymentStatus.Pending] = new HashSet<SurveyPaymentStatus>
             {
                 SurveyPaymentStatus.Processing,
-                SurveyPaymentStatus.Confirmed,
+                SurveyPaymentStatus.Paid,
                 SurveyPaymentStatus.Failed,
                 SurveyPaymentStatus.AdjustmentRequired
             },
             [SurveyPaymentStatus.Processing] = new HashSet<SurveyPaymentStatus>
             {
-                SurveyPaymentStatus.Confirmed,
+                SurveyPaymentStatus.Paid,
                 SurveyPaymentStatus.Failed,
                 SurveyPaymentStatus.AdjustmentRequired
             },
-            [SurveyPaymentStatus.Confirmed] = new HashSet<SurveyPaymentStatus>
+            [SurveyPaymentStatus.Paid] = new HashSet<SurveyPaymentStatus>
             {
                 SurveyPaymentStatus.AdjustmentRequired,
                 SurveyPaymentStatus.Refunded
             },
             [SurveyPaymentStatus.AdjustmentRequired] = new HashSet<SurveyPaymentStatus>
             {
-                SurveyPaymentStatus.Confirmed,
+                SurveyPaymentStatus.Paid,
                 SurveyPaymentStatus.Refunded
             }
         };
@@ -117,7 +117,7 @@ public sealed class SurveyPayment : Entity
     public void Confirm(string providerReference, DateTimeOffset confirmedAt)
     {
         SetProviderReference(providerReference);
-        TransitionTo(SurveyPaymentStatus.Confirmed, confirmedAt);
+        TransitionTo(SurveyPaymentStatus.Paid, confirmedAt);
         ConfirmedAt = confirmedAt;
     }
 
@@ -148,7 +148,7 @@ public sealed class SurveyPayment : Entity
         SetProviderReference(providerReference);
         Amount = settledAmount.Amount;
         Currency = settledAmount.Currency.Value;
-        TransitionTo(SurveyPaymentStatus.Confirmed, reconciledAt);
+        TransitionTo(SurveyPaymentStatus.Paid, reconciledAt);
         ConfirmedAt = reconciledAt;
     }
 

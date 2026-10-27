@@ -62,7 +62,7 @@ public sealed class SurveyPoliciesTests
             SafetyChecksSatisfied: true,
             HasValidWrittenDataUseConsent: true,
             HasValidFlightPermission: true,
-            DepositPaymentStatus: SurveyPaymentStatus.Confirmed));
+            DepositPaymentStatus: SurveyPaymentStatus.Paid));
 
         Assert.True(decision.IsReady);
         Assert.Empty(decision.Failures);
@@ -82,7 +82,7 @@ public sealed class SurveyPoliciesTests
             HasPriceSnapshot: true,
             AppointmentPurpose: SurveyAppointmentPurpose.PaidService,
             AppointmentStatus: SurveyAppointmentStatus.Confirmed,
-            PaymentStatus: SurveyPaymentStatus.Confirmed,
+            PaymentStatus: SurveyPaymentStatus.Paid,
             HasActiveQualifiedPrimaryManager: true,
             IsPrimaryManagerAvailable: true,
             IsAppointmentCurrent: true,
@@ -114,7 +114,7 @@ public sealed class SurveyPoliciesTests
             HasPriceSnapshot: true,
             AppointmentPurpose: SurveyAppointmentPurpose.PaidService,
             AppointmentStatus: SurveyAppointmentStatus.Confirmed,
-            PaymentStatus: SurveyPaymentStatus.Confirmed,
+            PaymentStatus: SurveyPaymentStatus.Paid,
             HasActiveQualifiedPrimaryManager: true,
             HasPendingPriceAdjustment: false,
             SafetyChecksSatisfied: true));
@@ -164,7 +164,7 @@ public sealed class SurveyPoliciesTests
             HasPriceSnapshot: true,
             AppointmentPurpose: SurveyAppointmentPurpose.BaselineMapping,
             AppointmentStatus: SurveyAppointmentStatus.Confirmed,
-            PaymentStatus: SurveyPaymentStatus.Confirmed,
+            PaymentStatus: SurveyPaymentStatus.Paid,
             HasActiveQualifiedPrimaryManager: true,
             HasPendingPriceAdjustment: false,
             SafetyChecksSatisfied: true));

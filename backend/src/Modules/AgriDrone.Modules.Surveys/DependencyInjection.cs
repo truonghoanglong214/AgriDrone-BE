@@ -139,8 +139,7 @@ public static class DependencyInjection
         services.AddScoped<ISurveyOrderArchiveReferenceQuery, SurveyOrderArchiveReferenceQuery>();
         services.AddScoped<ISurveyRequestIdempotencyResolver, SurveyRequestIdempotencyResolver>();
         services.AddOptions<SurveyPaymentProviderOptions>()
-            .Bind(configuration.GetSection(
-                SurveyPaymentProviderOptions.SectionName))
+            .Bind(configuration.GetSection(SurveyPaymentProviderOptions.SectionName))
             .ValidateOnStart();
         services.AddSingleton<IValidateOptions<SurveyPaymentProviderOptions>,
             SurveyPaymentProviderOptionsValidator>();

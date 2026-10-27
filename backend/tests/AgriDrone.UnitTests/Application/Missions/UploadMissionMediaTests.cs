@@ -170,7 +170,7 @@ public sealed class UploadMissionMediaTests
                 }
                 throw new NotSupportedException();
             };
-            handler = new(this, this, this, this, this, sender);
+            handler = new(this, this, this, null!, this, this, sender);
         }
 
         public async Task<Result<CompleteUploadSessionResult>> Upload(

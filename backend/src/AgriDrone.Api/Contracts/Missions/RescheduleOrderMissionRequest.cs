@@ -1,5 +1,5 @@
 namespace AgriDrone.Api.Contracts.Missions;
 
 public sealed record RescheduleOrderMissionRequest(
-    uint ExpectedVersion, DateTimeOffset StartAt, DateTimeOffset EndAt,
+    uint ExpectedVersion, DateOnly ScheduledDate,
     Guid? ReplacementDroneId = null);

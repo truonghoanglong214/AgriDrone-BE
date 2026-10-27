@@ -98,7 +98,7 @@ namespace AgriDrone.Database.Migrations
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "survey_capture_authorization_status", new[] { "PENDING", "VERIFIED", "REVOKED" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "survey_capture_authorization_type", new[] { "WRITTEN_DATA_USE_CONSENT", "FLIGHT_PERMISSION" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "survey_order_status", new[] { "PENDING_BOUNDARY_VERIFICATION", "AWAITING_BASELINE_APPOINTMENT", "AWAITING_BASELINE_DEPOSIT", "AWAITING_BOUNDARY_CAPTURE", "BASELINE_READY", "BASELINE_IN_PROGRESS", "AWAITING_BASELINE_REVIEW", "AWAITING_PRICING", "AWAITING_PAID_APPOINTMENT", "AWAITING_PAYMENT", "READY_FOR_PAID_SERVICE", "IN_PROGRESS", "PENDING_REVIEW", "COMPLETED", "CANCELLED" });
-            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "survey_payment_status", new[] { "PENDING", "PROCESSING", "CONFIRMED", "FAILED", "REFUNDED", "ADJUSTMENT_REQUIRED" });
+            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "survey_payment_status", new[] { "PENDING", "PROCESSING", "PAID", "FAILED", "REFUNDED", "ADJUSTMENT_REQUIRED" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "survey_pole_count_source", new[] { "BASELINE_PUBLICATION", "CURRENT_PUBLISHED_INVENTORY" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "survey_request_kind", new[] { "NEW_CUSTOMER", "EXISTING_TENANT_NEW_FARM", "EXISTING_FARM_SURVEY" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "survey_request_status", new[] { "SUBMITTED", "UNDER_REVIEW", "APPROVED", "REJECTED", "WITHDRAWN" });
@@ -7319,6 +7319,10 @@ namespace AgriDrone.Database.Migrations
 
                             t.HasCheckConstraint("ck_survey_orders_pricing_mode", "NOT (price_per_pole_snapshot IS NOT NULL AND price_per_ha_snapshot IS NOT NULL)");
 
+                            t.HasCheckConstraint("ck_survey_orders_deposit_consistency", "(requires_baseline_mapping = false AND deposit_amount = 0 AND deposit_payment_status = 'PAID'::system.survey_payment_status) OR (requires_baseline_mapping = true AND deposit_amount > 0)");
+
+                            t.HasCheckConstraint("ck_survey_orders_deposit_nonnegative", "deposit_amount >= 0");
+
                             t.HasCheckConstraint("ck_survey_orders_remaining_amount_nonnegative", "remaining_amount IS NULL OR remaining_amount >= 0");
                         });
                 });
@@ -7404,13 +7408,13 @@ namespace AgriDrone.Database.Migrations
                     b.HasIndex("SurveyOrderId", "Purpose")
                         .IsUnique()
                         .HasDatabaseName("uq_survey_payments_one_active_per_order_purpose")
-                        .HasFilter("status IN ('PENDING'::system.survey_payment_status, 'PROCESSING'::system.survey_payment_status, 'CONFIRMED'::system.survey_payment_status, 'ADJUSTMENT_REQUIRED'::system.survey_payment_status)");
+                        .HasFilter("status IN ('PENDING'::system.survey_payment_status, 'PROCESSING'::system.survey_payment_status, 'PAID'::system.survey_payment_status, 'ADJUSTMENT_REQUIRED'::system.survey_payment_status)");
 
                     b.ToTable("survey_payments", "survey", t =>
                         {
                             t.HasCheckConstraint("ck_survey_payments_amount_positive", "amount > 0");
 
-                            t.HasCheckConstraint("ck_survey_payments_confirmation", "(status = 'CONFIRMED'::system.survey_payment_status AND confirmed_at IS NOT NULL AND provider_reference IS NOT NULL) OR (status <> 'CONFIRMED'::system.survey_payment_status)");
+                            t.HasCheckConstraint("ck_survey_payments_confirmation", "(status = 'PAID'::system.survey_payment_status AND confirmed_at IS NOT NULL AND provider_reference IS NOT NULL) OR (status <> 'PAID'::system.survey_payment_status)");
 
                             t.HasCheckConstraint("ck_survey_payments_currency", "currency ~ '^[A-Z]{3}$'");
 

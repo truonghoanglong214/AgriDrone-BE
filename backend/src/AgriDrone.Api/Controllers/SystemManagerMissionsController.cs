@@ -2,10 +2,9 @@ using System.Text.Json;
 using AgriDrone.Api.Contracts.Missions;
 using AgriDrone.Modules.Missions.Application.Features.Missions.CompleteMissionPreflight;
 using AgriDrone.Modules.Missions.Application.Features.Missions.GetActivePreflightChecklist;
+using AgriDrone.Modules.Missions.Application.Features.Missions.GetMissionDetails;
 using AgriDrone.Modules.Missions.Application.Features.Missions.TransitionMission;
 using AgriDrone.Modules.Missions.Application.Features.Missions.RescheduleOrderMission;
-using AgriDrone.Modules.Missions.Application.Features.Missions.SyncFieldNote;
-using AgriDrone.Modules.Missions.Application.Features.Missions.GetFieldNotes;
 using AgriDrone.Modules.Missions.Domain.Missions;
 using AgriDrone.Modules.Missions.Application.Abstractions.Missions;
 using AgriDrone.SharedInfrastructure.Authorization;
@@ -62,32 +61,7 @@ public sealed class SystemManagerMissionsController(
             : Results.NotFound();
     }
 
-    /// <remarks>Đồng bộ ghi chú hiện trường bằng OperationId để retry an toàn. Có thể ghi loại sự cố, kết quả xử lý, quyết định recovery và tham chiếu bằng chứng; quyết định phải phù hợp trạng thái chuyến bay.</remarks>
-    [HttpPost("field-notes")]
-    public async Task<IResult> SyncFieldNote(
-        [FromRoute] Guid farmId, [FromRoute] Guid missionId,
-        [FromBody] SyncMissionFieldNoteRequest request,
-        CancellationToken cancellationToken)
-    {
-        var result = await sender.Send(new SyncFieldNoteCommand(
-            farmId, missionId, request.OperationId, request.Text,
-            request.ObservedAt, request.IncidentType, request.IncidentOutcome,
-            request.RecoveryDecision, request.EvidenceReference), cancellationToken);
-        return result.ToHttpResult(HttpContext, Results.Ok);
-    }
-
-    /// <remarks>Lấy ghi chú và sự cố đã ghi cho mission thuộc Farm được phân công.</remarks>
-    [HttpGet("field-notes")]
-    public async Task<IResult> GetFieldNotes(
-        [FromRoute] Guid farmId, [FromRoute] Guid missionId,
-        CancellationToken cancellationToken)
-    {
-        var result = await sender.Send(new GetFieldNotesQuery(
-            farmId, missionId), cancellationToken);
-        return result.ToHttpResult(HttpContext, Results.Ok);
-    }
-
-    /// <remarks>Đổi lịch mission Scheduled; với FlightFailed, chỉ phục hồi khi sự cố có quyết định RESCHEDULE_REQUIRED. Có thể chọn drone thay thế cho lần bay lại. ExpectedVersion chống cập nhật đồng thời và checklist cũ hết hiệu lực.</remarks>
+    /// <remarks>Đổi ngày bay cho mission Scheduled và có thể thay Drone nếu Drone cũ hỏng. Với FlightFailed, chỉ phục hồi khi sự cố có quyết định RESCHEDULE_REQUIRED. ReplacementDroneId có thể bỏ qua để giữ Drone hiện tại. ExpectedVersion chống cập nhật đồng thời và checklist cũ hết hiệu lực.</remarks>
     [HttpPost("reschedule")]
     public async Task<IResult> Reschedule(
         [FromRoute] Guid farmId, [FromRoute] Guid missionId,
@@ -96,7 +70,7 @@ public sealed class SystemManagerMissionsController(
     {
         var result = await sender.Send(new RescheduleOrderMissionCommand(
             farmId, missionId, request.ExpectedVersion,
-            request.StartAt, request.EndAt, request.ReplacementDroneId), cancellationToken);
+            request.ScheduledDate, request.ReplacementDroneId), cancellationToken);
         return result.ToHttpResult(HttpContext, Results.Ok);
     }
 
@@ -119,14 +93,49 @@ public sealed class SystemManagerMissionsController(
                 value.Items)));
     }
 
-    /// <remarks>Lưu câu trả lời checklist theo OperationId và ExpectedVersion. Nếu xác nhận phù hợp để bay, cần ghi bằng chứng điều kiện cho phép bay và phương án failsafe; quyết định không bay được lưu để theo dõi.</remarks>
+    /// <summary>Lấy version hiện tại của Mission trong luồng BE2.</summary>
+    /// <remarks>
+    /// FE dùng version này làm ExpectedMissionVersion cho thao tác media và
+    /// telemetry. Hai loại dữ liệu đó dùng version của Mission, không có row
+    /// version riêng.
+    /// </remarks>
+    [HttpGet("version")]
+    public async Task<IResult> GetMissionVersion(
+        [FromRoute] Guid farmId,
+        [FromRoute] Guid missionId,
+        CancellationToken cancellationToken)
+    {
+        var access = await managerAccessService.ResolveFarmAccessAsync(
+            farmId, cancellationToken);
+        if (!access.IsAllowed || access.TenantId is not Guid tenantId ||
+            access.FarmId != farmId)
+            return Results.Forbid();
+
+        var result = await sender.Send(
+            new GetMissionDetailsQuery(tenantId, farmId, missionId),
+            cancellationToken);
+        return result.ToHttpResult(
+            HttpContext,
+            mission => Results.Ok(new { mission.Id, mission.Version }));
+    }
+
+    /// <remarks>Lưu câu trả lời checklist theo Idempotency-Key header, ExpectedMissionVersion và ChecklistVersion. FE giữ nguyên header key khi retry cùng lần gửi checklist. Nếu xác nhận phù hợp để bay, các câu trả lời checklist phải đạt điều kiện cấu hình.</remarks>
     [HttpPost("preflight")]
     public async Task<IResult> CompletePreflight(
         [FromRoute] Guid farmId,
         [FromRoute] Guid missionId,
         [FromBody] CompleteMissionPreflightRequest request,
+        [FromHeader(Name = "Idempotency-Key")] Guid idempotencyKey,
         CancellationToken cancellationToken)
     {
+        if (idempotencyKey == Guid.Empty)
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["Idempotency-Key"] = ["A non-empty UUID idempotency key is required."]
+            });
+        }
+
         if (request.Answers.ValueKind != JsonValueKind.Object)
         {
             return Results.ValidationProblem(new Dictionary<string, string[]>
@@ -140,17 +149,14 @@ public sealed class SystemManagerMissionsController(
             new CompleteMissionPreflightCommand(
                 farmId,
                 missionId,
-                request.OperationId,
-                request.ExpectedVersion,
+                idempotencyKey,
+                request.ExpectedMissionVersion,
                 request.ChecklistDefinitionId,
                 request.ChecklistVersion,
                 answers,
                 request.SuitableForFlight,
                 request.Notes,
-                request.DeviceCompletedAt,
-                request.UnsuitableConditionNotes,
-                request.FailsafeNotes,
-                request.FlightAuthorizationEvidence),
+                request.DeviceCompletedAt),
             cancellationToken);
         return result.ToHttpResult(HttpContext, Results.Ok);
     }
@@ -160,56 +166,80 @@ public sealed class SystemManagerMissionsController(
     public Task<IResult> Start(
         [FromRoute] Guid farmId,
         [FromRoute] Guid missionId,
-        [FromBody] OperateMissionRequest request,
+        [FromBody] StartMissionRequest request,
         CancellationToken cancellationToken) =>
-        Transition(farmId, missionId, MissionStatus.InFlight, request, cancellationToken);
+        Transition(farmId, missionId, MissionStatus.InFlight,
+            request.ExpectedMissionVersion, null, cancellationToken);
 
     /// <remarks>Chuyển chuyến bay InFlight sang FlightCompleted và ghi thời điểm kết thúc. Bước upload media/telemetry được thực hiện qua API riêng.</remarks>
     [HttpPost("complete-flight")]
     public Task<IResult> CompleteFlight(
         [FromRoute] Guid farmId,
         [FromRoute] Guid missionId,
-        [FromBody] OperateMissionRequest request,
+        [FromBody] CompleteFlightMissionRequest request,
         CancellationToken cancellationToken) =>
-        Transition(farmId, missionId, MissionStatus.FlightCompleted, request, cancellationToken);
+        Transition(farmId, missionId, MissionStatus.FlightCompleted,
+            request.ExpectedMissionVersion, null, cancellationToken);
 
-    /// <remarks>Ghi chuyến bay thất bại cùng Reason, loại sự cố, kết quả xử lý, quyết định recovery và tham chiếu bằng chứng trong một giao dịch; đồng thời chuyển drone sang bảo trì.</remarks>
+    /// <remarks>Ghi chuyến bay thất bại cùng Idempotency-Key header, Reason, loại sự cố, kết quả xử lý, quyết định recovery và tham chiếu bằng chứng trong một giao dịch; đồng thời chuyển drone sang bảo trì.</remarks>
     [HttpPost("fail-flight")]
-    public Task<IResult> FailFlight(
+    public async Task<IResult> FailFlight(
         [FromRoute] Guid farmId,
         [FromRoute] Guid missionId,
-        [FromBody] OperateMissionRequest request,
-        CancellationToken cancellationToken) =>
-        Transition(farmId, missionId, MissionStatus.FlightFailed, request, cancellationToken);
+        [FromBody] FailFlightMissionRequest request,
+        [FromHeader(Name = "Idempotency-Key")] Guid idempotencyKey,
+        CancellationToken cancellationToken)
+    {
+        if (idempotencyKey == Guid.Empty)
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["Idempotency-Key"] = ["A non-empty UUID idempotency key is required."]
+            });
+        }
+
+        return await Transition(farmId, missionId, MissionStatus.FlightFailed,
+            request.ExpectedMissionVersion, request.Reason, cancellationToken,
+            idempotencyKey, request.IncidentType,
+            request.IncidentOutcome, request.RecoveryDecision,
+            request.EvidenceReference);
+    }
 
     /// <remarks>Hủy mission ở trạng thái Draft hoặc Scheduled; yêu cầu Reason để lưu vết quyết định.</remarks>
     [HttpPost("cancel")]
     public Task<IResult> Cancel(
         [FromRoute] Guid farmId,
         [FromRoute] Guid missionId,
-        [FromBody] OperateMissionRequest request,
+        [FromBody] CancelMissionRequest request,
         CancellationToken cancellationToken) =>
-        Transition(farmId, missionId, MissionStatus.Cancelled, request, cancellationToken);
+        Transition(farmId, missionId, MissionStatus.Cancelled,
+            request.ExpectedMissionVersion, request.Reason, cancellationToken);
 
     private async Task<IResult> Transition(
         Guid farmId,
         Guid missionId,
         MissionStatus status,
-        OperateMissionRequest request,
-        CancellationToken cancellationToken)
+        uint expectedMissionVersion,
+        string? reason,
+        CancellationToken cancellationToken,
+        Guid? incidentOperationId = null,
+        string? incidentType = null,
+        string? incidentOutcome = null,
+        string? recoveryDecision = null,
+        string? evidenceReference = null)
     {
         var result = await sender.Send(
             new TransitionMissionCommand(
                 farmId,
                 missionId,
                 status,
-                request.ExpectedVersion,
-                request.Reason,
-                request.IncidentOperationId,
-                request.IncidentType,
-                request.IncidentOutcome,
-                request.RecoveryDecision,
-                request.EvidenceReference),
+                expectedMissionVersion,
+                reason,
+                incidentOperationId,
+                incidentType,
+                incidentOutcome,
+                recoveryDecision,
+                evidenceReference),
             cancellationToken);
         return result.ToHttpResult(HttpContext, Results.Ok);
     }

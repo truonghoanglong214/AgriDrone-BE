@@ -37,7 +37,7 @@ internal static class SurveyPaymentCommandSupport
     {
         SurveyPaymentStatus.Pending => "PENDING",
         SurveyPaymentStatus.Processing => "PROCESSING",
-        SurveyPaymentStatus.Confirmed => "CONFIRMED",
+        SurveyPaymentStatus.Paid => "PAID",
         SurveyPaymentStatus.Failed => "FAILED",
         SurveyPaymentStatus.Refunded => "REFUNDED",
         SurveyPaymentStatus.AdjustmentRequired => "ADJUSTMENT_REQUIRED",

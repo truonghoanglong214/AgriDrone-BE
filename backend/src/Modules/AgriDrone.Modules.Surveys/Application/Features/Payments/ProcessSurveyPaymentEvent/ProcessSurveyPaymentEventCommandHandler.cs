@@ -133,6 +133,21 @@ internal sealed class ProcessSurveyPaymentEventCommandHandler(
                 PaymentError.ProviderMismatch());
         }
 
+        if (payment.Status == SurveyPaymentStatus.Paid &&
+            string.Equals(
+                command.EventType.Trim(),
+                SurveyPaymentCommandSupport.SucceededEvent,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return Result.Success(CreateResponse(
+                command,
+                payment,
+                order,
+                duplicate: true,
+                transitionApplied: false,
+                "ALREADY_PAID_IGNORED"));
+        }
+
         var previousPaymentStatus = payment.Status;
         var previousOrderStatus = order.Status;
         var (transitionApplied, disposition) = ApplyEvent(
@@ -217,7 +232,7 @@ internal sealed class ProcessSurveyPaymentEventCommandHandler(
             SurveyPaymentCommandSupport.ChargebackEvent)
         {
             if (payment.Status is not (
-                SurveyPaymentStatus.Confirmed or
+                SurveyPaymentStatus.Paid or
                 SurveyPaymentStatus.AdjustmentRequired))
             {
                 return (false, "IGNORED_CURRENT_STATE");

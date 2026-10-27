@@ -2,6 +2,7 @@ using AgriDrone.Api.Contracts.Surveys.Orders;
 using AgriDrone.Api.Contracts.Surveys.Payments;
 using AgriDrone.Api.Mapping;
 using AgriDrone.Modules.Surveys.Application.Features.Payments.ApplyPriceAdjustment;
+using AgriDrone.Modules.Surveys.Application.Features.Payments.GetSystemAdminSurveyPaymentHistory;
 using AgriDrone.Modules.Surveys.Application.Features.Payments.ApprovePriceAdjustment;
 using AgriDrone.Modules.Surveys.Application.Features.Payments.RejectPriceAdjustment;
 using AgriDrone.Modules.Surveys.Application.Features.Adjustments.ScopeAdjustments.RequestScopeAdjustment;
@@ -54,6 +55,24 @@ public sealed class SystemSurveyOrdersController(ISender sender)
         return result.ToHttpResult(
             HttpContext,
             page => Results.Ok(SurveyOrderResponseMapper.ToResponse(page)));
+    }
+    /// <summary>System Admin xem lịch sử thanh toán của SurveyOrder.</summary>
+    [HttpGet("{orderId:guid}/payments")]
+    [ProducesResponseType<SurveyPaymentHistoryApiResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IResult> GetPaymentHistory(
+        [FromRoute] Guid orderId,
+        CancellationToken cancellationToken)
+    {
+        var result = await sender.Send(
+            new GetSystemAdminSurveyPaymentHistoryQuery(orderId),
+            cancellationToken);
+        return result.ToHttpResult(
+            HttpContext,
+            response => Results.Ok(
+                SurveyPaymentResponseMapper.ToResponse(response)));
     }
 
     [HttpPost("{orderId:guid}/price-adjustments/{adjustmentId:guid}/approve")]

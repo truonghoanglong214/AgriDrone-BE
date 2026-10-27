@@ -6,6 +6,7 @@ using AgriDrone.Database;
 using AgriDrone.Integrations.Email;
 using AgriDrone.Integrations.Media;
 using AgriDrone.Integrations.Media.Telemetry;
+using AgriDrone.Integrations.SePay;
 using AgriDrone.Modules.Farms;
 using AgriDrone.Modules.Identity;
 using AgriDrone.Modules.Missions;
@@ -64,7 +65,6 @@ builder.Services.AddSwaggerGen(options =>
 {
     options.OperationFilter<LegacyEndpointOperationFilter>();
     options.OperationFilter<AllowAnonymousOperationFilter>();
-    options.OperationFilter<SurveyPaymentCallbackOperationFilter>();
 
     var xmlFileName =
         $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
@@ -132,6 +132,7 @@ builder.Services
     .AddNotificationsModule(builder.Configuration)
     .AddPlantsModule(builder.Configuration)
     .AddSurveysModule(builder.Configuration)
+    .AddSePayIntegration(builder.Configuration)
     .AddIntegrationMessagingFoundation(builder.Configuration)
     .AddMappingPublicationPersistence(builder.Configuration)
     .AddSurveyResultPublicationPersistence(builder.Configuration)
@@ -174,7 +175,10 @@ if (app.Environment.IsDevelopment())
     app.UseStaticFiles();
     app.UseSwagger();
     app.UseSwaggerUI(options =>
-        options.InjectJavascript("/swagger/folder-upload.js"));
+    {
+        options.InjectJavascript("/swagger/folder-upload.js");
+        options.InjectJavascript("/swagger/sepay-qr.js");
+    });
 }
 
 if (!app.Environment.IsDevelopment())

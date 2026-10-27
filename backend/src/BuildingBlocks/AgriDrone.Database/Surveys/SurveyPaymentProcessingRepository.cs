@@ -13,6 +13,59 @@ internal sealed class SurveyPaymentProcessingRepository(
     SurveyPaymentProcessingDbContext context)
     : ISurveyPaymentProcessingRepository
 {
+    public async Task<Result<IReadOnlyList<SurveyPayment>>>
+        GetOwnerPaymentHistoryAsync(
+            Guid surveyOrderId,
+            Guid actorUserId,
+            CancellationToken cancellationToken = default)
+    {
+        context.EnsureTransaction();
+        if (!await LockOrderAsync(surveyOrderId, cancellationToken))
+        {
+            return Result.Failure<IReadOnlyList<SurveyPayment>>(
+                SurveyOrderError.NotFound(surveyOrderId));
+        }
+
+        if (!await HasOwnerAccessAsync(
+                surveyOrderId,
+                actorUserId,
+                cancellationToken))
+        {
+            return Result.Failure<IReadOnlyList<SurveyPayment>>(
+                PaymentError.Forbidden());
+        }
+
+        IReadOnlyList<SurveyPayment> payments =
+            await ReadPaymentHistoryAsync(surveyOrderId, cancellationToken);
+        return Result.Success(payments);
+    }
+
+    public async Task<Result<IReadOnlyList<SurveyPayment>>>
+        GetSystemAdminPaymentHistoryAsync(
+            Guid surveyOrderId,
+            CancellationToken cancellationToken = default)
+    {
+        context.EnsureTransaction();
+        if (!await LockOrderAsync(surveyOrderId, cancellationToken))
+        {
+            return Result.Failure<IReadOnlyList<SurveyPayment>>(
+                SurveyOrderError.NotFound(surveyOrderId));
+        }
+
+        IReadOnlyList<SurveyPayment> payments =
+            await ReadPaymentHistoryAsync(surveyOrderId, cancellationToken);
+        return Result.Success(payments);
+    }
+
+    private Task<List<SurveyPayment>> ReadPaymentHistoryAsync(
+        Guid surveyOrderId,
+        CancellationToken cancellationToken) => context.SurveyPayments
+        .AsNoTracking()
+        .Include(payment => payment.Events)
+        .Where(payment => payment.SurveyOrderId == surveyOrderId)
+        .OrderByDescending(payment => payment.CreatedAt)
+        .ToListAsync(cancellationToken);
+
     public async Task<Result<SurveyPaymentOwnerState>>
         GetForOwnerInitiationAsync(
             Guid surveyOrderId,
@@ -61,7 +114,7 @@ internal sealed class SurveyPaymentProcessingRepository(
                   AND payment.status IN (
                     'PENDING'::system.survey_payment_status,
                     'PROCESSING'::system.survey_payment_status,
-                    'CONFIRMED'::system.survey_payment_status,
+                    'PAID'::system.survey_payment_status,
                     'ADJUSTMENT_REQUIRED'::system.survey_payment_status)
                 FOR UPDATE OF payment
                 """)

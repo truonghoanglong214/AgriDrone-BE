@@ -4,7 +4,7 @@ public enum SurveyPaymentStatus
 {
     Pending,
     Processing,
-    Confirmed,
+    Paid,
     Failed,
     Refunded,
     AdjustmentRequired

@@ -204,7 +204,7 @@ public sealed class SystemManagerSurveyOrdersController(ISender sender)
             new StartBoundaryCaptureCommand(
                 orderId,
                 request.DroneId!.Value,
-                request.OperationId!.Value,
+                request.IdempotencyKey!.Value,
                 request.ExpectedOrderVersion!.Value),
             cancellationToken);
         return result.ToHttpResult(
@@ -232,7 +232,7 @@ public sealed class SystemManagerSurveyOrdersController(ISender sender)
                 sessionId,
                 request.ExpectedSessionVersion!.Value,
                 request.Samples.Select(item => new BoundaryCaptureSampleInput(
-                    item.ClientOperationId!.Value,
+                    item.ClientIdempotencyKey!.Value,
                     item.SequenceNumber,
                     item.Latitude,
                     item.Longitude,
