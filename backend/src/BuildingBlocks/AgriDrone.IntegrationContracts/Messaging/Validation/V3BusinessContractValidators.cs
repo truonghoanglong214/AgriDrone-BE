@@ -147,6 +147,17 @@ public static class V3BusinessContractValidators
                     Range(candidate.MatchConfidence.Value, 0, 1,
                         "MatchConfidence", errors);
                 }
+
+                if (candidate.Status is not null &&
+                    candidate.Status is not ("DETECTED" or "MISSING"))
+                {
+                    errors.Add("Status must be DETECTED or MISSING when provided.");
+                }
+
+                if (candidate.Source is { Length: > 100 })
+                {
+                    errors.Add("Source cannot exceed 100 characters.");
+                }
             }
         }
 

@@ -39,7 +39,9 @@ public sealed record MappingCandidateV3(
     decimal? MeasuredBoundaryDistanceM = null,
     decimal? BoundaryThresholdM = null,
     Guid? MatchedPlantId = null,
-    decimal? MatchConfidence = null);
+    decimal? MatchConfidence = null,
+    string? Status = null,
+    string? Source = null);
 
 public sealed record GeoJsonPointV3(
     string Type,

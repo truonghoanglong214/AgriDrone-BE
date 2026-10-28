@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using AgriDrone.Api.Contracts.Missions;
 using AgriDrone.Modules.Missions.Application.Features.Missions.CompleteMissionPreflight;
@@ -7,10 +8,13 @@ using AgriDrone.Modules.Missions.Application.Features.Missions.TransitionMission
 using AgriDrone.Modules.Missions.Application.Features.Missions.RescheduleOrderMission;
 using AgriDrone.Modules.Missions.Domain.Missions;
 using AgriDrone.Modules.Missions.Application.Abstractions.Missions;
+using AgriDrone.IntegrationContracts.Mapping;
+using AgriDrone.IntegrationContracts.Messaging;
 using AgriDrone.SharedInfrastructure.Authorization;
 using AgriDrone.SharedInfrastructure.Http;
 using MediatR;
 using AgriDrone.SharedKernel.Application.Abstractions.Authorization;
+using AgriDrone.SharedKernel.Application.Abstractions.Execution;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -22,8 +26,46 @@ namespace AgriDrone.Api.Controllers;
 public sealed class SystemManagerMissionsController(
     ISender sender,
     ISystemManagerAccessService managerAccessService,
-    IMissionPlantGpsStore plantGpsStore) : ControllerBase
+    IMissionPlantGpsStore plantGpsStore,
+    IMissionPlantGpsPublisher plantGpsPublisher,
+    IExecutionContext executionContext) : ControllerBase
 {
+    /// <summary>Lấy danh sách cây CSV đã lưu cho mission.</summary>
+    [HttpGet("plant-gps")]
+    public async Task<IResult> GetPlantGps(
+        [FromRoute] Guid farmId,
+        [FromRoute] Guid missionId,
+        CancellationToken cancellationToken)
+    {
+        var access = await managerAccessService.ResolveFarmAccessAsync(
+            farmId, cancellationToken);
+        if (!access.IsAllowed || access.TenantId is not Guid tenantId ||
+            access.FarmId != farmId)
+            return Results.Forbid();
+
+        var rows = await plantGpsStore.GetAsync(
+            tenantId, farmId, missionId, cancellationToken);
+        if (rows is null)
+            return Results.NotFound();
+
+        return Results.Ok(new
+        {
+            missionId,
+            savedCount = rows.Count,
+            trees = rows.Select(tree => new
+            {
+                tree.TreeId,
+                tree.Row,
+                tree.Col,
+                tree.Latitude,
+                tree.Longitude,
+                tree.Confidence,
+                tree.Status,
+                tree.Source
+            }).ToArray()
+        });
+    }
+
     /// <summary>Lưu bản CSV cây hiện tại theo mission trước khi tải xuống.</summary>
     [HttpPost("plant-gps")]
     public async Task<IResult> ReplacePlantGps(
@@ -59,6 +101,211 @@ public sealed class SystemManagerMissionsController(
             farmId, missionId, rows, cancellationToken);
         return saved ? Results.Ok(new { missionId, savedCount = rows.Length })
             : Results.NotFound();
+    }
+
+    /// <summary>Lưu danh sách cây từ file CSV cho mission.</summary>
+    [HttpPost("plant-gps/csv")]
+    [Consumes("multipart/form-data")]
+    [RequestSizeLimit(5 * 1024 * 1024)]
+    public async Task<IResult> ReplacePlantGpsFromCsv(
+        [FromRoute] Guid farmId,
+        [FromRoute] Guid missionId,
+        IFormFile file,
+        CancellationToken cancellationToken)
+    {
+        const long maximumFileSizeBytes = 5 * 1024 * 1024;
+        const string expectedHeader =
+            "tree_id,row,col,latitude,longitude,confidence,status,source";
+
+        if (file is null || file.Length == 0 ||
+            file.Length > maximumFileSizeBytes)
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["file"] = ["Upload a non-empty CSV file no larger than 5 MB."]
+            });
+        }
+
+        var access = await managerAccessService.ResolveFarmAccessAsync(
+            farmId, cancellationToken);
+        if (!access.IsAllowed || access.TenantId is null || access.FarmId != farmId)
+            return Results.Forbid();
+
+        var rows = new List<MissionPlantGpsRow>();
+        using var reader = new StreamReader(file.OpenReadStream());
+        var header = await reader.ReadLineAsync(cancellationToken);
+
+        if (!string.Equals(header?.TrimStart('\uFEFF'), expectedHeader,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["file"] = [$"CSV header must be: {expectedHeader}."]
+            });
+        }
+
+        var lineNumber = 1;
+        while (await reader.ReadLineAsync(cancellationToken) is { } line)
+        {
+            lineNumber++;
+            if (string.IsNullOrWhiteSpace(line))
+                continue;
+
+            // Python currently emits unquoted scalar values with this exact 8-column schema.
+            var columns = line.Split(',');
+            if (columns.Length != 8 ||
+                !int.TryParse(columns[1], NumberStyles.Integer,
+                    CultureInfo.InvariantCulture, out var row) ||
+                !int.TryParse(columns[2], NumberStyles.Integer,
+                    CultureInfo.InvariantCulture, out var col) ||
+                !decimal.TryParse(columns[3], NumberStyles.Float,
+                    CultureInfo.InvariantCulture, out var latitude) ||
+                !decimal.TryParse(columns[4], NumberStyles.Float,
+                    CultureInfo.InvariantCulture, out var longitude) ||
+                !decimal.TryParse(columns[5], NumberStyles.Float,
+                    CultureInfo.InvariantCulture, out var confidence))
+            {
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    ["file"] = [$"CSV row {lineNumber} has an invalid format."]
+                });
+            }
+
+            rows.Add(new MissionPlantGpsRow(
+                columns[0].Trim(), row, col, latitude, longitude,
+                confidence, columns[6].Trim(), columns[7].Trim()));
+
+            if (rows.Count > 10000)
+            {
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    ["file"] = ["CSV cannot contain more than 10000 data rows."]
+                });
+            }
+        }
+
+        if (rows.Count == 0 ||
+            rows.Any(tree =>
+                string.IsNullOrWhiteSpace(tree.TreeId) || tree.TreeId.Length > 100 ||
+                tree.Row < 1 || tree.Col < 1 ||
+                tree.Latitude is < -90 or > 90 ||
+                tree.Longitude is < -180 or > 180 ||
+                tree.Confidence is < 0 or > 1 ||
+                tree.Status is not ("DETECTED" or "MISSING") ||
+                string.IsNullOrWhiteSpace(tree.Source) || tree.Source.Length > 100) ||
+            rows.Select(tree => tree.TreeId)
+                .Distinct(StringComparer.Ordinal).Count() != rows.Count)
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["file"] =
+                ["CSV must contain valid rows with unique tree_id values, valid coordinates, and status DETECTED or MISSING."]
+            });
+        }
+
+        var saved = await plantGpsStore.ReplaceAsync(
+            access.TenantId.Value, farmId, missionId, rows, cancellationToken);
+
+        return saved
+            ? Results.Ok(new { missionId, savedCount = rows.Count })
+            : Results.NotFound();
+    }
+
+    /// <summary>Ghép dữ liệu CSV đã lưu với metadata V3 và xếp message vào Outbox.</summary>
+    /// <remarks>
+    /// Request body chứa metadata payload cần để dựng mapping.baseline-candidates-ready.v3.
+    /// API lấy treeId trong payload để ghép với các dòng CSV đã lưu; tọa độ, hàng,
+    /// cột và confidence trong message lấy từ DB. Message envelope
+    /// được tạo phía server. Dùng lại Idempotency-Key nếu retry cùng một lần publish.
+    /// </remarks>
+    [HttpPost("plant-gps/publish")]
+    public async Task<IResult> PublishPlantGps(
+        [FromRoute] Guid farmId,
+        [FromRoute] Guid missionId,
+        [FromHeader(Name = "Idempotency-Key")] Guid? idempotencyKey,
+        [FromBody] PublishMissionPlantGpsRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (idempotencyKey is not Guid messageId || messageId == Guid.Empty)
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["Idempotency-Key"] = ["A non-empty GUID Idempotency-Key is required."]
+            });
+        }
+
+        var access = await managerAccessService.ResolveFarmAccessAsync(
+            farmId, cancellationToken);
+        if (!access.IsAllowed || access.TenantId is not Guid tenantId ||
+            access.FarmId != farmId)
+            return Results.Forbid();
+
+        if (executionContext.ActorId is not Guid actorId ||
+            executionContext.CorrelationId == Guid.Empty)
+            return Results.Unauthorized();
+
+        if (request.Payload is null)
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["payload"] = ["A payload is required."]
+            });
+        }
+
+        if (request.Payload.Zones is null || request.Payload.Zones.Count == 0 ||
+            request.Payload.Zones.Any(zone => zone is null ||
+                zone.Candidates is null || zone.Candidates.Count == 0 ||
+                zone.Candidates.Any(candidate => candidate is null ||
+                    string.IsNullOrWhiteSpace(candidate.TreeId))))
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["payload.zones"] = ["At least one zone with candidate rows is required."]
+            });
+        }
+
+        var payload = new BaselineMappingCandidatesReadyV3(
+            request.Payload.SurveyOrderId,
+            missionId,
+            farmId,
+            request.Payload.Zones.Select(zone => new ZoneMappingCandidatesV3(
+                zone.ZoneId,
+                zone.Candidates.Select(candidate =>
+                    new MappingCandidateV3(TreeId: candidate.TreeId)).ToArray(),
+                GridBearingDeg: zone.GridBearingDeg,
+                RowSpacingM: zone.RowSpacingM,
+                PlantSpacingM: zone.PlantSpacingM)).ToArray());
+
+        var result = await plantGpsPublisher.PublishAsync(
+            tenantId,
+            farmId,
+            missionId,
+            actorId,
+            executionContext.CorrelationId,
+            messageId,
+            payload,
+            cancellationToken);
+
+        return result.Status switch
+        {
+            MissionPlantGpsPublishStatus.Queued => Results.Ok(new
+            {
+                missionId,
+                messageId = result.MessageId,
+                status = "QUEUED"
+            }),
+            MissionPlantGpsPublishStatus.NotFound => Results.NotFound(),
+            MissionPlantGpsPublishStatus.Conflict => Results.Conflict(new
+            {
+                errors = result.Errors
+            }),
+            MissionPlantGpsPublishStatus.Invalid => Results.ValidationProblem(
+                new Dictionary<string, string[]>
+                {
+                    ["payload"] = result.Errors?.ToArray() ?? ["Payload is invalid."]
+                }),
+            _ => Results.Problem("Unable to queue the plant GPS message.")
+        };
     }
 
     /// <remarks>Đổi ngày bay cho mission Scheduled và có thể thay Drone nếu Drone cũ hỏng. Với FlightFailed, chỉ phục hồi khi sự cố có quyết định RESCHEDULE_REQUIRED. ReplacementDroneId có thể bỏ qua để giữ Drone hiện tại. ExpectedVersion chống cập nhật đồng thời và checklist cũ hết hiệu lực.</remarks>

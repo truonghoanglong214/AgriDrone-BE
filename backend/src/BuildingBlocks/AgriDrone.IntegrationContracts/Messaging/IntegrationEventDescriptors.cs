@@ -96,6 +96,13 @@ public static class IntegrationEventDescriptors
             IntegrationSchemaVersions.V3,
             RequiresActorId: false);
 
+    public static IntegrationEventDescriptor<BaselineMappingCandidatesReadyV3Message>
+        BaselineMappingCandidatesReadyV3Message { get; } =
+        new(
+            IntegrationEventTypes.BaselineMappingCandidatesReadyV3,
+            IntegrationSchemaVersions.V3,
+            RequiresActorId: false);
+
     public static IntegrationEventDescriptor<FarmBaseMapPublishedV3>
         FarmBaseMapPublishedV3 { get; } =
         new(
