@@ -200,7 +200,7 @@ internal sealed class SystemManagerSurveyOrderQueries(
         PagedRequest page,
         CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfEqual(tenantId, Guid.Empty);
+        ArgumentOutOfRangeException.ThrowIfEqual(tenantId, Guid.Empty);
         EnsureValidPage(page);
 
         var orders = GetTenantOwnerOrders(tenantId);
@@ -215,8 +215,8 @@ internal sealed class SystemManagerSurveyOrderQueries(
         Guid surveyOrderId,
         CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfEqual(tenantId, Guid.Empty);
-        ArgumentException.ThrowIfEqual(surveyOrderId, Guid.Empty);
+        ArgumentOutOfRangeException.ThrowIfEqual(tenantId, Guid.Empty);
+        ArgumentOutOfRangeException.ThrowIfEqual(surveyOrderId, Guid.Empty);
 
         return GetTenantOwnerOrders(tenantId)
             .Where(item => item.SurveyOrderId == surveyOrderId)
