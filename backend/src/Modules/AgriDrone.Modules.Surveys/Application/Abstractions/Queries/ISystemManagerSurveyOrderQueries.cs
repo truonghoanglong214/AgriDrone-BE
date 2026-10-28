@@ -15,6 +15,17 @@ public interface ISystemManagerSurveyOrderQueries
         SystemAdminSurveyOrderFilter filter,
         PagedRequest page,
         CancellationToken cancellationToken = default);
+
+    Task<PagedResult<TenantOwnerSurveyOrderItem>> GetTenantOwnerPageAsync(
+        Guid tenantId,
+        SurveyOrderStatus? status,
+        PagedRequest page,
+        CancellationToken cancellationToken = default);
+
+    Task<TenantOwnerSurveyOrderItem?> GetTenantOwnerByIdAsync(
+        Guid tenantId,
+        Guid surveyOrderId,
+        CancellationToken cancellationToken = default);
 }
 
 public sealed record SystemManagerSurveyOrderFilter(
@@ -46,3 +57,24 @@ public sealed record SystemManagerSurveyOrderItem(
     SurveyAppointmentStatus? CurrentAppointmentStatus,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt);
+
+public sealed record TenantOwnerSurveyOrderItem(
+    Guid SurveyOrderId,
+    string OrderNumber,
+    Guid FarmId,
+    string FarmName,
+    SurveyOrderStatus Status,
+    uint OrderVersion,
+    decimal DepositAmount,
+    decimal? TotalAmount,
+    decimal? RemainingAmount,
+    string Currency,
+    TenantOwnerCurrentAppointmentItem? CurrentAppointment);
+
+public sealed record TenantOwnerCurrentAppointmentItem(
+    Guid AppointmentId,
+    SurveyAppointmentPurpose Purpose,
+    DateTimeOffset StartAt,
+    DateTimeOffset EndAt,
+    SurveyAppointmentStatus Status,
+    uint AppointmentVersion);
