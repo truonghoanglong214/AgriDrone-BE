@@ -21,6 +21,7 @@ public sealed class MappingCandidate : AggregateRoot
     public decimal BoundaryThresholdM { get; private set; }
     public Guid? ProposedMatchedPlantId { get; private set; }
     public decimal? MatchConfidence { get; private set; }
+    public string? TreeId { get; private set; }
 
     public MappingCandidateReviewDecision ReviewDecision { get; private set; }
     public Point? CorrectedPosition { get; private set; }
@@ -53,7 +54,8 @@ public sealed class MappingCandidate : AggregateRoot
         decimal boundaryThresholdM,
         Guid? proposedMatchedPlantId,
         decimal? matchConfidence,
-        DateTimeOffset createdAt)
+        DateTimeOffset createdAt,
+        string? treeId = null)
     {
         DomainGuard.NotEmpty(id);
         DomainGuard.NotEmpty(batchId);
@@ -83,6 +85,7 @@ public sealed class MappingCandidate : AggregateRoot
             BoundaryThresholdM = boundaryThresholdM,
             ProposedMatchedPlantId = proposedMatchedPlantId,
             MatchConfidence = matchConfidence,
+            TreeId = treeId?.Trim(),
             ReviewDecision = MappingCandidateReviewDecision.Pending,
             CreatedAt = createdAt,
             UpdatedAt = createdAt
@@ -112,9 +115,10 @@ public sealed class MappingCandidate : AggregateRoot
             throw new InvalidOperationException("Relocate decision requires a corrected position.");
         }
 
-        if (decision == MappingCandidateReviewDecision.Replace && !correctedMatchedPlantId.HasValue && !ProposedMatchedPlantId.HasValue)
+        if (decision is MappingCandidateReviewDecision.Relocate or MappingCandidateReviewDecision.MatchExisting or MappingCandidateReviewDecision.Replace &&
+            !correctedMatchedPlantId.HasValue && !ProposedMatchedPlantId.HasValue)
         {
-            throw new InvalidOperationException("Replace decision requires an existing plant ID to be replaced.");
+            throw new InvalidOperationException($"{decision} decision requires an existing plant ID to match or replace.");
         }
 
         if (correctedRowIndex.HasValue) ArgumentOutOfRangeException.ThrowIfLessThan(correctedRowIndex.Value, 1);

@@ -2,11 +2,10 @@ namespace AgriDrone.Modules.Farms.Domain.Maps.Staging;
 
 public enum MappingCandidateReviewDecision
 {
-    Pending,
-    Accept,
-    Reject,
-    Relocate,
-    Replace,
-    CreateNew = Accept,
-    MatchExisting = Relocate
+    Pending = 0,
+    MatchExisting = 1,
+    Relocate = 2,
+    CreateNew = 3,
+    Replace = 4,
+    Reject = 5
 }

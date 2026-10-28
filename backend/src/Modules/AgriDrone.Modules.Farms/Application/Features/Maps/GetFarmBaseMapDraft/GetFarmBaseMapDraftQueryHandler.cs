@@ -84,7 +84,8 @@ internal sealed class GetFarmBaseMapDraftQueryHandler(
                     ProposedMatchedPlantId: c.ProposedMatchedPlantId,
                     CorrectedMatchedPlantId: c.CorrectedMatchedPlantId,
                     ReviewReason: c.ReviewReason,
-                    ReviewedAt: c.ReviewedAt)).ToList();
+                    ReviewedAt: c.ReviewedAt,
+                    TreeId: c.TreeId)).ToList();
 
                 zonesList.Add(new CandidateZoneDto(
                     ZoneId: z.ZoneId,
@@ -96,7 +97,7 @@ internal sealed class GetFarmBaseMapDraftQueryHandler(
         }
 
         var total = candidates.Count;
-        var accepted = candidates.Count(c => c.ReviewDecision is MappingCandidateReviewDecision.Accept or MappingCandidateReviewDecision.CreateNew);
+        var accepted = candidates.Count(c => c.ReviewDecision is MappingCandidateReviewDecision.CreateNew or MappingCandidateReviewDecision.MatchExisting);
         var rejected = candidates.Count(c => c.ReviewDecision == MappingCandidateReviewDecision.Reject);
         var relocated = candidates.Count(c => c.ReviewDecision == MappingCandidateReviewDecision.Relocate);
         var replaced = candidates.Count(c => c.ReviewDecision == MappingCandidateReviewDecision.Replace);

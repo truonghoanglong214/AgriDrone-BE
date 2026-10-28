@@ -59,7 +59,7 @@ public sealed class SystemManagerFarmBaseMapsController(ISender sender) : Contro
     {
         if (!Enum.TryParse<MappingCandidateReviewDecision>(request.Decision, ignoreCase: true, out var decision))
         {
-            return Results.BadRequest($"Invalid review decision '{request.Decision}'. Allowed values: Accept, Reject, Relocate, Replace.");
+            return Results.BadRequest($"Invalid review decision '{request.Decision}'. Allowed values: MatchExisting, Relocate, CreateNew, Replace, Reject.");
         }
 
         Point? correctedPoint = null;

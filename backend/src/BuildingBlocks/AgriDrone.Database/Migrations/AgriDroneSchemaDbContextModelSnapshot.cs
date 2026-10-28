@@ -727,6 +727,11 @@ namespace AgriDrone.Database.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("source_observation_id");
 
+                    b.Property<string>("TreeId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("tree_id");
+
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
@@ -751,8 +756,6 @@ namespace AgriDrone.Database.Migrations
 
                     NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("OriginalPosition"), "gist");
 
-                    b.HasIndex("ZoneId");
-
                     b.HasIndex("BatchId", "CandidateId")
                         .IsUnique()
                         .HasDatabaseName("uq_mapping_candidates_batch_candidate");
@@ -760,6 +763,8 @@ namespace AgriDrone.Database.Migrations
                     b.HasIndex("BatchId", "SourceObservationId")
                         .IsUnique()
                         .HasDatabaseName("uq_mapping_candidates_batch_observation");
+
+                    b.HasIndex("BatchId", "ZoneId");
 
                     b.ToTable("mapping_candidates", "farm");
                 });
@@ -7293,7 +7298,7 @@ namespace AgriDrone.Database.Migrations
 
                             t.HasCheckConstraint("ck_survey_orders_currency", "currency IS NULL OR currency ~ '^[A-Z]{3}$'");
 
-                            t.HasCheckConstraint("ck_survey_orders_deposit_consistency", "(requires_baseline_mapping = false AND deposit_amount = 0 AND deposit_payment_status = 'CONFIRMED'::system.survey_payment_status) OR (requires_baseline_mapping = true AND deposit_amount > 0)");
+                            t.HasCheckConstraint("ck_survey_orders_deposit_consistency", "(requires_baseline_mapping = false AND deposit_amount = 0 AND deposit_payment_status = 'PAID'::system.survey_payment_status) OR (requires_baseline_mapping = true AND deposit_amount > 0)");
 
                             t.HasCheckConstraint("ck_survey_orders_deposit_nonnegative", "deposit_amount >= 0");
 
@@ -7318,10 +7323,6 @@ namespace AgriDrone.Database.Migrations
                             t.HasCheckConstraint("ck_survey_orders_price_nonnegative", "(price_per_pole_snapshot IS NULL OR price_per_pole_snapshot > 0) AND (price_per_ha_snapshot IS NULL OR price_per_ha_snapshot > 0) AND (final_price IS NULL OR final_price >= 0)");
 
                             t.HasCheckConstraint("ck_survey_orders_pricing_mode", "NOT (price_per_pole_snapshot IS NOT NULL AND price_per_ha_snapshot IS NOT NULL)");
-
-                            t.HasCheckConstraint("ck_survey_orders_deposit_consistency", "(requires_baseline_mapping = false AND deposit_amount = 0 AND deposit_payment_status = 'PAID'::system.survey_payment_status) OR (requires_baseline_mapping = true AND deposit_amount > 0)");
-
-                            t.HasCheckConstraint("ck_survey_orders_deposit_nonnegative", "deposit_amount >= 0");
 
                             t.HasCheckConstraint("ck_survey_orders_remaining_amount_nonnegative", "remaining_amount IS NULL OR remaining_amount >= 0");
                         });
@@ -8367,11 +8368,11 @@ namespace AgriDrone.Database.Migrations
 
                     b.HasOne("AgriDrone.Modules.Farms.Domain.Maps.Staging.MappingCandidateZone", "Zone")
                         .WithMany("Candidates")
-                        .HasForeignKey("ZoneId")
-                        .HasPrincipalKey("ZoneId")
+                        .HasForeignKey("BatchId", "ZoneId")
+                        .HasPrincipalKey("BatchId", "ZoneId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
-                        .HasConstraintName("fk_mapping_candidates_zone");
+                        .HasConstraintName("fk_mapping_candidates_candidate_zone");
 
                     b.Navigation("Batch");
 

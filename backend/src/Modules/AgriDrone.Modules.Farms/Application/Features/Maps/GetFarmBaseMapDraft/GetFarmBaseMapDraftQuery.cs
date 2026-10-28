@@ -21,7 +21,8 @@ public sealed record CandidateDto(
     Guid? ProposedMatchedPlantId,
     Guid? CorrectedMatchedPlantId,
     string? ReviewReason,
-    DateTimeOffset? ReviewedAt);
+    DateTimeOffset? ReviewedAt,
+    string? TreeId = null);
 
 public sealed record CandidateZoneDto(
     Guid ZoneId,

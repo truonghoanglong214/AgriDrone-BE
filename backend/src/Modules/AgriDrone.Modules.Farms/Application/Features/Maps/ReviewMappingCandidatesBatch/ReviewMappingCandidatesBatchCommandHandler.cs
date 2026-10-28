@@ -81,7 +81,7 @@ internal sealed class ReviewMappingCandidatesBatchCommandHandler(
         await dbContext.SaveChangesAsync(cancellationToken);
 
         var totalReviewed = reviewedCount;
-        var accepted = batch.Candidates.Count(c => c.ReviewDecision is MappingCandidateReviewDecision.Accept or MappingCandidateReviewDecision.CreateNew);
+        var accepted = batch.Candidates.Count(c => c.ReviewDecision is MappingCandidateReviewDecision.CreateNew or MappingCandidateReviewDecision.MatchExisting);
         var rejected = batch.Candidates.Count(c => c.ReviewDecision == MappingCandidateReviewDecision.Reject);
         var relocated = batch.Candidates.Count(c => c.ReviewDecision == MappingCandidateReviewDecision.Relocate);
         var replaced = batch.Candidates.Count(c => c.ReviewDecision == MappingCandidateReviewDecision.Replace);

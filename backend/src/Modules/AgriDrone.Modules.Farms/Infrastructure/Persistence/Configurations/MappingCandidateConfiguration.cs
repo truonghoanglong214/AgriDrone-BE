@@ -94,6 +94,10 @@ public sealed class MappingCandidateConfiguration : IEntityTypeConfiguration<Map
             .HasColumnName("match_confidence")
             .HasColumnType("numeric(5,4)");
 
+        builder.Property(c => c.TreeId)
+            .HasColumnName("tree_id")
+            .HasMaxLength(100);
+
         builder.Property(c => c.ReviewDecision)
             .HasColumnName("review_decision")
             .HasConversion<string>()

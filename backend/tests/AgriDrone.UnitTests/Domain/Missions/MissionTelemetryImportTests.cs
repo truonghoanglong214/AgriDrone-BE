@@ -82,12 +82,12 @@ public sealed class MissionTelemetryImportTests
         };
 
         using var segment = ImportTelemetryCommandHandler
-            .CreateSelectedSegmentJson(1, points);
+            .CreateSelectedSegmentJson(points);
         var point = segment.RootElement
             .GetProperty("points")[0];
 
-        Assert.Equal(1, segment.RootElement
-            .GetProperty("segmentIndex").GetInt32());
+        Assert.True(segment.RootElement.GetProperty("segmentIndex").ValueKind == System.Text.Json.JsonValueKind.Null); // segmentIndex
+
         Assert.Equal(4, point.EnumerateObject().Count());
         Assert.Equal("2026-10-13 10:12:44", point
             .GetProperty("timestamp").GetString());
@@ -126,6 +126,7 @@ public sealed class MissionTelemetryImportTests
         Assert.NotNull(telemetryImport.SelectedSegmentJson);
         Assert.Equal(1, telemetryImport.SelectedSegmentJson.RootElement
             .GetProperty("segmentIndex").GetInt32());
+
         Assert.Equal(2, telemetryImport.SelectedSegmentJson.RootElement
             .GetProperty("points").GetArrayLength());
     }

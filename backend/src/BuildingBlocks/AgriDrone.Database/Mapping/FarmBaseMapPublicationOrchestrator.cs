@@ -84,7 +84,36 @@ internal sealed class FarmBaseMapPublicationOrchestrator(
                     AppError.Conflict("SurveyOrder.InvalidStatus", $"Survey order {order.Id} is in status '{order.Status}' and cannot record baseline publication."));
             }
 
+            if (batch.Candidates.Any(c => c.ReviewDecision == MappingCandidateReviewDecision.Pending))
+            {
+                return Result.Failure<FarmBaseMapPublishedResult>(
+                    AppError.Conflict(
+                        "MappingCandidateBatch.PendingReviewRemaining",
+                        "Cannot publish farm base map while candidates remain in Pending review decision."));
+            }
+
             var now = timeProvider.GetUtcNow();
+
+            // Supersede existing published farm base map versions to respect partial unique index
+            var existingPublishedMaps = await dbContext.FarmBaseMapVersions
+                .Where(v => v.FarmId == farmId && v.Status == FarmBaseMapStatus.Published)
+                .ToListAsync(ct);
+
+            foreach (var prevMap in existingPublishedMaps)
+            {
+                prevMap.Supersede(now);
+            }
+
+            // Supersede existing confirmed zone map versions for zones in this batch
+            var batchZoneIds = batch.Zones.Select(z => z.ZoneId).ToList();
+            var existingZoneMaps = await dbContext.ZoneMapVersions
+                .Where(zm => batchZoneIds.Contains(zm.ZoneId) && zm.Status == MapVersionStatus.Confirmed)
+                .ToListAsync(ct);
+
+            foreach (var prevZoneMap in existingZoneMaps)
+            {
+                prevZoneMap.Supersede();
+            }
 
             var defaultHealth = await dbContext.HealthLevels
                 .Where(h => h.IsActive)
@@ -117,10 +146,10 @@ internal sealed class FarmBaseMapPublicationOrchestrator(
 
                 var zoneCandidates = batch.Candidates
                     .Where(c => c.ZoneId == z.ZoneId &&
-                                (c.ReviewDecision is MappingCandidateReviewDecision.Accept
-                                     or MappingCandidateReviewDecision.Relocate
-                                     or MappingCandidateReviewDecision.Replace
-                                 || (c.ReviewDecision == MappingCandidateReviewDecision.Pending && c.BoundaryClassification == "IN_BOUNDARY")))
+                                c.ReviewDecision is MappingCandidateReviewDecision.CreateNew
+                                                 or MappingCandidateReviewDecision.MatchExisting
+                                                 or MappingCandidateReviewDecision.Relocate
+                                                 or MappingCandidateReviewDecision.Replace)
                     .ToList();
 
                 var plantMappings = new List<PublishedPlantMappingV3>();
@@ -131,25 +160,107 @@ internal sealed class FarmBaseMapPublicationOrchestrator(
                     var row = c.CorrectedRowIndex ?? c.ProposedRowIndex ?? 1;
                     var col = c.CorrectedColumnIndex ?? c.ProposedColumnIndex ?? 1;
 
-                    var plantId = Guid.NewGuid();
-                    var plantCode = $"P-{z.ZoneId.ToString()[..4]}-{row:D3}-{col:D3}-{plantId.ToString()[..4]}";
+                    if (c.ReviewDecision == MappingCandidateReviewDecision.MatchExisting)
+                    {
+                        var targetPlantId = c.CorrectedMatchedPlantId ?? c.ProposedMatchedPlantId;
+                        if (!targetPlantId.HasValue)
+                        {
+                            return Result.Failure<FarmBaseMapPublishedResult>(
+                                AppError.Validation(
+                                    "MappingCandidate.MissingMatchedPlantId",
+                                    $"Candidate {c.CandidateId} has MatchExisting decision but lacks target plant ID."));
+                        }
 
-                    var plant = Plant.CreateFromMapping(
-                        id: plantId,
-                        farmId: farmId,
-                        zoneId: z.ZoneId,
-                        plantCode: plantCode,
-                        location: pos,
-                        mapVersionId: zoneMapId,
-                        rowIndex: row,
-                        columnIndex: col,
-                        locationAccuracyM: 0.1m,
-                        positionConfidence: c.PositionConfidence,
-                        healthLevelId: healthId,
-                        sourceMissionId: batch.MissionId,
-                        mappedAt: now);
+                        var existingPlant = await dbContext.Plants
+                            .SingleOrDefaultAsync(p => p.Id == targetPlantId.Value, ct);
 
-                    if (c.ReviewDecision == MappingCandidateReviewDecision.Replace)
+                        if (existingPlant is null)
+                        {
+                            return Result.Failure<FarmBaseMapPublishedResult>(
+                                AppError.NotFound(
+                                    "Plant.NotFound",
+                                    $"Target plant {targetPlantId.Value} for candidate {c.CandidateId} was not found."));
+                        }
+
+                        existingPlant.ApplyPublishedMapPosition(
+                            mapVersionId: zoneMapId,
+                            location: existingPlant.Location ?? pos,
+                            rowIndex: existingPlant.RowIndex ?? row,
+                            columnIndex: existingPlant.ColumnIndex ?? col,
+                            locationAccuracyM: existingPlant.LocationAccuracyM,
+                            positionConfidence: c.PositionConfidence,
+                            mappedAt: now);
+
+                        var targetLocation = existingPlant.Location ?? pos;
+                        plantMappings.Add(new PublishedPlantMappingV3(
+                            PlantId: existingPlant.Id,
+                            SourceCandidateId: c.CandidateId,
+                            Position: new GeoJsonPointV3("Point", [targetLocation.X, targetLocation.Y]),
+                            RowIndex: existingPlant.RowIndex ?? row,
+                            ColumnIndex: existingPlant.ColumnIndex ?? col,
+                            LifecycleStatus: PublishedPlantLifecycleStatusesV3.Active,
+                            AppliedPlantChangeReportId: null));
+                    }
+                    else if (c.ReviewDecision == MappingCandidateReviewDecision.Relocate)
+                    {
+                        var targetPlantId = c.CorrectedMatchedPlantId ?? c.ProposedMatchedPlantId;
+                        if (!targetPlantId.HasValue)
+                        {
+                            return Result.Failure<FarmBaseMapPublishedResult>(
+                                AppError.Validation(
+                                    "MappingCandidate.MissingRelocatePlantId",
+                                    $"Candidate {c.CandidateId} has Relocate decision but lacks target plant ID."));
+                        }
+
+                        var existingPlant = await dbContext.Plants
+                            .SingleOrDefaultAsync(p => p.Id == targetPlantId.Value, ct);
+
+                        if (existingPlant is null)
+                        {
+                            return Result.Failure<FarmBaseMapPublishedResult>(
+                                AppError.NotFound(
+                                    "Plant.NotFound",
+                                    $"Target plant {targetPlantId.Value} for candidate {c.CandidateId} was not found."));
+                        }
+
+                        var oldLocation = existingPlant.Location;
+                        var oldRow = existingPlant.RowIndex;
+                        var oldCol = existingPlant.ColumnIndex;
+
+                        existingPlant.ApplyPublishedMapPosition(
+                            mapVersionId: zoneMapId,
+                            location: pos,
+                            rowIndex: row,
+                            columnIndex: col,
+                            locationAccuracyM: 0.1m,
+                            positionConfidence: c.PositionConfidence,
+                            mappedAt: now);
+
+                        dbContext.PlantChangeEvents.Add(
+                            PlantChangeEvent.MappingPositionChanged(
+                                farmId: farmId,
+                                missionId: batch.MissionId,
+                                plantId: existingPlant.Id,
+                                oldLocation: oldLocation,
+                                newLocation: pos,
+                                oldRowIndex: oldRow,
+                                newRowIndex: row,
+                                oldColumnIndex: oldCol,
+                                newColumnIndex: col,
+                                lifecycleStatus: existingPlant.LifecycleStatus,
+                                actorId: actorId,
+                                createdAt: now));
+
+                        plantMappings.Add(new PublishedPlantMappingV3(
+                            PlantId: existingPlant.Id,
+                            SourceCandidateId: c.CandidateId,
+                            Position: new GeoJsonPointV3("Point", [pos.X, pos.Y]),
+                            RowIndex: row,
+                            ColumnIndex: col,
+                            LifecycleStatus: PublishedPlantLifecycleStatusesV3.Active,
+                            AppliedPlantChangeReportId: null));
+                    }
+                    else if (c.ReviewDecision == MappingCandidateReviewDecision.Replace)
                     {
                         var targetPlantId = c.CorrectedMatchedPlantId ?? c.ProposedMatchedPlantId;
                         if (targetPlantId.HasValue)
@@ -160,31 +271,95 @@ internal sealed class FarmBaseMapPublicationOrchestrator(
                             {
                                 oldPlant.Retire(PlantLifecycleStatus.Removed, now);
                             }
+                        }
+
+                        var plantId = Guid.NewGuid();
+                        var plantCode = $"P-{z.ZoneId.ToString()[..4]}-{row:D3}-{col:D3}-{plantId.ToString()[..4]}";
+
+                        var plant = Plant.CreateFromMapping(
+                            id: plantId,
+                            farmId: farmId,
+                            zoneId: z.ZoneId,
+                            plantCode: plantCode,
+                            location: pos,
+                            mapVersionId: zoneMapId,
+                            rowIndex: row,
+                            columnIndex: col,
+                            locationAccuracyM: 0.1m,
+                            positionConfidence: c.PositionConfidence,
+                            healthLevelId: healthId,
+                            sourceMissionId: batch.MissionId,
+                            mappedAt: now);
+
+                        if (targetPlantId.HasValue)
+                        {
                             plant.LinkReplacedPlant(targetPlantId.Value);
                         }
+
+                        dbContext.Plants.Add(plant);
+
+                        dbContext.PlantChangeEvents.Add(
+                            PlantChangeEvent.MappingCreated(
+                                farmId,
+                                batch.MissionId,
+                                plantId,
+                                pos,
+                                row,
+                                col,
+                                actorId,
+                                now));
+
+                        plantMappings.Add(new PublishedPlantMappingV3(
+                            PlantId: plantId,
+                            SourceCandidateId: c.CandidateId,
+                            Position: new GeoJsonPointV3("Point", [pos.X, pos.Y]),
+                            RowIndex: row,
+                            ColumnIndex: col,
+                            LifecycleStatus: PublishedPlantLifecycleStatusesV3.Active,
+                            AppliedPlantChangeReportId: null));
                     }
+                    else // CreateNew
+                    {
+                        var plantId = Guid.NewGuid();
+                        var plantCode = $"P-{z.ZoneId.ToString()[..4]}-{row:D3}-{col:D3}-{plantId.ToString()[..4]}";
 
-                    dbContext.Plants.Add(plant);
+                        var plant = Plant.CreateFromMapping(
+                            id: plantId,
+                            farmId: farmId,
+                            zoneId: z.ZoneId,
+                            plantCode: plantCode,
+                            location: pos,
+                            mapVersionId: zoneMapId,
+                            rowIndex: row,
+                            columnIndex: col,
+                            locationAccuracyM: 0.1m,
+                            positionConfidence: c.PositionConfidence,
+                            healthLevelId: healthId,
+                            sourceMissionId: batch.MissionId,
+                            mappedAt: now);
 
-                    dbContext.PlantChangeEvents.Add(
-                        PlantChangeEvent.MappingCreated(
-                            farmId,
-                            batch.MissionId,
-                            plantId,
-                            pos,
-                            row,
-                            col,
-                            actorId,
-                            now));
+                        dbContext.Plants.Add(plant);
 
-                    plantMappings.Add(new PublishedPlantMappingV3(
-                        PlantId: plantId,
-                        SourceCandidateId: c.CandidateId,
-                        Position: new GeoJsonPointV3("Point", [pos.X, pos.Y]),
-                        RowIndex: row,
-                        ColumnIndex: col,
-                        LifecycleStatus: PublishedPlantLifecycleStatusesV3.Active,
-                        AppliedPlantChangeReportId: null));
+                        dbContext.PlantChangeEvents.Add(
+                            PlantChangeEvent.MappingCreated(
+                                farmId,
+                                batch.MissionId,
+                                plantId,
+                                pos,
+                                row,
+                                col,
+                                actorId,
+                                now));
+
+                        plantMappings.Add(new PublishedPlantMappingV3(
+                            PlantId: plantId,
+                            SourceCandidateId: c.CandidateId,
+                            Position: new GeoJsonPointV3("Point", [pos.X, pos.Y]),
+                            RowIndex: row,
+                            ColumnIndex: col,
+                            LifecycleStatus: PublishedPlantLifecycleStatusesV3.Active,
+                            AppliedPlantChangeReportId: null));
+                    }
                 }
 
                 publishedZones.Add(new PublishedZoneMapV3(

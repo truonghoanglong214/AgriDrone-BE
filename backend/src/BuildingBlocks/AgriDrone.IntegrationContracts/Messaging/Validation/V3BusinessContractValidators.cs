@@ -22,26 +22,29 @@ public static class V3BusinessContractValidators
         BaselineMappingCandidatesReadyV3? payload)
     {
         var errors = RequiredIds(
-            (payload?.CausationId, "CausationId"),
-            (payload?.HandoffId, "HandoffId"),
             (payload?.SurveyOrderId, "SurveyOrderId"),
             (payload?.MissionId, "MissionId"),
-            (payload?.FarmId, "FarmId"),
-            (payload?.FarmBoundaryVersionId, "FarmBoundaryVersionId"),
-            (payload?.JobId, "JobId"),
-            (payload?.ModelVersionId, "ModelVersionId"));
+            (payload?.FarmId, "FarmId"));
 
         if (payload is null)
         {
             return errors;
         }
 
+        OptionalId(payload.CausationId, "CausationId", errors);
+        OptionalId(payload.HandoffId, "HandoffId", errors);
+        OptionalId(payload.FarmBoundaryVersionId, "FarmBoundaryVersionId", errors);
+        OptionalId(payload.JobId, "JobId", errors);
+        OptionalId(payload.ModelVersionId, "ModelVersionId", errors);
         OptionalId(payload.ExpectedCurrentFarmBaseMapVersionId,
             "ExpectedCurrentFarmBaseMapVersionId", errors);
         RequiredText(payload.ModelVersion, "ModelVersion", errors);
         RequiredText(payload.AlgorithmVersion, "AlgorithmVersion", errors);
         RequiredText(payload.BoundaryPolicyVersion, "BoundaryPolicyVersion", errors);
-        Utc(payload.ProducedAt, "ProducedAt", errors);
+        if (payload.ProducedAt.HasValue)
+        {
+            Utc(payload.ProducedAt.Value, "ProducedAt", errors);
+        }
         RequiredItems(payload.Zones, "Zones", errors);
 
         if (payload.Zones is null)
@@ -50,10 +53,13 @@ public static class V3BusinessContractValidators
         }
 
         Unique(payload.Zones.Select(zone => zone.ZoneId), "ZoneId", errors);
-        Unique(payload.Zones.SelectMany(zone =>
-                zone.Candidates ?? Array.Empty<MappingCandidateV3>())
-            .Select(candidate => candidate.CandidateId),
-            "CandidateId", errors);
+        var providedCandidateIds = payload.Zones
+            .SelectMany(zone => zone.Candidates ?? Array.Empty<MappingCandidateV3>())
+            .Where(candidate => candidate.CandidateId.HasValue && candidate.CandidateId.Value != Guid.Empty)
+            .Select(candidate => candidate.CandidateId!.Value)
+            .ToList();
+        Unique(providedCandidateIds, "CandidateId", errors);
+
         var candidateCount = payload.Zones.Sum(zone => zone.Candidates?.Count ?? 0);
         Maximum(candidateCount, IntegrationContractLimits.MaximumMappingCandidateCount,
             "Mapping candidates", errors);
@@ -72,14 +78,16 @@ public static class V3BusinessContractValidators
                 continue;
             }
 
-            Unique(zone.Candidates.Select(candidate => candidate.CandidateId),
-                "CandidateId within a zone", errors);
+            var zoneProvidedIds = zone.Candidates
+                .Where(candidate => candidate.CandidateId.HasValue && candidate.CandidateId.Value != Guid.Empty)
+                .Select(candidate => candidate.CandidateId!.Value)
+                .ToList();
+            Unique(zoneProvidedIds, "CandidateId within a zone", errors);
+
             foreach (var candidate in zone.Candidates)
             {
-                RequiredId(candidate.CandidateId, "CandidateId", errors);
-                RequiredId(candidate.SourceObservationId, "SourceObservationId", errors);
-                RequiredItems(candidate.EvidenceMediaAssetIds,
-                    "EvidenceMediaAssetIds", errors);
+                OptionalId(candidate.CandidateId, "CandidateId", errors);
+                OptionalId(candidate.SourceObservationId, "SourceObservationId", errors);
                 if (candidate.EvidenceMediaAssetIds is not null)
                 {
                     foreach (var mediaAssetId in candidate.EvidenceMediaAssetIds)
@@ -91,16 +99,48 @@ public static class V3BusinessContractValidators
                         "EvidenceMediaAssetId within a candidate", errors);
                 }
 
-                Point(candidate.OriginalPosition, "OriginalPosition", errors);
+                if (candidate.OriginalPosition is not null)
+                {
+                    Point(candidate.OriginalPosition, "OriginalPosition", errors);
+                }
+                else
+                {
+                    if (candidate.Longitude is < -180 or > 180)
+                    {
+                        errors.Add("Longitude must be in the range [-180, 180].");
+                    }
+                    if (candidate.Latitude is < -90 or > 90)
+                    {
+                        errors.Add("Latitude must be in the range [-90, 90].");
+                    }
+                    if (candidate.Longitude == 0 && candidate.Latitude == 0)
+                    {
+                        errors.Add("Mapping candidate coordinates (Longitude, Latitude) must be provided.");
+                    }
+                }
+
                 GridPosition(candidate.ProposedRowIndex, candidate.ProposedColumnIndex,
                     errors);
                 Range(candidate.PositionConfidence, 0, 1,
                     "PositionConfidence", errors);
-                Allowed(candidate.BoundaryClassification,
-                    CandidateBoundaryClassifications, "BoundaryClassification", errors);
-                NonNegative(candidate.MeasuredBoundaryDistanceM,
-                    "MeasuredBoundaryDistanceM", errors);
-                Positive(candidate.BoundaryThresholdM, "BoundaryThresholdM", errors);
+
+                if (!string.IsNullOrWhiteSpace(candidate.BoundaryClassification))
+                {
+                    Allowed(candidate.BoundaryClassification,
+                        CandidateBoundaryClassifications, "BoundaryClassification", errors);
+                }
+
+                if (candidate.MeasuredBoundaryDistanceM.HasValue)
+                {
+                    NonNegative(candidate.MeasuredBoundaryDistanceM.Value,
+                        "MeasuredBoundaryDistanceM", errors);
+                }
+
+                if (candidate.BoundaryThresholdM.HasValue)
+                {
+                    Positive(candidate.BoundaryThresholdM.Value, "BoundaryThresholdM", errors);
+                }
+
                 OptionalId(candidate.MatchedPlantId, "MatchedPlantId", errors);
                 if (candidate.MatchConfidence.HasValue)
                 {

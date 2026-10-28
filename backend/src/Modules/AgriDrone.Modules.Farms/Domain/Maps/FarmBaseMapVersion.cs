@@ -83,6 +83,20 @@ public sealed class FarmBaseMapVersion : AggregateRoot
         UpdatedAt = publishedAt;
         Version++;
     }
+
+    public void Supersede(DateTimeOffset supersededAt)
+    {
+        DomainGuard.Utc(supersededAt);
+
+        if (Status != FarmBaseMapStatus.Published)
+        {
+            throw new InvalidOperationException("Only a published farm base map can be superseded.");
+        }
+
+        Status = FarmBaseMapStatus.Superseded;
+        UpdatedAt = supersededAt;
+        Version++;
+    }
 }
 
 public sealed record FarmBaseMapPublicationContext

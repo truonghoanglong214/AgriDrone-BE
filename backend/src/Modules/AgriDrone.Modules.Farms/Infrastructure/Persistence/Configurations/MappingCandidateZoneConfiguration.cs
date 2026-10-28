@@ -59,9 +59,9 @@ public sealed class MappingCandidateZoneConfiguration : IEntityTypeConfiguration
 
         builder.HasMany(z => z.Candidates)
             .WithOne(c => c.Zone)
-            .HasForeignKey(c => c.ZoneId)
-            .HasPrincipalKey(z => z.ZoneId)
+            .HasForeignKey(c => new { c.BatchId, c.ZoneId })
+            .HasPrincipalKey(z => new { z.BatchId, z.ZoneId })
             .OnDelete(DeleteBehavior.Cascade)
-            .HasConstraintName("fk_mapping_candidates_zone");
+            .HasConstraintName("fk_mapping_candidates_candidate_zone");
     }
 }
