@@ -13,5 +13,6 @@ public sealed record GetMissionsQuery(
     Guid? DroneId,
     MissionType? MissionType,
     MissionStatus? Status,
-    string? Search)
+    string? Search,
+    Guid? TenantId = null)
     : IRequest<Result<PagedResult<MissionListItemResponse>>>;

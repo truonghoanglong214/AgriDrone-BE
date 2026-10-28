@@ -9,6 +9,14 @@ internal sealed class PreflightChecklistRepository(
     MissionsDbContext dbContext)
     : IPreflightChecklistRepository
 {
+    public async Task<IReadOnlyList<PreflightChecklistDefinition>> GetAllDefinitionsAsync(
+        CancellationToken cancellationToken = default) =>
+        await dbContext.PreflightChecklistDefinitions
+            .AsNoTracking()
+            .OrderBy(definition => definition.Code)
+            .ThenByDescending(definition => definition.VersionNumber)
+            .ToListAsync(cancellationToken);
+
     public Task<PreflightChecklistDefinition?> GetActiveDefinitionAsync(
         string code,
         CancellationToken cancellationToken = default) =>

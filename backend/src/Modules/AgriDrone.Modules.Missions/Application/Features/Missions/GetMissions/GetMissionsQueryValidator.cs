@@ -7,6 +7,7 @@ internal sealed class GetMissionsQueryValidator : AbstractValidator<GetMissionsQ
     public GetMissionsQueryValidator()
     {
         RuleFor(query => query.FarmId).NotEmpty();
+        RuleFor(query => query.TenantId).Must(id => id != Guid.Empty);
         RuleFor(query => query.PageNumber).GreaterThanOrEqualTo(1);
         RuleFor(query => query.PageSize).InclusiveBetween(1, 100);
         RuleFor(query => query).Must(query =>
