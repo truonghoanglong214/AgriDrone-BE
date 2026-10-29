@@ -203,9 +203,7 @@ internal sealed class SystemManagerSurveyOrderQueries(
         ArgumentOutOfRangeException.ThrowIfEqual(tenantId, Guid.Empty);
         EnsureValidPage(page);
 
-        var orders = GetTenantOwnerOrders(tenantId);
-        if (status.HasValue)
-            orders = orders.Where(item => item.Status == status.Value);
+        var orders = GetTenantOwnerOrders(tenantId, status: status);
 
         return await orders.ToPagedResultAsync(page, cancellationToken);
     }
@@ -218,18 +216,21 @@ internal sealed class SystemManagerSurveyOrderQueries(
         ArgumentOutOfRangeException.ThrowIfEqual(tenantId, Guid.Empty);
         ArgumentOutOfRangeException.ThrowIfEqual(surveyOrderId, Guid.Empty);
 
-        return GetTenantOwnerOrders(tenantId)
-            .Where(item => item.SurveyOrderId == surveyOrderId)
+        return GetTenantOwnerOrders(tenantId, surveyOrderId: surveyOrderId)
             .SingleOrDefaultAsync(cancellationToken);
     }
 
     private IQueryable<TenantOwnerSurveyOrderItem> GetTenantOwnerOrders(
-        Guid tenantId) =>
+        Guid tenantId,
+        Guid? surveyOrderId = null,
+        SurveyOrderStatus? status = null) =>
         from order in context.Set<SurveyOrder>().AsNoTracking()
         join farm in context.Set<Farm>().AsNoTracking()
             on new { order.TenantId, order.FarmId }
             equals new { farm.TenantId, FarmId = farm.Id }
         where order.TenantId == tenantId && farm.DeletedAt == null
+            && (!surveyOrderId.HasValue || order.Id == surveyOrderId.Value)
+            && (!status.HasValue || order.Status == status.Value)
         orderby order.CreatedAt descending, order.Id descending
         select new TenantOwnerSurveyOrderItem(
             order.Id,
