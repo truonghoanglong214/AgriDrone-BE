@@ -6,7 +6,7 @@ public sealed class MetashapeOptions
 
     public string Endpoint { get; set; } = "http://localhost:8000";
 
-    public string CameraType { get; set; } = "equidistant_fisheye";
+    public string CameraType { get; set; } = "frame";
 
     public string AlignAccuracy { get; set; } = "medium";
 

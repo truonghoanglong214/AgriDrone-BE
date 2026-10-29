@@ -28,6 +28,10 @@ from metashape_workflow import (
     extract_geotiff_metadata,
     run_metashape_orthophoto_pipeline,
 )
+from odm_workflow import (
+    ODMProcessingError,
+    run_odm_orthophoto_pipeline,
+)
 from minio_storage import minio_storage
 from models import (
     MapBounds,
@@ -271,6 +275,138 @@ def process_metashape(request: ProcessMetashapeRequest, background_tasks: Backgr
         status="QUEUED",
         message="Metashape task successfully submitted."
     )
+
+
+def execute_odm_job(task_id: str, request: ProcessMetashapeRequest):
+    start_time = time.time()
+    work_dir = os.path.join(settings.temp_dir, f"odm_{task_id}")
+    images_dir = os.path.join(work_dir, "images")
+    output_dir = os.path.join(work_dir, "output")
+    os.makedirs(images_dir, exist_ok=True)
+    os.makedirs(output_dir, exist_ok=True)
+
+    task = tasks_db[task_id]
+    task.status = "RUNNING"
+    task.progress = 5
+    task.stage = "Downloading images from MinIO for ODM"
+
+    try:
+        # 1. Download images from MinIO
+        local_images = []
+        for idx, img in enumerate(request.images):
+            ext = os.path.splitext(img.storage_key)[1] or ".jpg"
+            local_img_path = os.path.join(images_dir, f"img_{idx:04d}{ext}")
+            minio_storage.download_file(img.storage_key, local_img_path)
+            local_images.append(local_img_path)
+
+        if not local_images:
+            raise ODMProcessingError("No images downloaded from MinIO for ODM processing.")
+
+        output_tif = os.path.join(output_dir, "orthophoto.tif")
+        output_jpg = os.path.join(output_dir, "map_preview.jpg")
+
+        def on_progress(pct: int, stg: str):
+            task.progress = pct
+            task.stage = stg
+            task.processing_time_ms = int((time.time() - start_time) * 1000)
+
+        # 2. Run OpenDroneMap Pipeline via NodeODM (Maximum quality matching Metashape)
+        bounds_dict, corners_dict, orig_w, orig_h = run_odm_orthophoto_pipeline(
+            photo_paths=local_images,
+            output_tif_path=output_tif,
+            output_jpg_path=output_jpg,
+            camera_type=request.camera_type,
+            node_host=settings.nodeodm_host,
+            node_port=settings.nodeodm_port,
+            progress_callback=on_progress
+        )
+
+        task.stage = "Uploading results to MinIO"
+        task.progress = 95
+
+        # 3. Upload GeoTIFF to MinIO
+        tif_key = f"tenants/{request.tenant_id}/media/{request.mission_id}/orthophoto.tif"
+        tif_size, tif_hash = minio_storage.upload_file(output_tif, tif_key, "image/tiff")
+
+        # 4. Upload Map Preview JPEG to MinIO
+        jpg_key = f"tenants/{request.tenant_id}/media/{request.mission_id}/map_preview.jpg"
+        jpg_size, jpg_hash = minio_storage.upload_file(output_jpg, jpg_key, "image/jpeg")
+
+        # 5. Generate presigned URLs
+        tif_url = minio_storage.get_presigned_url(tif_key)
+        preview_url = minio_storage.get_presigned_url(jpg_key)
+
+        task.status = "COMPLETED"
+        task.progress = 100
+        task.stage = "Completed"
+        task.processing_time_ms = int((time.time() - start_time) * 1000)
+        task.tif_storage_key = tif_key
+        task.jpg_storage_key = jpg_key
+        task.tif_url = tif_url
+        task.preview_url = preview_url
+        task.tif_size_bytes = tif_size
+        task.jpg_size_bytes = jpg_size
+        task.tif_checksum = tif_hash
+        task.jpg_checksum = jpg_hash
+        task.original_width = orig_w
+        task.original_height = orig_h
+        task.bounds = MapBounds(**bounds_dict)
+        task.corners = MapCorners(**corners_dict)
+
+        # Optional: Delete source raw images from MinIO to save disk space
+        if getattr(request, "delete_source_images", False):
+            try:
+                logger.info(f"Deleting {len(request.images)} raw source images from MinIO...")
+                keys_to_delete = [img.storage_key for img in request.images]
+                minio_storage.delete_files(keys_to_delete)
+                logger.info("Raw source images successfully deleted from MinIO.")
+            except Exception as e:
+                logger.warning(f"Failed to delete source images from MinIO: {e}")
+
+        logger.info(f"ODM Task {task_id} completed successfully in {task.processing_time_ms} ms")
+
+    except Exception as ex:
+        logger.error(f"ODM Task {task_id} failed: {ex}", exc_info=True)
+        task.status = "FAILED"
+        task.error_message = str(ex)
+        task.processing_time_ms = int((time.time() - start_time) * 1000)
+
+    finally:
+        # Clean up temporary files
+        try:
+            shutil.rmtree(work_dir, ignore_errors=True)
+        except Exception:
+            pass
+
+
+@app.post("/api/v1/odm/process", response_model=ProcessMetashapeResponse, tags=["OpenDroneMap (ODM) Processing"])
+def process_odm(request: ProcessMetashapeRequest, background_tasks: BackgroundTasks):
+    task_id = str(uuid.uuid4())
+    task_record = MetashapeTaskStatusResponse(
+        mission_id=request.mission_id,
+        task_id=task_id,
+        status="QUEUED",
+        progress=0,
+        stage="Queued for OpenDroneMap photogrammetry processing"
+    )
+    tasks_db[task_id] = task_record
+
+    # Submit job to background executor
+    executor.submit(execute_odm_job, task_id, request)
+
+    return ProcessMetashapeResponse(
+        mission_id=request.mission_id,
+        task_id=task_id,
+        status="QUEUED",
+        message="OpenDroneMap task successfully submitted."
+    )
+
+
+@app.get("/api/v1/odm/tasks/{task_id}", response_model=MetashapeTaskStatusResponse, tags=["OpenDroneMap (ODM) Processing"])
+def get_odm_task_status(task_id: str):
+    if task_id not in tasks_db:
+        raise HTTPException(status_code=404, detail=f"ODM Task {task_id} not found")
+    return tasks_db[task_id]
 
 
 @app.get("/api/v1/metashape/tasks/{task_id}", response_model=MetashapeTaskStatusResponse)

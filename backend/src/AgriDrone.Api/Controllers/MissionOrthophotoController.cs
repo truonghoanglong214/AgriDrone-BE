@@ -73,7 +73,55 @@ public sealed class MissionOrthophotoController(
     }
 
     /// <summary>
-    /// Kiểm tra tiến độ ghép bản đồ của Metashape và lấy ảnh xem trước nhẹ (map_preview.jpg) kèm tọa độ 4 góc GPS khi hoàn thành.
+    /// Kích hoạt gửi ảnh đã gắn GPS sang OpenDroneMap (NodeODM) mã nguồn mở để ghép bản đồ (Phương án thay thế độc lập).
+    /// Mặc định dùng camera góc Linear ('frame' / 'perspective'). Có thể truyền 'equidistant_fisheye' nếu chụp bằng góc Wide.
+    /// </summary>
+    [HttpPost("api/missions/{missionId:guid}/farms/{farmId:guid}/process-odm")]
+    [Authorize(Policy = AccessAuthorizationPolicies.SystemManager)]
+    public async Task<IResult> ProcessOdm(
+        [FromRoute] Guid farmId,
+        [FromRoute] Guid missionId,
+        [FromBody] ProcessMetashapeRequest? request,
+        CancellationToken cancellationToken)
+    {
+        var access = await managerAccessService.ResolveFarmAccessAsync(farmId, cancellationToken);
+        if (!access.IsAllowed || access.TenantId is not Guid tenantId || access.FarmId != farmId)
+        {
+            return Results.Forbid();
+        }
+
+        MetashapeTaskOptions? customOptions = null;
+        if (request is not null &&
+            (request.CameraType is not null ||
+             request.AlignAccuracy is not null ||
+             request.GenericPreselection is not null))
+        {
+            customOptions = new MetashapeTaskOptions(
+                request.CameraType,
+                request.AlignAccuracy,
+                request.GenericPreselection);
+        }
+
+        var command = new ProcessMetashapeCommand(
+            tenantId,
+            farmId,
+            missionId,
+            customOptions,
+            Engine: "odm");
+
+        var result = await sender.Send(command, cancellationToken);
+
+        return result.ToHttpResult(
+            HttpContext,
+            value => Results.Ok(new ProcessMetashapeResponse(
+                value.MissionId,
+                value.TaskId,
+                value.Status,
+                value.Message)));
+    }
+
+    /// <summary>
+    /// Kiểm tra tiến độ ghép bản đồ của Metashape / ODM và lấy ảnh xem trước nhẹ (map_preview.jpg) kèm tọa độ 4 góc GPS khi hoàn thành.
     /// </summary>
     [HttpGet("api/missions/{missionId:guid}/farms/{farmId:guid}/orthophoto-status")]
     [Authorize(Policy = AccessAuthorizationPolicies.SystemManager)]

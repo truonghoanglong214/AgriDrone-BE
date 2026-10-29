@@ -7,3 +7,4 @@ numpy>=2.1.0
 pillow>=11.0.0
 shapely>=2.0.0
 python-multipart>=0.0.12
+pyodm>=1.5.0

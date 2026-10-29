@@ -98,6 +98,20 @@ internal sealed partial class GetMissionOrthophotoStatusQueryHandler(
         var status = await metashapeService.GetTaskStatusAsync(taskId, cancellationToken);
         if (!status.IsSuccess)
         {
+            if (mission.Status == MissionStatus.Processing &&
+                status.ErrorMessage is not null &&
+                (status.ErrorMessage.Contains("NotFound", StringComparison.OrdinalIgnoreCase) ||
+                 status.ErrorMessage.Contains("not found", StringComparison.OrdinalIgnoreCase)))
+            {
+                logger.LogWarning(
+                    "Metashape task {TaskId} not found on service for Mission {MissionId}. Releasing from PROCESSING state.",
+                    taskId,
+                    mission.Id);
+
+                mission.FailProcessing(timeProvider.GetUtcNow());
+                await unitOfWork.SaveChangesAsync(cancellationToken);
+            }
+
             return Result.Success(new MissionOrthophotoStatusResult(
                 mission.Id,
                 taskId,

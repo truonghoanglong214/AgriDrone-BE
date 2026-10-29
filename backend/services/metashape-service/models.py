@@ -10,7 +10,7 @@ class ProcessMetashapeRequest(BaseModel):
     tenant_id: str
     farm_id: str
     images: List[ImageItem] = Field(default_factory=list)
-    camera_type: str = "equidistant_fisheye"
+    camera_type: str = "frame"
     align_accuracy: str = "medium"
     generic_preselection: bool = True
     delete_source_images: bool = True
@@ -129,4 +129,46 @@ class YoloDetectMissionResponse(BaseModel):
     csv_download_url: Optional[str] = None
     active_trees: List[TreeItem] = Field(default_factory=list)
     missing_trees: List[TreeItem] = Field(default_factory=list)
+
+
+# ─── Disease Detection Models ─────────────────────────────────────────────────
+
+class DiseaseDetectionItem(BaseModel):
+    """A single disease detection instance with GPS coordinates, cropped image and annotated image."""
+    id: str
+    class_id: int
+    class_name: str
+    lat: float
+    lon: float
+    confidence: float
+    bbox_x: float
+    bbox_y: float
+    bbox_w: float
+    bbox_h: float
+    image_name: str
+    crop_image_url: Optional[str] = None
+    annotated_image_url: Optional[str] = None
+
+
+class DiseaseDetectMissionRequest(BaseModel):
+    """Request to run disease detection directly on raw geotagged mission images."""
+    mission_id: str
+    tenant_id: str = "tenant-001"
+    confidence_threshold: float = 0.25
+    polygon_geojson: Optional[Dict[str, Any]] = None
+    images: Optional[List[ImageItem]] = None
+
+
+class DiseaseDetectMissionResponse(BaseModel):
+    """Response containing all disease detections for a mission."""
+    mission_id: str
+    model_name: str
+    total_images_scanned: int
+    total_detections: int
+    disease_summary: Dict[str, int] = Field(default_factory=dict)
+    csv_download_url: Optional[str] = None
+    annotated_image_urls: List[str] = Field(default_factory=list)
+    detections: List[DiseaseDetectionItem] = Field(default_factory=list)
+
+
 
