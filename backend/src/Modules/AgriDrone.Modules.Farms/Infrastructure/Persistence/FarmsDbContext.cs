@@ -21,13 +21,14 @@ internal sealed class FarmsDbContext(DbContextOptions<FarmsDbContext> options)
 
     public DbSet<FarmZone> FarmZones => Set<FarmZone>();
 
+    public DbSet<FarmZonePlantMembership> FarmZonePlantMemberships =>
+        Set<FarmZonePlantMembership>();
+
     public DbSet<ZoneMapVersion> ZoneMapVersions => Set<ZoneMapVersion>();
 
     public DbSet<FarmBaseMapVersion> FarmBaseMapVersions => Set<FarmBaseMapVersion>();
 
     public DbSet<MappingCandidateBatch> MappingCandidateBatches => Set<MappingCandidateBatch>();
-
-    public DbSet<MappingCandidateZone> MappingCandidateZones => Set<MappingCandidateZone>();
 
     public DbSet<MappingCandidate> MappingCandidates => Set<MappingCandidate>();
 

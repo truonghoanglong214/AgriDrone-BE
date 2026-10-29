@@ -117,6 +117,7 @@ public sealed class SurveyOrder : AggregateRoot
     public DateTimeOffset? DepositConfirmedAt { get; private set; }
     public Guid? ScopeConfirmedBy { get; private set; }
     public DateTimeOffset? ScopeConfirmedAt { get; private set; }
+    public SurveyScopeType ScopeType { get; private set; } = SurveyScopeType.FarmWide;
     public bool RequiresBaselineMapping { get; private set; }
     public Guid? PreviousCompatibleOrderId { get; private set; }
     public string? PreviousOrderCompatibilityPolicyVersion { get; private set; }
@@ -131,6 +132,7 @@ public sealed class SurveyOrder : AggregateRoot
     public SurveyOrder? PreviousCompatibleOrder { get; private set; }
     public ICollection<SurveyAppointment> Appointments { get; private set; } = [];
     public ICollection<SurveyPayment> Payments { get; private set; } = [];
+    public ICollection<SurveyOrderZoneScope> ZoneScopes { get; private set; } = [];
 
     public static SurveyOrder Create(
         string orderNumber,
@@ -201,6 +203,38 @@ public sealed class SurveyOrder : AggregateRoot
 
     public static bool CanTransition(SurveyOrderStatus from, SurveyOrderStatus to) =>
         AllowedTransitions.TryGetValue(from, out var allowed) && allowed.Contains(to);
+
+    public void ConfirmFlightScope(
+        SurveyScopeType scopeType,
+        IReadOnlyCollection<(Guid ZoneId, long ZoneVersion, NetTopologySuite.Geometries.Polygon Boundary)> zones,
+        Guid confirmedBy,
+        DateTimeOffset confirmedAt)
+    {
+        DomainGuard.NotEmpty(confirmedBy);
+        DomainGuard.Utc(confirmedAt);
+        ArgumentNullException.ThrowIfNull(zones);
+
+        if (!Enum.IsDefined(scopeType) ||
+            (scopeType == SurveyScopeType.FarmWide && zones.Count != 0) ||
+            (scopeType == SurveyScopeType.Zones && zones.Count == 0) ||
+            zones.Any(zone => zone.ZoneId == Guid.Empty) ||
+            zones.Select(zone => zone.ZoneId).Distinct().Count() != zones.Count)
+        {
+            throw new ArgumentException("The selected Survey scope is invalid.", nameof(zones));
+        }
+
+        ZoneScopes.Clear();
+        foreach (var zone in zones)
+        {
+            ZoneScopes.Add(SurveyOrderZoneScope.Create(
+                Id, FarmId, zone.ZoneId, zone.ZoneVersion,
+                zone.Boundary, confirmedAt));
+        }
+
+        ScopeType = scopeType;
+        ScopeConfirmedBy = confirmedBy;
+        ScopeConfirmedAt = confirmedAt;
+    }
 
     public void EnsureVersion(uint expectedVersion)
     {

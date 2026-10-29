@@ -33,6 +33,8 @@ public sealed class SurveyBoundaryVerificationDbContext(
     public DbSet<FarmBaseMapVersion> FarmBaseMapVersions =>
         Set<FarmBaseMapVersion>();
     public DbSet<SurveyOrder> SurveyOrders => Set<SurveyOrder>();
+    public DbSet<SurveyOrderZoneScope> SurveyOrderZoneScopes =>
+        Set<SurveyOrderZoneScope>();
     public DbSet<SurveyAppointment> SurveyAppointments => Set<SurveyAppointment>();
     public DbSet<BoundaryCaptureSession> BoundaryCaptureSessions => Set<BoundaryCaptureSession>();
     public DbSet<BoundaryCaptureSample> BoundaryCaptureSamples => Set<BoundaryCaptureSample>();
@@ -123,6 +125,7 @@ public sealed class SurveyBoundaryVerificationDbContext(
         modelBuilder.ApplyConfiguration(new FarmBoundaryConfiguration());
         modelBuilder.ApplyConfiguration(new FarmBaseMapVersionConfiguration());
         modelBuilder.ApplyConfiguration(new SurveyOrderConfiguration());
+        modelBuilder.ApplyConfiguration(new SurveyOrderZoneScopeConfiguration());
         modelBuilder.ApplyConfiguration(new SurveyAppointmentConfiguration());
         modelBuilder.ApplyConfiguration(new BoundaryCaptureSessionConfiguration());
         modelBuilder.ApplyConfiguration(new BoundaryCaptureSampleConfiguration());

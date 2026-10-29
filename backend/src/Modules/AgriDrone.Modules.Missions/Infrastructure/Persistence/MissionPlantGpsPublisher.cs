@@ -2,6 +2,7 @@ using AgriDrone.IntegrationContracts.Mapping;
 using AgriDrone.IntegrationContracts.Messaging;
 using AgriDrone.IntegrationContracts.Messaging.Validation;
 using AgriDrone.Modules.Missions.Application.Abstractions.Missions;
+using AgriDrone.Modules.Missions.Domain.Missions;
 using AgriDrone.SharedInfrastructure.Messaging.Outbox;
 using Microsoft.EntityFrameworkCore;
 
@@ -19,7 +20,7 @@ internal sealed class MissionPlantGpsPublisher(
         Guid actorId,
         Guid correlationId,
         Guid idempotencyKey,
-        BaselineMappingCandidatesReadyV3 payload,
+        MissionPlantGpsPublishRequest request,
         CancellationToken cancellationToken)
     {
         var existingMessage = await db.OutboxMessages.AsNoTracking()
@@ -36,15 +37,9 @@ internal sealed class MissionPlantGpsPublisher(
                     Errors: ["Idempotency-Key has already been used for another event."]);
         }
 
-        var mission = await db.DroneMissions.AsNoTracking()
+        var mission = await db.DroneMissions
             .Where(item => item.Id == missionId && item.FarmId == farmId &&
                            item.TenantId == tenantId)
-            .Select(item => new
-            {
-                item.SurveyOrderId,
-                item.ZoneId,
-                item.ScopeZoneIds
-            })
             .SingleOrDefaultAsync(cancellationToken);
         if (mission is null)
         {
@@ -53,32 +48,19 @@ internal sealed class MissionPlantGpsPublisher(
         }
 
         if (mission.SurveyOrderId is null ||
-            mission.SurveyOrderId != payload.SurveyOrderId ||
-            payload.MissionId != missionId || payload.FarmId != farmId)
+            mission.SurveyOrderId != request.SurveyOrderId ||
+            mission.Purpose != MissionPurpose.BaselineMapping)
         {
             return new MissionPlantGpsPublishResult(
                 MissionPlantGpsPublishStatus.Conflict,
-                Errors: ["Payload mission, farm, or survey order does not match the stored mission."]);
+                Errors: ["Payload survey order does not match a baseline mapping mission."]);
         }
 
-        if (payload.Zones is null || payload.Zones.Count == 0 ||
-            payload.Zones.Any(zone => zone is null || zone.Candidates is null))
+        if (request.Candidates is null || request.Candidates.Count == 0)
         {
             return new MissionPlantGpsPublishResult(
                 MissionPlantGpsPublishStatus.Invalid,
-                Errors: ["Payload must contain zones and candidate lists."]);
-        }
-
-        var missionZoneIds = (mission.ScopeZoneIds ?? [])
-            .Where(zoneId => zoneId != Guid.Empty)
-            .ToHashSet();
-        if (mission.ZoneId is Guid primaryZoneId && primaryZoneId != Guid.Empty)
-            missionZoneIds.Add(primaryZoneId);
-        if (payload.Zones.Any(zone => !missionZoneIds.Contains(zone.ZoneId)))
-        {
-            return new MissionPlantGpsPublishResult(
-                MissionPlantGpsPublishStatus.Conflict,
-                Errors: ["Payload zones must belong to this mission."]);
+                Errors: ["Payload must contain complete candidate records."]);
         }
 
         var storedRows = await db.Database.SqlQueryRaw<MissionPlantGpsRow>(
@@ -98,12 +80,8 @@ internal sealed class MissionPlantGpsPublisher(
 
         var storedByTreeId = storedRows.ToDictionary(
             row => row.TreeId, StringComparer.Ordinal);
-        var requestedCandidates = payload.Zones
-            .SelectMany(zone => zone.Candidates ?? Array.Empty<MappingCandidateV3>())
-            .ToArray();
-        var treeIds = requestedCandidates
-            .Select(candidate => candidate.TreeId)
-            .ToArray();
+        var candidatesRequest = request.Candidates.ToArray();
+        var treeIds = candidatesRequest.Select(candidate => candidate.TreeId).ToArray();
         if (treeIds.Any(string.IsNullOrWhiteSpace) ||
             treeIds.Distinct(StringComparer.Ordinal).Count() != treeIds.Length ||
             treeIds.Length != storedByTreeId.Count ||
@@ -114,25 +92,56 @@ internal sealed class MissionPlantGpsPublisher(
                 Errors: ["Payload candidates must match every saved CSV tree_id exactly once."]);
         }
 
-        var enrichedZones = payload.Zones.Select(zone => zone with
+        if (candidatesRequest.Any(candidate =>
+                candidate.Row < 1 || candidate.Col < 1 ||
+                candidate.Latitude is < -90 or > 90 ||
+                candidate.Longitude is < -180 or > 180 ||
+                candidate.Confidence is < 0 or > 1 ||
+                string.IsNullOrWhiteSpace(candidate.Status) ||
+                string.IsNullOrWhiteSpace(candidate.Source)))
         {
-            Candidates = zone.Candidates.Select(candidate =>
+            return new MissionPlantGpsPublishResult(
+                MissionPlantGpsPublishStatus.Invalid,
+                Errors: ["Each candidate must include valid row, col, coordinates, confidence, status, and source."]);
+        }
+
+        if (candidatesRequest.Any(candidate =>
             {
-                var row = storedByTreeId[candidate.TreeId!];
-                return candidate with
-                {
-                    Longitude = (double)row.Longitude,
-                    Latitude = (double)row.Latitude,
-                    ProposedRowIndex = row.Row,
-                    ProposedColumnIndex = row.Col,
-                    PositionConfidence = row.Confidence,
-                    TreeId = row.TreeId,
-                    Status = row.Status,
-                    Source = row.Source
-                };
-            }).ToArray()
+                var stored = storedByTreeId[candidate.TreeId];
+                return candidate.Row != stored.Row || candidate.Col != stored.Col ||
+                       candidate.Latitude != stored.Latitude ||
+                       candidate.Longitude != stored.Longitude ||
+                       candidate.Confidence != stored.Confidence ||
+                       !string.Equals(candidate.Status, stored.Status, StringComparison.Ordinal) ||
+                       !string.Equals(candidate.Source, stored.Source, StringComparison.Ordinal);
+            }))
+        {
+            return new MissionPlantGpsPublishResult(
+                MissionPlantGpsPublishStatus.Conflict,
+                Errors: ["Payload candidate fields must match the saved plant GPS rows."]);
+        }
+
+        var occurredAt = timeProvider.GetUtcNow();
+        var candidates = candidatesRequest.Select(candidate =>
+        {
+            return new MappingCandidateV3(
+                Longitude: (double)candidate.Longitude,
+                Latitude: (double)candidate.Latitude,
+                ProposedRowIndex: candidate.Row,
+                ProposedColumnIndex: candidate.Col,
+                PositionConfidence: candidate.Confidence,
+                TreeId: candidate.TreeId,
+                Status: candidate.Status,
+                Source: candidate.Source);
         }).ToArray();
-        var enrichedPayload = payload with { Zones = enrichedZones };
+        var enrichedPayload = new BaselineMappingCandidatesReadyV3(
+            request.SurveyOrderId,
+            missionId,
+            farmId,
+            request.GridBearingDeg,
+            request.RowSpacingM,
+            request.PlantSpacingM,
+            candidates);
 
         var validationErrors = V3BusinessContractValidators.Validate(enrichedPayload);
         if (validationErrors.Count != 0)
@@ -142,36 +151,14 @@ internal sealed class MissionPlantGpsPublisher(
                 Errors: validationErrors);
         }
 
-        var messagePayload = new BaselineMappingCandidatesReadyV3Message(
-            enrichedPayload.SurveyOrderId,
-            enrichedPayload.MissionId,
-            enrichedPayload.FarmId,
-            enrichedPayload.Zones.Select(zone =>
-                new BaselineMappingZoneV3Message(
-                    zone.ZoneId,
-                    zone.RowSpacingM,
-                    zone.PlantSpacingM,
-                    zone.GridBearingDeg,
-                    zone.Candidates.Select(candidate =>
-                        new BaselineMappingCandidateV3Message(
-                            candidate.Longitude,
-                            candidate.Latitude,
-                            candidate.ProposedRowIndex!.Value,
-                            candidate.ProposedColumnIndex!.Value,
-                            candidate.PositionConfidence,
-                            candidate.TreeId!))
-                    .ToArray()))
-            .ToArray());
-
-        var occurredAt = timeProvider.GetUtcNow();
         var envelope = IntegrationEventEnvelopeFactory.Create(
-            IntegrationEventDescriptors.BaselineMappingCandidatesReadyV3Message,
+            IntegrationEventDescriptors.BaselineMappingCandidatesReadyV3,
             idempotencyKey,
             correlationId,
             tenantId,
             actorId,
             occurredAt,
-            messagePayload);
+            enrichedPayload);
         db.OutboxMessages.Add(outboxMessageFactory.Create(
             envelope,
             IntegrationEventTypes.BaselineMappingCandidatesReadyV3,

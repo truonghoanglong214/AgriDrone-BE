@@ -5,7 +5,8 @@ namespace AgriDrone.Modules.Missions.Application.Abstractions.Missions;
 internal interface IPreflightChecklistRepository
 {
     Task<IReadOnlyList<PreflightChecklistDefinition>> GetAllDefinitionsAsync(
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<PreflightChecklistDefinition>>([]);
 
     Task<PreflightChecklistDefinition?> GetActiveDefinitionAsync(
         string code,

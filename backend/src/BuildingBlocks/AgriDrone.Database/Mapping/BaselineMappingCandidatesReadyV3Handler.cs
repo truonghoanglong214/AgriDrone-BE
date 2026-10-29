@@ -145,6 +145,7 @@ internal sealed class BaselineMappingCandidatesReadyV3Handler(
 
         var farmBoundaryVersionId = boundary.Id;
         var producedAt = payload.ProducedAt ?? DateTimeOffset.UtcNow;
+
         var jobId = payload.JobId.HasValue && payload.JobId.Value != Guid.Empty
             ? payload.JobId.Value
             : Guid.NewGuid();
@@ -182,7 +183,10 @@ internal sealed class BaselineMappingCandidatesReadyV3Handler(
             sourceMissionGroupId: null,
             sourceMissionId: payload.MissionId,
             farmBoundaryVersionId: farmBoundaryVersionId,
-            handoffId: handoffId);
+            handoffId: handoffId,
+            gridBearingDeg: payload.GridBearingDeg,
+            rowSpacingM: payload.RowSpacingM,
+            plantSpacingM: payload.PlantSpacingM);
 
         var draftBaseMap = FarmBaseMapVersion.PrepareDraft(mapContext, producedAt);
         context.FarmBaseMapVersions.Add(draftBaseMap);
@@ -198,6 +202,9 @@ internal sealed class BaselineMappingCandidatesReadyV3Handler(
             farmBoundaryVersionId: farmBoundaryVersionId,
             farmBaseMapVersionId: draftBaseMap.Id,
             expectedCurrentFarmBaseMapVersionId: payload.ExpectedCurrentFarmBaseMapVersionId,
+            gridBearingDeg: payload.GridBearingDeg,
+            rowSpacingM: payload.RowSpacingM,
+            plantSpacingM: payload.PlantSpacingM,
             jobId: jobId,
             modelVersionId: modelVersionId,
             modelVersion: payload.ModelVersion,
@@ -208,73 +215,48 @@ internal sealed class BaselineMappingCandidatesReadyV3Handler(
 
         context.MappingCandidateBatches.Add(batch);
 
-        foreach (var zonePayload in payload.Zones)
+        foreach (var c in payload.Candidates)
         {
-            var candidateZoneId = Guid.NewGuid();
-            var candidateZone = MappingCandidateZone.Create(
-                id: candidateZoneId,
-                batchId: batchId,
-                zoneId: zonePayload.ZoneId,
-                expectedCurrentZoneMapVersionId: zonePayload.ExpectedCurrentZoneMapVersionId,
-                gridBearingDeg: zonePayload.GridBearingDeg,
-                rowSpacingM: zonePayload.RowSpacingM,
-                plantSpacingM: zonePayload.PlantSpacingM,
-                createdAt: producedAt);
-
-            context.MappingCandidateZones.Add(candidateZone);
-
-            foreach (var c in zonePayload.Candidates)
+            Point point;
+            if (c.OriginalPosition is not null && c.OriginalPosition.Coordinates.Count >= 2)
             {
-                Point point;
-                if (c.OriginalPosition is not null && c.OriginalPosition.Coordinates.Count >= 2)
+                point = new Point(c.OriginalPosition.Coordinates[0], c.OriginalPosition.Coordinates[1])
                 {
-                    point = new Point(c.OriginalPosition.Coordinates[0], c.OriginalPosition.Coordinates[1])
-                    {
-                        SRID = 4326
-                    };
-                }
-                else
-                {
-                    point = new Point(c.Longitude, c.Latitude)
-                    {
-                        SRID = 4326
-                    };
-                }
-
-                var isInside = boundary.Geometry.Covers(point) || boundary.Geometry.Intersects(point);
-                var boundaryClassification = !string.IsNullOrWhiteSpace(c.BoundaryClassification)
-                    ? c.BoundaryClassification
-                    : (isInside ? BoundaryClassificationsV3.InBoundary : BoundaryClassificationsV3.OutOfBoundary);
-
-                var candidateId = c.CandidateId.HasValue && c.CandidateId.Value != Guid.Empty
-                    ? c.CandidateId.Value
-                    : Guid.NewGuid();
-
-                var sourceObservationId = c.SourceObservationId.HasValue && c.SourceObservationId.Value != Guid.Empty
-                    ? c.SourceObservationId.Value
-                    : Guid.NewGuid();
-
-                var candidate = MappingCandidate.Create(
-                    id: Guid.NewGuid(),
-                    batchId: batchId,
-                    zoneId: zonePayload.ZoneId,
-                    candidateId: candidateId,
-                    sourceObservationId: sourceObservationId,
-                    evidenceMediaAssetIds: c.EvidenceMediaAssetIds ?? [],
-                    originalPosition: point,
-                    proposedRowIndex: c.ProposedRowIndex,
-                    proposedColumnIndex: c.ProposedColumnIndex,
-                    positionConfidence: c.PositionConfidence,
-                    boundaryClassification: boundaryClassification,
-                    measuredBoundaryDistanceM: c.MeasuredBoundaryDistanceM ?? (isInside ? 5.0m : 0.0m),
-                    boundaryThresholdM: c.BoundaryThresholdM ?? 1.0m,
-                    proposedMatchedPlantId: c.MatchedPlantId,
-                    matchConfidence: c.MatchConfidence,
-                    createdAt: producedAt,
-                    treeId: c.TreeId);
-
-                context.MappingCandidates.Add(candidate);
+                    SRID = 4326
+                };
             }
+            else
+            {
+                point = new Point(c.Longitude, c.Latitude) { SRID = 4326 };
+            }
+
+            var isInside = boundary.Geometry.Covers(point) || boundary.Geometry.Intersects(point);
+            var boundaryClassification = !string.IsNullOrWhiteSpace(c.BoundaryClassification)
+                ? c.BoundaryClassification
+                : (isInside ? BoundaryClassificationsV3.InBoundary : BoundaryClassificationsV3.OutOfBoundary);
+
+            var candidate = MappingCandidate.Create(
+                id: Guid.NewGuid(),
+                batchId: batchId,
+                zoneId: null,
+                candidateId: c.CandidateId is { } candidateId && candidateId != Guid.Empty
+                    ? candidateId : Guid.NewGuid(),
+                sourceObservationId: c.SourceObservationId is { } observationId && observationId != Guid.Empty
+                    ? observationId : Guid.NewGuid(),
+                evidenceMediaAssetIds: c.EvidenceMediaAssetIds ?? [],
+                originalPosition: point,
+                proposedRowIndex: c.ProposedRowIndex,
+                proposedColumnIndex: c.ProposedColumnIndex,
+                positionConfidence: c.PositionConfidence,
+                boundaryClassification: boundaryClassification,
+                measuredBoundaryDistanceM: c.MeasuredBoundaryDistanceM ?? (isInside ? 5.0m : 0.0m),
+                boundaryThresholdM: c.BoundaryThresholdM ?? 1.0m,
+                proposedMatchedPlantId: c.MatchedPlantId,
+                matchConfidence: c.MatchConfidence,
+                createdAt: producedAt,
+                treeId: c.TreeId);
+
+            context.MappingCandidates.Add(candidate);
         }
 
         try

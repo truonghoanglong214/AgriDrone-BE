@@ -163,6 +163,7 @@ internal sealed class TransitionMissionCommandHandler(
               order.FarmBoundaryVersionId != mission.FarmBoundaryVersionId)) ||
             order.ScopeZoneIds is null ||
             !order.ScopeZoneIds.Order().SequenceEqual(mission.ScopeZoneIds.Order()) ||
+            order.ScopeFingerprint != mission.ScopeFingerprint ||
             managerProfileId is null ||
             order.PrimarySystemManagerId != managerProfileId)
             return MissionOperationError.InvalidOrderContext();

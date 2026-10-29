@@ -86,6 +86,18 @@ internal sealed class SurveyOrderMissionPlanningQuery(
                           source.AppointmentStartAt.HasValue &&
                           source.AppointmentEndAt.HasValue &&
                           source.AppointmentEndAt.Value > source.AppointmentStartAt.Value;
+        var scopeType = source.ScopeType == SurveyScopeType.Zones
+            ? MissionScopeType.Zones
+            : MissionScopeType.FarmWide;
+        var scopeZones = (source.ScopeZones ?? [])
+            .OrderBy(zone => zone.ZoneId)
+            .Select(zone => new MissionScopeZoneSnapshot(
+                zone.ZoneId, zone.ZoneVersion, zone.Boundary))
+            .ToArray();
+        var scopeFingerprint = scopeType == MissionScopeType.FarmWide
+            ? "FARM_WIDE"
+            : string.Join('|', scopeZones.Select(zone =>
+                $"{zone.ZoneId:N}:{zone.ZoneVersion}"));
         return new SurveyOrderMissionPlanningContext(
             source.SurveyOrderId, source.TenantId, source.FarmId,
             selectedService,
@@ -94,6 +106,7 @@ internal sealed class SurveyOrderMissionPlanningQuery(
             (!purposeMatches ? "PURPOSE_MISMATCH" : null) ??
             (source.ReadinessFailures.Count > 0 ? source.ReadinessFailures[0] : null) ??
             (ready ? null : "ORDER_NOT_READY"), canPlan, canSchedule,
-            source.FarmBoundaryVersionId, source.PrimarySystemManagerId);
+            source.FarmBoundaryVersionId, source.PrimarySystemManagerId,
+            scopeType, scopeZones, scopeFingerprint);
     }
 }

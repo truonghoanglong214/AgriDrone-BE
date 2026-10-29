@@ -29,6 +29,12 @@ public sealed class DroneMission : AggregateRoot
 
     public Guid[] ScopeZoneIds { get; private set; } = [];
 
+    public MissionScopeType ScopeType { get; private set; } = MissionScopeType.FarmWide;
+
+    public JsonDocument ScopeSnapshot { get; private set; } = JsonDocument.Parse("[]");
+
+    public string ScopeFingerprint { get; private set; } = "FARM_WIDE";
+
     public Guid? FarmBoundaryVersionId { get; private set; }
 
     public bool RequiresBaselineCompletion { get; private set; }
@@ -265,7 +271,10 @@ public sealed class DroneMission : AggregateRoot
         bool requiresBaselineCompletion,
         JsonDocument flightParameters,
         Guid createdBy,
-        DateTimeOffset createdAt)
+        DateTimeOffset createdAt,
+        MissionScopeType scopeType = MissionScopeType.FarmWide,
+        JsonDocument? scopeSnapshot = null,
+        string scopeFingerprint = "FARM_WIDE")
     {
         DomainGuard.NotEmpty(surveyOrderId);
         DomainGuard.NotEmpty(tenantId);
@@ -296,12 +305,31 @@ public sealed class DroneMission : AggregateRoot
             .Distinct()
             .ToArray();
 
-        if (normalizedScope.Length != scopeZoneIds.Count)
+        if (purpose != global::AgriDrone.Modules.Missions.Domain.Missions.MissionPurpose.BaselineMapping &&
+            normalizedScope.Length != scopeZoneIds.Count)
         {
             throw new ArgumentException(
                 "Mission scope cannot contain empty or duplicate Zone identifiers.",
                 nameof(scopeZoneIds));
         }
+
+        if (purpose == global::AgriDrone.Modules.Missions.Domain.Missions.MissionPurpose.BaselineMapping)
+        {
+            normalizedScope = [];
+            scopeFingerprint = "FARM_WIDE";
+        }
+
+        var effectiveScopeType = normalizedScope.Length == 0
+            ? MissionScopeType.FarmWide
+            : MissionScopeType.Zones;
+        if (!Enum.IsDefined(scopeType) ||
+            (scopeType == MissionScopeType.Zones && normalizedScope.Length == 0))
+        {
+            throw new ArgumentException(
+                "Mission scope type does not match its Zone identifiers.",
+                nameof(scopeType));
+        }
+        ArgumentException.ThrowIfNullOrWhiteSpace(scopeFingerprint);
 
         if (purpose == global::AgriDrone.Modules.Missions.Domain.Missions.MissionPurpose.BaselineMapping &&
             sourceMapVersionId.HasValue)
@@ -352,6 +380,12 @@ public sealed class DroneMission : AggregateRoot
                 ? primaryZone
                 : null,
             ScopeZoneIds = normalizedScope,
+            ScopeType = effectiveScopeType,
+            ScopeSnapshot = JsonDocument.Parse(
+                purpose == global::AgriDrone.Modules.Missions.Domain.Missions.MissionPurpose.BaselineMapping
+                    ? "[]"
+                    : scopeSnapshot?.RootElement.GetRawText() ?? "[]"),
+            ScopeFingerprint = scopeFingerprint.Trim(),
             FarmBoundaryVersionId = farmBoundaryVersionId,
             DroneId = droneId,
             PilotUserId = pilotUserId,

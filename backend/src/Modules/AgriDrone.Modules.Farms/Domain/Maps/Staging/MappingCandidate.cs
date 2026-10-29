@@ -8,7 +8,7 @@ public sealed class MappingCandidate : AggregateRoot
     private MappingCandidate() { }
 
     public Guid BatchId { get; private set; }
-    public Guid ZoneId { get; private set; }
+    public Guid? ZoneId { get; private set; }
     public Guid CandidateId { get; private set; }
     public Guid SourceObservationId { get; private set; }
     public IReadOnlyList<Guid> EvidenceMediaAssetIds { get; private set; } = [];
@@ -36,12 +36,11 @@ public sealed class MappingCandidate : AggregateRoot
     public DateTimeOffset UpdatedAt { get; private set; }
 
     public MappingCandidateBatch Batch { get; private set; } = null!;
-    public MappingCandidateZone Zone { get; private set; } = null!;
 
     public static MappingCandidate Create(
         Guid id,
         Guid batchId,
-        Guid zoneId,
+        Guid? zoneId,
         Guid candidateId,
         Guid sourceObservationId,
         IReadOnlyList<Guid> evidenceMediaAssetIds,
@@ -59,7 +58,7 @@ public sealed class MappingCandidate : AggregateRoot
     {
         DomainGuard.NotEmpty(id);
         DomainGuard.NotEmpty(batchId);
-        DomainGuard.NotEmpty(zoneId);
+        if (zoneId.HasValue) DomainGuard.NotEmpty(zoneId.Value);
         DomainGuard.NotEmpty(candidateId);
         DomainGuard.NotEmpty(sourceObservationId);
         ArgumentNullException.ThrowIfNull(originalPosition);

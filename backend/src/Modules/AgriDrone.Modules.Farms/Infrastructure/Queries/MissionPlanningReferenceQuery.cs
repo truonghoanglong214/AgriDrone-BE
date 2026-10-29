@@ -52,4 +52,20 @@ internal sealed class MissionPlanningReferenceQuery(
                     mapVersion.Zone.Farm.DeletedAt == null,
                 cancellationToken);
     }
+
+    public Task<bool> IsPublishedFarmBaseMapVersionAsync(
+        Guid tenantId,
+        Guid farmId,
+        Guid mapVersionId,
+        CancellationToken cancellationToken = default)
+    {
+        return dbContext.FarmBaseMapVersions
+            .AsNoTracking()
+            .AnyAsync(mapVersion =>
+                mapVersion.Id == mapVersionId &&
+                mapVersion.TenantId == tenantId &&
+                mapVersion.FarmId == farmId &&
+                mapVersion.Status == FarmBaseMapStatus.Published,
+                cancellationToken);
+    }
 }

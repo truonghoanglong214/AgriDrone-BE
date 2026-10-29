@@ -45,119 +45,99 @@ public static class V3BusinessContractValidators
         {
             Utc(payload.ProducedAt.Value, "ProducedAt", errors);
         }
-        RequiredItems(payload.Zones, "Zones", errors);
+        Bearing(payload.GridBearingDeg, "GridBearingDeg", errors);
+        PositiveMeasurement(payload.RowSpacingM, "RowSpacingM", errors);
+        PositiveMeasurement(payload.PlantSpacingM, "PlantSpacingM", errors);
+        RequiredItems(payload.Candidates, "Candidates", errors);
 
-        if (payload.Zones is null)
+        if (payload.Candidates is null)
         {
             return errors;
         }
 
-        Unique(payload.Zones.Select(zone => zone.ZoneId), "ZoneId", errors);
-        var providedCandidateIds = payload.Zones
-            .SelectMany(zone => zone.Candidates ?? Array.Empty<MappingCandidateV3>())
+        var providedCandidateIds = payload.Candidates
             .Where(candidate => candidate.CandidateId.HasValue && candidate.CandidateId.Value != Guid.Empty)
             .Select(candidate => candidate.CandidateId!.Value)
             .ToList();
         Unique(providedCandidateIds, "CandidateId", errors);
 
-        var candidateCount = payload.Zones.Sum(zone => zone.Candidates?.Count ?? 0);
+        var candidateCount = payload.Candidates.Count;
         Maximum(candidateCount, IntegrationContractLimits.MaximumMappingCandidateCount,
             "Mapping candidates", errors);
 
-        foreach (var zone in payload.Zones)
+        foreach (var candidate in payload.Candidates)
         {
-            RequiredId(zone.ZoneId, "ZoneId", errors);
-            OptionalId(zone.ExpectedCurrentZoneMapVersionId,
-                "ExpectedCurrentZoneMapVersionId", errors);
-            Bearing(zone.GridBearingDeg, "GridBearingDeg", errors);
-            PositiveMeasurement(zone.RowSpacingM, "RowSpacingM", errors);
-            PositiveMeasurement(zone.PlantSpacingM, "PlantSpacingM", errors);
-            RequiredItems(zone.Candidates, "Candidates", errors);
-            if (zone.Candidates is null)
+            OptionalId(candidate.CandidateId, "CandidateId", errors);
+            OptionalId(candidate.SourceObservationId, "SourceObservationId", errors);
+            if (candidate.EvidenceMediaAssetIds is not null)
             {
-                continue;
+                foreach (var mediaAssetId in candidate.EvidenceMediaAssetIds)
+                {
+                    RequiredId(mediaAssetId, "EvidenceMediaAssetId", errors);
+                }
+
+                Unique(candidate.EvidenceMediaAssetIds,
+                    "EvidenceMediaAssetId within a candidate", errors);
             }
 
-            var zoneProvidedIds = zone.Candidates
-                .Where(candidate => candidate.CandidateId.HasValue && candidate.CandidateId.Value != Guid.Empty)
-                .Select(candidate => candidate.CandidateId!.Value)
-                .ToList();
-            Unique(zoneProvidedIds, "CandidateId within a zone", errors);
-
-            foreach (var candidate in zone.Candidates)
+            if (candidate.OriginalPosition is not null)
             {
-                OptionalId(candidate.CandidateId, "CandidateId", errors);
-                OptionalId(candidate.SourceObservationId, "SourceObservationId", errors);
-                if (candidate.EvidenceMediaAssetIds is not null)
+                Point(candidate.OriginalPosition, "OriginalPosition", errors);
+            }
+            else
+            {
+                if (candidate.Longitude is < -180 or > 180)
                 {
-                    foreach (var mediaAssetId in candidate.EvidenceMediaAssetIds)
-                    {
-                        RequiredId(mediaAssetId, "EvidenceMediaAssetId", errors);
-                    }
-
-                    Unique(candidate.EvidenceMediaAssetIds,
-                        "EvidenceMediaAssetId within a candidate", errors);
+                    errors.Add("Longitude must be in the range [-180, 180].");
                 }
-
-                if (candidate.OriginalPosition is not null)
+                if (candidate.Latitude is < -90 or > 90)
                 {
-                    Point(candidate.OriginalPosition, "OriginalPosition", errors);
+                    errors.Add("Latitude must be in the range [-90, 90].");
                 }
-                else
+                if (candidate.Longitude == 0 && candidate.Latitude == 0)
                 {
-                    if (candidate.Longitude is < -180 or > 180)
-                    {
-                        errors.Add("Longitude must be in the range [-180, 180].");
-                    }
-                    if (candidate.Latitude is < -90 or > 90)
-                    {
-                        errors.Add("Latitude must be in the range [-90, 90].");
-                    }
-                    if (candidate.Longitude == 0 && candidate.Latitude == 0)
-                    {
-                        errors.Add("Mapping candidate coordinates (Longitude, Latitude) must be provided.");
-                    }
+                    errors.Add("Mapping candidate coordinates (Longitude, Latitude) must be provided.");
                 }
+            }
 
-                GridPosition(candidate.ProposedRowIndex, candidate.ProposedColumnIndex,
-                    errors);
-                Range(candidate.PositionConfidence, 0, 1,
-                    "PositionConfidence", errors);
+            GridPosition(candidate.ProposedRowIndex, candidate.ProposedColumnIndex,
+                errors);
+            Range(candidate.PositionConfidence, 0, 1,
+                "PositionConfidence", errors);
 
-                if (!string.IsNullOrWhiteSpace(candidate.BoundaryClassification))
-                {
-                    Allowed(candidate.BoundaryClassification,
-                        CandidateBoundaryClassifications, "BoundaryClassification", errors);
-                }
+            if (!string.IsNullOrWhiteSpace(candidate.BoundaryClassification))
+            {
+                Allowed(candidate.BoundaryClassification,
+                    CandidateBoundaryClassifications, "BoundaryClassification", errors);
+            }
 
-                if (candidate.MeasuredBoundaryDistanceM.HasValue)
-                {
-                    NonNegative(candidate.MeasuredBoundaryDistanceM.Value,
-                        "MeasuredBoundaryDistanceM", errors);
-                }
+            if (candidate.MeasuredBoundaryDistanceM.HasValue)
+            {
+                NonNegative(candidate.MeasuredBoundaryDistanceM.Value,
+                    "MeasuredBoundaryDistanceM", errors);
+            }
 
-                if (candidate.BoundaryThresholdM.HasValue)
-                {
-                    Positive(candidate.BoundaryThresholdM.Value, "BoundaryThresholdM", errors);
-                }
+            if (candidate.BoundaryThresholdM.HasValue)
+            {
+                Positive(candidate.BoundaryThresholdM.Value, "BoundaryThresholdM", errors);
+            }
 
-                OptionalId(candidate.MatchedPlantId, "MatchedPlantId", errors);
-                if (candidate.MatchConfidence.HasValue)
-                {
-                    Range(candidate.MatchConfidence.Value, 0, 1,
-                        "MatchConfidence", errors);
-                }
+            OptionalId(candidate.MatchedPlantId, "MatchedPlantId", errors);
+            if (candidate.MatchConfidence.HasValue)
+            {
+                Range(candidate.MatchConfidence.Value, 0, 1,
+                    "MatchConfidence", errors);
+            }
 
-                if (candidate.Status is not null &&
-                    candidate.Status is not ("DETECTED" or "MISSING"))
-                {
-                    errors.Add("Status must be DETECTED or MISSING when provided.");
-                }
+            if (candidate.Status is not null &&
+                candidate.Status is not ("DETECTED" or "MISSING"))
+            {
+                errors.Add("Status must be DETECTED or MISSING when provided.");
+            }
 
-                if (candidate.Source is { Length: > 100 })
-                {
-                    errors.Add("Source cannot exceed 100 characters.");
-                }
+            if (candidate.Source is { Length: > 100 })
+            {
+                errors.Add("Source cannot exceed 100 characters.");
             }
         }
 
@@ -184,7 +164,7 @@ public static class V3BusinessContractValidators
         Positive(payload.VersionNumber, "VersionNumber", errors);
         Positive(payload.ConfirmedSurveyPoleCount, "ConfirmedSurveyPoleCount", errors);
         Utc(payload.PublishedAt, "PublishedAt", errors);
-        RequiredItems(payload.Zones, "Zones", errors);
+        RequiredItems(payload.PlantMappings, "PlantMappings", errors);
         if (payload.AppliedPlantChangeReportIds is null)
         {
             errors.Add("AppliedPlantChangeReportIds is required; use an empty list when none were applied.");
@@ -200,17 +180,14 @@ public static class V3BusinessContractValidators
                 "AppliedPlantChangeReportId", errors);
         }
 
-        if (payload.Zones is null)
+        if (payload.PlantMappings is null)
         {
             return errors;
         }
 
-        Unique(payload.Zones.Select(zone => zone.ZoneId), "ZoneId", errors);
-        Unique(payload.Zones.SelectMany(zone =>
-                zone.PlantMappings ?? Array.Empty<PublishedPlantMappingV3>())
-            .Select(mapping => mapping.PlantId),
+        Unique(payload.PlantMappings.Select(mapping => mapping.PlantId),
             "PlantId", errors);
-        var plantCount = payload.Zones.Sum(zone => zone.PlantMappings?.Count ?? 0);
+        var plantCount = payload.PlantMappings.Count;
         Maximum(plantCount, IntegrationContractLimits.MaximumPlantMappingCount,
             "Plant mappings", errors);
         if (plantCount != payload.ConfirmedSurveyPoleCount)
@@ -218,42 +195,28 @@ public static class V3BusinessContractValidators
             errors.Add("ConfirmedSurveyPoleCount must equal the total published plant mapping count.");
         }
 
-        foreach (var zone in payload.Zones)
+        foreach (var mapping in payload.PlantMappings)
         {
-            RequiredId(zone.ZoneId, "ZoneId", errors);
-            RequiredId(zone.ZoneMapVersionId, "ZoneMapVersionId", errors);
-            Positive(zone.VersionNumber, "Zone VersionNumber", errors);
-            RequiredItems(zone.PlantMappings, "PlantMappings", errors);
-            if (zone.PlantMappings is null)
+            RequiredId(mapping.PlantId, "PlantId", errors);
+            OptionalId(mapping.SourceCandidateId, "SourceCandidateId", errors);
+            OptionalId(mapping.AppliedPlantChangeReportId,
+                "AppliedPlantChangeReportId", errors);
+            Point(mapping.Position, "Position", errors);
+            Positive(mapping.RowIndex, "RowIndex", errors);
+            Positive(mapping.ColumnIndex, "ColumnIndex", errors);
+            RequiredText(mapping.LifecycleStatus, "LifecycleStatus", errors);
+            if (!string.Equals(mapping.LifecycleStatus,
+                    PublishedPlantLifecycleStatusesV3.Active,
+                    StringComparison.Ordinal))
             {
-                continue;
+                errors.Add("Published plant mappings must have ACTIVE LifecycleStatus.");
             }
-
-            Unique(zone.PlantMappings.Select(mapping => mapping.PlantId),
-                "PlantId within a zone", errors);
-            foreach (var mapping in zone.PlantMappings)
+            if (mapping.AppliedPlantChangeReportId.HasValue &&
+                (payload.AppliedPlantChangeReportIds is null ||
+                 !payload.AppliedPlantChangeReportIds.Contains(
+                     mapping.AppliedPlantChangeReportId.Value)))
             {
-                RequiredId(mapping.PlantId, "PlantId", errors);
-                OptionalId(mapping.SourceCandidateId, "SourceCandidateId", errors);
-                OptionalId(mapping.AppliedPlantChangeReportId,
-                    "AppliedPlantChangeReportId", errors);
-                Point(mapping.Position, "Position", errors);
-                Positive(mapping.RowIndex, "RowIndex", errors);
-                Positive(mapping.ColumnIndex, "ColumnIndex", errors);
-                RequiredText(mapping.LifecycleStatus, "LifecycleStatus", errors);
-                if (!string.Equals(mapping.LifecycleStatus,
-                        PublishedPlantLifecycleStatusesV3.Active,
-                        StringComparison.Ordinal))
-                {
-                    errors.Add("Published plant mappings must have ACTIVE LifecycleStatus.");
-                }
-                if (mapping.AppliedPlantChangeReportId.HasValue &&
-                    (payload.AppliedPlantChangeReportIds is null ||
-                     !payload.AppliedPlantChangeReportIds.Contains(
-                         mapping.AppliedPlantChangeReportId.Value)))
-                {
-                    errors.Add("A plant mapping references an undeclared AppliedPlantChangeReportId.");
-                }
+                errors.Add("A plant mapping references an undeclared AppliedPlantChangeReportId.");
             }
         }
 

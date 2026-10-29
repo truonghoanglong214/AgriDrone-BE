@@ -23,13 +23,3 @@ public interface ISurveyOrderBoundaryRepository
         DateTimeOffset verifiedAt,
         CancellationToken cancellationToken = default);
 }
-
-public sealed record SurveyOrderBoundaryVerificationState(
-    SurveyOrder Order,
-    Guid SystemManagerProfileId,
-    Guid? CurrentPublishedBaseMapVersionId,
-    int? CurrentConfirmedPoleCount);
-
-public sealed record SurveyBoundaryApprovalSnapshot(
-    Guid FarmBoundaryId,
-    int VersionNumber);

@@ -96,6 +96,26 @@ internal sealed class VerifySurveyOrderBoundaryAndScopeCommandHandler(
         var state = stateResult.Value;
         var order = state.Order;
 
+        var selectedZoneIds = command.ZoneIds ?? [];
+        if ((command.ScopeType == AgriDrone.Modules.Surveys.Domain.SurveyScopeType.FarmWide && selectedZoneIds.Count != 0) ||
+            (command.ScopeType == AgriDrone.Modules.Surveys.Domain.SurveyScopeType.Zones && selectedZoneIds.Count == 0) ||
+            selectedZoneIds.Any(zoneId => zoneId == Guid.Empty) ||
+            selectedZoneIds.Distinct().Count() != selectedZoneIds.Count)
+        {
+            return Result.Failure<VerifySurveyOrderBoundaryAndScopeResponse>(
+                SurveyOrderError.InvalidTransition("The selected Survey scope is invalid."));
+        }
+
+        var selectedZones = state.ActiveZones
+            .Where(zone => selectedZoneIds.Contains(zone.ZoneId))
+            .ToArray();
+        if (selectedZones.Length != selectedZoneIds.Count)
+        {
+            return Result.Failure<VerifySurveyOrderBoundaryAndScopeResponse>(
+                SurveyOrderError.InvalidTransition(
+                    "Every selected Zone must be active, have a polygon, and belong to the Survey farm."));
+        }
+
         if (order.RequiresBaselineMapping)
         {
             return Result.Failure<VerifySurveyOrderBoundaryAndScopeResponse>(
@@ -137,6 +157,12 @@ internal sealed class VerifySurveyOrderBoundaryAndScopeCommandHandler(
                     ? ConfirmedSurveyPoleCount.Create(
                         state.CurrentConfirmedPoleCount.Value)
                     : null,
+                actorId,
+                verifiedAt);
+            order.ConfirmFlightScope(
+                command.ScopeType,
+                selectedZones.Select(zone =>
+                    (zone.ZoneId, zone.Version, zone.Boundary)).ToArray(),
                 actorId,
                 verifiedAt);
         }

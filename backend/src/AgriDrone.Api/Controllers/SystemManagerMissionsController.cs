@@ -8,8 +8,6 @@ using AgriDrone.Modules.Missions.Application.Features.Missions.TransitionMission
 using AgriDrone.Modules.Missions.Application.Features.Missions.RescheduleOrderMission;
 using AgriDrone.Modules.Missions.Domain.Missions;
 using AgriDrone.Modules.Missions.Application.Abstractions.Missions;
-using AgriDrone.IntegrationContracts.Mapping;
-using AgriDrone.IntegrationContracts.Messaging;
 using AgriDrone.SharedInfrastructure.Authorization;
 using AgriDrone.SharedInfrastructure.Http;
 using MediatR;
@@ -211,12 +209,11 @@ public sealed class SystemManagerMissionsController(
             : Results.NotFound();
     }
 
-    /// <summary>Ghép dữ liệu CSV đã lưu với metadata V3 và xếp message vào Outbox.</summary>
+    /// <summary>Kiểm tra candidate GPS đầy đủ và xếp message vào Outbox.</summary>
     /// <remarks>
-    /// Request body chứa metadata payload cần để dựng mapping.baseline-candidates-ready.v3.
-    /// API lấy treeId trong payload để ghép với các dòng CSV đã lưu; tọa độ, hàng,
-    /// cột và confidence trong message lấy từ DB. Message envelope
-    /// được tạo phía server. Dùng lại Idempotency-Key nếu retry cùng một lần publish.
+    /// Client gửi SurveyOrderId, spacing và candidate GPS đầy đủ, không cần gửi zone.
+    /// Các candidate phải khớp những dòng đã lưu trong mission. Backend dùng hoặc
+    /// gán zone nội bộ rồi tạo message. Dùng lại Idempotency-Key khi retry.
     /// </remarks>
     [HttpPost("plant-gps/publish")]
     public async Task<IResult> PublishPlantGps(
@@ -252,29 +249,31 @@ public sealed class SystemManagerMissionsController(
             });
         }
 
-        if (request.Payload.Zones is null || request.Payload.Zones.Count == 0 ||
-            request.Payload.Zones.Any(zone => zone is null ||
-                zone.Candidates is null || zone.Candidates.Count == 0 ||
-                zone.Candidates.Any(candidate => candidate is null ||
-                    string.IsNullOrWhiteSpace(candidate.TreeId))))
+        if (request.Payload.Candidates is null || request.Payload.Candidates.Count == 0 ||
+            request.Payload.Candidates.Any(candidate => candidate is null ||
+                string.IsNullOrWhiteSpace(candidate.TreeId)))
         {
             return Results.ValidationProblem(new Dictionary<string, string[]>
             {
-                ["payload.zones"] = ["At least one zone with candidate rows is required."]
+                ["payload.candidates"] = ["At least one candidate with treeId is required."]
             });
         }
 
-        var payload = new BaselineMappingCandidatesReadyV3(
+        var publishRequest = new MissionPlantGpsPublishRequest(
             request.Payload.SurveyOrderId,
-            missionId,
-            farmId,
-            request.Payload.Zones.Select(zone => new ZoneMappingCandidatesV3(
-                zone.ZoneId,
-                zone.Candidates.Select(candidate =>
-                    new MappingCandidateV3(TreeId: candidate.TreeId)).ToArray(),
-                GridBearingDeg: zone.GridBearingDeg,
-                RowSpacingM: zone.RowSpacingM,
-                PlantSpacingM: zone.PlantSpacingM)).ToArray());
+            request.Payload.RowSpacingM,
+            request.Payload.PlantSpacingM,
+            request.Payload.GridBearingDeg,
+            request.Payload.Candidates.Select(candidate =>
+                new MissionPlantGpsCandidateInput(
+                    candidate.TreeId,
+                    candidate.Row,
+                    candidate.Col,
+                    candidate.Latitude,
+                    candidate.Longitude,
+                    candidate.Confidence,
+                    candidate.Status,
+                    candidate.Source)).ToArray());
 
         var result = await plantGpsPublisher.PublishAsync(
             tenantId,
@@ -283,7 +282,7 @@ public sealed class SystemManagerMissionsController(
             actorId,
             executionContext.CorrelationId,
             messageId,
-            payload,
+            publishRequest,
             cancellationToken);
 
         return result.Status switch

@@ -48,7 +48,6 @@ internal sealed class FarmBaseMapPublicationOrchestrator(
             }
 
             var batch = await dbContext.MappingCandidateBatches
-                .Include(b => b.Zones)
                 .Include(b => b.Candidates)
                 .SingleOrDefaultAsync(b => b.FarmBaseMapVersionId == draftId, ct);
 
@@ -104,57 +103,21 @@ internal sealed class FarmBaseMapPublicationOrchestrator(
                 prevMap.Supersede(now);
             }
 
-            // Supersede existing confirmed zone map versions for zones in this batch
-            var batchZoneIds = batch.Zones.Select(z => z.ZoneId).ToList();
-            var existingZoneMaps = await dbContext.ZoneMapVersions
-                .Where(zm => batchZoneIds.Contains(zm.ZoneId) && zm.Status == MapVersionStatus.Confirmed)
-                .ToListAsync(ct);
-
-            foreach (var prevZoneMap in existingZoneMaps)
-            {
-                prevZoneMap.Supersede();
-            }
-
             var defaultHealth = await dbContext.HealthLevels
                 .Where(h => h.IsActive)
                 .OrderBy(h => h.Rank)
                 .FirstOrDefaultAsync(ct);
             var healthId = defaultHealth?.Id ?? Guid.Parse("10000000-0000-0000-0000-000000000001");
 
-            var publishedZones = new List<PublishedZoneMapV3>();
+            var publishableCandidates = batch.Candidates
+                .Where(c => c.ReviewDecision is MappingCandidateReviewDecision.CreateNew
+                                             or MappingCandidateReviewDecision.MatchExisting
+                                             or MappingCandidateReviewDecision.Relocate
+                                             or MappingCandidateReviewDecision.Replace)
+                .ToList();
+            var plantMappings = new List<PublishedPlantMappingV3>();
 
-            foreach (var z in batch.Zones)
-            {
-                var zoneMapId = Guid.NewGuid();
-                var zoneMap = ZoneMapVersion.CreateDraftForFarmMap(
-                    id: zoneMapId,
-                    farmId: farmId,
-                    zoneId: z.ZoneId,
-                    farmBaseMapVersionId: draft.Id,
-                    sourceMissionId: batch.MissionId,
-                    sourceApprovalId: Guid.NewGuid(),
-                    versionNumber: draft.VersionNumber,
-                    gridBearingDeg: (decimal)z.GridBearingDeg,
-                    rowSpacingM: (decimal)z.RowSpacingM,
-                    plantSpacingM: (decimal)z.PlantSpacingM,
-                    algorithmVersion: batch.AlgorithmVersion,
-                    parameters: JsonDocument.Parse("{}"),
-                    createdAt: now);
-
-                zoneMap.Confirm(actorId, now);
-                dbContext.ZoneMapVersions.Add(zoneMap);
-
-                var zoneCandidates = batch.Candidates
-                    .Where(c => c.ZoneId == z.ZoneId &&
-                                c.ReviewDecision is MappingCandidateReviewDecision.CreateNew
-                                                 or MappingCandidateReviewDecision.MatchExisting
-                                                 or MappingCandidateReviewDecision.Relocate
-                                                 or MappingCandidateReviewDecision.Replace)
-                    .ToList();
-
-                var plantMappings = new List<PublishedPlantMappingV3>();
-
-                foreach (var c in zoneCandidates)
+            foreach (var c in publishableCandidates)
                 {
                     var pos = c.CorrectedPosition ?? c.OriginalPosition;
                     var row = c.CorrectedRowIndex ?? c.ProposedRowIndex ?? 1;
@@ -182,8 +145,8 @@ internal sealed class FarmBaseMapPublicationOrchestrator(
                                     $"Target plant {targetPlantId.Value} for candidate {c.CandidateId} was not found."));
                         }
 
-                        existingPlant.ApplyPublishedMapPosition(
-                            mapVersionId: zoneMapId,
+                        existingPlant.ApplyPublishedFarmMapPosition(
+                            farmBaseMapVersionId: draft.Id,
                             location: existingPlant.Location ?? pos,
                             rowIndex: existingPlant.RowIndex ?? row,
                             columnIndex: existingPlant.ColumnIndex ?? col,
@@ -227,8 +190,8 @@ internal sealed class FarmBaseMapPublicationOrchestrator(
                         var oldRow = existingPlant.RowIndex;
                         var oldCol = existingPlant.ColumnIndex;
 
-                        existingPlant.ApplyPublishedMapPosition(
-                            mapVersionId: zoneMapId,
+                        existingPlant.ApplyPublishedFarmMapPosition(
+                            farmBaseMapVersionId: draft.Id,
                             location: pos,
                             rowIndex: row,
                             columnIndex: col,
@@ -274,15 +237,14 @@ internal sealed class FarmBaseMapPublicationOrchestrator(
                         }
 
                         var plantId = Guid.NewGuid();
-                        var plantCode = $"P-{z.ZoneId.ToString()[..4]}-{row:D3}-{col:D3}-{plantId.ToString()[..4]}";
+                        var plantCode = $"P-{farmId.ToString()[..4]}-{row:D3}-{col:D3}-{plantId.ToString()[..4]}";
 
-                        var plant = Plant.CreateFromMapping(
+                        var plant = Plant.CreateFromFarmMapping(
                             id: plantId,
                             farmId: farmId,
-                            zoneId: z.ZoneId,
                             plantCode: plantCode,
                             location: pos,
-                            mapVersionId: zoneMapId,
+                            farmBaseMapVersionId: draft.Id,
                             rowIndex: row,
                             columnIndex: col,
                             locationAccuracyM: 0.1m,
@@ -321,15 +283,14 @@ internal sealed class FarmBaseMapPublicationOrchestrator(
                     else // CreateNew
                     {
                         var plantId = Guid.NewGuid();
-                        var plantCode = $"P-{z.ZoneId.ToString()[..4]}-{row:D3}-{col:D3}-{plantId.ToString()[..4]}";
+                        var plantCode = $"P-{farmId.ToString()[..4]}-{row:D3}-{col:D3}-{plantId.ToString()[..4]}";
 
-                        var plant = Plant.CreateFromMapping(
+                        var plant = Plant.CreateFromFarmMapping(
                             id: plantId,
                             farmId: farmId,
-                            zoneId: z.ZoneId,
                             plantCode: plantCode,
                             location: pos,
-                            mapVersionId: zoneMapId,
+                            farmBaseMapVersionId: draft.Id,
                             rowIndex: row,
                             columnIndex: col,
                             locationAccuracyM: 0.1m,
@@ -360,13 +321,6 @@ internal sealed class FarmBaseMapPublicationOrchestrator(
                             LifecycleStatus: PublishedPlantLifecycleStatusesV3.Active,
                             AppliedPlantChangeReportId: null));
                     }
-                }
-
-                publishedZones.Add(new PublishedZoneMapV3(
-                    ZoneId: z.ZoneId,
-                    ZoneMapVersionId: zoneMapId,
-                    VersionNumber: draft.VersionNumber,
-                    PlantMappings: plantMappings));
             }
 
             draft.Publish(actorId, now);
@@ -392,7 +346,7 @@ internal sealed class FarmBaseMapPublicationOrchestrator(
                 ConfirmedSurveyPoleCount: validation.ConfirmedPublishablePoleCount,
                 ConfirmedBy: actorId,
                 PublishedAt: now,
-                Zones: publishedZones,
+                PlantMappings: plantMappings,
                 AppliedPlantChangeReportIds: []);
 
             var envelope = IntegrationEventEnvelopeFactory.Create(

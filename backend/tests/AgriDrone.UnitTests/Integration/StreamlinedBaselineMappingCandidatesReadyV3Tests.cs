@@ -24,23 +24,18 @@ public sealed class StreamlinedBaselineMappingCandidatesReadyV3Tests
             SurveyOrderId: SurveyOrderId,
             MissionId: MissionId,
             FarmId: FarmId,
-            Zones:
+            GridBearingDeg: 0.0,
+            RowSpacingM: 3.5,
+            PlantSpacingM: 2.0,
+            Candidates:
             [
-                new ZoneMappingCandidatesV3(
-                    ZoneId: ZoneId,
-                    GridBearingDeg: 0.0,
-                    RowSpacingM: 3.5,
-                    PlantSpacingM: 2.0,
-                    Candidates:
-                    [
-                        new MappingCandidateV3(
-                            Longitude: 106.123456,
-                            Latitude: 10.654321,
-                            ProposedRowIndex: 1,
-                            ProposedColumnIndex: 5,
-                            PositionConfidence: 0.98m,
-                            TreeId: "tree_r1_c5")
-                    ])
+                new MappingCandidateV3(
+                    Longitude: 106.123456,
+                    Latitude: 10.654321,
+                    ProposedRowIndex: 1,
+                    ProposedColumnIndex: 5,
+                    PositionConfidence: 0.98m,
+                    TreeId: "tree_r1_c5")
             ]);
 
         // Act
@@ -58,20 +53,18 @@ public sealed class StreamlinedBaselineMappingCandidatesReadyV3Tests
             SurveyOrderId: SurveyOrderId,
             MissionId: MissionId,
             FarmId: FarmId,
-            Zones:
+            GridBearingDeg: 0,
+            RowSpacingM: 3,
+            PlantSpacingM: 2.5,
+            Candidates:
             [
-                new ZoneMappingCandidatesV3(
-                    ZoneId: ZoneId,
-                    Candidates:
-                    [
-                        new MappingCandidateV3(
-                            Longitude: 0.0,
-                            Latitude: 0.0,
-                            OriginalPosition: null,
-                            ProposedRowIndex: 1,
-                            ProposedColumnIndex: 1,
-                            PositionConfidence: 0.9m)
-                    ])
+                new MappingCandidateV3(
+                    Longitude: 0.0,
+                    Latitude: 0.0,
+                    OriginalPosition: null,
+                    ProposedRowIndex: 1,
+                    ProposedColumnIndex: 1,
+                    PositionConfidence: 0.9m)
             ]);
 
         // Act
@@ -90,23 +83,18 @@ public sealed class StreamlinedBaselineMappingCandidatesReadyV3Tests
             MissionId: MissionId,
             FarmId: FarmId,
             ProducedAt: new DateTimeOffset(2026, 10, 28, 12, 0, 0, TimeSpan.Zero),
-            Zones:
+            GridBearingDeg: 45.0,
+            RowSpacingM: 4.0,
+            PlantSpacingM: 2.5,
+            Candidates:
             [
-                new ZoneMappingCandidatesV3(
-                    ZoneId: ZoneId,
-                    GridBearingDeg: 45.0,
-                    RowSpacingM: 4.0,
-                    PlantSpacingM: 2.5,
-                    Candidates:
-                    [
-                        new MappingCandidateV3(
-                            Longitude: 105.789123,
-                            Latitude: 21.012345,
-                            ProposedRowIndex: 2,
-                            ProposedColumnIndex: 3,
-                            PositionConfidence: 0.95m,
-                            TreeId: "tree_r2_c3")
-                    ])
+                new MappingCandidateV3(
+                    Longitude: 105.789123,
+                    Latitude: 21.012345,
+                    ProposedRowIndex: 2,
+                    ProposedColumnIndex: 3,
+                    PositionConfidence: 0.95m,
+                    TreeId: "tree_r2_c3")
             ]);
 
         var options = new JsonSerializerOptions
@@ -124,8 +112,9 @@ public sealed class StreamlinedBaselineMappingCandidatesReadyV3Tests
         Assert.Equal(original.SurveyOrderId, deserialized.SurveyOrderId);
         Assert.Equal(original.MissionId, deserialized.MissionId);
         Assert.Equal(original.FarmId, deserialized.FarmId);
-        var zone = Assert.Single(deserialized.Zones);
-        var candidate = Assert.Single(zone.Candidates);
+        Assert.DoesNotContain("zones", json, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("zoneId", json, StringComparison.OrdinalIgnoreCase);
+        var candidate = Assert.Single(deserialized.Candidates);
         Assert.Equal(105.789123, candidate.Longitude);
         Assert.Equal(21.012345, candidate.Latitude);
         Assert.Equal("tree_r2_c3", candidate.TreeId);

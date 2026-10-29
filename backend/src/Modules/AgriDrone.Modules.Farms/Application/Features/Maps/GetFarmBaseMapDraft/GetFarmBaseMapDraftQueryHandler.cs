@@ -48,25 +48,13 @@ internal sealed class GetFarmBaseMapDraftQueryHandler(
 
         var batch = await dbContext.MappingCandidateBatches
             .AsNoTracking()
-            .Include(b => b.Zones)
             .Include(b => b.Candidates)
             .SingleOrDefaultAsync(
                 b => b.FarmBaseMapVersionId == query.DraftId || b.FarmId == query.FarmId && b.SurveyOrderId == draft.SourceSurveyOrderId,
                 cancellationToken);
 
         var candidates = batch?.Candidates.ToList() ?? [];
-        var zonesList = new List<CandidateZoneDto>();
-
-        if (batch is not null)
-        {
-            var candidatesByZone = candidates
-                .GroupBy(c => c.ZoneId)
-                .ToDictionary(g => g.Key, g => g.ToList());
-
-            foreach (var z in batch.Zones)
-            {
-                var zoneCandidates = candidatesByZone.TryGetValue(z.ZoneId, out var cz) ? cz : [];
-                var candidateDtos = zoneCandidates.Select(c => new CandidateDto(
+        var candidateDtos = candidates.Select(c => new CandidateDto(
                     CandidateId: c.CandidateId,
                     SourceObservationId: c.SourceObservationId,
                     EvidenceMediaAssetIds: c.EvidenceMediaAssetIds,
@@ -86,15 +74,6 @@ internal sealed class GetFarmBaseMapDraftQueryHandler(
                     ReviewReason: c.ReviewReason,
                     ReviewedAt: c.ReviewedAt,
                     TreeId: c.TreeId)).ToList();
-
-                zonesList.Add(new CandidateZoneDto(
-                    ZoneId: z.ZoneId,
-                    GridBearingDeg: z.GridBearingDeg,
-                    RowSpacingM: z.RowSpacingM,
-                    PlantSpacingM: z.PlantSpacingM,
-                    Candidates: candidateDtos));
-            }
-        }
 
         var total = candidates.Count;
         var accepted = candidates.Count(c => c.ReviewDecision is MappingCandidateReviewDecision.CreateNew or MappingCandidateReviewDecision.MatchExisting);
@@ -124,7 +103,10 @@ internal sealed class GetFarmBaseMapDraftQueryHandler(
             RejectedCount: rejected,
             RelocatedCount: relocated,
             ReplacedCount: replaced,
-            Zones: zonesList);
+            GridBearingDeg: batch?.GridBearingDeg ?? draft.GridBearingDeg,
+            RowSpacingM: batch?.RowSpacingM ?? draft.RowSpacingM,
+            PlantSpacingM: batch?.PlantSpacingM ?? draft.PlantSpacingM,
+            Candidates: candidateDtos);
 
         return Result.Success(response);
     }

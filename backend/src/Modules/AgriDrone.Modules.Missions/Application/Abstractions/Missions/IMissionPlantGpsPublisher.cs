@@ -1,5 +1,3 @@
-using AgriDrone.IntegrationContracts.Mapping;
-
 namespace AgriDrone.Modules.Missions.Application.Abstractions.Missions;
 
 public interface IMissionPlantGpsPublisher
@@ -11,19 +9,6 @@ public interface IMissionPlantGpsPublisher
         Guid actorId,
         Guid correlationId,
         Guid idempotencyKey,
-        BaselineMappingCandidatesReadyV3 payload,
+        MissionPlantGpsPublishRequest request,
         CancellationToken cancellationToken);
-}
-
-public sealed record MissionPlantGpsPublishResult(
-    MissionPlantGpsPublishStatus Status,
-    Guid? MessageId = null,
-    IReadOnlyList<string>? Errors = null);
-
-public enum MissionPlantGpsPublishStatus
-{
-    Queued,
-    NotFound,
-    Conflict,
-    Invalid
 }

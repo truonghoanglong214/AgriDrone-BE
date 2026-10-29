@@ -14,7 +14,7 @@ public sealed class BaselineMappingBatchValidatorTests
     {
         // Arrange
         var batch = CreateSampleBatch();
-        var zoneId = batch.Zones.First().ZoneId;
+        Guid? zoneId = null;
 
         var candidate = MappingCandidate.Create(
             id: Guid.NewGuid(),
@@ -49,7 +49,7 @@ public sealed class BaselineMappingBatchValidatorTests
     {
         // Arrange
         var batch = CreateSampleBatch();
-        var zoneId = batch.Zones.First().ZoneId;
+        Guid? zoneId = null;
 
         var candidate = MappingCandidate.Create(
             id: Guid.NewGuid(),
@@ -84,7 +84,7 @@ public sealed class BaselineMappingBatchValidatorTests
     {
         // Arrange
         var batch = CreateSampleBatch();
-        var zoneId = batch.Zones.First().ZoneId;
+        Guid? zoneId = null;
         var reviewerId = Guid.NewGuid();
         var now = DateTimeOffset.UtcNow;
 
@@ -142,11 +142,11 @@ public sealed class BaselineMappingBatchValidatorTests
     }
 
     [Fact]
-    public void ValidateWhenDuplicateGridPositionInSameZoneFlagsDuplicateGridError()
+    public void ValidateWhenDuplicateGridPositionInFarmFlagsDuplicateGridError()
     {
         // Arrange
         var batch = CreateSampleBatch();
-        var zoneId = batch.Zones.First().ZoneId;
+        Guid? zoneId = null;
         var reviewerId = Guid.NewGuid();
         var now = DateTimeOffset.UtcNow;
 
@@ -199,7 +199,7 @@ public sealed class BaselineMappingBatchValidatorTests
 
         // Assert
         Assert.False(result.IsValid);
-        Assert.Contains(result.Issues, i => i.Code == "DuplicateGridPositionInZone");
+        Assert.Contains(result.Issues, i => i.Code == "DuplicateGridPositionInFarmMap");
     }
 
     [Fact]
@@ -207,7 +207,7 @@ public sealed class BaselineMappingBatchValidatorTests
     {
         // Arrange
         var batch = CreateSampleBatch();
-        var zoneId = batch.Zones.First().ZoneId;
+        Guid? zoneId = null;
         var reviewerId = Guid.NewGuid();
         var now = DateTimeOffset.UtcNow;
 
@@ -279,6 +279,9 @@ public sealed class BaselineMappingBatchValidatorTests
             farmBoundaryVersionId: Guid.NewGuid(),
             farmBaseMapVersionId: Guid.NewGuid(),
             expectedCurrentFarmBaseMapVersionId: null,
+            gridBearingDeg: 45.0,
+            rowSpacingM: 2.5,
+            plantSpacingM: 2.5,
             jobId: Guid.NewGuid(),
             modelVersionId: Guid.NewGuid(),
             modelVersion: "v1.0",
@@ -287,17 +290,6 @@ public sealed class BaselineMappingBatchValidatorTests
             producedAt: now,
             createdAt: now);
 
-        var zone = MappingCandidateZone.Create(
-            id: Guid.NewGuid(),
-            batchId: batchId,
-            zoneId: Guid.NewGuid(),
-            expectedCurrentZoneMapVersionId: null,
-            gridBearingDeg: 45.0,
-            rowSpacingM: 2.5,
-            plantSpacingM: 2.5,
-            createdAt: now);
-
-        batch.AddZone(zone);
         return batch;
     }
 }

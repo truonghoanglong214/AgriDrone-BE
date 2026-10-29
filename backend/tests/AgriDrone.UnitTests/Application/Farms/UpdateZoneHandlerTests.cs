@@ -215,6 +215,7 @@ public sealed class UpdateZoneHandlerTests
                 actorId),
             accessService,
             boundaryPolicy,
+            new NoOpFarmZonePlantMembershipService(),
             new FixedTimeProvider(Now));
 
         return new Fixture(

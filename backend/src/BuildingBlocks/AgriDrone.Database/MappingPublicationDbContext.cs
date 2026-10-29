@@ -40,9 +40,6 @@ public sealed class MappingPublicationDbContext(
     public DbSet<MappingCandidateBatch> MappingCandidateBatches =>
         Set<MappingCandidateBatch>();
 
-    public DbSet<MappingCandidateZone> MappingCandidateZones =>
-        Set<MappingCandidateZone>();
-
     public DbSet<MappingCandidate> MappingCandidates =>
         Set<MappingCandidate>();
 
@@ -96,7 +93,6 @@ public sealed class MappingPublicationDbContext(
         modelBuilder.ApplyConfiguration(new FarmBaseMapVersionConfiguration());
         modelBuilder.ApplyConfiguration(new ZoneMapVersionConfiguration());
         modelBuilder.ApplyConfiguration(new MappingCandidateBatchConfiguration());
-        modelBuilder.ApplyConfiguration(new MappingCandidateZoneConfiguration());
         modelBuilder.ApplyConfiguration(new MappingCandidateConfiguration());
         modelBuilder.ApplyConfiguration(new HealthLevelConfiguration());
         modelBuilder.ApplyConfiguration(new PlantConfiguration());
@@ -172,6 +168,22 @@ public sealed class MappingPublicationDbContext(
             })
             .OnDelete(DeleteBehavior.Restrict)
             .HasConstraintName("fk_plants_current_map_version_same_zone");
+
+        modelBuilder.Entity<Plant>()
+            .HasOne<FarmBaseMapVersion>()
+            .WithMany()
+            .HasForeignKey(plant => new
+            {
+                plant.FarmBaseMapVersionId,
+                plant.FarmId
+            })
+            .HasPrincipalKey(mapVersion => new
+            {
+                mapVersion.Id,
+                mapVersion.FarmId
+            })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_plants_farm_base_map_version_same_farm");
 
         modelBuilder.Entity<AuditLog>()
             .HasOne<Farm>()

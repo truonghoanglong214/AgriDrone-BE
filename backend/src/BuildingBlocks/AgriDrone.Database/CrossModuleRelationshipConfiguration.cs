@@ -297,6 +297,43 @@ internal static class CrossModuleRelationshipConfiguration
             .HasConstraintName("fk_plants_current_map_version_same_zone");
 
         modelBuilder.Entity<Plant>()
+            .HasOne<FarmBaseMapVersion>()
+            .WithMany()
+            .HasForeignKey(plant => new
+            {
+                plant.FarmBaseMapVersionId,
+                plant.FarmId
+            })
+            .HasPrincipalKey(mapVersion => new
+            {
+                mapVersion.Id,
+                mapVersion.FarmId
+            })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_plants_farm_base_map_version_same_farm");
+
+        modelBuilder.Entity<FarmZonePlantMembership>()
+            .HasOne<Plant>()
+            .WithMany()
+            .HasForeignKey(membership => new
+            {
+                membership.PlantId,
+                membership.FarmId
+            })
+            .HasPrincipalKey(plant => new { plant.Id, plant.FarmId })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName(
+                "fk_farm_zone_plant_memberships_plant_same_farm");
+
+        modelBuilder.Entity<FarmZonePlantMembership>()
+            .HasOne<User>()
+            .WithMany()
+            .HasForeignKey(membership => membership.AssignedBy)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName(
+                "fk_farm_zone_plant_memberships_users_assigned_by");
+
+        modelBuilder.Entity<Plant>()
             .HasOne<DroneMission>()
             .WithMany()
             .HasForeignKey(plant => plant.CreatedFromMissionId)
@@ -716,6 +753,14 @@ internal static class CrossModuleRelationshipConfiguration
             })
             .OnDelete(DeleteBehavior.Restrict)
             .HasConstraintName("fk_survey_orders_farm_boundary_same_tenant_farm");
+
+        modelBuilder.Entity<SurveyOrderZoneScope>()
+            .HasOne<FarmZone>()
+            .WithMany()
+            .HasForeignKey(scope => new { scope.ZoneId, scope.FarmId })
+            .HasPrincipalKey(zone => new { zone.Id, zone.FarmId })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_survey_order_zone_scopes_zone_same_farm");
 
         modelBuilder.Entity<BoundaryException>()
             .HasOne<SurveyOrder>()

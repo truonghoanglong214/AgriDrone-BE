@@ -1,4 +1,5 @@
 using AgriDrone.IntegrationContracts.Surveys;
+using AgriDrone.IntegrationContracts.Mapping;
 using AgriDrone.Modules.Farms.Domain.Boundaries;
 using AgriDrone.Modules.Farms.Domain.Farms;
 using AgriDrone.Modules.Farms.Domain.Maps;
@@ -31,6 +32,7 @@ internal sealed class SurveyOrderOperationalContextV3Query(
             .Include(value => value.SurveyService)
             .Include(value => value.Appointments)
             .Include(value => value.Payments)
+            .Include(value => value.ZoneScopes)
             .SingleOrDefaultAsync(value => value.Id == surveyOrderId, cancellationToken);
         if (order is null) return null;
 
@@ -163,11 +165,36 @@ internal sealed class SurveyOrderOperationalContextV3Query(
                 .FirstOrDefaultAsync(cancellationToken);
         }
 
-        var scopeZoneIds = await db.Set<FarmZone>().AsNoTracking()
-            .Where(z => z.FarmId == order.FarmId && z.Status == GeneralStatus.Active && z.DeletedAt == null)
-            .OrderBy(z => z.Code)
-            .Select(z => z.Id)
-            .ToListAsync(cancellationToken);
+        var isBaselineScope = purpose == SurveyOperationPurpose.BaselineMapping;
+        var scopeType = isBaselineScope
+            ? IntegrationContracts.Surveys.SurveyScopeType.FarmWide
+            : order.ScopeType == Modules.Surveys.Domain.SurveyScopeType.Zones
+                ? IntegrationContracts.Surveys.SurveyScopeType.Zones
+                : IntegrationContracts.Surveys.SurveyScopeType.FarmWide;
+        var scopeZones = isBaselineScope
+            ? []
+            : order.ZoneScopes
+                .OrderBy(scope => scope.ZoneId)
+                .Select(scope => new SurveyScopeZoneV3(
+                    scope.ZoneId,
+                    scope.ZoneVersion,
+                    ToGeoJson(scope.BoundarySnapshot)))
+                .ToArray();
+        var scopeZoneIds = scopeZones.Select(scope => scope.ZoneId).ToArray();
+        var currentScopeVersions = scopeZoneIds.Length == 0
+            ? new Dictionary<Guid, long>()
+            : await db.Set<FarmZone>().AsNoTracking()
+                .Where(zone => scopeZoneIds.Contains(zone.Id) &&
+                               zone.FarmId == order.FarmId &&
+                               zone.Status == GeneralStatus.Active &&
+                               zone.DeletedAt == null &&
+                               zone.Boundary != null)
+                .ToDictionaryAsync(zone => zone.Id, zone => zone.Version,
+                    cancellationToken);
+        var scopeStale = scopeType == IntegrationContracts.Surveys.SurveyScopeType.Zones &&
+            scopeZones.Any(scope =>
+                !currentScopeVersions.TryGetValue(scope.ZoneId, out var version) ||
+                version != scope.ZoneVersion);
 
         var expectedPayableAmount = order.RemainingAmount ?? order.FinalPrice;
         var isPaymentAmountAndCurrencyMatched = purpose == SurveyOperationPurpose.BaselineMapping
@@ -213,6 +240,14 @@ internal sealed class SurveyOrderOperationalContextV3Query(
         // BE1 authoritative readiness represents commercial, legal consent/permission, and boundary verification gates
         var decision = SurveyOrderReadinessPolicy.EvaluateCommercialReadiness(snapshot);
 
+        var readinessFailures = decision.Failures
+            .Select(value => value.ToString())
+            .ToList();
+        if (scopeStale)
+        {
+            readinessFailures.Insert(0, "SCOPE_STALE");
+        }
+
         return new SurveyOrderOperationalContextV3(
             order.Id, order.TenantId, order.FarmId, order.SurveyService.Code,
             order.SurveyService.ServiceType.ToString(), purpose.ToString(),
@@ -225,7 +260,7 @@ internal sealed class SurveyOrderOperationalContextV3Query(
             appointment?.Status.ToString(), payment?.Id, payment?.Status.ToString(),
             managerReady ? access.ManagerProfileId : null,
             order.PreviousCompatibleOrderId,
-            decision.IsReady, decision.Failures.Select(value => value.ToString()).ToArray(),
+            decision.IsReady && !scopeStale, readinessFailures,
             clock.GetUtcNow(),
             scopeZoneIds,
             order.BoundaryCaptureSessionId,
@@ -245,6 +280,29 @@ internal sealed class SurveyOrderOperationalContextV3Query(
             candidateCenterLongitude,
             candidateCenterLatitude,
             approximateAreaHa,
-            surveyRadiusMeters);
+            surveyRadiusMeters,
+            scopeType,
+            scopeZones);
+    }
+
+    private static GeoJsonPolygonV3 ToGeoJson(
+        NetTopologySuite.Geometries.Polygon polygon)
+    {
+        var rings = new List<IReadOnlyList<IReadOnlyList<double>>>
+        {
+            polygon.ExteriorRing.Coordinates
+                .Select(coordinate => (IReadOnlyList<double>)
+                    [coordinate.X, coordinate.Y])
+                .ToArray()
+        };
+        for (var i = 0; i < polygon.NumInteriorRings; i++)
+        {
+            rings.Add(polygon.GetInteriorRingN(i).Coordinates
+                .Select(coordinate => (IReadOnlyList<double>)
+                    [coordinate.X, coordinate.Y])
+                .ToArray());
+        }
+
+        return new GeoJsonPolygonV3("Polygon", rings);
     }
 }

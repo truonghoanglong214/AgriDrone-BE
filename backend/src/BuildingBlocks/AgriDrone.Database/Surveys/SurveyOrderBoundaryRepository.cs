@@ -51,9 +51,18 @@ internal sealed class SurveyOrderBoundaryRepository(
                 SurveyOrderError.Forbidden());
         }
 
-        var order = await context.SurveyOrders.SingleAsync(
-            item => item.Id == surveyOrderId,
-            cancellationToken);
+        var order = await context.SurveyOrders
+            .Include(item => item.ZoneScopes)
+            .SingleAsync(item => item.Id == surveyOrderId, cancellationToken);
+        var activeZoneSnapshots = await context.FarmZones
+            .AsNoTracking()
+            .Where(zone => zone.FarmId == order.FarmId &&
+                           zone.Status == AgriDrone.SharedKernel.Domain.GeneralStatus.Active &&
+                           zone.DeletedAt == null &&
+                           zone.Boundary != null)
+            .Select(zone => new SurveyZoneSelectionSnapshot(
+                zone.Id, zone.Version, zone.Boundary!))
+            .ToListAsync(cancellationToken);
 
         var baseMapLocked = await ExistsAsync(
             """
@@ -78,7 +87,8 @@ internal sealed class SurveyOrderBoundaryRepository(
                 order,
                 access.Value,
                 CurrentPublishedBaseMapVersionId: null,
-                CurrentConfirmedPoleCount: null));
+                CurrentConfirmedPoleCount: null,
+                activeZoneSnapshots));
         }
 
         var baseMap = await context.FarmBaseMapVersions
@@ -104,7 +114,8 @@ internal sealed class SurveyOrderBoundaryRepository(
             order,
             access.Value,
             baseMap.Id,
-            sourceOrder.ConfirmedSurveyPoleCount.Value.Value));
+            sourceOrder.ConfirmedSurveyPoleCount.Value.Value,
+            activeZoneSnapshots));
     }
 
     public async Task<Result<SurveyBoundaryApprovalSnapshot>>

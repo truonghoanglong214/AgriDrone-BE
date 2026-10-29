@@ -4,7 +4,6 @@ namespace AgriDrone.Modules.Farms.Domain.Maps.Staging;
 
 public sealed class MappingCandidateBatch : AggregateRoot
 {
-    private readonly List<MappingCandidateZone> _zones = [];
     private readonly List<MappingCandidate> _candidates = [];
 
     private MappingCandidateBatch() { }
@@ -17,6 +16,9 @@ public sealed class MappingCandidateBatch : AggregateRoot
     public Guid FarmBoundaryVersionId { get; private set; }
     public Guid? FarmBaseMapVersionId { get; private set; }
     public Guid? ExpectedCurrentFarmBaseMapVersionId { get; private set; }
+    public double GridBearingDeg { get; private set; }
+    public double RowSpacingM { get; private set; }
+    public double PlantSpacingM { get; private set; }
     public Guid JobId { get; private set; }
     public Guid ModelVersionId { get; private set; }
     public string ModelVersion { get; private set; } = string.Empty;
@@ -31,7 +33,6 @@ public sealed class MappingCandidateBatch : AggregateRoot
     public DateTimeOffset CreatedAt { get; private set; }
     public DateTimeOffset UpdatedAt { get; private set; }
 
-    public IReadOnlyCollection<MappingCandidateZone> Zones => _zones.AsReadOnly();
     public IReadOnlyCollection<MappingCandidate> Candidates => _candidates.AsReadOnly();
 
     public static MappingCandidateBatch Create(
@@ -44,6 +45,9 @@ public sealed class MappingCandidateBatch : AggregateRoot
         Guid farmBoundaryVersionId,
         Guid? farmBaseMapVersionId,
         Guid? expectedCurrentFarmBaseMapVersionId,
+        double gridBearingDeg,
+        double rowSpacingM,
+        double plantSpacingM,
         Guid jobId,
         Guid modelVersionId,
         string modelVersion,
@@ -63,6 +67,10 @@ public sealed class MappingCandidateBatch : AggregateRoot
         DomainGuard.NotEmpty(modelVersionId);
         DomainGuard.Utc(producedAt);
         DomainGuard.Utc(createdAt);
+        ArgumentOutOfRangeException.ThrowIfNegative(gridBearingDeg);
+        ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(gridBearingDeg, 360);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(rowSpacingM);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(plantSpacingM);
 
         return new MappingCandidateBatch
         {
@@ -75,6 +83,9 @@ public sealed class MappingCandidateBatch : AggregateRoot
             FarmBoundaryVersionId = farmBoundaryVersionId,
             FarmBaseMapVersionId = farmBaseMapVersionId,
             ExpectedCurrentFarmBaseMapVersionId = expectedCurrentFarmBaseMapVersionId,
+            GridBearingDeg = gridBearingDeg,
+            RowSpacingM = rowSpacingM,
+            PlantSpacingM = plantSpacingM,
             JobId = jobId,
             ModelVersionId = modelVersionId,
             ModelVersion = modelVersion?.Trim() ?? string.Empty,
@@ -91,12 +102,6 @@ public sealed class MappingCandidateBatch : AggregateRoot
     {
         DomainGuard.NotEmpty(farmBaseMapVersionId);
         FarmBaseMapVersionId = farmBaseMapVersionId;
-    }
-
-    public void AddZone(MappingCandidateZone zone)
-    {
-        ArgumentNullException.ThrowIfNull(zone);
-        _zones.Add(zone);
     }
 
     public void AddCandidate(MappingCandidate candidate)

@@ -384,7 +384,8 @@ public sealed class MarkFarmBoundaryOnOrthophotoCommandHandlerTests
                 order,
                 Guid.NewGuid(),
                 Guid.NewGuid(),
-                CurrentConfirmedPoleCount: 100)));
+                CurrentConfirmedPoleCount: 100,
+                ActiveZones: [])));
         }
 
         public Task<Result<SurveyBoundaryApprovalSnapshot>> StageApprovedBoundaryAsync(

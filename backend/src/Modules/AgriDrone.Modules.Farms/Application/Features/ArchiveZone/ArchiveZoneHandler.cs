@@ -1,6 +1,7 @@
 using System.Text.Json;
 using AgriDrone.Modules.Farms.Application.Abstractions.Persistence;
 using AgriDrone.Modules.Farms.Application.Abstractions.Queries;
+using AgriDrone.Modules.Farms.Application.Abstractions.Zones;
 using AgriDrone.Modules.Farms.Application.Errors;
 using AgriDrone.Modules.Farms.Domain.Zones;
 using AgriDrone.SharedInfrastructure.Auditing;
@@ -19,6 +20,7 @@ internal sealed class ArchiveZoneHandler(
     IAuditWriter auditWriter,
     IExecutionContext executionContext,
     ISystemManagerAccessService managerAccessService,
+    IFarmZonePlantMembershipService membershipService,
     TimeProvider timeProvider)
     : IRequestHandler<ArchiveZoneCommand, Result>
 {
@@ -81,6 +83,12 @@ internal sealed class ArchiveZoneHandler(
 
                 var now = timeProvider.GetUtcNow();
                 zone.Archive(now);
+                await membershipService.CloseZoneAsync(
+                    request.FarmId,
+                    zone.Id,
+                    actorId,
+                    now,
+                    token);
 
                 using var newData = CreateAuditData(zone);
 

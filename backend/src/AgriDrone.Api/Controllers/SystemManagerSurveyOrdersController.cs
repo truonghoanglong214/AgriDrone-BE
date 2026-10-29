@@ -110,7 +110,9 @@ public sealed class SystemManagerSurveyOrdersController(ISender sender)
                 request.Reason,
                 request.EvidenceReference,
                 request.ExpectedOrderVersion!.Value,
-                request.ExpectedCurrentBoundaryVersionNumber),
+                request.ExpectedCurrentBoundaryVersionNumber,
+                ParseScopeType(request.ScopeType),
+                request.ZoneIds ?? []),
             cancellationToken);
 
         return result.ToHttpResult(
@@ -118,6 +120,15 @@ public sealed class SystemManagerSurveyOrdersController(ISender sender)
             response => Results.Ok(
                 SurveyOrderResponseMapper.ToResponse(response)));
     }
+
+    private static SurveyScopeType ParseScopeType(string scopeType) =>
+        scopeType.Trim().ToUpperInvariant() switch
+        {
+            "FARM_WIDE" => SurveyScopeType.FarmWide,
+            "ZONES" => SurveyScopeType.Zones,
+            _ => throw new ArgumentException(
+                "ScopeType must be FARM_WIDE or ZONES.", nameof(scopeType))
+        };
 
     /// <summary>Xác nhận active pole count và khóa snapshot giá theo trụ.</summary>
     /// <remarks>
@@ -656,9 +667,4 @@ public sealed class SystemManagerSurveyOrdersController(ISender sender)
             HttpContext,
             response => Results.Ok(response));
     }
-}
-
-public enum PaidSurveyMissionPurpose
-{
-    PlantHealth
 }

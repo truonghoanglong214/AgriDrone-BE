@@ -27,8 +27,7 @@ public sealed class MappingCandidateConfiguration : IEntityTypeConfiguration<Map
 
         builder.Property(c => c.ZoneId)
             .HasColumnName("zone_id")
-            .HasColumnType("uuid")
-            .IsRequired();
+            .HasColumnType("uuid");
 
         builder.Property(c => c.CandidateId)
             .HasColumnName("candidate_id")

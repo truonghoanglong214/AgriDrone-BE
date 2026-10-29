@@ -18,8 +18,8 @@ public sealed class PlantConfiguration : IEntityTypeConfiguration<Plant>
                     "Digital Plant Profile root: one row represents one real dragon-fruit pole throughout its lifecycle.");
                 tableBuilder.HasCheckConstraint(
                     "ck_plants_grid_position_complete",
-                    "(current_map_version_id IS NULL AND row_index IS NULL AND column_index IS NULL) OR " +
-                    "(current_map_version_id IS NOT NULL AND zone_id IS NOT NULL AND " +
+                    "((current_map_version_id IS NULL AND farm_base_map_version_id IS NULL) AND row_index IS NULL AND column_index IS NULL) OR " +
+                    "(((current_map_version_id IS NOT NULL AND zone_id IS NOT NULL) OR farm_base_map_version_id IS NOT NULL) AND " +
                     "row_index IS NOT NULL AND column_index IS NOT NULL)");
                 tableBuilder.HasCheckConstraint(
                     "ck_plants_grid_indices_positive",
@@ -63,6 +63,10 @@ public sealed class PlantConfiguration : IEntityTypeConfiguration<Plant>
 
         builder.Property(plant => plant.CurrentMapVersionId)
             .HasColumnName("current_map_version_id")
+            .HasColumnType("uuid");
+
+        builder.Property(plant => plant.FarmBaseMapVersionId)
+            .HasColumnName("farm_base_map_version_id")
             .HasColumnType("uuid");
 
         builder.Property(plant => plant.RowIndex)
@@ -144,15 +148,18 @@ public sealed class PlantConfiguration : IEntityTypeConfiguration<Plant>
         builder.HasIndex(plant => plant.CurrentMapVersionId)
             .HasDatabaseName("ix_plants_current_map_version");
 
+        builder.HasIndex(plant => plant.FarmBaseMapVersionId)
+            .HasDatabaseName("ix_plants_farm_base_map_version");
+
         builder.HasIndex(plant => new
         {
-            plant.ZoneId,
+            plant.FarmBaseMapVersionId,
             plant.RowIndex,
             plant.ColumnIndex
         })
-            .HasDatabaseName("ux_plants_active_zone_grid_position")
+            .HasDatabaseName("ux_plants_active_farm_map_grid_position")
             .HasFilter(
-                "row_index IS NOT NULL AND column_index IS NOT NULL AND " +
+                "farm_base_map_version_id IS NOT NULL AND row_index IS NOT NULL AND column_index IS NOT NULL AND " +
                 "lifecycle_status IN ('ACTIVE'::system.plant_lifecycle_status, " +
                 "'MISSING'::system.plant_lifecycle_status)")
             .IsUnique();

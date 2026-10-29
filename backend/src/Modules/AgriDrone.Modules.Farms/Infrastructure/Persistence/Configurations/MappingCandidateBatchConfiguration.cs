@@ -57,6 +57,21 @@ public sealed class MappingCandidateBatchConfiguration : IEntityTypeConfiguratio
             .HasColumnName("expected_current_farm_base_map_version_id")
             .HasColumnType("uuid");
 
+        builder.Property(b => b.GridBearingDeg)
+            .HasColumnName("grid_bearing_deg")
+            .HasColumnType("double precision")
+            .IsRequired();
+
+        builder.Property(b => b.RowSpacingM)
+            .HasColumnName("row_spacing_m")
+            .HasColumnType("double precision")
+            .IsRequired();
+
+        builder.Property(b => b.PlantSpacingM)
+            .HasColumnName("plant_spacing_m")
+            .HasColumnType("double precision")
+            .IsRequired();
+
         builder.Property(b => b.JobId)
             .HasColumnName("job_id")
             .HasColumnType("uuid")
@@ -133,12 +148,6 @@ public sealed class MappingCandidateBatchConfiguration : IEntityTypeConfiguratio
             .HasPrincipalKey(f => new { f.Id, f.TenantId })
             .OnDelete(DeleteBehavior.Restrict)
             .HasConstraintName("fk_mapping_candidate_batches_farms");
-
-        builder.HasMany(b => b.Zones)
-            .WithOne(z => z.Batch)
-            .HasForeignKey(z => z.BatchId)
-            .OnDelete(DeleteBehavior.Cascade)
-            .HasConstraintName("fk_mapping_candidate_zones_batch");
 
         builder.HasMany(b => b.Candidates)
             .WithOne(c => c.Batch)

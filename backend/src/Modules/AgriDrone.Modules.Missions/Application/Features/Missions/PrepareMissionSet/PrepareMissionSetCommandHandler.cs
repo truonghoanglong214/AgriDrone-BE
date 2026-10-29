@@ -169,6 +169,8 @@ internal sealed class PrepareMissionSetCommandHandler(
         var now = timeProvider.GetUtcNow();
         var created = new List<DroneMission>();
         using var flightParameters = JsonDocument.Parse("{}");
+        using var scopeSnapshot = JsonSerializer.SerializeToDocument(
+            order.ScopeZones ?? []);
 
         foreach (var purpose in expectedPurposes)
         {
@@ -208,7 +210,10 @@ internal sealed class PrepareMissionSetCommandHandler(
                 false,
                 flightParameters,
                 actorId,
-                now);
+                now,
+                order.ScopeType,
+                scopeSnapshot,
+                order.ScopeFingerprint);
             if (purposeContexts[purpose].IsReadyToSchedule)
             {
                 var window = purpose == MissionPurpose.BaselineMapping
@@ -388,6 +393,7 @@ internal sealed class PrepareMissionSetCommandHandler(
             mission.TenantId != order.TenantId ||
             mission.FarmId != order.FarmId ||
             !mission.ScopeZoneIds.Order().SequenceEqual(order.ScopeZoneIds.Order()) ||
+            mission.ScopeFingerprint != order.ScopeFingerprint ||
             mission.Purpose is not { } purpose ||
             !expectedPurposes.Contains(purpose) ||
             mission.Status is MissionStatus.Cancelled or MissionStatus.FlightFailed ||

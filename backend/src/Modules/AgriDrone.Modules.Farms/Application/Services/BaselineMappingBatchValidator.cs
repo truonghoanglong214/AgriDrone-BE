@@ -4,30 +4,6 @@ using NetTopologySuite.Geometries;
 
 namespace AgriDrone.Modules.Farms.Application.Services;
 
-public sealed record MappingBatchValidationIssue(
-    Guid? CandidateId,
-    string Code,
-    string Message,
-    string Severity); // "Error" | "Warning"
-
-public sealed record BaselineMappingBatchValidationResult(
-    bool IsValid,
-    int TotalCandidates,
-    int AcceptedCount,
-    int RejectedCount,
-    int RelocatedCount,
-    int ReplacedCount,
-    int PendingCount,
-    int ConfirmedPublishablePoleCount,
-    IReadOnlyList<MappingBatchValidationIssue> Issues);
-
-public interface IBaselineMappingBatchValidator
-{
-    BaselineMappingBatchValidationResult Validate(
-        MappingCandidateBatch batch,
-        FarmBoundary? boundary);
-}
-
 public sealed class BaselineMappingBatchValidator : IBaselineMappingBatchValidator
 {
     private const double DuplicateDistanceThresholdMeters = 0.3;
@@ -45,22 +21,10 @@ public sealed class BaselineMappingBatchValidator : IBaselineMappingBatchValidat
         var candidates = batch.Candidates.ToList();
         var boundaryPoly = boundary?.Geometry;
 
-        var batchZoneIds = batch.Zones.Select(z => z.ZoneId).ToHashSet();
-
         // 1. Candidate validation (Boundary, Decision, Target Plant, Pending checks)
         foreach (var c in candidates)
         {
             var pos = c.CorrectedPosition ?? c.OriginalPosition;
-
-            // Validate ZoneId exists in batch zones
-            if (batchZoneIds.Count > 0 && !batchZoneIds.Contains(c.ZoneId))
-            {
-                issues.Add(new MappingBatchValidationIssue(
-                    c.CandidateId,
-                    "InvalidCandidateZone",
-                    $"Candidate {c.CandidateId} belongs to zone {c.ZoneId} which is not present in the batch zones.",
-                    "Error"));
-            }
 
             // Flag Pending candidates as blocking errors for publication
             if (c.ReviewDecision == MappingCandidateReviewDecision.Pending)
@@ -148,20 +112,20 @@ public sealed class BaselineMappingBatchValidator : IBaselineMappingBatchValidat
             .Where(c => c.ReviewDecision != MappingCandidateReviewDecision.Reject)
             .ToList();
 
-        // 2. Grid Position Unique Check within each Zone
-        var gridPositions = new HashSet<(Guid ZoneId, int Row, int Col)>();
+        // 2. Grid Position Unique Check within the farm base map
+        var gridPositions = new HashSet<(int Row, int Col)>();
         foreach (var c in activeCandidates)
         {
             var row = c.CorrectedRowIndex ?? c.ProposedRowIndex;
             var col = c.CorrectedColumnIndex ?? c.ProposedColumnIndex;
             if (row.HasValue && col.HasValue)
             {
-                if (!gridPositions.Add((c.ZoneId, row.Value, col.Value)))
+                if (!gridPositions.Add((row.Value, col.Value)))
                 {
                     issues.Add(new MappingBatchValidationIssue(
                         c.CandidateId,
-                        "DuplicateGridPositionInZone",
-                        $"Candidate {c.CandidateId} has duplicate grid position (Row: {row.Value}, Col: {col.Value}) in zone {c.ZoneId}.",
+                        "DuplicateGridPositionInFarmMap",
+                        $"Candidate {c.CandidateId} has duplicate farm grid position (Row: {row.Value}, Col: {col.Value}).",
                         "Error"));
                 }
             }

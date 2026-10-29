@@ -19,6 +19,8 @@ internal sealed class SurveysDbContext(DbContextOptions<SurveysDbContext> option
         SurveyApprovalIdempotencyRecords =>
         Set<SurveyApprovalIdempotencyRecord>();
     public DbSet<SurveyOrder> SurveyOrders => Set<SurveyOrder>();
+    public DbSet<SurveyOrderZoneScope> SurveyOrderZoneScopes =>
+        Set<SurveyOrderZoneScope>();
     public DbSet<SurveyCaptureAuthorization> SurveyCaptureAuthorizations =>
         Set<SurveyCaptureAuthorization>();
     public DbSet<SurveyAppointment> SurveyAppointments => Set<SurveyAppointment>();
