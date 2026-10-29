@@ -20,4 +20,10 @@ internal interface IDroneQueries
 
     Task<IReadOnlyList<DroneRegistryItemResponse>> GetRegistryAsync(
         CancellationToken cancellationToken = default);
+
+    async Task<DroneRegistryItemResponse?> GetDetailsAsync(
+        Guid droneId,
+        CancellationToken cancellationToken = default) =>
+        (await GetRegistryAsync(cancellationToken))
+            .SingleOrDefault(drone => drone.Id == droneId);
 }

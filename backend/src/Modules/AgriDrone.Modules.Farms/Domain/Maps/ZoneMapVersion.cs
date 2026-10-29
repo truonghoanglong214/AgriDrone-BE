@@ -118,6 +118,46 @@ public sealed class ZoneMapVersion : AggregateRoot
             createdAt);
     }
 
+    public static ZoneMapVersion CreateDraftForFarmMap(
+        Guid id,
+        Guid farmId,
+        Guid zoneId,
+        Guid farmBaseMapVersionId,
+        Guid sourceMissionId,
+        Guid sourceApprovalId,
+        int versionNumber,
+        decimal gridBearingDeg,
+        decimal rowSpacingM,
+        decimal plantSpacingM,
+        string algorithmVersion,
+        JsonDocument parameters,
+        DateTimeOffset createdAt)
+    {
+        DomainGuard.NotEmpty(farmBaseMapVersionId);
+        var zoneMap = CreateDraft(
+            id,
+            farmId,
+            zoneId,
+            sourceMissionId,
+            sourceApprovalId,
+            versionNumber,
+            gridBearingDeg,
+            rowSpacingM,
+            plantSpacingM,
+            algorithmVersion,
+            parameters,
+            createdAt);
+
+        zoneMap.LinkToFarmBaseMap(farmBaseMapVersionId);
+        return zoneMap;
+    }
+
+    public void LinkToFarmBaseMap(Guid farmBaseMapVersionId)
+    {
+        DomainGuard.NotEmpty(farmBaseMapVersionId);
+        FarmBaseMapVersionId = farmBaseMapVersionId;
+    }
+
     public void Confirm(Guid actorId, DateTimeOffset confirmedAt)
     {
         DomainGuard.NotEmpty(actorId);
@@ -144,5 +184,4 @@ public sealed class ZoneMapVersion : AggregateRoot
 
         Status = MapVersionStatus.Superseded;
     }
-
 }

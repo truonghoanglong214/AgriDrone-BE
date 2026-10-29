@@ -2,6 +2,9 @@ namespace AgriDrone.Modules.Missions.Application.Abstractions.Missions;
 
 public interface IMissionPlantGpsStore
 {
+    Task<IReadOnlyList<MissionPlantGpsRow>?> GetAsync(Guid tenantId, Guid farmId,
+        Guid missionId, CancellationToken cancellationToken);
+
     Task<bool> ReplaceAsync(Guid tenantId, Guid farmId, Guid missionId,
         IReadOnlyList<MissionPlantGpsRow> rows, CancellationToken cancellationToken);
 }

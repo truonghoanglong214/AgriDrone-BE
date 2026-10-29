@@ -2,13 +2,6 @@ using AgriDrone.SharedKernel.Domain;
 
 namespace AgriDrone.Modules.Farms.Domain.Maps;
 
-public enum FarmBaseMapStatus
-{
-    Draft,
-    Published,
-    Superseded
-}
-
 public sealed class FarmBaseMapVersion : AggregateRoot
 {
     private FarmBaseMapVersion() { }
@@ -18,6 +11,12 @@ public sealed class FarmBaseMapVersion : AggregateRoot
     public int VersionNumber { get; private set; }
     public Guid SourceSurveyOrderId { get; private set; }
     public Guid? SourceMissionGroupId { get; private set; }
+    public Guid? SourceMissionId { get; private set; }
+    public Guid? FarmBoundaryVersionId { get; private set; }
+    public Guid? HandoffId { get; private set; }
+    public double GridBearingDeg { get; private set; }
+    public double RowSpacingM { get; private set; }
+    public double PlantSpacingM { get; private set; }
     public FarmBaseMapStatus Status { get; private set; }
     public Guid? PublishedBy { get; private set; }
     public DateTimeOffset? PublishedAt { get; private set; }
@@ -41,10 +40,30 @@ public sealed class FarmBaseMapVersion : AggregateRoot
             VersionNumber = context.VersionNumber,
             SourceSurveyOrderId = context.SourceSurveyOrderId,
             SourceMissionGroupId = context.SourceMissionGroupId,
+            SourceMissionId = context.SourceMissionId,
+            FarmBoundaryVersionId = context.FarmBoundaryVersionId,
+            HandoffId = context.HandoffId,
+            GridBearingDeg = context.GridBearingDeg,
+            RowSpacingM = context.RowSpacingM,
+            PlantSpacingM = context.PlantSpacingM,
             Status = FarmBaseMapStatus.Draft,
             CreatedAt = createdAt,
             UpdatedAt = createdAt
         };
+    }
+
+    public void SetPublicationProvenance(
+        Guid? sourceMissionId,
+        Guid? farmBoundaryVersionId,
+        Guid? handoffId)
+    {
+        if (sourceMissionId.HasValue) DomainGuard.NotEmpty(sourceMissionId.Value);
+        if (farmBoundaryVersionId.HasValue) DomainGuard.NotEmpty(farmBoundaryVersionId.Value);
+        if (handoffId.HasValue) DomainGuard.NotEmpty(handoffId.Value);
+
+        SourceMissionId = sourceMissionId ?? SourceMissionId;
+        FarmBoundaryVersionId = farmBoundaryVersionId ?? FarmBoundaryVersionId;
+        HandoffId = handoffId ?? HandoffId;
     }
 
     public void Publish(Guid publishedBy, DateTimeOffset publishedAt)
@@ -63,53 +82,18 @@ public sealed class FarmBaseMapVersion : AggregateRoot
         UpdatedAt = publishedAt;
         Version++;
     }
-}
 
-public sealed record FarmBaseMapPublicationContext
-{
-    public FarmBaseMapPublicationContext(
-        Guid sourceSurveyOrderId,
-        Guid tenantId,
-        Guid farmId,
-        int versionNumber,
-        Guid? sourceMissionGroupId)
+    public void Supersede(DateTimeOffset supersededAt)
     {
-        DomainGuard.NotEmpty(sourceSurveyOrderId);
-        DomainGuard.NotEmpty(tenantId);
-        DomainGuard.NotEmpty(farmId);
+        DomainGuard.Utc(supersededAt);
 
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(versionNumber);
-
-        if (sourceMissionGroupId.HasValue)
+        if (Status != FarmBaseMapStatus.Published)
         {
-            DomainGuard.NotEmpty(sourceMissionGroupId.Value);
+            throw new InvalidOperationException("Only a published farm base map can be superseded.");
         }
 
-        SourceSurveyOrderId = sourceSurveyOrderId;
-        TenantId = tenantId;
-        FarmId = farmId;
-        VersionNumber = versionNumber;
-        SourceMissionGroupId = sourceMissionGroupId;
+        Status = FarmBaseMapStatus.Superseded;
+        UpdatedAt = supersededAt;
+        Version++;
     }
-
-    public Guid SourceSurveyOrderId { get; }
-    public Guid TenantId { get; }
-    public Guid FarmId { get; }
-    public int VersionNumber { get; }
-    public Guid? SourceMissionGroupId { get; }
-}
-
-public interface IFarmBaseMapPublicationService
-{
-    FarmBaseMapVersion PrepareDraft(
-        FarmBaseMapPublicationContext context,
-        DateTimeOffset createdAt);
-}
-
-public sealed class FarmBaseMapPublicationService : IFarmBaseMapPublicationService
-{
-    public FarmBaseMapVersion PrepareDraft(
-        FarmBaseMapPublicationContext context,
-        DateTimeOffset createdAt) =>
-        FarmBaseMapVersion.PrepareDraft(context, createdAt);
 }

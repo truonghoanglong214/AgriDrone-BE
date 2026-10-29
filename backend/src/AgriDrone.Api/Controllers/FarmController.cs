@@ -24,6 +24,8 @@ using AgriDrone.Modules.Farms.Application.Features.GetZonesByFarm;
 using AgriDrone.Modules.Farms.Application.Features.RestoreFarm;
 using AgriDrone.Modules.Farms.Application.Features.GetArchivedFarmById;
 using AgriDrone.Modules.Farms.Application.Features.GetArchivedFarms;
+using AgriDrone.Modules.Farms.Application.Features.UpdateZonePlantMemberships;
+using AgriDrone.Modules.Farms.Application.Abstractions.Zones;
 
 namespace AgriDrone.Api.Controllers
 {
@@ -173,6 +175,40 @@ namespace AgriDrone.Api.Controllers
                 zone => Results.Created(
                     $"/api/farms/{farmId}/zones/{zone.ZoneId}",
                     FarmZoneResponseMapper.ToResponse(zone)));
+        }
+
+        [HttpPatch("{farmId:guid}/zones/{zoneId:guid}/plant-memberships")]
+        [Authorize(Policy = AccessAuthorizationPolicies.SystemManager)]
+        public async Task<IResult> UpdateZonePlantMemberships(
+            [FromRoute] Guid farmId,
+            [FromRoute] Guid zoneId,
+            [FromBody] UpdateZonePlantMembershipsRequest request,
+            CancellationToken cancellationToken)
+        {
+            var operations = new List<ZonePlantMembershipOperation>();
+            foreach (var operation in request.Operations ?? [])
+            {
+                if (!Enum.TryParse<ZonePlantMembershipAction>(
+                        operation.Action, true, out var action))
+                {
+                    return Results.ValidationProblem(new Dictionary<string, string[]>
+                    {
+                        ["operations.action"] = ["Action must be ASSIGN or UNASSIGN."]
+                    });
+                }
+
+                operations.Add(new ZonePlantMembershipOperation(operation.PlantId, action));
+            }
+
+            var result = await sender.Send(
+                new UpdateZonePlantMembershipsCommand(
+                    farmId,
+                    zoneId,
+                    request.ExpectedZoneVersion,
+                    request.Reason,
+                    operations),
+                cancellationToken);
+            return result.ToHttpResult(HttpContext, Results.Ok);
         }
 
         /// <summary>Lấy danh sách zone theo farm.</summary>

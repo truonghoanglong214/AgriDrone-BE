@@ -194,6 +194,69 @@ internal sealed class SystemManagerSurveyOrderQueries(
             .ToPagedResultAsync(page, cancellationToken);
     }
 
+    public async Task<PagedResult<TenantOwnerSurveyOrderItem>> GetTenantOwnerPageAsync(
+        Guid tenantId,
+        SurveyOrderStatus? status,
+        PagedRequest page,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfEqual(tenantId, Guid.Empty);
+        EnsureValidPage(page);
+
+        var orders = GetTenantOwnerOrders(tenantId, status: status);
+
+        return await orders.ToPagedResultAsync(page, cancellationToken);
+    }
+
+    public Task<TenantOwnerSurveyOrderItem?> GetTenantOwnerByIdAsync(
+        Guid tenantId,
+        Guid surveyOrderId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfEqual(tenantId, Guid.Empty);
+        ArgumentOutOfRangeException.ThrowIfEqual(surveyOrderId, Guid.Empty);
+
+        return GetTenantOwnerOrders(tenantId, surveyOrderId: surveyOrderId)
+            .SingleOrDefaultAsync(cancellationToken);
+    }
+
+    private IQueryable<TenantOwnerSurveyOrderItem> GetTenantOwnerOrders(
+        Guid tenantId,
+        Guid? surveyOrderId = null,
+        SurveyOrderStatus? status = null) =>
+        from order in context.Set<SurveyOrder>().AsNoTracking()
+        join farm in context.Set<Farm>().AsNoTracking()
+            on new { order.TenantId, order.FarmId }
+            equals new { farm.TenantId, FarmId = farm.Id }
+        where order.TenantId == tenantId && farm.DeletedAt == null
+            && (!surveyOrderId.HasValue || order.Id == surveyOrderId.Value)
+            && (!status.HasValue || order.Status == status.Value)
+        orderby order.CreatedAt descending, order.Id descending
+        select new TenantOwnerSurveyOrderItem(
+            order.Id,
+            order.OrderNumber,
+            order.FarmId,
+            farm.Name,
+            order.Status,
+            order.Version,
+            order.DepositAmount,
+            order.FinalPrice,
+            order.RemainingAmount,
+            order.Currency ?? "VND",
+            order.Appointments
+                .Where(item => item.Status == SurveyAppointmentStatus.Proposed ||
+                               item.Status == SurveyAppointmentStatus.Confirmed ||
+                               item.Status == SurveyAppointmentStatus.RescheduleRequested)
+                .OrderByDescending(item => item.RevisionNumber)
+                .Select(item => new TenantOwnerCurrentAppointmentItem(
+                    item.Id,
+                    item.Purpose,
+                    item.ProposedStartAt,
+                    item.ProposedEndAt,
+                    item.Status,
+                    item.Version))
+                .FirstOrDefault());
+
     private static void EnsureValidPage(PagedRequest page)
     {
         ArgumentNullException.ThrowIfNull(page);

@@ -5,9 +5,12 @@ using AgriDrone.Modules.Surveys.Application.Features.Appointments.ConfirmSurveyA
 using AgriDrone.Modules.Surveys.Application.Features.Appointments.RequestSurveyAppointmentReschedule;
 using AgriDrone.Modules.Surveys.Application.Features.Payments.InitiateSurveyPayment;
 using AgriDrone.Modules.Surveys.Application.Features.Payments.GetSurveyPaymentHistory;
+using AgriDrone.Modules.Surveys.Application.Features.Orders.GetTenantOwnerSurveyOrders;
+using AgriDrone.Modules.Surveys.Application.Features.Orders.GetTenantOwnerSurveyOrder;
 using AgriDrone.Modules.Surveys.Domain;
 using AgriDrone.SharedInfrastructure.Authorization;
 using AgriDrone.SharedInfrastructure.Http;
+using AgriDrone.SharedKernel.Application.Pagination;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -20,6 +23,43 @@ namespace AgriDrone.Api.Controllers;
 public sealed class TenantOwnerSurveyOrdersController(ISender sender)
     : ControllerBase
 {
+    /// <summary>Lấy danh sách SurveyOrder thuộc tenant hiện tại của Owner.</summary>
+    [HttpGet]
+    [ProducesResponseType<PagedResult<AgriDrone.Api.Contracts.Surveys.Orders.TenantOwnerSurveyOrderApiResponse>>(
+        StatusCodes.Status200OK)]
+    public async Task<IResult> GetOrders(
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 20,
+        [FromQuery] SurveyOrderStatus? status = null,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await sender.Send(
+            new GetTenantOwnerSurveyOrdersQuery(pageNumber, pageSize, status),
+            cancellationToken);
+        return result.ToHttpResult(
+            HttpContext,
+            page => Results.Ok(
+                TenantOwnerSurveyOrderResponseMapper.ToResponse(page)));
+    }
+
+    /// <summary>Lấy chi tiết SurveyOrder cùng số tiền và lịch hẹn hiện tại.</summary>
+    [HttpGet("{orderId:guid}")]
+    [ProducesResponseType<AgriDrone.Api.Contracts.Surveys.Orders.TenantOwnerSurveyOrderApiResponse>(
+        StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IResult> GetOrder(
+        [FromRoute] Guid orderId,
+        CancellationToken cancellationToken)
+    {
+        var result = await sender.Send(
+            new GetTenantOwnerSurveyOrderQuery(orderId),
+            cancellationToken);
+        return result.ToHttpResult(
+            HttpContext,
+            item => Results.Ok(
+                TenantOwnerSurveyOrderResponseMapper.ToResponse(item)));
+    }
+
     /// <summary>Xác nhận appointment hiện hành của SurveyOrder thuộc Tenant.</summary>
     [HttpPost("{orderId:guid}/appointments/{appointmentId:guid}/confirm")]
     [ProducesResponseType<SurveyAppointmentApiResponse>(

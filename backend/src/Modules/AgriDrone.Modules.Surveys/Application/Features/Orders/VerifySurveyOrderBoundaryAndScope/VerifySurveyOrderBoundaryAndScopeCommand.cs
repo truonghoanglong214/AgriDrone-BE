@@ -1,4 +1,5 @@
 using AgriDrone.SharedKernel.Application;
+using AgriDrone.Modules.Surveys.Domain;
 using MediatR;
 using NetTopologySuite.Geometries;
 
@@ -10,5 +11,7 @@ public sealed record VerifySurveyOrderBoundaryAndScopeCommand(
     string Reason,
     string? EvidenceReference,
     uint ExpectedOrderVersion,
-    int? ExpectedCurrentBoundaryVersionNumber)
+    int? ExpectedCurrentBoundaryVersionNumber,
+    SurveyScopeType ScopeType = SurveyScopeType.FarmWide,
+    IReadOnlyList<Guid>? ZoneIds = null)
     : IRequest<Result<VerifySurveyOrderBoundaryAndScopeResponse>>;

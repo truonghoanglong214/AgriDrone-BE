@@ -14,4 +14,11 @@ public interface IMissionPlanningReferenceQuery
         Guid zoneId,
         Guid mapVersionId,
         CancellationToken cancellationToken = default);
+
+    Task<bool> IsPublishedFarmBaseMapVersionAsync(
+        Guid tenantId,
+        Guid farmId,
+        Guid mapVersionId,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult(false);
 }

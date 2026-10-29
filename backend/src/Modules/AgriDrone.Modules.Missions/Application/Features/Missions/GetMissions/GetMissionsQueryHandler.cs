@@ -15,11 +15,12 @@ internal sealed class GetMissionsQueryHandler(
     public async Task<Result<PagedResult<MissionListItemResponse>>> Handle(
         GetMissionsQuery request, CancellationToken cancellationToken)
     {
-        if (executionContext.TenantId is not Guid tenantId)
+        var tenantId = request.TenantId ?? executionContext.TenantId;
+        if (tenantId is not Guid resolvedTenantId)
             return Result.Failure<PagedResult<MissionListItemResponse>>(
                 MissionError.CurrentTenantRequired());
 
-        var page = await queries.GetPageAsync(tenantId, request, cancellationToken);
+        var page = await queries.GetPageAsync(resolvedTenantId, request, cancellationToken);
         return Result.Success(page);
     }
 }

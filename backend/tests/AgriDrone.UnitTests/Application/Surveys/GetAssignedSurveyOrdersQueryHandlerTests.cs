@@ -99,6 +99,17 @@ public sealed class GetAssignedSurveyOrdersQueryHandlerTests
         {
             return Task.FromResult(response ?? new PagedResult<SystemManagerSurveyOrderItem>([], 1, 20, 0));
         }
+
+        public Task<PagedResult<TenantOwnerSurveyOrderItem>> GetTenantOwnerPageAsync(
+            Guid tenantId, SurveyOrderStatus? status, PagedRequest page,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(new PagedResult<TenantOwnerSurveyOrderItem>(
+                [], page.PageNumber, page.PageSize, 0));
+
+        public Task<TenantOwnerSurveyOrderItem?> GetTenantOwnerByIdAsync(
+            Guid tenantId, Guid surveyOrderId,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<TenantOwnerSurveyOrderItem?>(null);
     }
 
     private sealed class FakeExecutionContext(Guid actorId) : IExecutionContext

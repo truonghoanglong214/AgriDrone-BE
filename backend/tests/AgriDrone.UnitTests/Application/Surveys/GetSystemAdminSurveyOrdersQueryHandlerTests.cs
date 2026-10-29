@@ -86,5 +86,16 @@ public sealed class GetSystemAdminSurveyOrdersQueryHandlerTests
             CapturedFilter = filter;
             return Task.FromResult(response);
         }
+
+        public Task<PagedResult<TenantOwnerSurveyOrderItem>> GetTenantOwnerPageAsync(
+            Guid tenantId, SurveyOrderStatus? status, PagedRequest page,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(new PagedResult<TenantOwnerSurveyOrderItem>(
+                [], page.PageNumber, page.PageSize, 0));
+
+        public Task<TenantOwnerSurveyOrderItem?> GetTenantOwnerByIdAsync(
+            Guid tenantId, Guid surveyOrderId,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<TenantOwnerSurveyOrderItem?>(null);
     }
 }

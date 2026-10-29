@@ -13,19 +13,6 @@ public sealed record VerifySurveyOrderBoundaryAndScopeRequest(
     [param: Range(typeof(uint), "1", "4294967295")]
     uint? ExpectedOrderVersion,
     [param: Range(1, int.MaxValue)]
-    int? ExpectedCurrentBoundaryVersionNumber);
-
-public sealed record VerifySurveyOrderBoundaryAndScopeApiResponse(
-    Guid SurveyOrderId,
-    string OrderNumber,
-    Guid TenantId,
-    Guid FarmId,
-    Guid FarmBoundaryId,
-    int FarmBoundaryVersionNumber,
-    Guid SystemManagerProfileId,
-    bool RequiresBaselineMapping,
-    Guid? CurrentFarmBaseMapVersionId,
-    int? ConfirmedSurveyPoleCount,
-    string OrderStatus,
-    uint OrderVersion,
-    DateTimeOffset VerifiedAt);
+    int? ExpectedCurrentBoundaryVersionNumber,
+    string ScopeType = "FARM_WIDE",
+    IReadOnlyList<Guid>? ZoneIds = null);

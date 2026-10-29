@@ -72,8 +72,8 @@ Không flow nào được xem là hoàn thành nếu còn đường bypass Surve
 - Farm-level base-map publication và persistent Plant identity.
 - Plant Health suspected finding, Disease Zone và sourced-guidance human review/publication dưới dạng preliminary result; không severity/diagnosis.
 - TenantOwner plant-inventory change report và manager verification/later-survey evidence workflow.
-- TenantOwner published-only queries, Digital Plant Profile, history và follow-up.
-- Business outbox events, audit, actor-specific work queues và BE contract cho minimal Manager mobile offline task/checklist/notes sync.
+- TenantOwner published-only queries, Digital Plant Profile, history và follow-up (Đã chuyển giao sang BE2 triển khai; BE1 chỉ giữ domain quản lý biến động cây trồng).
+- Actor-specific work queues tổng hợp danh sách chờ xử lý cho Admin/Manager/Owner. (Notification pipeline, Audit behaviors và Manager mobile offline sync engine đã chuyển giao sang BE2).
 
 ### BE1 không triển khai trong plan này
 
@@ -86,7 +86,12 @@ Không flow nào được xem là hoàn thành nếu còn đường bypass Surve
 - Web/mobile UI.
 - Harvest Readiness runtime/API trong MVP; capability này chỉ là Stretch sau gate riêng.
 - Tenant/autonomous flight, in-flight AI, bắt buộc RTK, spraying, cây trồng khác, mọi bệnh thanh long hoặc expert-certified diagnosis.
-- Hạ tầng kỹ thuật cổng thanh toán `AgriDrone.Modules.Payments` (Sandbox gateway adapter, tạo Checkout URL/QR code, webhook endpoints, HMAC-SHA256 signature verification, idempotency claim và phát `PaymentConfirmedIntegrationEvent`) được chuyển giao cho **BE2** triển khai để cân đối khối lượng công việc giữa các thành viên; BE1 chỉ sở hữu nghiệp vụ Order pricing, deposit policy, final settlement intent và readiness gate.
+- Cân đối khối lượng công việc giữa BE1 và BE2 (2026-10-23): Chuyển giao các cấu phần hạ tầng, query read-models và consumer sang **BE2** triển khai:
+  + Hạ tầng kỹ thuật cổng thanh toán `AgriDrone.Modules.Payments` (Sandbox gateway adapter, tạo Checkout URL/QR code, webhook endpoints, HMAC-SHA256 signature verification, idempotency claim và phát `PaymentConfirmedIntegrationEvent`).
+  + Toàn bộ Published-only Query Read Models & Portal APIs cho TenantOwner ở Step 9 / UC11 (Farm list, Base map, danh sách Plant, Digital Plant Profile, Timeline, Comparison).
+  + RabbitMQ Ingestion Consumer V4 ở Step 7 / UC09 Phase 7A (`PlantHealthAnalysisReadyV4` consumer, Inbox dedup, pending observations/zones import).
+  + Hạ tầng Notifications pipeline, Audit logging behaviors và Manager mobile offline sync engine ở Step 10 / UC12 (Phase 10C–10F).
+  + BE1 chỉ sở hữu nghiệp vụ Order pricing, deposit policy, final settlement intent, transactional approval/onboarding, boundary marking, human publication gate và change report lifecycle.
 
 BE1 vẫn phải cung cấp/tiêu thụ contract rõ ràng để BE2 hoàn tất các phần phụ thuộc.
 
@@ -1072,6 +1077,8 @@ Không tạo thêm domain, consumer, feature, controller hoặc API contract Har
 
 #### File manifest Step 9
 
+> **Lưu ý phân công (2026-10-23):** Toàn bộ nhóm file Published-only query (`GetTenantOwnerFarms`, `GetFarmSurveyOrders`, `GetPublishedFarmMap`, `GetFarmPlants`, `GetDigitalPlantProfile`, `GetDigitalPlantTimeline`, `GetPublishedSurveyResult`, `GetSurveyResultComparison`), query abstractions/implementations và controller `TenantOwnerSurveyPortalController` đã được chuyển giao cho **BE2** triển khai (tương ứng Step 12 của BE2). **BE1** chỉ triển khai nhóm file Plant-change feature folders (`PlantInventoryChangeReport`, Phase 9D).
+
 Published-only query files:
 
 | Folder | Files |
@@ -1106,6 +1113,8 @@ API files:
 - `[Tạo] API/Controllers/SystemManagerPlantInventoryChangesController.cs`
 
 #### File manifest Step 10
+
+> **Lưu ý phân công (2026-10-23):** Các file Notification consumer/deduplication, MobileSync features (`GetManagerMobileWorkItems`, `PushManagerMobileOperations`), `ManagerMobileSyncOperation` và `SystemManagerMobileSyncController` đã được chuyển giao cho **BE2** triển khai (tương ứng Step 14 của BE2). **BE1** chỉ triển khai các file WorkQueues query (`ISurveyWorkQueueQueries`, `SurveyWorkQueueQueries`, Phase 10A–10B).
 
 | Folder/file | Files hoặc trách nhiệm |
 |---|---|
@@ -2310,42 +2319,42 @@ Không chuyển Step 7 nếu BE2 chưa đọc lại được published base-map/
 
 ### 14.1. V3 consumer entry point
 
-- [ ] Consumer riêng nhận `BaselineMappingCandidatesReadyV3`; V2 cũ chỉ compatibility/drain.
-- [ ] Validate envelope/schema trước payload.
-- [ ] Inbox check/claim theo MessageId.
-- [ ] Validate Order/Farm/Mission/purpose/assigned reviewer/expected base-map state.
-- [ ] Chỉ order `RequiresBaselineMapping = true` và BaselineMapping Mission hợp lệ được initial publish.
-- [ ] ACK transport chỉ sau transaction commit; transient retry/permanent DLQ theo policy.
-- [ ] Assigned SystemManager review/correct/approve/reject pending candidates/boundary exceptions trước publication.
+- [x] Consumer riêng nhận `BaselineMappingCandidatesReadyV3`; V2 cũ chỉ compatibility/drain.
+- [x] Validate envelope/schema trước payload.
+- [x] Inbox check/claim theo MessageId.
+- [x] Validate Order/Farm/Mission/purpose/assigned reviewer/expected base-map state.
+- [x] Chỉ order `RequiresBaselineMapping = true` và BaselineMapping Mission hợp lệ được initial publish.
+- [x] ACK transport chỉ sau transaction commit; transient retry/permanent DLQ theo policy.
+- [x] Assigned SystemManager review/correct/approve/reject pending candidates/boundary exceptions trước publication.
 
 ### 14.2. Farm-level publication
 
-- [ ] Tạo Draft `FarmBaseMapVersion` với SourceSurveyOrderId.
-- [ ] Tạo `ZoneMapVersion` slices thuộc cùng Farm header.
-- [ ] Validate all candidates theo batch: IDs, geometry, row/column, duplicate, resolved Plant và Farm/Zone consistency.
-- [ ] Classify `OutOfBoundary/NeedsReview`; không tạo/link Plant cho exception chưa có manager decision.
-- [ ] Tạo/link Plants và PlantChangeEvents theo reviewed decisions.
-- [ ] Publish toàn Farm atomically; không lộ partial Zone state.
-- [ ] Enforce tối đa một current Published base map/Farm.
-- [ ] Phát `FarmBaseMapPublishedV3` qua Outbox; giữ V2 compatibility/drain theo metric.
-- [ ] Ghi/phát `ConfirmedSurveyPoleCount` cùng source map version để Step 4C khóa per-pole price; duplicate event không tính giá hai lần.
+- [x] Tạo Draft `FarmBaseMapVersion` với SourceSurveyOrderId.
+- [x] Tạo `ZoneMapVersion` slices thuộc cùng Farm header.
+- [x] Validate all candidates theo batch: IDs, geometry, row/column, duplicate, resolved Plant và Farm/Zone consistency.
+- [x] Classify `OutOfBoundary/NeedsReview`; không tạo/link Plant cho exception chưa có manager decision.
+- [x] Tạo/link Plants và PlantChangeEvents theo reviewed decisions.
+- [x] Publish toàn Farm atomically; không lộ partial Zone state.
+- [x] Enforce tối đa một current Published base map/Farm.
+- [x] Phát `FarmBaseMapPublishedV3` qua Outbox; giữ V2 compatibility/drain theo metric.
+- [x] Ghi/phát `ConfirmedSurveyPoleCount` cùng source map version để Step 4C khóa per-pole price; duplicate event không tính giá hai lần.
 
 ### 14.3. Plant rules
 
-- [ ] Candidate/observation chưa publish không tạo Plant chính thức.
-- [ ] Matched Plant giữ ID; relocation giữ ID.
-- [ ] New/replacement Plant tạo ID mới theo explicit decision.
-- [ ] Missing observation không retire Plant.
-- [ ] Owner-reported `NewlyAdded` không được `CreateNew` nếu thiếu later-survey candidate + manager approval liên kết với report.
-- [ ] Repeat service survey chỉ lưu observation/match result, không tạo base-map version.
-- [ ] Map correction sau initial publish đi qua `BaseMapAmendment` có reason/review/audit.
+- [x] Candidate/observation chưa publish không tạo Plant chính thức.
+- [x] Matched Plant giữ ID; relocation giữ ID.
+- [x] New/replacement Plant tạo ID mới theo explicit decision.
+- [x] Missing observation không retire Plant.
+- [x] Owner-reported `NewlyAdded` không được `CreateNew` nếu thiếu later-survey candidate + manager approval liên kết với report.
+- [x] Repeat service survey chỉ lưu observation/match result, không tạo base-map version.
+- [x] Map correction sau initial publish đi qua `BaseMapAmendment` có reason/review/audit.
 
 ### 14.4. V1 migration
 
-- [ ] V3 producer/consumer có routing/queue riêng; không rewrite V2.
-- [ ] V1 consumer chỉ tồn tại để drain/replay hợp lệ.
-- [ ] Theo dõi V1 receive/outbox/retry/DLQ counts.
-- [ ] Không xóa V1 trước retention window và Phase 14 gate.
+- [x] V3 producer/consumer có routing/queue riêng; không rewrite V2.
+- [x] V1 consumer chỉ tồn tại để drain/replay hợp lệ.
+- [x] Theo dõi V1 receive/outbox/retry/DLQ counts.
+- [x] Không xóa V1 trước retention window và Phase 14 gate.
 
 ### Tests Step 6
 
@@ -2364,6 +2373,10 @@ Chưa viết/chạy trong Step 6. Toàn bộ backlog kiểm thử của Step 6 �
 
 ### 15.0. Chia phase và cách triển khai Step 7
 
+> **Phân công trách nhiệm:**
+> - **Phase 7A (AI Ingestion Consumer):** Chuyển giao cho **BE2** triển khai. BE2 xây dựng `PlantHealthAnalysisReadyV4Consumer` lắng nghe message từ exchange của BE2, deduplicate và import pending observations, proposed disease zones geometry vào DB.
+> - **Phase 7B–7E (Manager Review & Publication UoW):** **BE1** triển khai toàn bộ logic nghiệp vụ SystemManager review, phê duyệt kết quả, transaction công bố (Publication Unit of Work) và cập nhật trạng thái SurveyOrder.
+
 | Phase | Nghiệp vụ | Dữ liệu được phép thay đổi |
 |---|---|---|
 | 7A — Health/zone ingestion | Import suspected observations và proposed Disease Zones/guidance | Chỉ pending/provenance; không severity |
@@ -2372,7 +2385,7 @@ Chưa viết/chạy trong Step 6. Toàn bộ backlog kiểm thử của Step 6 �
 | 7D — Atomic publication | Publish preliminary result và cập nhật latest-reviewed state | Published preliminary result + derived state |
 | 7E — Completion/output | Thông báo BE2 và owner published view | Outbox/read model |
 
-#### Phase 7A — Import health observations
+#### Phase 7A — Import health observations (Chuyển giao BE2 triển khai)
 
 Tạo V4 consumer và application feature riêng; V2/V3 chỉ compatibility/drain. Handler phải:
 
@@ -2515,6 +2528,10 @@ Step 8 đạt yêu cầu MVP khi capability được chứng minh là disabled/n
 
 ### 17.0. Chia phase và cách triển khai Step 9
 
+> **Phân công trách nhiệm:**
+> - **Phase 9A–9C & 9E (Published-only Read Models, Query APIs, Cache/Index):** Chuyển giao toàn bộ cho **BE2** triển khai. BE2 xây dựng `TenantOwnerSurveyPortalController`, các query handlers và DTOs phục vụ Portal cho TenantOwner (Farm list, Survey history, Base map, Danh sách Plant, Digital Plant Profile, Timeline, Comparison). Tầng này thuần túy là Read-Only, không làm thay đổi trạng thái transactional của BE1.
+> - **Phase 9D (Plant Inventory Change Workflow):** **BE1** sở hữu domain logic báo cáo biến động cây trồng (`PlantInventoryChangeReport`), SystemManager verification và cập nhật lifecycle cây/amendment.
+
 | Phase | Mục tiêu | Đầu ra |
 |---|---|---|
 | 9A — Owner farm/order views | Danh sách Farm và survey history | Published/owned data only |
@@ -2624,6 +2641,10 @@ Chưa viết/chạy trong Step 9. Toàn bộ backlog kiểm thử của Step 9 �
 ## 18. Step 10 — UC12 Work queues, notifications, audit và Manager offline sync
 
 ### 18.0. Chia phase và cách triển khai Step 10
+
+> **Phân công trách nhiệm:**
+> - **Phase 10C–10F (Hạ tầng Kỹ thuật & Sync Engine):** Chuyển giao cho **BE2** triển khai. BE2 xây dựng Notification pipeline (RabbitMQ consumer, inbox dedup, email/push dispatch), Audit logging behaviors (MediatR pipeline behavior, append-only log), observability runbook và Manager mobile offline sync engine (nhận batch sync, checklist dã ngoại, upload MinIO).
+> - **Phase 10A–10B (Work Queues Query):** **BE1** triển khai các query read-model đơn giản tổng hợp danh sách việc chờ xử lý của SystemAdmin, SystemManager và TenantOwner trực tiếp từ các bảng Survey/Order hiện có.
 
 | Phase | Nội dung | Kết quả |
 |---|---|---|

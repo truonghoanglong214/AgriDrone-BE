@@ -155,6 +155,11 @@ public sealed class SurveyOrderConfiguration : IEntityTypeConfiguration<SurveyOr
             .HasColumnType("timestamp with time zone");
         builder.Property(order => order.ScopeConfirmedBy).HasColumnName("scope_confirmed_by").HasColumnType("uuid");
         builder.Property(order => order.ScopeConfirmedAt).HasColumnName("scope_confirmed_at").HasColumnType("timestamp with time zone");
+        builder.Property(order => order.ScopeType)
+            .HasColumnName("scope_type")
+            .HasColumnType("system.survey_scope_type")
+            .HasDefaultValue(SurveyScopeType.FarmWide)
+            .IsRequired();
         builder.Property(order => order.RequiresBaselineMapping).HasColumnName("requires_baseline_mapping").HasColumnType("boolean");
         builder.Property(order => order.PreviousCompatibleOrderId).HasColumnName("previous_compatible_order_id").HasColumnType("uuid");
         builder.Property(order => order.PreviousOrderCompatibilityPolicyVersion)
@@ -182,5 +187,11 @@ public sealed class SurveyOrderConfiguration : IEntityTypeConfiguration<SurveyOr
         builder.HasOne(order => order.SurveyService).WithMany().HasForeignKey(order => order.SurveyServiceId).OnDelete(DeleteBehavior.Restrict).HasConstraintName("fk_survey_orders_services_service_id");
         builder.HasOne(order => order.SurveyServicePrice).WithMany().HasForeignKey(order => new { order.SurveyServicePriceId, order.SurveyServiceId }).HasPrincipalKey(price => new { price.Id, price.SurveyServiceId }).OnDelete(DeleteBehavior.Restrict).HasConstraintName("fk_survey_orders_price_same_service");
         builder.HasOne(order => order.PreviousCompatibleOrder).WithMany().HasForeignKey(order => new { order.PreviousCompatibleOrderId, order.FarmId, order.SurveyServiceId }).HasPrincipalKey(order => new { order.Id, order.FarmId, order.SurveyServiceId }).OnDelete(DeleteBehavior.Restrict).HasConstraintName("fk_survey_orders_previous_same_farm_service");
+        builder.HasMany(order => order.ZoneScopes)
+            .WithOne()
+            .HasForeignKey(scope => new { scope.SurveyOrderId, scope.FarmId })
+            .HasPrincipalKey(order => new { order.Id, order.FarmId })
+            .OnDelete(DeleteBehavior.Cascade)
+            .HasConstraintName("fk_survey_order_zone_scopes_order_farm");
     }
 }

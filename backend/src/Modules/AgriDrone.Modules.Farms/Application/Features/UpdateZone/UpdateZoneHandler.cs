@@ -1,6 +1,7 @@
 using System.Text.Json;
 using AgriDrone.Modules.Farms.Application.Abstractions.Boundaries;
 using AgriDrone.Modules.Farms.Application.Abstractions.Persistence;
+using AgriDrone.Modules.Farms.Application.Abstractions.Zones;
 using AgriDrone.Modules.Farms.Application.Errors;
 using AgriDrone.Modules.Farms.Domain.Farms;
 using AgriDrone.Modules.Farms.Domain.Zones;
@@ -22,6 +23,7 @@ internal sealed class UpdateZoneHandler(
     IExecutionContext executionContext,
     ISystemManagerAccessService managerAccessService,
     IFarmBoundaryPolicy boundaryPolicy,
+    IFarmZonePlantMembershipService membershipService,
     TimeProvider timeProvider)
     : IRequestHandler<UpdateZoneCommand, Result<UpdateZoneResponse>>
 {
@@ -76,6 +78,12 @@ internal sealed class UpdateZoneHandler(
 
         var name = request.Name.Trim();
 
+        if (request.Boundary is null)
+        {
+            return Result.Failure<UpdateZoneResponse>(
+                FarmZoneError.InvalidBoundary());
+        }
+
         var geometryDecision = await boundaryPolicy.ValidateZoneAsync(
             tenantId,
             request.FarmId,
@@ -108,6 +116,13 @@ internal sealed class UpdateZoneHandler(
             request.Boundary,
             request.AreaHectares,
             now);
+        await membershipService.RecomputeAutoAsync(
+            request.FarmId,
+            zone.Id,
+            request.Boundary,
+            actorId,
+            now,
+            cancellationToken);
 
         using var newData = CreateAuditData(zone);
 

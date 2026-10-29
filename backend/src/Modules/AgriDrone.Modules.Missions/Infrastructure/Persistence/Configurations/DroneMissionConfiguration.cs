@@ -133,6 +133,33 @@ public sealed class DroneMissionConfiguration : IEntityTypeConfiguration<DroneMi
             .HasDefaultValueSql("ARRAY[]::uuid[]")
             .IsRequired();
 
+        builder.Property(mission => mission.ScopeType)
+            .HasColumnName("scope_type")
+            .HasConversion(
+                value => value == MissionScopeType.FarmWide
+                    ? "FARM_WIDE"
+                    : "ZONES",
+                value => value == "FARM_WIDE"
+                    ? MissionScopeType.FarmWide
+                    : MissionScopeType.Zones)
+            .HasColumnType("character varying(20)")
+            .HasMaxLength(20)
+            .HasDefaultValue(MissionScopeType.FarmWide)
+            .IsRequired();
+
+        builder.Property(mission => mission.ScopeSnapshot)
+            .HasColumnName("scope_snapshot")
+            .HasColumnType("jsonb")
+            .HasDefaultValueSql("'[]'::jsonb")
+            .IsRequired();
+
+        builder.Property(mission => mission.ScopeFingerprint)
+            .HasColumnName("scope_fingerprint")
+            .HasColumnType("character varying(1000)")
+            .HasMaxLength(1000)
+            .HasDefaultValue("FARM_WIDE")
+            .IsRequired();
+
         builder.Property(mission => mission.FarmBoundaryVersionId)
             .HasColumnName("farm_boundary_version_id")
             .HasColumnType("uuid");

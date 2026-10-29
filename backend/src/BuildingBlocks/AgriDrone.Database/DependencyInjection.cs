@@ -3,6 +3,7 @@ using AgriDrone.Database.Surveys;
 using AgriDrone.IntegrationContracts.Surveys;
 using AgriDrone.IntegrationContracts.Mapping;
 using AgriDrone.IntegrationContracts.Messaging;
+using AgriDrone.Modules.Farms.Application.Abstractions.Maps;
 using AgriDrone.Modules.Surveys.Application.Abstractions.Approvals;
 using AgriDrone.Modules.Surveys.Application.Abstractions.Appointments;
 using AgriDrone.Modules.Surveys.Application.Abstractions.BoundaryCapture;
@@ -84,6 +85,14 @@ public static class DependencyInjection
             MappingCandidatesApprovedHandler>();
         services.AddIntegrationConsumer<MappingCandidatesApprovedProcessor>(
             IntegrationConsumerNames.Be1MappingCandidatesApprovedV1);
+
+        services.AddScoped<
+            IIntegrationMessageHandler<BaselineMappingCandidatesReadyV3>,
+            BaselineMappingCandidatesReadyV3Handler>();
+        services.AddIntegrationConsumer<BaselineMappingCandidatesReadyV3Processor>(
+            IntegrationConsumerNames.Be1BaselineMappingCandidatesReadyV3);
+
+        services.AddScoped<IFarmBaseMapPublicationOrchestrator, FarmBaseMapPublicationOrchestrator>();
 
         return services;
     }

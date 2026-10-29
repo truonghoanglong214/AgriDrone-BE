@@ -76,7 +76,10 @@ public sealed class FarmZone : Entity
             areaHectares,
             status,
             createdBy,
-            createdAt);
+            createdAt)
+        {
+            Id = Guid.NewGuid()
+        };
     }
 
     public void UpdateDetails(

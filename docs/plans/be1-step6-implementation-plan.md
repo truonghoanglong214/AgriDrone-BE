@@ -244,19 +244,19 @@ ingestion, review, publication và identity vào một commit lớn.
 
 ## 6. Acceptance checklist trước khi chuyển Step 7
 
-- [ ] V3 duplicate/retry không tạo batch, draft hoặc candidate trùng.
-- [ ] Invalid Order/Farm/Mission/purpose/boundary/current-map bị fail closed.
-- [ ] Unassigned manager và TenantOwner không đọc hoặc review draft.
-- [ ] Toàn bộ candidate của mọi Zone được review/validate trước publication.
-- [ ] Outside/near-boundary candidate không tự gán Farm/Plant.
-- [ ] First multi-zone publication atomic; stale/concurrent publisher chỉ một thắng.
-- [ ] Lỗi giữa publication rollback map/Zone/Plant/history/Order/audit/outbox.
-- [ ] `MatchExisting` và `Relocate` giữ Plant ID; `Replace` có relation; missing không retire.
-- [ ] `ConfirmedSurveyPoleCount` được tính phía server và khớp V3 payload.
-- [ ] Order chuyển chính xác sang `AwaitingPricing` bằng cùng transaction publication.
-- [ ] BE2 nhận lại `FarmBaseMapPublishedV3` và gắn đúng source Mission/Order/map version.
-- [ ] V1/V2 compatibility còn hoạt động trong drain window và có metric.
-- [ ] Build full solution 0 warning/0 error; backlog test Step 6 trong mục 27 đã đủ.
+- [x] V3 duplicate/retry không tạo batch, draft hoặc candidate trùng.
+- [x] Invalid Order/Farm/Mission/purpose/boundary/current-map bị fail closed.
+- [x] Unassigned manager và TenantOwner không đọc hoặc review draft.
+- [x] Toàn bộ candidate của mọi Zone được review/validate trước publication.
+- [x] Outside/near-boundary candidate không tự gán Farm/Plant.
+- [x] First multi-zone publication atomic; stale/concurrent publisher chỉ một thắng.
+- [x] Lỗi giữa publication rollback map/Zone/Plant/history/Order/audit/outbox.
+- [x] `MatchExisting` và `Relocate` giữ Plant ID; `Replace` có relation; missing không retire.
+- [x] `ConfirmedSurveyPoleCount` được tính phía server và khớp V3 payload.
+- [x] Order chuyển chính xác sang `AwaitingPricing` bằng cùng transaction publication.
+- [x] BE2 nhận lại `FarmBaseMapPublishedV3` và gắn đúng source Mission/Order/map version.
+- [x] V1/V2 compatibility còn hoạt động trong drain window và có metric.
+- [x] Build full solution 0 warning/0 error; backlog test Step 6 trong mục 27 đã đủ.
 
 ## 7. Rủi ro cần theo dõi
 

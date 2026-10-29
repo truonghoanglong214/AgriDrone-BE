@@ -1,0 +1,27 @@
+namespace AgriDrone.Modules.Farms.Application.Features.Maps.GetFarmBaseMapDraft;
+
+public sealed record FarmBaseMapDraftResponse(
+    Guid DraftId,
+    Guid FarmId,
+    int VersionNumber,
+    string Status,
+    Guid SourceSurveyOrderId,
+    Guid? SourceMissionId,
+    Guid? FarmBoundaryVersionId,
+    Guid? HandoffId,
+    Guid? BatchId,
+    string? BatchStatus,
+    Guid? JobId,
+    string? ModelVersion,
+    string? AlgorithmVersion,
+    DateTimeOffset? ProducedAt,
+    int TotalCandidates,
+    int PendingCount,
+    int AcceptedCount,
+    int RejectedCount,
+    int RelocatedCount,
+    int ReplacedCount,
+    double GridBearingDeg,
+    double RowSpacingM,
+    double PlantSpacingM,
+    IReadOnlyList<CandidateDto> Candidates);

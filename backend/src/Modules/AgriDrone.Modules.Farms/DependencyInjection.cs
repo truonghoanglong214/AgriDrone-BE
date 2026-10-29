@@ -4,6 +4,7 @@ using AgriDrone.Modules.Farms.Application.Abstractions.Persistence;
 using AgriDrone.Modules.Farms.Application.Abstractions.Queries;
 using AgriDrone.Modules.Farms.Application.Policies;
 using AgriDrone.Modules.Farms.Application.Provisioning;
+using AgriDrone.Modules.Farms.Application.Services;
 using AgriDrone.Modules.Farms.Infrastructure.Boundaries;
 using AgriDrone.Modules.Farms.Domain.Farms;
 using AgriDrone.Modules.Farms.Domain.Boundaries;
@@ -12,6 +13,8 @@ using AgriDrone.Modules.Farms.Domain.Zones;
 using AgriDrone.Modules.Farms.Infrastructure.Persistence;
 using AgriDrone.Modules.Farms.Infrastructure.Queries;
 using AgriDrone.Modules.Farms.Infrastructure.Repositories;
+using AgriDrone.Modules.Farms.Infrastructure.Zones;
+using AgriDrone.Modules.Farms.Application.Abstractions.Zones;
 using AgriDrone.SharedInfrastructure.Auditing;
 using AgriDrone.SharedInfrastructure.Persistence;
 using AgriDrone.SharedKernel.Domain;
@@ -67,6 +70,8 @@ public static class DependencyInjection
         services.AddScoped<IFarmProvisioningPort, FarmProvisioningPort>();
         services.AddScoped<IFarmBaseMapPublicationService, FarmBaseMapPublicationService>();
         services.AddScoped<IFarmOperationalContextQueries, FarmOperationalContextQueries>();
+        services.AddScoped<IBaselineMappingBatchValidator, BaselineMappingBatchValidator>();
+        services.AddScoped<IFarmZonePlantMembershipService, FarmZonePlantMembershipService>();
 
         var assembly = typeof(DependencyInjection).Assembly;
 

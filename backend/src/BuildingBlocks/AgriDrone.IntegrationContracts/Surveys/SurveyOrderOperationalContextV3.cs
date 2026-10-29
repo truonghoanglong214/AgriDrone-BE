@@ -48,4 +48,6 @@ public sealed record SurveyOrderOperationalContextV3(
     double? CandidateCenterLongitude = null,
     double? CandidateCenterLatitude = null,
     decimal? ApproximateAreaHa = null,
-    double? SurveyRadiusMeters = null);
+    double? SurveyRadiusMeters = null,
+    SurveyScopeType ScopeType = SurveyScopeType.FarmWide,
+    IReadOnlyList<SurveyScopeZoneV3>? ScopeZones = null);

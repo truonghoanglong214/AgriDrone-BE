@@ -1,3 +1,5 @@
+using AgriDrone.Modules.Missions.Domain.Missions;
+
 namespace AgriDrone.Modules.Missions.Application.Abstractions.MissionPlanning;
 
 public sealed record SurveyOrderMissionPlanningContext(
@@ -15,4 +17,7 @@ public sealed record SurveyOrderMissionPlanningContext(
     bool IsEligibleForPlanning = true,
     bool IsReadyToSchedule = true,
     Guid? FarmBoundaryVersionId = null,
-    Guid? PrimarySystemManagerId = null);
+    Guid? PrimarySystemManagerId = null,
+    MissionScopeType ScopeType = MissionScopeType.FarmWide,
+    IReadOnlyCollection<MissionScopeZoneSnapshot>? ScopeZones = null,
+    string ScopeFingerprint = "FARM_WIDE");

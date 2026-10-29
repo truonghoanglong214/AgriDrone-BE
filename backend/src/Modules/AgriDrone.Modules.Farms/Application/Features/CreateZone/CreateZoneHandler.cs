@@ -1,6 +1,7 @@
 using System.Text.Json;
 using AgriDrone.Modules.Farms.Application.Abstractions.Boundaries;
 using AgriDrone.Modules.Farms.Application.Abstractions.Persistence;
+using AgriDrone.Modules.Farms.Application.Abstractions.Zones;
 using AgriDrone.Modules.Farms.Application.Errors;
 using AgriDrone.Modules.Farms.Domain.Farms;
 using AgriDrone.Modules.Farms.Domain.Zones;
@@ -23,6 +24,7 @@ namespace AgriDrone.Modules.Farms.Application.Features.CreateZone
         IExecutionContext executionContext,
         ISystemManagerAccessService managerAccessService,
         IFarmBoundaryPolicy boundaryPolicy,
+        IFarmZonePlantMembershipService membershipService,
         TimeProvider timeProvider) : IRequestHandler<CreateZoneCommand, Result<CreateZoneResponse>>
     {
         private const string ActiveZoneCodeConstraint =
@@ -47,6 +49,9 @@ namespace AgriDrone.Modules.Farms.Application.Features.CreateZone
 
             if (farm is null)
                 return Result.Failure<CreateZoneResponse>(FarmError.NotFound());
+
+            if (request.Boundary is null)
+                return Result.Failure<CreateZoneResponse>(FarmZoneError.InvalidBoundary());
 
             var geometryDecision = await boundaryPolicy.ValidateZoneAsync(
                 tenantId,
@@ -84,6 +89,13 @@ namespace AgriDrone.Modules.Farms.Application.Features.CreateZone
                 now);
             
             farmZoneRepository.Add(newZone);
+            await membershipService.RecomputeAutoAsync(
+                request.FarmId,
+                newZone.Id,
+                request.Boundary,
+                userId,
+                now,
+                cancellationToken);
 
             using var auditData = JsonSerializer.SerializeToDocument(new
             {

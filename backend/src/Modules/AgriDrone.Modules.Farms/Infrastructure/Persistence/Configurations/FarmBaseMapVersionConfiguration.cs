@@ -29,6 +29,12 @@ public sealed class FarmBaseMapVersionConfiguration : IEntityTypeConfiguration<F
         builder.Property(map => map.VersionNumber).HasColumnName("version_number").HasColumnType("integer");
         builder.Property(map => map.SourceSurveyOrderId).HasColumnName("source_survey_order_id").HasColumnType("uuid");
         builder.Property(map => map.SourceMissionGroupId).HasColumnName("source_mission_group_id").HasColumnType("uuid");
+        builder.Property(map => map.SourceMissionId).HasColumnName("source_mission_id").HasColumnType("uuid");
+        builder.Property(map => map.FarmBoundaryVersionId).HasColumnName("farm_boundary_version_id").HasColumnType("uuid");
+        builder.Property(map => map.HandoffId).HasColumnName("handoff_id").HasColumnType("uuid");
+        builder.Property(map => map.GridBearingDeg).HasColumnName("grid_bearing_deg").HasColumnType("double precision").IsRequired();
+        builder.Property(map => map.RowSpacingM).HasColumnName("row_spacing_m").HasColumnType("double precision").IsRequired();
+        builder.Property(map => map.PlantSpacingM).HasColumnName("plant_spacing_m").HasColumnType("double precision").IsRequired();
         builder.Property(map => map.Status)
             .HasColumnName("status")
             .HasColumnType("system.farm_base_map_status")

@@ -75,6 +75,10 @@ public static class DependencyInjection
                         "survey_order_status",
                         "system",
                         translator)
+                    .MapEnum<SurveyScopeType>(
+                        "survey_scope_type",
+                        "system",
+                        translator)
                     .MapEnum<SurveyPoleCountSource>(
                         "survey_pole_count_source",
                         "system",
@@ -173,12 +177,6 @@ public static class DependencyInjection
             BaselineOrthophotoCompletedHandler>();
         services.AddIntegrationConsumer<BaselineOrthophotoCompletedProcessor>(
             IntegrationConsumerNames.Be1BaselineOrthophotoCompletedV1);
-
-        services.AddScoped<
-            IIntegrationMessageHandler<BaselineMappingCandidatesReadyV3>,
-            BaselineMappingCandidatesReadyV3Handler>();
-        services.AddIntegrationConsumer<BaselineMappingCandidatesReadyV3Processor>(
-            IntegrationConsumerNames.Be1BaselineMappingCandidatesReadyV3);
 
         services.TryAddSingleton(TimeProvider.System);
 

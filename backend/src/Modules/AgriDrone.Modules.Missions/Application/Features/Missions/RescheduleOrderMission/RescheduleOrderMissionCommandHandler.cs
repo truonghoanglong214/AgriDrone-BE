@@ -74,6 +74,7 @@ internal sealed class RescheduleOrderMissionCommandHandler(
             order.FarmBoundaryVersionId != mission.FarmBoundaryVersionId ||
             order.ScopeZoneIds is null ||
             !order.ScopeZoneIds.Order().SequenceEqual(mission.ScopeZoneIds.Order()) ||
+            order.ScopeFingerprint != mission.ScopeFingerprint ||
             access.ManagerProfileId is null ||
             order.PrimarySystemManagerId != access.ManagerProfileId)
             return Result.Failure<MissionResponse>(MissionOperationError.InvalidOrderContext());

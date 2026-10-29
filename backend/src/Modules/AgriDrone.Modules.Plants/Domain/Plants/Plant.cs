@@ -86,6 +86,8 @@ public sealed class Plant : AggregateRoot
 
     public Guid? CurrentMapVersionId { get; private set; }
 
+    public Guid? FarmBaseMapVersionId { get; private set; }
+
     public int? RowIndex { get; private set; }
 
     public int? ColumnIndex { get; private set; }
@@ -105,6 +107,8 @@ public sealed class Plant : AggregateRoot
     public DateTimeOffset? MappedAt { get; private set; }
 
     public Guid? CreatedFromMissionId { get; private set; }
+
+    public Guid? ReplacedPlantId { get; private set; }
 
     public DateTimeOffset CreatedAt { get; private set; }
 
@@ -164,6 +168,54 @@ public sealed class Plant : AggregateRoot
             mappedAt);
     }
 
+    public static Plant CreateFromFarmMapping(
+        Guid id,
+        Guid farmId,
+        string plantCode,
+        Point location,
+        Guid farmBaseMapVersionId,
+        int rowIndex,
+        int columnIndex,
+        decimal? locationAccuracyM,
+        decimal positionConfidence,
+        Guid healthLevelId,
+        Guid sourceMissionId,
+        DateTimeOffset mappedAt)
+    {
+        DomainGuard.NotEmpty(id);
+        DomainGuard.NotEmpty(farmId);
+        DomainGuard.NotEmpty(farmBaseMapVersionId);
+        DomainGuard.NotEmpty(healthLevelId);
+        DomainGuard.NotEmpty(sourceMissionId);
+        var normalizedPlantCode = NormalizePlantCode(plantCode);
+        EnsureLocation(location, nameof(location));
+        ArgumentOutOfRangeException.ThrowIfLessThan(rowIndex, 1);
+        ArgumentOutOfRangeException.ThrowIfLessThan(columnIndex, 1);
+        EnsureMappingMeasurements(locationAccuracyM, positionConfidence, mappedAt);
+
+        return new Plant
+        {
+            Id = id,
+            FarmId = farmId,
+            ZoneId = null,
+            PlantCode = normalizedPlantCode,
+            Location = CopyPoint(location),
+            CurrentMapVersionId = null,
+            FarmBaseMapVersionId = farmBaseMapVersionId,
+            RowIndex = rowIndex,
+            ColumnIndex = columnIndex,
+            LocationAccuracyM = locationAccuracyM,
+            PositionConfidence = positionConfidence,
+            PositionSource = Plants.PositionSource.MappingAi,
+            LifecycleStatus = PlantLifecycleStatus.Active,
+            CurrentHealthLevelId = healthLevelId,
+            MappedAt = mappedAt,
+            CreatedFromMissionId = sourceMissionId,
+            CreatedAt = mappedAt,
+            UpdatedAt = mappedAt
+        };
+    }
+
     public static Plant RegisterManually(
         Guid id,
         Guid farmId,
@@ -201,6 +253,25 @@ public sealed class Plant : AggregateRoot
             registeredAt);
     }
 
+    public void LinkReplacedPlant(Guid replacedPlantId)
+    {
+        DomainGuard.NotEmpty(replacedPlantId);
+        ReplacedPlantId = replacedPlantId;
+    }
+
+    public void Retire(PlantLifecycleStatus status, DateTimeOffset retiredAt)
+    {
+        DomainGuard.Utc(retiredAt);
+        if (status is not (PlantLifecycleStatus.Removed or PlantLifecycleStatus.Dead))
+        {
+            throw new ArgumentOutOfRangeException(nameof(status), "Retire status must be Removed or Dead.");
+        }
+
+        LifecycleStatus = status;
+        RetiredAt = retiredAt;
+        UpdatedAt = retiredAt;
+    }
+
     public void ApplyPublishedMapPosition(
         Guid mapVersionId,
         Point location,
@@ -236,6 +307,39 @@ public sealed class Plant : AggregateRoot
         UpdatedAt = mappedAt;
     }
 
+    public void ApplyPublishedFarmMapPosition(
+        Guid farmBaseMapVersionId,
+        Point location,
+        int rowIndex,
+        int columnIndex,
+        decimal? locationAccuracyM,
+        decimal positionConfidence,
+        DateTimeOffset mappedAt)
+    {
+        DomainGuard.NotEmpty(farmBaseMapVersionId);
+        EnsureLocation(location, nameof(location));
+        ArgumentOutOfRangeException.ThrowIfLessThan(rowIndex, 1);
+        ArgumentOutOfRangeException.ThrowIfLessThan(columnIndex, 1);
+        EnsureMappingMeasurements(locationAccuracyM, positionConfidence, mappedAt);
+
+        if (LifecycleStatus != PlantLifecycleStatus.Active)
+        {
+            throw new InvalidOperationException(
+                $"Plant '{Id}' in lifecycle '{LifecycleStatus}' cannot be assigned to a published map.");
+        }
+
+        FarmBaseMapVersionId = farmBaseMapVersionId;
+        CurrentMapVersionId = null;
+        Location = CopyPoint(location);
+        RowIndex = rowIndex;
+        ColumnIndex = columnIndex;
+        LocationAccuracyM = locationAccuracyM;
+        PositionConfidence = positionConfidence;
+        PositionSource = Plants.PositionSource.MappingAi;
+        MappedAt = mappedAt;
+        UpdatedAt = mappedAt;
+    }
+
     public void ClearGridPositionForRemap(DateTimeOffset updatedAt)
     {
         if (LifecycleStatus != PlantLifecycleStatus.Active)
@@ -247,6 +351,7 @@ public sealed class Plant : AggregateRoot
         DomainGuard.Utc(updatedAt);
 
         CurrentMapVersionId = null;
+        FarmBaseMapVersionId = null;
         RowIndex = null;
         ColumnIndex = null;
         UpdatedAt = updatedAt;
@@ -374,5 +479,4 @@ public sealed class Plant : AggregateRoot
                 parameterName,
                 "Latitude must be between -90 and 90 degrees.");
     }
-
 }

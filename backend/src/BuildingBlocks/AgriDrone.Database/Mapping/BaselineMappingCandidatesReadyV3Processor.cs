@@ -4,7 +4,7 @@ using AgriDrone.IntegrationContracts.Messaging.Validation;
 using AgriDrone.SharedInfrastructure.Messaging.Consumers;
 using AgriDrone.SharedKernel.Application.Abstractions.Execution;
 
-namespace AgriDrone.Modules.Surveys.Infrastructure.Messaging.Consumers;
+namespace AgriDrone.Database.Mapping;
 
 internal sealed class BaselineMappingCandidatesReadyV3Processor(
     IIntegrationMessageReader messageReader,

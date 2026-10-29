@@ -304,6 +304,7 @@ public sealed class ArchiveFarmZoneHandlerTests
                 auditWriter,
                 executionContext,
                 accessService,
+                new NoOpFarmZonePlantMembershipService(),
                 timeProvider),
             farm,
             zone,

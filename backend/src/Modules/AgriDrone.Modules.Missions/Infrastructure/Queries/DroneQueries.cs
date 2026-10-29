@@ -102,4 +102,31 @@ internal sealed class DroneQueries(
                 drone.Version))
             .ToListAsync(cancellationToken);
     }
+
+    public Task<DroneRegistryItemResponse?> GetDetailsAsync(
+        Guid droneId,
+        CancellationToken cancellationToken = default) =>
+        dbContext.Drones
+            .AsNoTracking()
+            .Where(drone => drone.Id == droneId && drone.DeletedAt == null)
+            .Select(drone => new DroneRegistryItemResponse(
+                drone.Id,
+                drone.Code,
+                drone.Name,
+                drone.Model,
+                drone.Manufacturer,
+                drone.Specifications,
+                drone.SerialNumber,
+                drone.RegistrationNumber,
+                drone.RegistrationDate,
+                drone.RegistrationExpiryDate,
+                drone.WeightKg,
+                drone.Status,
+                drone.LastMaintenanceAt,
+                drone.NextMaintenanceAt,
+                drone.Notes,
+                drone.CreatedAt,
+                drone.UpdatedAt,
+                drone.Version))
+            .SingleOrDefaultAsync(cancellationToken);
 }

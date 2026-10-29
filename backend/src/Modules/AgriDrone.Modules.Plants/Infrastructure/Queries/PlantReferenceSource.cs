@@ -22,10 +22,9 @@ internal sealed class PlantReferenceSource(
         ValidateScope(tenantId, farmId, zoneId, mapVersionId);
 
         var mapExists =
-            await farmReferenceQuery.IsConfirmedMapVersionAsync(
+            await farmReferenceQuery.IsPublishedFarmBaseMapVersionAsync(
                 tenantId,
                 farmId,
-                zoneId,
                 mapVersionId,
                 cancellationToken);
         if (!mapExists)
@@ -33,12 +32,21 @@ internal sealed class PlantReferenceSource(
             return [];
         }
 
+        var scopedPlantIds = await dbContext.Database.SqlQueryRaw<Guid>(
+                "SELECT membership.plant_id AS \"Value\" " +
+                "FROM farm.farm_zone_plant_memberships AS membership " +
+                "WHERE membership.farm_id = {0} AND membership.zone_id = {1} " +
+                "AND membership.effective_to IS NULL AND membership.is_assigned = TRUE",
+                farmId,
+                zoneId)
+            .ToArrayAsync(cancellationToken);
+
         var plants = await dbContext.Plants
             .AsNoTracking()
             .Where(plant =>
                 plant.FarmId == farmId &&
-                plant.ZoneId == zoneId &&
-                plant.CurrentMapVersionId == mapVersionId &&
+                scopedPlantIds.Contains(plant.Id) &&
+                plant.FarmBaseMapVersionId == mapVersionId &&
                 (plant.LifecycleStatus == PlantLifecycleStatus.Active ||
                  plant.LifecycleStatus == PlantLifecycleStatus.Missing))
             .OrderBy(plant => plant.RowIndex)
@@ -47,9 +55,9 @@ internal sealed class PlantReferenceSource(
             .Select(plant => new PlantReferenceProjection(
                 plant.Id,
                 plant.FarmId,
-                plant.ZoneId!.Value,
+                zoneId,
                 plant.LifecycleStatus,
-                plant.CurrentMapVersionId,
+                plant.FarmBaseMapVersionId,
                 plant.Location == null ? null : plant.Location.Y,
                 plant.Location == null ? null : plant.Location.X,
                 plant.RowIndex,

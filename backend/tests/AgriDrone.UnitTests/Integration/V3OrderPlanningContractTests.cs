@@ -122,10 +122,9 @@ public sealed class V3OrderPlanningContractTests
         var payload = new FarmBaseMapPublishedV3(
             ids[4], ids[5], ids[6], ids[7], ids[8], ids[9], ids[10],
             2, 1, ids[3], publishedAt,
-            [new PublishedZoneMapV3(ids[11], ids[0], 1,
-                [new PublishedPlantMappingV3(ids[1], ids[2],
-                    new GeoJsonPointV3("Point", [106.5, 10.5]), 1, 1,
-                    PublishedPlantLifecycleStatusesV3.Active, null)])], []);
+            [new PublishedPlantMappingV3(ids[1], ids[2],
+                new GeoJsonPointV3("Point", [106.5, 10.5]), 1, 1,
+                PublishedPlantLifecycleStatusesV3.Active, null)], []);
         var envelope = IntegrationEventEnvelopeFactory.Create(
             IntegrationEventDescriptors.FarmBaseMapPublishedV3,
             ids[0], ids[1], ids[2], ids[3], publishedAt, payload,
@@ -145,7 +144,7 @@ public sealed class V3OrderPlanningContractTests
 
         var json = Encoding.UTF8.GetString(serializer.Serialize(envelope));
         const string expected =
-            "{\"messageId\":\"00000001-0000-0000-0000-000000000000\",\"correlationId\":\"00000002-0000-0000-0000-000000000000\",\"tenantId\":\"00000003-0000-0000-0000-000000000000\",\"actorId\":\"00000004-0000-0000-0000-000000000000\",\"occurredAt\":\"2026-10-09T01:02:03+00:00\",\"schemaVersion\":3,\"eventType\":\"mapping.farm-base-map-published.v3\",\"payload\":{\"causationId\":\"00000005-0000-0000-0000-000000000000\",\"publicationId\":\"00000006-0000-0000-0000-000000000000\",\"surveyOrderId\":\"00000007-0000-0000-0000-000000000000\",\"sourceMissionId\":\"00000008-0000-0000-0000-000000000000\",\"farmId\":\"00000009-0000-0000-0000-000000000000\",\"farmBoundaryVersionId\":\"00000010-0000-0000-0000-000000000000\",\"farmBaseMapVersionId\":\"00000011-0000-0000-0000-000000000000\",\"versionNumber\":2,\"confirmedSurveyPoleCount\":1,\"confirmedBy\":\"00000004-0000-0000-0000-000000000000\",\"publishedAt\":\"2026-10-09T01:02:03+00:00\",\"zones\":[{\"zoneId\":\"00000012-0000-0000-0000-000000000000\",\"zoneMapVersionId\":\"00000001-0000-0000-0000-000000000000\",\"versionNumber\":1,\"plantMappings\":[{\"plantId\":\"00000002-0000-0000-0000-000000000000\",\"sourceCandidateId\":\"00000003-0000-0000-0000-000000000000\",\"position\":{\"type\":\"Point\",\"coordinates\":[106.5,10.5]},\"rowIndex\":1,\"columnIndex\":1,\"lifecycleStatus\":\"ACTIVE\",\"appliedPlantChangeReportId\":null}]}],\"appliedPlantChangeReportIds\":[]},\"causationId\":\"00000005-0000-0000-0000-000000000000\",\"sourceSystem\":\"BE1\"}";
+            "{\"messageId\":\"00000001-0000-0000-0000-000000000000\",\"correlationId\":\"00000002-0000-0000-0000-000000000000\",\"tenantId\":\"00000003-0000-0000-0000-000000000000\",\"actorId\":\"00000004-0000-0000-0000-000000000000\",\"occurredAt\":\"2026-10-09T01:02:03+00:00\",\"schemaVersion\":3,\"eventType\":\"mapping.farm-base-map-published.v3\",\"payload\":{\"causationId\":\"00000005-0000-0000-0000-000000000000\",\"publicationId\":\"00000006-0000-0000-0000-000000000000\",\"surveyOrderId\":\"00000007-0000-0000-0000-000000000000\",\"sourceMissionId\":\"00000008-0000-0000-0000-000000000000\",\"farmId\":\"00000009-0000-0000-0000-000000000000\",\"farmBoundaryVersionId\":\"00000010-0000-0000-0000-000000000000\",\"farmBaseMapVersionId\":\"00000011-0000-0000-0000-000000000000\",\"versionNumber\":2,\"confirmedSurveyPoleCount\":1,\"confirmedBy\":\"00000004-0000-0000-0000-000000000000\",\"publishedAt\":\"2026-10-09T01:02:03+00:00\",\"plantMappings\":[{\"plantId\":\"00000002-0000-0000-0000-000000000000\",\"sourceCandidateId\":\"00000003-0000-0000-0000-000000000000\",\"position\":{\"type\":\"Point\",\"coordinates\":[106.5,10.5]},\"rowIndex\":1,\"columnIndex\":1,\"lifecycleStatus\":\"ACTIVE\",\"appliedPlantChangeReportId\":null}],\"appliedPlantChangeReportIds\":[]},\"causationId\":\"00000005-0000-0000-0000-000000000000\",\"sourceSystem\":\"BE1\"}";
         Assert.Equal(expected, json);
         var copy = serializer.Deserialize<FarmBaseMapPublishedV3>(serializer.Serialize(envelope));
         Assert.NotNull(copy);
