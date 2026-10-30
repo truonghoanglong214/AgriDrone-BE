@@ -244,6 +244,7 @@ internal static class PostgreSqlEnumMappings
         optionsBuilder.MapEnum<SurveyRequestStatus>("survey_request_status", DbSchemas.System, translator);
         optionsBuilder.MapEnum<SurveyReviewDecision>("survey_review_decision", DbSchemas.System, translator);
         optionsBuilder.MapEnum<SurveyOrderStatus>("survey_order_status", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<SurveyScopeType>("survey_scope_type", DbSchemas.System, translator);
         optionsBuilder.MapEnum<SurveyPoleCountSource>("survey_pole_count_source", DbSchemas.System, translator);
         optionsBuilder.MapEnum<SurveyAppointmentPurpose>("survey_appointment_purpose", DbSchemas.System, translator);
         optionsBuilder.MapEnum<SurveyAppointmentStatus>("survey_appointment_status", DbSchemas.System, translator);
