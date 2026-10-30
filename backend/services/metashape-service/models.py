@@ -130,6 +130,17 @@ class YoloDetectMissionRequest(BaseModel):
     polygon_geojson: Optional[Dict[str, Any]] = None
 
 
+class YoloRecalculateGridRequest(BaseModel):
+    mission_id: str
+    active_trees: List[Dict[str, Any]]
+    row_spacing: float = 2.5
+    col_spacing: float = 2.5
+    anchor_lat: Optional[float] = None
+    anchor_lon: Optional[float] = None
+    custom_angle_deg: Optional[float] = None
+    polygon_geojson: Optional[Dict[str, Any]] = None
+
+
 class YoloDetectMissionResponse(BaseModel):
     mission_id: str
     model_name: str

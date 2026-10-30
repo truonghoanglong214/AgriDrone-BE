@@ -323,6 +323,9 @@ def get_map_picker_html(
           <button id="btn-download-csv" onclick="downloadCurrentTreesCsv()" class="btn btn-secondary" style="margin-top: 6px; font-size: 11px; display: none; width: 100%; cursor: pointer;">
             📥 Tải File CSV Mới Nhất (Đã chỉnh sửa)
           </button>
+          <button id="btn-renumber-grid" onclick="renumberAllRowsAndColumns()" class="btn btn-secondary" style="margin-top: 6px; font-size: 11px; display: none; width: 100%; cursor: pointer; border-color: #38bdf8; color: #38bdf8; font-weight: 700;">
+            ⚡ Tính toán lại vị trí cây (Chuẩn hóa Hàng & Cột)
+          </button>
           <input id="plant-gps-farm-id" value="{escaped_farm_id}" placeholder="Farm ID" style="width: 100%; margin-top: 6px;" />
           <input id="plant-gps-api-url" value="http://localhost:5080" placeholder=".NET API URL" style="width: 100%; margin-top: 6px;" />
           <input id="plant-gps-token" type="password" placeholder="Manager JWT token" autocomplete="off" style="width: 100%; margin-top: 6px;" />
@@ -567,11 +570,39 @@ def get_map_picker_html(
         interactive: true,
         bubblingMouseEvents: false
       }}).addTo(map);
+
       m.bindTooltip(`🔴 Khuyết: H${{tree.row}}-C${{tree.col}}`, {{
         permanent: false,
         direction: 'top'
       }});
-      m.bindPopup(`<b>🔴 Nghi ngờ bỏ sót / Khuyết cây</b><br>Hàng: ${{tree.row}}, Cột: ${{tree.col}}<br>Lat: ${{tree.lat}}<br>Lon: ${{tree.lon}}<br><button style="margin-top:6px;padding:6px 12px;background:#10b981;border:none;border-radius:4px;color:#000;cursor:pointer;font-weight:700;" onclick="confirmMissingTree(${{tree.lat}}, ${{tree.lon}})">✅ Xác nhận có cây tại đây</button>`);
+
+      const popupHtml = `
+        <div style="font-family: sans-serif; font-size: 12px; line-height: 1.5;">
+          <b style="color: #ef4444; font-size: 13px;">🔴 Vị Trí Nghi Ngờ Khuyết Cây</b><br>
+          Hàng: <b>${{tree.row}}</b> | Cột: <b>${{tree.col}}</b><br>
+          <span style="color: #94a3b8; font-size: 11px;">Tọa độ: ${{tree.lat.toFixed(6)}}, ${{tree.lon.toFixed(6)}}</span>
+          <div style="margin-top: 6px; padding: 4px; background: rgba(0,0,0,0.3); border-radius: 4px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px;">
+              <span style="font-size: 11px; color: #94a3b8;">Sửa vị trí:</span>
+              <label style="font-size: 11px; color: #cbd5e1;">Hàng:</label>
+              <input type="number" id="edit-row-${{tree.id}}" value="${{tree.row}}" min="1" max="999" style="width: 42px; padding: 2px 4px; background: #0f172a; color: #ef4444; border: 1px solid #334155; border-radius: 3px; font-size: 11px; font-weight: 700; text-align: center;">
+              <label style="font-size: 11px; color: #cbd5e1;">Cột:</label>
+              <input type="number" id="edit-col-${{tree.id}}" value="${{tree.col}}" min="1" max="999" style="width: 42px; padding: 2px 4px; background: #0f172a; color: #ef4444; border: 1px solid #334155; border-radius: 3px; font-size: 11px; font-weight: 700; text-align: center;">
+              <button style="padding: 2px 6px; background: #ef4444; color: #fff; border: none; border-radius: 3px; font-size: 11px; font-weight: 700; cursor: pointer;" onclick="saveManualMissingRowCol('${{tree.id}}')">💾</button>
+            </div>
+          </div>
+          <div style="margin-top: 8px; display: flex; flex-direction: column; gap: 6px;">
+            <button style="padding:6px 10px; background:#10b981; border:none; border-radius:4px; color:#000; cursor:pointer; font-weight:700; font-size:11px;" onclick="confirmMissingTree(${{tree.lat}}, ${{tree.lon}})">
+              ✅ Xác nhận có cây thực tế tại đây
+            </button>
+            <button style="padding:6px 10px; background:#ef4444; border:none; border-radius:4px; color:#fff; cursor:pointer; font-weight:700; font-size:11px;" onclick="dismissMissingTree(${{tree.lat}}, ${{tree.lon}})">
+              ❌ Xóa điểm khuyết này (Đánh lại thứ tự hàng)
+            </button>
+          </div>
+        </div>
+      `;
+      m.bindPopup(popupHtml);
+
       m.on('click', function(ev) {{
         if (ev && ev.originalEvent) ev.originalEvent.stopPropagation();
         m.openPopup();
@@ -593,6 +624,251 @@ def get_map_picker_html(
       const row = missingTree ? missingTree.row : 1;
       const col = missingTree ? missingTree.col : (activeTreesList.length + 1);
       addConfirmedTreeMarker(lat, lon, 'Người dùng xác nhận', 1.0, row, col);
+    }};
+
+    window.dismissMissingTree = function(lat, lon) {{
+      const target = missingTreesList.find(t => Math.abs(t.lat - lat) < 0.00001 && Math.abs(t.lon - lon) < 0.00001);
+      if (!target) return;
+
+      const targetRow = target.row;
+      const targetCol = target.col;
+
+      // 1. Xóa marker trên bản đồ
+      treeMarkers = treeMarkers.filter(m => {{
+        const p = m.getLatLng();
+        if (Math.abs(p.lat - lat) < 0.00001 && Math.abs(p.lng - lon) < 0.00001) {{
+          map.removeLayer(m);
+          return false;
+        }}
+        return true;
+      }});
+
+      // 2. Xóa khỏi danh sách missingTreesList
+      missingTreesList = missingTreesList.filter(t => t !== target);
+
+      // 3. Đánh lại số thứ tự cột trong HÀNG ĐÓ:
+      // Các cây đứng sau điểm khuyết bị xóa (col > targetCol) sẽ lùi 1 đơn vị (col -= 1)
+      activeTreesList.forEach(t => {{
+        if (t.row === targetRow && t.col > targetCol) {{
+          t.col -= 1;
+          t.id = `tree_r${{t.row}}_c${{t.col}}`;
+        }}
+      }});
+
+      missingTreesList.forEach(m => {{
+        if (m.row === targetRow && m.col > targetCol) {{
+          m.col -= 1;
+          m.id = `missing_r${{m.row}}_c${{m.col}}`;
+        }}
+      }});
+
+      // 4. Cập nhật lại giao diện và marker
+      refreshAllTreeMarkers();
+      updateTreeCounters();
+    }};
+
+    window.deleteActiveTree = function(id, lat, lon) {{
+      const target = activeTreesList.find(t => t.id === id || (Math.abs(t.lat - lat) < 0.00001 && Math.abs(t.lon - lon) < 0.00001));
+      if (!target) return;
+
+      const targetRow = target.row;
+      const targetCol = target.col;
+
+      treeMarkers = treeMarkers.filter(m => {{
+        const p = m.getLatLng();
+        if (Math.abs(p.lat - lat) < 0.00001 && Math.abs(p.lng - lon) < 0.00001) {{
+          map.removeLayer(m);
+          return false;
+        }}
+        return true;
+      }});
+
+      activeTreesList = activeTreesList.filter(t => t !== target);
+
+      activeTreesList.forEach(t => {{
+        if (t.row === targetRow && t.col > targetCol) {{
+          t.col -= 1;
+          t.id = `tree_r${{t.row}}_c${{t.col}}`;
+        }}
+      }});
+
+      missingTreesList.forEach(m => {{
+        if (m.row === targetRow && m.col > targetCol) {{
+          m.col -= 1;
+          m.id = `missing_r${{m.row}}_c${{m.col}}`;
+        }}
+      }});
+
+      refreshAllTreeMarkers();
+      updateTreeCounters();
+    }};
+
+    function refreshAllTreeMarkers() {{
+      treeMarkers.forEach(m => map.removeLayer(m));
+      treeMarkers = [];
+      if (anchorMarker) {{
+        map.removeLayer(anchorMarker);
+        anchorMarker = null;
+      }}
+
+      activeTreesList.forEach(t => {{
+        const isAnchor = t.is_anchor;
+        const m = L.circleMarker([t.lat, t.lon], {{
+          radius: isAnchor ? 10 : 7,
+          color: isAnchor ? '#f59e0b' : '#10b981',
+          fillColor: isAnchor ? '#fbbf24' : '#34d399',
+          fillOpacity: isAnchor ? 1.0 : 0.85,
+          weight: isAnchor ? 3 : 2,
+          interactive: true,
+          bubblingMouseEvents: false
+        }}).addTo(map);
+
+        m.bindTooltip(isAnchor ? `📍 Neo H${{t.row}}-C${{t.col}}` : `H${{t.row}}-C${{t.col}}`, {{ direction: 'top' }});
+
+        const popupContent = `
+          <div style="font-family: sans-serif; font-size: 12px; line-height: 1.5;">
+            <b style="color: ${{isAnchor ? '#f59e0b' : '#10b981'}}; font-size: 13px;">${{isAnchor ? '📍 Cây Neo Mốc (H1-C1)' : '🟢 Trụ Thanh Long'}}</b><br>
+            Hàng: <b>${{t.row}}</b> | Cột: <b>${{t.col}}</b><br>
+            Độ tin cậy: <b>${{((t.confidence || 1.0) * 100).toFixed(0)}}%</b><br>
+            <span style="color: #94a3b8; font-size: 11px;">Tọa độ: ${{t.lat.toFixed(6)}}, ${{t.lon.toFixed(6)}}</span><br>
+            <div style="margin-top: 6px; padding: 4px; background: rgba(0,0,0,0.3); border-radius: 4px;">
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px;">
+                <span style="font-size: 11px; color: #94a3b8;">Sửa vị trí:</span>
+                <label style="font-size: 11px; color: #cbd5e1;">Hàng:</label>
+                <input type="number" id="edit-row-${{t.id}}" value="${{t.row}}" min="1" max="999" style="width: 42px; padding: 2px 4px; background: #0f172a; color: #38bdf8; border: 1px solid #334155; border-radius: 3px; font-size: 11px; font-weight: 700; text-align: center;">
+                <label style="font-size: 11px; color: #cbd5e1;">Cột:</label>
+                <input type="number" id="edit-col-${{t.id}}" value="${{t.col}}" min="1" max="999" style="width: 42px; padding: 2px 4px; background: #0f172a; color: #38bdf8; border: 1px solid #334155; border-radius: 3px; font-size: 11px; font-weight: 700; text-align: center;">
+                <button style="padding: 2px 6px; background: #38bdf8; color: #000; border: none; border-radius: 3px; font-size: 11px; font-weight: 700; cursor: pointer;" onclick="saveManualTreeRowCol('${{t.id}}')">💾</button>
+              </div>
+            </div>
+            <div style="margin-top: 6px; display: flex; gap: 6px;">
+              <button style="flex: 1; padding:4px 8px; background:#ef4444; border:none; border-radius:4px; color:#fff; cursor:pointer; font-size:11px; font-weight:600;" onclick="deleteActiveTree('${{t.id}}', ${{t.lat}}, ${{t.lon}})">
+                🗑️ Xóa cây
+              </button>
+              <button style="flex: 1; padding:4px 8px; background:#f59e0b; border:none; border-radius:4px; color:#000; cursor:pointer; font-size:11px; font-weight:700;" onclick="setAnchorPoint(${{t.lat}}, ${{t.lon}})">
+                📍 Đặt làm Neo
+              </button>
+            </div>
+          </div>
+        `;
+        m.bindPopup(popupContent);
+
+        m.on('click', function(ev) {{
+          if (ev && ev.originalEvent) ev.originalEvent.stopPropagation();
+          if (isPickAnchorMode) {{
+            setAnchorPoint(t.lat, t.lon);
+            togglePickAnchorMode();
+            return;
+          }}
+          m.openPopup();
+        }});
+        treeMarkers.push(m);
+      }});
+
+      missingTreesList.forEach(t => addMissingTreeMarker(t));
+    }}
+
+    window.saveManualTreeRowCol = function(treeId) {{
+      const rInput = document.getElementById(`edit-row-${{treeId}}`);
+      const cInput = document.getElementById(`edit-col-${{treeId}}`);
+      if (!rInput || !cInput) return;
+      const nr = parseInt(rInput.value);
+      const nc = parseInt(cInput.value);
+      if (isNaN(nr) || isNaN(nc) || nr < 1 || nc < 1) {{
+        alert("Vui lòng nhập Hàng và Cột >= 1");
+        return;
+      }}
+      const t = activeTreesList.find(x => x.id === treeId);
+      if (t) {{
+        t.row = nr;
+        t.col = nc;
+        t.id = `tree_r${{nr}}_c${{nc}}`;
+        refreshAllTreeMarkers();
+        updateTreeCounters();
+      }}
+    }};
+
+    window.saveManualMissingRowCol = function(treeId) {{
+      const rInput = document.getElementById(`edit-row-${{treeId}}`);
+      const cInput = document.getElementById(`edit-col-${{treeId}}`);
+      if (!rInput || !cInput) return;
+      const nr = parseInt(rInput.value);
+      const nc = parseInt(cInput.value);
+      if (isNaN(nr) || isNaN(nc) || nr < 1 || nc < 1) {{
+        alert("Vui lòng nhập Hàng và Cột >= 1");
+        return;
+      }}
+      const m = missingTreesList.find(x => x.id === treeId);
+      if (m) {{
+        m.row = nr;
+        m.col = nc;
+        m.id = `missing_r${{nr}}_c${{nc}}`;
+        refreshAllTreeMarkers();
+        updateTreeCounters();
+      }}
+    }};
+
+    window.renumberAllRowsAndColumns = async function() {{
+      if (!activeTreesList || activeTreesList.length === 0) {{
+        alert("Chưa có danh sách cây để tính toán!");
+        return;
+      }}
+
+      const btn = document.getElementById('btn-renumber-grid');
+      const oldText = btn ? btn.innerText : '';
+      if (btn) {{
+        btn.disabled = true;
+        btn.innerText = '⏳ Đang phân chia Hàng & Cột chuẩn xác...';
+      }}
+
+      try {{
+        let polygonJson = null;
+        const geoOutput = document.getElementById('geojson-output');
+        if (geoOutput && geoOutput.value) {{
+          try {{ polygonJson = JSON.parse(geoOutput.value); }} catch(e) {{}}
+        }}
+
+        const rowSpacing = parseFloat(document.getElementById('input-row-spacing').value) || 2.5;
+        const colSpacing = parseFloat(document.getElementById('input-col-spacing').value) || 2.5;
+
+        const reqBody = {{
+          mission_id: missionId,
+          active_trees: activeTreesList,
+          row_spacing: rowSpacing,
+          col_spacing: colSpacing,
+          anchor_lat: anchorTreeLat,
+          anchor_lon: anchorTreeLon,
+          polygon_geojson: polygonJson
+        }};
+
+        const resp = await fetch('/api/v1/yolo/recalculate-grid', {{
+          method: 'POST',
+          headers: {{ 'Content-Type': 'application/json' }},
+          body: JSON.stringify(reqBody)
+        }});
+
+        if (!resp.ok) {{
+          const err = await resp.json();
+          throw new Error(err.detail || 'Lỗi khi tính toán lại lưới');
+        }}
+
+        const data = await resp.json();
+        activeTreesList = data.active_trees || [];
+        missingTreesList = data.missing_trees || [];
+
+        refreshAllTreeMarkers();
+        updateTreeCounters();
+        document.getElementById('grid-dimensions-val').innerText = `${{data.max_row || 0}} hàng x ${{data.max_col || 0}} cột`;
+
+        alert(`✅ Đã phân chia Hàng & Cột chuẩn xác!\n- Cây Neo luôn là Hàng 1 - Cột 1\n- Tổng: ${{activeTreesList.length}} cây nhận diện\n- Khuyết/sót: ${{missingTreesList.length}} cây\n- Kích thước: ${{data.max_row}} hàng x ${{data.max_col}} cột`);
+      }} catch(err) {{
+        alert("Lỗi: " + err.message);
+      }} finally {{
+        if (btn) {{
+          btn.disabled = false;
+          btn.innerText = oldText;
+        }}
+      }}
     }};
 
     async function downloadCurrentTreesCsv() {{
@@ -929,55 +1205,13 @@ def get_map_picker_html(
     }}
 
     function renderTreeResults(data) {{
-      treeMarkers.forEach(m => map.removeLayer(m));
-      treeMarkers = [];
-      if (anchorMarker) {{
-        map.removeLayer(anchorMarker);
-        anchorMarker = null;
-      }}
-
       isPolygonLocked = true;
       updatePolygonLockUI();
 
       activeTreesList = data.active_trees || [];
       missingTreesList = data.missing_trees || [];
 
-      activeTreesList.forEach(t => {{
-        const isAnchor = t.is_anchor;
-        const m = L.circleMarker([t.lat, t.lon], {{
-          radius: isAnchor ? 10 : 7,
-          color: isAnchor ? '#f59e0b' : '#10b981',
-          fillColor: isAnchor ? '#fbbf24' : '#34d399',
-          fillOpacity: isAnchor ? 1.0 : 0.85,
-          weight: isAnchor ? 3 : 2,
-          interactive: true,
-          bubblingMouseEvents: false
-        }}).addTo(map);
-
-        m.bindTooltip(isAnchor ? `📍 Neo H${{t.row}}-C${{t.col}}` : `H${{t.row}}-C${{t.col}}`, {{
-          direction: 'top'
-        }});
-
-        const popupContent = isAnchor
-          ? `<b>📍 Cây Neo Mốc (Hàng ${{t.row}} - Cột ${{t.col}})</b><br>Độ tin cậy: ${{(t.confidence*100).toFixed(0)}}%<br>Lat: ${{t.lat}}<br>Lon: ${{t.lon}}`
-          : `<b>🟢 Trụ Thanh Long (Hàng ${{t.row}} - Cột ${{t.col}})</b><br>Độ tin cậy: ${{(t.confidence*100).toFixed(0)}}%<br>Lat: ${{t.lat}}<br>Lon: ${{t.lon}}`;
-
-        m.bindPopup(popupContent);
-
-        m.on('click', function(ev) {{
-          if (ev && ev.originalEvent) ev.originalEvent.stopPropagation();
-          if (isPickAnchorMode) {{
-            setAnchorPoint(t.lat, t.lon);
-            togglePickAnchorMode();
-            return;
-          }}
-          m.openPopup();
-        }});
-
-        treeMarkers.push(m);
-      }});
-
-      missingTreesList.forEach(t => addMissingTreeMarker(t));
+      refreshAllTreeMarkers();
 
       document.getElementById('tree-stats').style.display = 'flex';
       document.getElementById('active-trees-count').innerText = data.total_unique_trees || activeTreesList.length;
@@ -994,6 +1228,8 @@ def get_map_picker_html(
 
       const dlBtn = document.getElementById('btn-download-csv');
       if (dlBtn) dlBtn.style.display = 'block';
+      const renumBtn = document.getElementById('btn-renumber-grid');
+      if (renumBtn) renumBtn.style.display = 'block';
     }}
 
     async function loadSavedTrees() {{

@@ -58,6 +58,7 @@ from models import (
     TreeItem,
     YoloDetectMissionRequest,
     YoloDetectMissionResponse,
+    YoloRecalculateGridRequest,
 )
 from orchard_postprocessor import (
     assign_grid_and_detect_missing,
@@ -938,6 +939,59 @@ def detect_mission_trees(request: YoloDetectMissionRequest):
         model_name="best.pt (Dragon-Fruit-class)",
         total_tiles_scanned=len(tile_files),
         total_raw_detections=len(raw_detections),
+        total_unique_trees=len(active_trees),
+        total_missing_trees=len(missing_trees),
+        suggested_row_spacing=suggested_row,
+        suggested_col_spacing=suggested_col,
+        max_row=max_row,
+        max_col=max_col,
+        csv_download_url=csv_url,
+        active_trees=[TreeItem(**t) for t in active_trees],
+        missing_trees=[TreeItem(**t) for t in missing_trees]
+    )
+
+
+@app.post("/api/v1/yolo/recalculate-grid", response_model=YoloDetectMissionResponse, tags=["YOLO Tree Detection"])
+def recalculate_tree_grid(request: YoloRecalculateGridRequest):
+    """
+    Tính toán lại vị trí hàng và cột cho danh sách cây hiện có mà không cần quét lại YOLO:
+    1. Xác định hướng chuẩn của hàng cây qua Neighbor Angle Voting (peak ~69°).
+    2. Phân cụm hàng 1D projection trên trục v_across (cây cùng luống không bao giờ nhảy hàng).
+    3. Cây neo mốc (Anchor Tree) luôn luôn được gán Hàng 1 - Cột 1 (is_anchor = True).
+    4. Quét khoảng trống thực tế để phát hiện cây khuyết (Missing Trees).
+    5. Cập nhật lại file CSV trees_{mission_id}.csv.
+    """
+    if not request.active_trees:
+        raise HTTPException(status_code=400, detail="Danh sách cây rỗng, không thể tính toán lại.")
+
+    anchor = None
+    if request.anchor_lat is not None and request.anchor_lon is not None:
+        anchor = {"lat": request.anchor_lat, "lon": request.anchor_lon}
+
+    active_trees, missing_trees, suggested_row, suggested_col = assign_grid_and_detect_missing(
+        trees=request.active_trees,
+        row_spacing=request.row_spacing,
+        col_spacing=request.col_spacing,
+        anchor_point=anchor,
+        custom_angle_deg=request.custom_angle_deg,
+        polygon_geojson=request.polygon_geojson
+    )
+
+    max_row = max((t["row"] for t in active_trees), default=0)
+    max_col = max((t["col"] for t in active_trees), default=0)
+
+    tiles_dir = os.path.join(settings.temp_dir, f"tiling_{request.mission_id}", "tiles")
+    if os.path.exists(tiles_dir):
+        csv_path = os.path.join(tiles_dir, f"trees_{request.mission_id}.csv")
+        export_trees_to_csv(active_trees, missing_trees, csv_path, polygon_geojson=request.polygon_geojson)
+
+    csv_url = f"/api/v1/yolo/download-csv/{request.mission_id}"
+
+    return YoloDetectMissionResponse(
+        mission_id=request.mission_id,
+        model_name="recalculated",
+        total_tiles_scanned=0,
+        total_raw_detections=len(active_trees),
         total_unique_trees=len(active_trees),
         total_missing_trees=len(missing_trees),
         suggested_row_spacing=suggested_row,
