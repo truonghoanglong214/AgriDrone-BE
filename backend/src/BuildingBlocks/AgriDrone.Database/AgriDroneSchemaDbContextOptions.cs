@@ -22,6 +22,8 @@ internal static class AgriDroneSchemaDbContextOptions
                         "__ef_migrations_history",
                         DbSchemas.System);
                 })
+            .ConfigureWarnings(warnings =>
+                warnings.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning))
             .UseSeeding((dbContext, _) =>
                 SystemRoleSeeder.Seed(dbContext))
             .UseAsyncSeeding((dbContext, _, cancellationToken) =>

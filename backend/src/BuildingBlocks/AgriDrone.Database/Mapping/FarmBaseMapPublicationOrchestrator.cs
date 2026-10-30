@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using AgriDrone.IntegrationContracts.Mapping;
 using AgriDrone.IntegrationContracts.Messaging;
 using AgriDrone.Modules.Farms.Application.Abstractions.Maps;
@@ -12,6 +12,7 @@ using AgriDrone.SharedInfrastructure.Auditing;
 using AgriDrone.SharedInfrastructure.Messaging.Outbox;
 using AgriDrone.SharedKernel.Application;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using NetTopologySuite.Geometries;
 
 namespace AgriDrone.Database.Mapping;
@@ -21,7 +22,8 @@ internal sealed class FarmBaseMapPublicationOrchestrator(
     IBaselineMappingBatchValidator validator,
     OutboxMessageFactory outboxMessageFactory,
     IAuditWriter auditWriter,
-    TimeProvider timeProvider)
+    TimeProvider timeProvider,
+    ILogger<FarmBaseMapPublicationOrchestrator> logger)
     : IFarmBaseMapPublicationOrchestrator
 {
     public async Task<Result<FarmBaseMapPublishedResult>> PublishAsync(
@@ -30,94 +32,113 @@ internal sealed class FarmBaseMapPublicationOrchestrator(
         Guid actorId,
         CancellationToken cancellationToken)
     {
-        return await dbContext.ExecuteInTransactionAsync(async ct =>
+        try
         {
-            var draft = await dbContext.FarmBaseMapVersions
-                .SingleOrDefaultAsync(m => m.Id == draftId && m.FarmId == farmId, ct);
-
-            if (draft is null)
+            return await dbContext.ExecuteInTransactionAsync(async ct =>
             {
-                return Result.Failure<FarmBaseMapPublishedResult>(
-                    AppError.NotFound("FarmBaseMapDraft.NotFound", "Farm base map draft not found."));
-            }
+                var draft = await dbContext.FarmBaseMapVersions
+                    .SingleOrDefaultAsync(m => m.Id == draftId && m.FarmId == farmId, ct);
 
-            if (draft.Status != FarmBaseMapStatus.Draft)
-            {
-                return Result.Failure<FarmBaseMapPublishedResult>(
-                    AppError.Conflict("FarmBaseMapDraft.InvalidStatus", $"Only draft base maps can be published; current status is '{draft.Status}'."));
-            }
+                if (draft is null)
+                {
+                    return Result.Failure<FarmBaseMapPublishedResult>(
+                        AppError.NotFound("FarmBaseMapDraft.NotFound", "Farm base map draft not found."));
+                }
 
-            var batch = await dbContext.MappingCandidateBatches
-                .Include(b => b.Candidates)
-                .SingleOrDefaultAsync(b => b.FarmBaseMapVersionId == draftId, ct);
+                if (draft.Status != FarmBaseMapStatus.Draft)
+                {
+                    return Result.Failure<FarmBaseMapPublishedResult>(
+                        AppError.Conflict("FarmBaseMapDraft.InvalidStatus", $"Only draft base maps can be published; current status is '{draft.Status}'."));
+                }
 
-            if (batch is null)
-            {
-                return Result.Failure<FarmBaseMapPublishedResult>(
-                    AppError.NotFound("MappingCandidateBatch.NotFound", "Mapping candidate batch not found."));
-            }
+                var batch = await dbContext.MappingCandidateBatches
+                    .Include(b => b.Candidates)
+                    .SingleOrDefaultAsync(b => b.FarmBaseMapVersionId == draftId, ct);
 
-            var boundary = await dbContext.FarmBoundaries
-                .SingleOrDefaultAsync(b => b.Id == batch.FarmBoundaryVersionId, ct);
+                if (batch is null)
+                {
+                    return Result.Failure<FarmBaseMapPublishedResult>(
+                        AppError.NotFound("MappingCandidateBatch.NotFound", "Mapping candidate batch not found."));
+                }
 
-            var validation = validator.Validate(batch, boundary);
-            if (!validation.IsValid)
-            {
-                var errorMessages = string.Join("; ", validation.Issues.Where(i => i.Severity == "Error").Select(i => i.Message));
-                return Result.Failure<FarmBaseMapPublishedResult>(
-                    AppError.Validation("MappingCandidateBatch.ValidationFailed", $"Cannot publish base map due to validation errors: {errorMessages}"));
-            }
+                var boundary = await dbContext.FarmBoundaries
+                    .SingleOrDefaultAsync(b => b.Id == batch.FarmBoundaryVersionId, ct);
 
-            var order = await dbContext.SurveyOrders
-                .SingleOrDefaultAsync(o => o.Id == draft.SourceSurveyOrderId, ct);
+                var validation = validator.Validate(batch, boundary);
+                if (!validation.IsValid)
+                {
+                    var errorMessages = string.Join("; ", validation.Issues.Where(i => i.Severity == "Error").Select(i => i.Message));
+                    return Result.Failure<FarmBaseMapPublishedResult>(
+                        AppError.Validation("MappingCandidateBatch.ValidationFailed", $"Cannot publish base map due to validation errors: {errorMessages}"));
+                }
 
-            if (order is null)
-            {
-                return Result.Failure<FarmBaseMapPublishedResult>(
-                    AppError.NotFound("SurveyOrder.NotFound", "Associated survey order not found."));
-            }
+                if (validation.ConfirmedPublishablePoleCount <= 0)
+                {
+                    return Result.Failure<FarmBaseMapPublishedResult>(
+                        AppError.Validation(
+                            "FarmBaseMapDraft.NoPublishablePoles",
+                            "At least one candidate must have an accepted review decision (CreateNew, MatchExisting, Relocate, Replace) to publish."));
+                }
 
-            if (order.Status != SurveyOrderStatus.AwaitingBaselineReview)
-            {
-                return Result.Failure<FarmBaseMapPublishedResult>(
-                    AppError.Conflict("SurveyOrder.InvalidStatus", $"Survey order {order.Id} is in status '{order.Status}' and cannot record baseline publication."));
-            }
+                var order = await dbContext.SurveyOrders
+                    .SingleOrDefaultAsync(o => o.Id == draft.SourceSurveyOrderId, ct);
 
-            if (batch.Candidates.Any(c => c.ReviewDecision == MappingCandidateReviewDecision.Pending))
-            {
-                return Result.Failure<FarmBaseMapPublishedResult>(
-                    AppError.Conflict(
-                        "MappingCandidateBatch.PendingReviewRemaining",
-                        "Cannot publish farm base map while candidates remain in Pending review decision."));
-            }
+                if (order is null)
+                {
+                    return Result.Failure<FarmBaseMapPublishedResult>(
+                        AppError.NotFound("SurveyOrder.NotFound", "Associated survey order not found."));
+                }
 
-            var now = timeProvider.GetUtcNow();
+                if (order.Status != SurveyOrderStatus.AwaitingBaselineReview)
+                {
+                    return Result.Failure<FarmBaseMapPublishedResult>(
+                        AppError.Conflict("SurveyOrder.InvalidStatus", $"Survey order {order.Id} is in status '{order.Status}' and cannot record baseline publication."));
+                }
 
-            // Supersede existing published farm base map versions to respect partial unique index
-            var existingPublishedMaps = await dbContext.FarmBaseMapVersions
-                .Where(v => v.FarmId == farmId && v.Status == FarmBaseMapStatus.Published)
-                .ToListAsync(ct);
+                if (batch.Candidates.Any(c => c.ReviewDecision == MappingCandidateReviewDecision.Pending))
+                {
+                    return Result.Failure<FarmBaseMapPublishedResult>(
+                        AppError.Conflict(
+                            "MappingCandidateBatch.PendingReviewRemaining",
+                            "Cannot publish farm base map while candidates remain in Pending review decision."));
+                }
 
-            foreach (var prevMap in existingPublishedMaps)
-            {
-                prevMap.Supersede(now);
-            }
+                var now = timeProvider.GetUtcNow();
+                if (order.UpdatedAt != default && now < order.UpdatedAt)
+                {
+                    now = order.UpdatedAt.AddMilliseconds(1);
+                }
 
-            var defaultHealth = await dbContext.HealthLevels
-                .Where(h => h.IsActive)
-                .OrderBy(h => h.Rank)
-                .FirstOrDefaultAsync(ct);
-            var healthId = defaultHealth?.Id ?? Guid.Parse("10000000-0000-0000-0000-000000000001");
+                // Supersede existing published farm base map versions to respect partial unique index
+                var existingPublishedMaps = await dbContext.FarmBaseMapVersions
+                    .Where(v => v.FarmId == farmId && v.Status == FarmBaseMapStatus.Published)
+                    .ToListAsync(ct);
 
-            var publishableCandidates = batch.Candidates
-                .Where(c => c.ReviewDecision is MappingCandidateReviewDecision.CreateNew
-                                             or MappingCandidateReviewDecision.MatchExisting
-                                             or MappingCandidateReviewDecision.Relocate
-                                             or MappingCandidateReviewDecision.Replace)
-                .ToList();
-            var plantMappings = new List<PublishedPlantMappingV3>();
+                foreach (var prevMap in existingPublishedMaps)
+                {
+                    prevMap.Supersede(now);
+                }
 
-            foreach (var c in publishableCandidates)
+                var defaultHealth = await dbContext.HealthLevels
+                    .Where(h => h.IsActive && h.Code == "UNKNOWN")
+                    .FirstOrDefaultAsync(ct)
+                    ?? await dbContext.HealthLevels
+                        .Where(h => h.IsActive)
+                        .OrderBy(h => h.Rank)
+                        .FirstOrDefaultAsync(ct);
+
+                var healthId = defaultHealth?.Id
+                    ?? Guid.Parse("11111111-1111-4111-8111-111111111101");
+
+                var publishableCandidates = batch.Candidates
+                    .Where(c => c.ReviewDecision is MappingCandidateReviewDecision.CreateNew
+                                                 or MappingCandidateReviewDecision.MatchExisting
+                                                 or MappingCandidateReviewDecision.Relocate
+                                                 or MappingCandidateReviewDecision.Replace)
+                    .ToList();
+                var plantMappings = new List<PublishedPlantMappingV3>();
+
+                foreach (var c in publishableCandidates)
                 {
                     var pos = c.CorrectedPosition ?? c.OriginalPosition;
                     var row = c.CorrectedRowIndex ?? c.ProposedRowIndex ?? 1;
@@ -321,79 +342,105 @@ internal sealed class FarmBaseMapPublicationOrchestrator(
                             LifecycleStatus: PublishedPlantLifecycleStatusesV3.Active,
                             AppliedPlantChangeReportId: null));
                     }
-            }
+                }
 
-            draft.Publish(actorId, now);
+                draft.Publish(actorId, now);
 
-            batch.Approve(actorId, "Farm base map published with reviewed plant identities", now);
+                batch.Approve(actorId, "Farm base map published with reviewed plant identities", now);
 
-            var confirmedCount = ConfirmedSurveyPoleCount.Create(validation.ConfirmedPublishablePoleCount);
-            order.RecordBaselinePublication(
-                farmBaseMapVersionId: draft.Id,
-                confirmedPoleCount: confirmedCount,
-                confirmedBy: actorId,
-                confirmedAt: now);
+                var confirmedCount = ConfirmedSurveyPoleCount.Create(validation.ConfirmedPublishablePoleCount);
+                order.RecordBaselinePublication(
+                    farmBaseMapVersionId: draft.Id,
+                    confirmedPoleCount: confirmedCount,
+                    confirmedBy: actorId,
+                    confirmedAt: now,
+                    farmBoundaryVersionId: batch.FarmBoundaryVersionId);
 
-            var publishedEvent = new FarmBaseMapPublishedV3(
-                CausationId: Guid.NewGuid(),
-                PublicationId: Guid.NewGuid(),
-                SurveyOrderId: order.Id,
-                SourceMissionId: batch.MissionId,
-                FarmId: farmId,
-                FarmBoundaryVersionId: batch.FarmBoundaryVersionId,
-                FarmBaseMapVersionId: draft.Id,
-                VersionNumber: draft.VersionNumber,
-                ConfirmedSurveyPoleCount: validation.ConfirmedPublishablePoleCount,
-                ConfirmedBy: actorId,
-                PublishedAt: now,
-                PlantMappings: plantMappings,
-                AppliedPlantChangeReportIds: []);
+                var publishedEvent = new FarmBaseMapPublishedV3(
+                    CausationId: Guid.NewGuid(),
+                    PublicationId: Guid.NewGuid(),
+                    SurveyOrderId: order.Id,
+                    SourceMissionId: batch.MissionId,
+                    FarmId: farmId,
+                    FarmBoundaryVersionId: batch.FarmBoundaryVersionId,
+                    FarmBaseMapVersionId: draft.Id,
+                    VersionNumber: draft.VersionNumber,
+                    ConfirmedSurveyPoleCount: validation.ConfirmedPublishablePoleCount,
+                    ConfirmedBy: actorId,
+                    PublishedAt: now,
+                    PlantMappings: plantMappings,
+                    AppliedPlantChangeReportIds: []);
 
-            var envelope = IntegrationEventEnvelopeFactory.Create(
-                descriptor: IntegrationEventDescriptors.FarmBaseMapPublishedV3,
-                messageId: Guid.NewGuid(),
-                correlationId: Guid.NewGuid(),
-                tenantId: order.TenantId,
-                actorId: actorId,
-                occurredAt: now,
-                payload: publishedEvent,
-                causationId: publishedEvent.CausationId);
+                var envelope = IntegrationEventEnvelopeFactory.Create(
+                    descriptor: IntegrationEventDescriptors.FarmBaseMapPublishedV3,
+                    messageId: Guid.NewGuid(),
+                    correlationId: Guid.NewGuid(),
+                    tenantId: order.TenantId,
+                    actorId: actorId,
+                    occurredAt: now,
+                    payload: publishedEvent,
+                    causationId: publishedEvent.CausationId);
 
-            var outboxMessage = outboxMessageFactory.Create(
-                envelope,
-                envelope.EventType,
-                partitionKey: farmId.ToString());
+                var outboxMessage = outboxMessageFactory.Create(
+                    envelope,
+                    envelope.EventType,
+                    partitionKey: farmId.ToString());
 
-            dbContext.OutboxMessages.Add(outboxMessage);
+                dbContext.OutboxMessages.Add(outboxMessage);
 
-            using var auditDoc = JsonDocument.Parse(JsonSerializer.Serialize(new
-            {
-                draft.Id,
-                draft.VersionNumber,
-                validation.ConfirmedPublishablePoleCount,
-                PublishedAt = now
-            }));
+                using var auditDoc = JsonDocument.Parse(JsonSerializer.Serialize(new
+                {
+                    draft.Id,
+                    draft.VersionNumber,
+                    validation.ConfirmedPublishablePoleCount,
+                    PublishedAt = now
+                }));
 
-            auditWriter.AddUserAction(
-                sink: dbContext,
-                tenantId: order.TenantId,
-                farmId: farmId,
-                actorId: actorId,
-                correlationId: envelope.CorrelationId,
-                entityType: "FarmBaseMapVersion",
-                entityId: draft.Id,
-                action: "PUBLISH",
-                oldData: null,
-                newData: auditDoc,
-                createdAt: now);
+                auditWriter.AddUserAction(
+                    sink: dbContext,
+                    tenantId: order.TenantId,
+                    farmId: farmId,
+                    actorId: actorId,
+                    correlationId: envelope.CorrelationId,
+                    entityType: "FarmBaseMapVersion",
+                    entityId: draft.Id,
+                    action: "PUBLISH",
+                    oldData: null,
+                    newData: auditDoc,
+                    createdAt: now);
 
-            await dbContext.SaveChangesAsync(ct);
+                await dbContext.SaveChangesAsync(ct);
 
-            return Result.Success(new FarmBaseMapPublishedResult(
-                FarmBaseMapVersionId: draft.Id,
-                VersionNumber: draft.VersionNumber,
-                ConfirmedSurveyPoleCount: validation.ConfirmedPublishablePoleCount,
-                PublishedAt: now));
-        }, cancellationToken);
+                return Result.Success(new FarmBaseMapPublishedResult(
+                    FarmBaseMapVersionId: draft.Id,
+                    VersionNumber: draft.VersionNumber,
+                    ConfirmedSurveyPoleCount: validation.ConfirmedPublishablePoleCount,
+                    PublishedAt: now));
+            }, cancellationToken);
+        }
+        catch (DbUpdateException ex)
+        {
+            logger.LogError(ex, "Database update error while publishing farm base map for farm {FarmId}, draft {DraftId}: {Message} -> {InnerMessage}",
+                farmId, draftId, ex.Message, ex.InnerException?.Message);
+            return Result.Failure<FarmBaseMapPublishedResult>(
+                AppError.Conflict(
+                    "FarmBaseMapPublication.DatabaseError",
+                    $"Database constraint failure: {ex.InnerException?.Message ?? ex.Message}"));
+        }
+        catch (SurveyDomainException ex)
+        {
+            logger.LogWarning(ex, "Domain rule violation publishing farm base map for farm {FarmId}, draft {DraftId}: {Code} - {Message}",
+                farmId, draftId, ex.Code, ex.Message);
+            return Result.Failure<FarmBaseMapPublishedResult>(
+                AppError.Conflict(ex.Code, ex.Message));
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Unexpected error publishing farm base map for farm {FarmId}, draft {DraftId}", farmId, draftId);
+            return Result.Failure<FarmBaseMapPublishedResult>(
+                AppError.Failure(
+                    "FarmBaseMapPublication.Failed",
+                    $"Publication failed: {ex.Message}"));
+        }
     }
 }

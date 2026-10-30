@@ -84,6 +84,7 @@ public sealed class MappingPublicationDbContext(
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        PostgreSqlEnumMappings.ConfigureModel(modelBuilder);
         IgnoreUnrelatedPlantNavigations(modelBuilder);
 
         modelBuilder.ApplyConfiguration(new FarmConfiguration());
