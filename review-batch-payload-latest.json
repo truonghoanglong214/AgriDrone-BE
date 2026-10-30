@@ -1,0 +1,615 @@
+{
+  "reviews": [
+    {
+      "candidateId": "b97506a4-9bb7-4911-8431-24bb443270ef",
+      "decision": "CreateNew",
+      "correctedLongitude": null,
+      "correctedLatitude": null,
+      "correctedRowIndex": null,
+      "correctedColumnIndex": null,
+      "correctedMatchedPlantId": null,
+      "reason": "Mock review: giữ nguyên tọa độ và grid được đề xuất"
+    },
+    {
+      "candidateId": "cc8bc436-e830-4025-ad7b-0506bd5dc302",
+      "decision": "CreateNew",
+      "correctedLongitude": null,
+      "correctedLatitude": null,
+      "correctedRowIndex": null,
+      "correctedColumnIndex": null,
+      "correctedMatchedPlantId": null,
+      "reason": "Mock review: giữ nguyên tọa độ và grid được đề xuất"
+    },
+    {
+      "candidateId": "ee4d1091-6c22-46c1-b8c6-64b324ce5746",
+      "decision": "CreateNew",
+      "correctedLongitude": null,
+      "correctedLatitude": null,
+      "correctedRowIndex": null,
+      "correctedColumnIndex": null,
+      "correctedMatchedPlantId": null,
+      "reason": "Mock review: giữ nguyên tọa độ và grid được đề xuất"
+    },
+    {
+      "candidateId": "e4c55d82-1d02-4cc0-8d09-0238e79a2411",
+      "decision": "CreateNew",
+      "correctedLongitude": null,
+      "correctedLatitude": null,
+      "correctedRowIndex": null,
+      "correctedColumnIndex": null,
+      "correctedMatchedPlantId": null,
+      "reason": "Mock review: giữ nguyên tọa độ và grid được đề xuất"
+    },
+    {
+      "candidateId": "81fd94e6-9b2f-44b9-bbc5-93af1355fa3b",
+      "decision": "CreateNew",
+      "correctedLongitude": null,
+      "correctedLatitude": null,
+      "correctedRowIndex": null,
+      "correctedColumnIndex": null,
+      "correctedMatchedPlantId": null,
+      "reason": "Mock review: giữ nguyên tọa độ và grid được đề xuất"
+    },
+    {
+      "candidateId": "953c2163-4910-4e3a-b27d-8f52eedda1cd",
+      "decision": "CreateNew",
+      "correctedLongitude": null,
+      "correctedLatitude": null,
+      "correctedRowIndex": null,
+      "correctedColumnIndex": null,
+      "correctedMatchedPlantId": null,
+      "reason": "Mock review: giữ nguyên tọa độ và grid được đề xuất"
+    },
+    {
+      "candidateId": "44c16649-b8c6-450c-87f4-b1e24f297a13",
+      "decision": "CreateNew",
+      "correctedLongitude": null,
+      "correctedLatitude": null,
+      "correctedRowIndex": null,
+      "correctedColumnIndex": null,
+      "correctedMatchedPlantId": null,
+      "reason": "Mock review: giữ nguyên tọa độ và grid được đề xuất"
+    },
+    {
+      "candidateId": "19845a6a-3fdd-46b8-a999-fd9345aaaf12",
+      "decision": "CreateNew",
+      "correctedLongitude": null,
+      "correctedLatitude": null,
+      "correctedRowIndex": null,
+      "correctedColumnIndex": null,
+      "correctedMatchedPlantId": null,
+      "reason": "Mock review: giữ nguyên tọa độ và grid được đề xuất"
+    },
+    {
+      "candidateId": "f326345f-17d2-4180-a0cd-5eae738fb0d3",
+      "decision": "CreateNew",
+      "correctedLongitude": null,
+      "correctedLatitude": null,
+      "correctedRowIndex": null,
+      "correctedColumnIndex": null,
+      "correctedMatchedPlantId": null,
+      "reason": "Mock review: giữ nguyên tọa độ và grid được đề xuất"
+    },
+    {
+      "candidateId": "6889a7c1-c60f-4f55-8951-7081cfaf61ee",
+      "decision": "CreateNew",
+      "correctedLongitude": null,
+      "correctedLatitude": null,
+      "correctedRowIndex": null,
+      "correctedColumnIndex": null,
+      "correctedMatchedPlantId": null,
+      "reason": "Mock review: giữ nguyên tọa độ và grid được đề xuất"
+    },
+    {
+      "candidateId": "e0d2ee10-0fec-44d6-9e50-bdce4a39f9f1",
+      "decision": "CreateNew",
+      "correctedLongitude": null,
+      "correctedLatitude": null,
+      "correctedRowIndex": null,
+      "correctedColumnIndex": null,
+      "correctedMatchedPlantId": null,
+      "reason": "Mock review: giữ nguyên tọa độ và grid được đề xuất"
+    },
+    {
+      "candidateId": "7b517af1-16bf-42d1-98f3-68d9e4c8e989",
+      "decision": "CreateNew",
+      "correctedLongitude": null,
+      "correctedLatitude": null,
+      "correctedRowIndex": null,
+      "correctedColumnIndex": null,
+      "correctedMatchedPlantId": null,
+      "reason": "Mock review: giữ nguyên tọa độ và grid được đề xuất"
+    },
+    {
+      "candidateId": "f196d025-7268-454a-a429-3f1871aa3b7b",
+      "decision": "CreateNew",
+      "correctedLongitude": null,
+      "correctedLatitude": null,
+      "correctedRowIndex": null,
+      "correctedColumnIndex": null,
+      "correctedMatchedPlantId": null,
+      "reason": "Mock review: giữ nguyên tọa độ và grid được đề xuất"
+    },
+    {
+      "candidateId": "d2f550b9-4513-4bf0-8e0e-ad8be7c62c53",
+      "decision": "CreateNew",
+      "correctedLongitude": null,
+      "correctedLatitude": null,
+      "correctedRowIndex": null,
+      "correctedColumnIndex": null,
+      "correctedMatchedPlantId": null,
+      "reason": "Mock review: giữ nguyên tọa độ và grid được đề xuất"
+    },
+    {
+      "candidateId": "7989bafc-0d42-42d8-8c57-0f0b014e0bce",
+      "decision": "CreateNew",
+      "correctedLongitude": null,
+      "correctedLatitude": null,
+      "correctedRowIndex": null,
+      "correctedColumnIndex": null,
+      "correctedMatchedPlantId": null,
+      "reason": "Mock review: giữ nguyên tọa độ và grid được đề xuất"
+    },
+    {
+      "candidateId": "e93367ca-0d01-4eaf-bd94-db26fc603bbf",
+      "decision": "CreateNew",
+      "correctedLongitude": null,
+      "correctedLatitude": null,
+      "correctedRowIndex": null,
+      "correctedColumnIndex": null,
+      "correctedMatchedPlantId": null,
+      "reason": "Mock review: giữ nguyên tọa độ và grid được đề xuất"
+    },
+    {
+      "candidateId": "9aa7f7a8-1c94-42c6-bc4f-57e9e7eea9d4",
+      "decision": "CreateNew",
+      "correctedLongitude": null,
+      "correctedLatitude": null,
+      "correctedRowIndex": null,
+      "correctedColumnIndex": null,
+      "correctedMatchedPlantId": null,
+      "reason": "Mock review: giữ nguyên tọa độ và grid được đề xuất"
+    },
+    {
+      "candidateId": "f7e9c038-bb00-4bfb-b42b-b275eb9286fc",
+      "decision": "CreateNew",
+      "correctedLongitude": null,
+      "correctedLatitude": null,
+      "correctedRowIndex": null,
+      "correctedColumnIndex": null,
+      "correctedMatchedPlantId": null,
+      "reason": "Mock review: giữ nguyên tọa độ và grid được đề xuất"
+    },
+    {
+      "candidateId": "dd2f5a2d-fda2-44cc-869c-e1f9ae847174",
+      "decision": "CreateNew",
+      "correctedLongitude": null,
+      "correctedLatitude": null,
+      "correctedRowIndex": null,
+      "correctedColumnIndex": null,
+      "correctedMatchedPlantId": null,
+      "reason": "Mock review: giữ nguyên tọa độ và grid được đề xuất"
+    },
+    {
+      "candidateId": "df672568-2fa5-4af1-ad2f-729a337c79a7",
+      "decision": "CreateNew",
+      "correctedLongitude": null,
+      "correctedLatitude": null,
+      "correctedRowIndex": null,
+      "correctedColumnIndex": null,
+      "correctedMatchedPlantId": null,
+      "reason": "Mock review: giữ nguyên tọa độ và grid được đề xuất"
+    },
+    {
+      "candidateId": "48ce24c9-79de-4b03-bf23-a4dc53a313bf",
+      "decision": "CreateNew",
+      "correctedLongitude": null,
+      "correctedLatitude": null,
+      "correctedRowIndex": null,
+      "correctedColumnIndex": null,
+      "correctedMatchedPlantId": null,
+      "reason": "Mock review: giữ nguyên tọa độ và grid được đề xuất"
+    },
+    {
+      "candidateId": "2a7e90ac-8193-4c45-a7e8-ca44f7586f21",
+      "decision": "CreateNew",
+      "correctedLongitude": null,
+      "correctedLatitude": null,
+      "correctedRowIndex": null,
+      "correctedColumnIndex": null,
+      "correctedMatchedPlantId": null,
+      "reason": "Mock review: giữ nguyên tọa độ và grid được đề xuất"
+    },
+    {
+      "candidateId": "ce8cc6ca-bd20-4ff4-8f21-187d833660c0",
+      "decision": "CreateNew",
+      "correctedLongitude": null,
+      "correctedLatitude": null,
+      "correctedRowIndex": null,
+      "correctedColumnIndex": null,
+      "correctedMatchedPlantId": null,
+      "reason": "Mock review: giữ nguyên tọa độ và grid được đề xuất"
+    },
+    {
+      "candidateId": "d8f2d019-2079-4d01-af1a-d962fa7a7aa8",
+      "decision": "CreateNew",
+      "correctedLongitude": null,
+      "correctedLatitude": null,
+      "correctedRowIndex": null,
+      "correctedColumnIndex": null,
+      "correctedMatchedPlantId": null,
+      "reason": "Mock review: giữ nguyên tọa độ và grid được đề xuất"
+    },
+    {
+      "candidateId": "766aa0e2-3ba5-49b3-b604-119faaf7a5a1",
+      "decision": "CreateNew",
+      "correctedLongitude": null,
+      "correctedLatitude": null,
+      "correctedRowIndex": null,
+      "correctedColumnIndex": null,
+      "correctedMatchedPlantId": null,
+      "reason": "Mock review: giữ nguyên tọa độ và grid được đề xuất"
+    },
+    {
+      "candidateId": "6a2940e4-adee-4c0c-b584-1850c2612263",
+      "decision": "CreateNew",
+      "correctedLongitude": null,
+      "correctedLatitude": null,
+      "correctedRowIndex": null,
+      "correctedColumnIndex": null,
+      "correctedMatchedPlantId": null,
+      "reason": "Mock review: giữ nguyên tọa độ và grid được đề xuất"
+    },
+    {
+      "candidateId": "5b87f974-a557-4c07-82c2-6987bc5bc031",
+      "decision": "CreateNew",
+      "correctedLongitude": null,
+      "correctedLatitude": null,
+      "correctedRowIndex": null,
+      "correctedColumnIndex": null,
+      "correctedMatchedPlantId": null,
+      "reason": "Mock review: giữ nguyên tọa độ và grid được đề xuất"
+    },
+    {
+      "candidateId": "c38905be-6497-4777-8f69-85a0281768f2",
+      "decision": "CreateNew",
+      "correctedLongitude": null,
+      "correctedLatitude": null,
+      "correctedRowIndex": null,
+      "correctedColumnIndex": null,
+      "correctedMatchedPlantId": null,
+      "reason": "Mock review: giữ nguyên tọa độ và grid được đề xuất"
+    },
+    {
+      "candidateId": "9bab151d-bd71-43c9-8d26-386719db93bf",
+      "decision": "CreateNew",
+      "correctedLongitude": null,
+      "correctedLatitude": null,
+      "correctedRowIndex": null,
+      "correctedColumnIndex": null,
+      "correctedMatchedPlantId": null,
+      "reason": "Mock review: giữ nguyên tọa độ và grid được đề xuất"
+    },
+    {
+      "candidateId": "940740a2-4c93-42ac-ae42-a61093635197",
+      "decision": "CreateNew",
+      "correctedLongitude": null,
+      "correctedLatitude": null,
+      "correctedRowIndex": null,
+      "correctedColumnIndex": null,
+      "correctedMatchedPlantId": null,
+      "reason": "Mock review: giữ nguyên tọa độ và grid được đề xuất"
+    },
+    {
+      "candidateId": "5651031f-1bda-4b62-9630-5d2e3b4ea408",
+      "decision": "CreateNew",
+      "correctedLongitude": null,
+      "correctedLatitude": null,
+      "correctedRowIndex": null,
+      "correctedColumnIndex": null,
+      "correctedMatchedPlantId": null,
+      "reason": "Mock review: giữ nguyên tọa độ và grid được đề xuất"
+    },
+    {
+      "candidateId": "5ce1d7de-644a-4570-8243-930f0bfb438c",
+      "decision": "CreateNew",
+      "correctedLongitude": null,
+      "correctedLatitude": null,
+      "correctedRowIndex": null,
+      "correctedColumnIndex": null,
+      "correctedMatchedPlantId": null,
+      "reason": "Mock review: giữ nguyên tọa độ và grid được đề xuất"
+    },
+    {
+      "candidateId": "3d9b9e05-c0dc-4ce0-bb13-4ee2d84f6568",
+      "decision": "CreateNew",
+      "correctedLongitude": null,
+      "correctedLatitude": null,
+      "correctedRowIndex": null,
+      "correctedColumnIndex": null,
+      "correctedMatchedPlantId": null,
+      "reason": "Mock review: giữ nguyên tọa độ và grid được đề xuất"
+    },
+    {
+      "candidateId": "1c9869a2-71e0-4a8e-811b-593b6e45e2d7",
+      "decision": "CreateNew",
+      "correctedLongitude": null,
+      "correctedLatitude": null,
+      "correctedRowIndex": null,
+      "correctedColumnIndex": null,
+      "correctedMatchedPlantId": null,
+      "reason": "Mock review: giữ nguyên tọa độ và grid được đề xuất"
+    },
+    {
+      "candidateId": "cd1ab073-c9c8-404d-ad56-6f42d69df2d7",
+      "decision": "CreateNew",
+      "correctedLongitude": null,
+      "correctedLatitude": null,
+      "correctedRowIndex": null,
+      "correctedColumnIndex": null,
+      "correctedMatchedPlantId": null,
+      "reason": "Mock review: giữ nguyên tọa độ và grid được đề xuất"
+    },
+    {
+      "candidateId": "b0dad21d-3d8b-47a6-ab80-ba60310bc7e6",
+      "decision": "CreateNew",
+      "correctedLongitude": null,
+      "correctedLatitude": null,
+      "correctedRowIndex": null,
+      "correctedColumnIndex": null,
+      "correctedMatchedPlantId": null,
+      "reason": "Mock review: giữ nguyên tọa độ và grid được đề xuất"
+    },
+    {
+      "candidateId": "c49cfb12-7e4c-4e2c-a3d6-fa057b374097",
+      "decision": "CreateNew",
+      "correctedLongitude": null,
+      "correctedLatitude": null,
+      "correctedRowIndex": null,
+      "correctedColumnIndex": null,
+      "correctedMatchedPlantId": null,
+      "reason": "Mock review: giữ nguyên tọa độ và grid được đề xuất"
+    },
+    {
+      "candidateId": "088fa6a3-8fb1-4df3-a5ac-3f23ec05e99b",
+      "decision": "CreateNew",
+      "correctedLongitude": null,
+      "correctedLatitude": null,
+      "correctedRowIndex": null,
+      "correctedColumnIndex": null,
+      "correctedMatchedPlantId": null,
+      "reason": "Mock review: giữ nguyên tọa độ và grid được đề xuất"
+    },
+    {
+      "candidateId": "c3ab9b70-ea86-49c0-8e64-e9b07767250b",
+      "decision": "CreateNew",
+      "correctedLongitude": null,
+      "correctedLatitude": null,
+      "correctedRowIndex": null,
+      "correctedColumnIndex": null,
+      "correctedMatchedPlantId": null,
+      "reason": "Mock review: giữ nguyên tọa độ và grid được đề xuất"
+    },
+    {
+      "candidateId": "e35fb417-bc5b-4b04-8b9f-c2c9f6304a10",
+      "decision": "CreateNew",
+      "correctedLongitude": null,
+      "correctedLatitude": null,
+      "correctedRowIndex": null,
+      "correctedColumnIndex": null,
+      "correctedMatchedPlantId": null,
+      "reason": "Mock review: giữ nguyên tọa độ và grid được đề xuất"
+    },
+    {
+      "candidateId": "593cace1-11c5-47a9-b425-f9ec6bdb088d",
+      "decision": "CreateNew",
+      "correctedLongitude": null,
+      "correctedLatitude": null,
+      "correctedRowIndex": null,
+      "correctedColumnIndex": null,
+      "correctedMatchedPlantId": null,
+      "reason": "Mock review: giữ nguyên tọa độ và grid được đề xuất"
+    },
+    {
+      "candidateId": "cde1a70d-4aa8-497e-a245-b124a180f38c",
+      "decision": "CreateNew",
+      "correctedLongitude": null,
+      "correctedLatitude": null,
+      "correctedRowIndex": null,
+      "correctedColumnIndex": null,
+      "correctedMatchedPlantId": null,
+      "reason": "Mock review: giữ nguyên tọa độ và grid được đề xuất"
+    },
+    {
+      "candidateId": "54aa8d1a-69bf-45b8-8027-dacddecf70cd",
+      "decision": "CreateNew",
+      "correctedLongitude": null,
+      "correctedLatitude": null,
+      "correctedRowIndex": null,
+      "correctedColumnIndex": null,
+      "correctedMatchedPlantId": null,
+      "reason": "Mock review: giữ nguyên tọa độ và grid được đề xuất"
+    },
+    {
+      "candidateId": "c1050815-627c-40f5-88a9-6eca97bfd025",
+      "decision": "CreateNew",
+      "correctedLongitude": null,
+      "correctedLatitude": null,
+      "correctedRowIndex": null,
+      "correctedColumnIndex": null,
+      "correctedMatchedPlantId": null,
+      "reason": "Mock review: giữ nguyên tọa độ và grid được đề xuất"
+    },
+    {
+      "candidateId": "7bb114d1-92ab-485f-8f36-1aa07ae132a4",
+      "decision": "CreateNew",
+      "correctedLongitude": null,
+      "correctedLatitude": null,
+      "correctedRowIndex": null,
+      "correctedColumnIndex": null,
+      "correctedMatchedPlantId": null,
+      "reason": "Mock review: giữ nguyên tọa độ và grid được đề xuất"
+    },
+    {
+      "candidateId": "543b883b-9dcf-4a42-b623-35c19a3f1da6",
+      "decision": "CreateNew",
+      "correctedLongitude": null,
+      "correctedLatitude": null,
+      "correctedRowIndex": null,
+      "correctedColumnIndex": null,
+      "correctedMatchedPlantId": null,
+      "reason": "Mock review: giữ nguyên tọa độ và grid được đề xuất"
+    },
+    {
+      "candidateId": "b27b343a-afaf-4e40-994f-e97f1f5e3402",
+      "decision": "CreateNew",
+      "correctedLongitude": null,
+      "correctedLatitude": null,
+      "correctedRowIndex": null,
+      "correctedColumnIndex": null,
+      "correctedMatchedPlantId": null,
+      "reason": "Mock review: giữ nguyên tọa độ và grid được đề xuất"
+    },
+    {
+      "candidateId": "de6a88e6-bc90-4597-b1b5-a6e215395252",
+      "decision": "CreateNew",
+      "correctedLongitude": null,
+      "correctedLatitude": null,
+      "correctedRowIndex": null,
+      "correctedColumnIndex": null,
+      "correctedMatchedPlantId": null,
+      "reason": "Mock review: giữ nguyên tọa độ và grid được đề xuất"
+    },
+    {
+      "candidateId": "d5d4e78f-5dd9-4d69-a0e5-63ca89b909ba",
+      "decision": "CreateNew",
+      "correctedLongitude": null,
+      "correctedLatitude": null,
+      "correctedRowIndex": null,
+      "correctedColumnIndex": null,
+      "correctedMatchedPlantId": null,
+      "reason": "Mock review: giữ nguyên tọa độ và grid được đề xuất"
+    },
+    {
+      "candidateId": "d1934f04-ec94-4dd9-9c79-0b9d4f299bdd",
+      "decision": "CreateNew",
+      "correctedLongitude": null,
+      "correctedLatitude": null,
+      "correctedRowIndex": null,
+      "correctedColumnIndex": null,
+      "correctedMatchedPlantId": null,
+      "reason": "Mock review: giữ nguyên tọa độ và grid được đề xuất"
+    },
+    {
+      "candidateId": "9273d444-47a6-4f47-a884-849a8e09dd0a",
+      "decision": "CreateNew",
+      "correctedLongitude": null,
+      "correctedLatitude": null,
+      "correctedRowIndex": null,
+      "correctedColumnIndex": null,
+      "correctedMatchedPlantId": null,
+      "reason": "Mock review: giữ nguyên tọa độ và grid được đề xuất"
+    },
+    {
+      "candidateId": "0ae45803-d1bb-48da-b13c-4331c87b729c",
+      "decision": "CreateNew",
+      "correctedLongitude": null,
+      "correctedLatitude": null,
+      "correctedRowIndex": null,
+      "correctedColumnIndex": null,
+      "correctedMatchedPlantId": null,
+      "reason": "Mock review: giữ nguyên tọa độ và grid được đề xuất"
+    },
+    {
+      "candidateId": "424b7f4d-e666-40e5-9e2e-cd0534bf3289",
+      "decision": "CreateNew",
+      "correctedLongitude": null,
+      "correctedLatitude": null,
+      "correctedRowIndex": null,
+      "correctedColumnIndex": null,
+      "correctedMatchedPlantId": null,
+      "reason": "Mock review: giữ nguyên tọa độ và grid được đề xuất"
+    },
+    {
+      "candidateId": "a5147d5a-4f5c-47ff-a80e-8c9f5b5ef7cd",
+      "decision": "CreateNew",
+      "correctedLongitude": null,
+      "correctedLatitude": null,
+      "correctedRowIndex": null,
+      "correctedColumnIndex": null,
+      "correctedMatchedPlantId": null,
+      "reason": "Mock review: giữ nguyên tọa độ và grid được đề xuất"
+    },
+    {
+      "candidateId": "c6dc7fe9-5914-4d5f-839a-6141086a9818",
+      "decision": "CreateNew",
+      "correctedLongitude": null,
+      "correctedLatitude": null,
+      "correctedRowIndex": null,
+      "correctedColumnIndex": null,
+      "correctedMatchedPlantId": null,
+      "reason": "Mock review: giữ nguyên tọa độ và grid được đề xuất"
+    },
+    {
+      "candidateId": "628a1981-31d5-4bca-9fd9-49c80b5dda4f",
+      "decision": "CreateNew",
+      "correctedLongitude": null,
+      "correctedLatitude": null,
+      "correctedRowIndex": null,
+      "correctedColumnIndex": null,
+      "correctedMatchedPlantId": null,
+      "reason": "Mock review: giữ nguyên tọa độ và grid được đề xuất"
+    },
+    {
+      "candidateId": "2a0dcbd5-664f-490c-bc0b-f0e3f9aa72f6",
+      "decision": "CreateNew",
+      "correctedLongitude": null,
+      "correctedLatitude": null,
+      "correctedRowIndex": null,
+      "correctedColumnIndex": null,
+      "correctedMatchedPlantId": null,
+      "reason": "Mock review: giữ nguyên tọa độ và grid được đề xuất"
+    },
+    {
+      "candidateId": "594bc90d-a5c2-4a5a-ba0a-4738928809d7",
+      "decision": "CreateNew",
+      "correctedLongitude": null,
+      "correctedLatitude": null,
+      "correctedRowIndex": null,
+      "correctedColumnIndex": null,
+      "correctedMatchedPlantId": null,
+      "reason": "Mock review: giữ nguyên tọa độ và grid được đề xuất"
+    },
+    {
+      "candidateId": "f344ad32-09eb-4a94-9808-12c520484a55",
+      "decision": "CreateNew",
+      "correctedLongitude": null,
+      "correctedLatitude": null,
+      "correctedRowIndex": null,
+      "correctedColumnIndex": null,
+      "correctedMatchedPlantId": null,
+      "reason": "Mock review: giữ nguyên tọa độ và grid được đề xuất"
+    },
+    {
+      "candidateId": "a425ec61-bae2-4aa2-a7c9-33e7ee520e50",
+      "decision": "CreateNew",
+      "correctedLongitude": null,
+      "correctedLatitude": null,
+      "correctedRowIndex": null,
+      "correctedColumnIndex": null,
+      "correctedMatchedPlantId": null,
+      "reason": "Mock review: giữ nguyên tọa độ và grid được đề xuất"
+    },
+    {
+      "candidateId": "c4cfc459-0f7f-4353-9b7f-dcf85485dc34",
+      "decision": "CreateNew",
+      "correctedLongitude": null,
+      "correctedLatitude": null,
+      "correctedRowIndex": null,
+      "correctedColumnIndex": null,
+      "correctedMatchedPlantId": null,
+      "reason": "Mock review: giữ nguyên tọa độ và grid được đề xuất"
+    }
+  ],
+  "batchReason": "Mock baseline review: CreateNew cho candidate Pending trong draft"
+}
