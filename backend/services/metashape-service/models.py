@@ -1,5 +1,5 @@
 from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 class ImageItem(BaseModel):
     storage_key: str
@@ -14,6 +14,21 @@ class ProcessMetashapeRequest(BaseModel):
     align_accuracy: str = "medium"
     generic_preselection: bool = True
     delete_source_images: bool = True
+
+    @field_validator("camera_type", mode="before")
+    @classmethod
+    def default_camera_type(cls, v):
+        return v or "frame"
+
+    @field_validator("align_accuracy", mode="before")
+    @classmethod
+    def default_align_accuracy(cls, v):
+        return v or "medium"
+
+    @field_validator("generic_preselection", mode="before")
+    @classmethod
+    def default_generic_preselection(cls, v):
+        return True if v is None else v
 
 class ProcessMetashapeResponse(BaseModel):
     mission_id: str
@@ -105,7 +120,7 @@ class TreeItem(BaseModel):
 
 class YoloDetectMissionRequest(BaseModel):
     mission_id: str
-    tenant_id: str = "tenant-001"
+    tenant_id: str
     confidence_threshold: float = 0.25
     row_spacing: float = 2.8
     col_spacing: float = 2.7

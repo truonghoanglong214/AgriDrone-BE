@@ -7,7 +7,7 @@ import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
-from typing import Dict
+from typing import Any, Dict, List, Optional
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,6 +18,19 @@ try:
     from ultralytics import YOLO
 except Exception:
     YOLO = None
+
+try:
+    import torch
+    # Tối ưu tải CPU để máy không bao giờ bị đơ/lag
+    if not torch.cuda.is_available():
+        cpu_threads = max(1, (os.cpu_count() or 4) // 2)
+        torch.set_num_threads(cpu_threads)
+        print(f"[METASHAPE-INIT] PyTorch running on CPU (clamped to {cpu_threads} threads).")
+    else:
+        print(f"[METASHAPE-INIT] PyTorch CUDA enabled! Device: {torch.cuda.get_device_name(0)}")
+except Exception as e:
+    torch = None
+    print(f"[METASHAPE-INIT] PyTorch setup note: {e}")
 
 
 from config import settings
@@ -123,31 +136,240 @@ def health():
     }
 
 
+def get_available_missions() -> List[Dict[str, Any]]:
+    """Liệt kê tất cả các chuyến bay đã hoàn thành và có ảnh trực giao trong MinIO hoặc tasks_db."""
+    missions = {}
+    try:
+        objects = minio_storage.client.list_objects(minio_storage.bucket, prefix="tenants/", recursive=True)
+        for obj in objects:
+            parts = obj.object_name.split("/")
+            if len(parts) >= 5 and parts[0] == "tenants" and parts[2] == "media":
+                tenant_id = parts[1]
+                mission_id = parts[3]
+                filename = parts[4]
+                if mission_id not in missions:
+                    missions[mission_id] = {
+                        "mission_id": mission_id,
+                        "tenant_id": tenant_id,
+                        "has_preview": False,
+                        "has_orthophoto": False,
+                        "has_metadata": False,
+                        "last_modified": str(obj.last_modified) if hasattr(obj, "last_modified") and obj.last_modified else ""
+                    }
+                if filename == "map_preview.jpg":
+                    missions[mission_id]["has_preview"] = True
+                elif filename == "orthophoto.tif":
+                    missions[mission_id]["has_orthophoto"] = True
+                elif filename == "metadata.json":
+                    missions[mission_id]["has_metadata"] = True
+                if hasattr(obj, "last_modified") and obj.last_modified:
+                    curr_mod = str(obj.last_modified)
+                    if curr_mod > missions[mission_id].get("last_modified", ""):
+                        missions[mission_id]["last_modified"] = curr_mod
+    except Exception as e:
+        logger.warning(f"Failed to list missions from MinIO: {e}")
+
+    for t_id, task in tasks_db.items():
+        if task.mission_id and task.mission_id not in missions and task.status == "COMPLETED":
+            missions[task.mission_id] = {
+                "mission_id": task.mission_id,
+                "tenant_id": "unknown",
+                "has_preview": bool(task.preview_url or task.jpg_storage_key),
+                "has_orthophoto": bool(task.tif_url or task.tif_storage_key),
+                "has_metadata": bool(task.bounds),
+                "last_modified": ""
+            }
+
+    results = [m for m in missions.values() if m["has_preview"] or m["has_orthophoto"]]
+    results.sort(key=lambda x: x.get("last_modified", ""), reverse=True)
+    return results
+
+
+def resolve_mission_metadata(
+    mission_id: Optional[str] = None,
+    tenant_id: Optional[str] = None,
+    min_lat: Optional[float] = None,
+    max_lat: Optional[float] = None,
+    min_lon: Optional[float] = None,
+    max_lon: Optional[float] = None,
+) -> Dict[str, Any]:
+    available = get_available_missions()
+
+    # 1. Tự động lấy mission mới nhất từ MinIO nếu chưa truyền mission_id
+    if not mission_id:
+        if available:
+            mission_id = available[0]["mission_id"]
+            if not tenant_id:
+                tenant_id = available[0]["tenant_id"]
+        else:
+            mission_id = "00000000-0000-0000-0000-000000000000"
+            tenant_id = tenant_id or "00000000-0000-0000-0000-000000000000"
+
+    # 2. Tìm tenant_id tương ứng
+    if not tenant_id:
+        for m in available:
+            if m["mission_id"] == mission_id and m.get("tenant_id"):
+                tenant_id = m["tenant_id"]
+                break
+        if not tenant_id:
+            try:
+                for obj in minio_storage.client.list_objects(minio_storage.bucket, prefix="tenants/", recursive=True):
+                    if f"/media/{mission_id}/" in obj.object_name:
+                        tenant_id = obj.object_name.split("/")[1]
+                        break
+            except Exception:
+                pass
+        tenant_id = tenant_id or "default"
+
+    # 3. Nếu caller đã truyền đủ 4 tọa độ góc
+    if min_lat is not None and max_lat is not None and min_lon is not None and max_lon is not None:
+        return {
+            "mission_id": mission_id,
+            "tenant_id": tenant_id,
+            "bounds": {
+                "min_lat": min_lat,
+                "max_lat": max_lat,
+                "min_lon": min_lon,
+                "max_lon": max_lon,
+            },
+            "available_missions": available
+        }
+
+    # 4. Đọc metadata.json từ MinIO
+    meta_key = f"tenants/{tenant_id}/media/{mission_id}/metadata.json"
+    try:
+        tmp_meta = os.path.join(settings.temp_dir, f"meta_{mission_id}.json")
+        minio_storage.download_file(meta_key, tmp_meta)
+        with open(tmp_meta, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        try:
+            os.remove(tmp_meta)
+        except Exception:
+            pass
+        if "bounds" in data:
+            return {
+                "mission_id": mission_id,
+                "tenant_id": tenant_id,
+                "bounds": data["bounds"],
+                "corners": data.get("corners"),
+                "available_missions": available
+            }
+    except Exception:
+        pass
+
+    # 5. Kiểm tra trong in-memory tasks_db
+    for task in tasks_db.values():
+        if task.mission_id == mission_id and task.bounds:
+            return {
+                "mission_id": mission_id,
+                "tenant_id": tenant_id,
+                "bounds": {
+                    "min_lat": task.bounds.min_lat,
+                    "max_lat": task.bounds.max_lat,
+                    "min_lon": task.bounds.min_lon,
+                    "max_lon": task.bounds.max_lon,
+                },
+                "corners": task.corners.dict() if task.corners else None,
+                "available_missions": available
+            }
+
+    # 6. Đọc trực tiếp từ file orthophoto.tif trong MinIO nếu chưa có metadata.json
+    tif_key = f"tenants/{tenant_id}/media/{mission_id}/orthophoto.tif"
+    try:
+        tmp_tif = os.path.join(settings.temp_dir, f"temp_meta_{mission_id}.tif")
+        minio_storage.download_file(tif_key, tmp_tif)
+        b_dict, c_dict, w, h = extract_geotiff_metadata(tmp_tif)
+        try:
+            os.remove(tmp_tif)
+        except Exception:
+            pass
+
+        # Lưu lại metadata.json vào MinIO để lần sau truy xuất ngay lập tức
+        try:
+            meta_save = {
+                "mission_id": mission_id,
+                "tenant_id": tenant_id,
+                "bounds": b_dict,
+                "corners": c_dict,
+                "width": w,
+                "height": h,
+            }
+            tmp_save = os.path.join(settings.temp_dir, f"meta_save_{mission_id}.json")
+            with open(tmp_save, "w", encoding="utf-8") as f:
+                json.dump(meta_save, f)
+            minio_storage.upload_file(tmp_save, meta_key, "application/json")
+            os.remove(tmp_save)
+        except Exception:
+            pass
+
+        return {
+            "mission_id": mission_id,
+            "tenant_id": tenant_id,
+            "bounds": b_dict,
+            "corners": c_dict,
+            "available_missions": available
+        }
+    except Exception as e:
+        logger.warning(f"Could not extract GeoTIFF bounds for {mission_id}: {e}")
+
+    # Fallback mặc định
+    return {
+        "mission_id": mission_id,
+        "tenant_id": tenant_id,
+        "bounds": {
+            "min_lat": 10.4613764,
+            "max_lat": 10.4619687,
+            "min_lon": 106.4938479,
+            "max_lon": 106.4941861,
+        },
+        "available_missions": available
+    }
+
+
+@app.get("/api/v1/missions", tags=["Interactive Map Tool"])
+def list_available_missions():
+    """
+    Liệt kê danh sách tất cả các chuyến bay (Mission) đã có bản đồ ghép sẵn trong hệ thống MinIO.
+    """
+    return get_available_missions()
+
+
 @app.get("/map-picker", response_class=HTMLResponse, tags=["Interactive Map Tool"])
 def map_picker_ui(
-    mission_id: str = "8d2ba93d-1421-448d-be83-a1034e8c4aab",
-    tenant_id: str = "cf637409-fb85-4dfd-8fd3-ae3ea799d635",
-    farm_id: str = "",
-    min_lat: float = 10.4611274,
-    max_lat: float = 10.4617541,
-    min_lon: float = 106.4936806,
-    max_lon: float = 106.4945788,
+    mission_id: Optional[str] = None,
+    tenant_id: Optional[str] = None,
+    farm_id: Optional[str] = "",
+    min_lat: Optional[float] = None,
+    max_lat: Optional[float] = None,
+    min_lon: Optional[float] = None,
+    max_lon: Optional[float] = None,
 ):
     """
     Giao diện Web tương tác trực quan:
-    - Hiển thị ảnh Drone JPG nén tối ưu (2.5MB) lồng lên Google Satellite.
+    - Tự động nạp chuyến bay (Mission) mới nhất từ MinIO nếu không truyền mission_id.
+    - Hiển thị ảnh Drone JPG nén tối ưu (2.5MB) lồng lên Google Satellite với đúng tọa độ GeoTIFF.
+    - Cho phép chọn/đổi nhanh giữa các Mission ngay trên thanh công cụ.
     - Zoom vào và click chuột chọn các đỉnh ranh giới thửa đất (Polygon).
-    - Tự động bắt tọa độ GPS từ ảnh và sinh GeoJSON.
-    - Cho phép ấn 'Cắt Mảnh' trực tiếp để test endpoint YOLO Tiling.
+    - Cắt ảnh Dual-scale (640 + 1280) và chạy YOLO nhận diện cây trực tiếp.
     """
-    html_content = get_map_picker_html(
+    resolved = resolve_mission_metadata(
         mission_id=mission_id,
         tenant_id=tenant_id,
-        farm_id=farm_id,
         min_lat=min_lat,
         max_lat=max_lat,
         min_lon=min_lon,
         max_lon=max_lon,
+    )
+    b = resolved["bounds"]
+    html_content = get_map_picker_html(
+        mission_id=resolved["mission_id"],
+        tenant_id=resolved["tenant_id"],
+        farm_id=farm_id or "",
+        min_lat=b["min_lat"],
+        max_lat=b["max_lat"],
+        min_lon=b["min_lon"],
+        max_lon=b["max_lon"],
+        available_missions=resolved.get("available_missions"),
     )
     return HTMLResponse(content=html_content)
 
@@ -206,6 +428,26 @@ def execute_metashape_job(task_id: str, request: ProcessMetashapeRequest):
         # 4. Upload Map Preview JPEG to MinIO
         jpg_key = f"tenants/{request.tenant_id}/media/{request.mission_id}/map_preview.jpg"
         jpg_size, jpg_hash = minio_storage.upload_file(output_jpg, jpg_key, "image/jpeg")
+
+        # 4b. Upload metadata.json to MinIO for fast map lookup
+        try:
+            meta_payload = {
+                "mission_id": request.mission_id,
+                "tenant_id": request.tenant_id,
+                "farm_id": request.farm_id,
+                "bounds": bounds_dict,
+                "corners": corners_dict,
+                "original_width": orig_w,
+                "original_height": orig_h,
+                "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+            }
+            meta_path = os.path.join(output_dir, "metadata.json")
+            with open(meta_path, "w", encoding="utf-8") as f:
+                json.dump(meta_payload, f, indent=2)
+            meta_key = f"tenants/{request.tenant_id}/media/{request.mission_id}/metadata.json"
+            minio_storage.upload_file(meta_path, meta_key, "application/json")
+        except Exception as e:
+            logger.warning(f"Failed to upload metadata.json: {e}")
 
         # 5. Generate presigned URLs
         tif_url = minio_storage.get_presigned_url(tif_key)
@@ -331,6 +573,26 @@ def execute_odm_job(task_id: str, request: ProcessMetashapeRequest):
         # 4. Upload Map Preview JPEG to MinIO
         jpg_key = f"tenants/{request.tenant_id}/media/{request.mission_id}/map_preview.jpg"
         jpg_size, jpg_hash = minio_storage.upload_file(output_jpg, jpg_key, "image/jpeg")
+
+        # 4b. Upload metadata.json to MinIO for fast map lookup
+        try:
+            meta_payload = {
+                "mission_id": request.mission_id,
+                "tenant_id": request.tenant_id,
+                "farm_id": request.farm_id,
+                "bounds": bounds_dict,
+                "corners": corners_dict,
+                "original_width": orig_w,
+                "original_height": orig_h,
+                "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+            }
+            meta_path = os.path.join(output_dir, "metadata.json")
+            with open(meta_path, "w", encoding="utf-8") as f:
+                json.dump(meta_payload, f, indent=2)
+            meta_key = f"tenants/{request.tenant_id}/media/{request.mission_id}/metadata.json"
+            minio_storage.upload_file(meta_path, meta_key, "application/json")
+        except Exception as e:
+            logger.warning(f"Failed to upload metadata.json: {e}")
 
         # 5. Generate presigned URLs
         tif_url = minio_storage.get_presigned_url(tif_key)
@@ -604,8 +866,20 @@ def detect_mission_trees(request: YoloDetectMissionRequest):
     if not tile_files:
         raise HTTPException(status_code=400, detail="Không tìm thấy file ảnh tile nào trong thư mục tạm.")
 
-    logger.info(f"Running YOLO inference on {len(tile_files)} tiles for mission {request.mission_id}...")
-    results = model.predict(source=tile_files, conf=request.confidence_threshold, verbose=False)
+    device = 0 if (torch is not None and torch.cuda.is_available()) else "cpu"
+    batch_size = 4 if device == 0 else 2
+    logger.info(f"Running YOLO inference on {len(tile_files)} tiles for mission {request.mission_id} (device={device}, batch={batch_size}, stream=True)...")
+    if torch is not None and torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
+    results = model.predict(
+        source=tile_files,
+        conf=request.confidence_threshold,
+        device=device,
+        batch=batch_size,
+        stream=True,
+        verbose=False
+    )
 
     raw_detections = []
     for r in results:
@@ -652,10 +926,10 @@ def detect_mission_trees(request: YoloDetectMissionRequest):
     max_row = max((t["row"] for t in active_trees), default=0)
     max_col = max((t["col"] for t in active_trees), default=0)
 
-    # 6. Export single consolidated CSV file
+    # 6. Export single consolidated CSV file (kèm theo ranh giới viền thửa đất Polygon)
     csv_filename = f"trees_{request.mission_id}.csv"
     csv_path = os.path.join(tiles_dir, csv_filename)
-    export_trees_to_csv(active_trees, missing_trees, csv_path)
+    export_trees_to_csv(active_trees, missing_trees, csv_path, polygon_geojson=request.polygon_geojson)
 
     csv_url = f"/api/v1/yolo/download-csv/{request.mission_id}"
 
@@ -699,6 +973,7 @@ def get_mission_trees(mission_id: str):
 
     active_trees = []
     missing_trees = []
+    boundary_points = []
     with open(actual_path, "r", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         for r in reader:
@@ -714,6 +989,8 @@ def get_mission_trees(mission_id: str):
             }
             if item["status"] == "MISSING":
                 missing_trees.append(item)
+            elif item["status"] == "BOUNDARY":
+                boundary_points.append(item)
             else:
                 active_trees.append(item)
 
@@ -724,10 +1001,12 @@ def get_mission_trees(mission_id: str):
         "has_trees": True,
         "total_unique_trees": len(active_trees),
         "total_missing_trees": len(missing_trees),
+        "total_boundary_points": len(boundary_points),
         "max_row": max_row,
         "max_col": max_col,
         "active_trees": active_trees,
-        "missing_trees": missing_trees
+        "missing_trees": missing_trees,
+        "boundary_points": boundary_points
     }
 
 

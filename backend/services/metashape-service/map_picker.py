@@ -4,15 +4,16 @@ from typing import Optional
 from minio_storage import minio_storage
 
 def get_map_picker_html(
-    mission_id: str = "8d2ba93d-1421-448d-be83-a1034e8c4aab",
-    tenant_id: str = "cf637409-fb85-4dfd-8fd3-ae3ea799d635",
+    mission_id: str,
+    tenant_id: str,
     farm_id: str = "",
     preview_url: Optional[str] = None,
-    min_lat: float = 10.4611274,
-    max_lat: float = 10.4617541,
-    min_lon: float = 106.4936806,
-    max_lon: float = 106.4945788,
-    tif_key: Optional[str] = None
+    min_lat: float = 10.4613764,
+    max_lat: float = 10.4619687,
+    min_lon: float = 106.4938479,
+    max_lon: float = 106.4941861,
+    tif_key: Optional[str] = None,
+    available_missions: Optional[list] = None
 ) -> str:
     # Auto-generate fresh presigned URL if not passed
     if not preview_url:
@@ -25,6 +26,16 @@ def get_map_picker_html(
     center_lat = (min_lat + max_lat) / 2
     center_lon = (min_lon + max_lon) / 2
     escaped_farm_id = html.escape(farm_id, quote=True)
+
+    options_html = ""
+    if available_missions:
+        for m in available_missions:
+            m_id = m.get("mission_id", "")
+            t_id = m.get("tenant_id", "")
+            selected = ' selected="selected"' if m_id == mission_id else ""
+            options_html += f'<option value="{m_id}"{selected}>{m_id} (Tenant: {t_id[:8]}...)</option>'
+    if not options_html:
+        options_html = f'<option value="{mission_id}" selected="selected">{mission_id}</option>'
 
     return f"""<!DOCTYPE html>
 <html lang="vi">
@@ -139,6 +150,30 @@ def get_map_picker_html(
     </div>
 
     <div class="sidebar-body">
+      <!-- Mission Switcher -->
+      <div class="card" style="border-color: #06b6d4; background: rgba(6, 182, 212, 0.08);">
+        <div class="section-title" style="color: #06b6d4; display: flex; justify-content: space-between; align-items: center;">
+          <span>🎯 Chọn Chuyến Bay (Mission)</span>
+          <span class="badge" style="background: #06b6d4; color: #000; font-size: 10px;">Dynamic</span>
+        </div>
+        <div style="margin-top: 6px; display: flex; flex-direction: column; gap: 6px;">
+          <div>
+            <label style="font-size: 11px; color: var(--text-muted);">Danh sách Mission phát hiện trong MinIO:</label>
+            <select id="mission-picker-select" style="width: 100%; margin-top: 2px;" onchange="onSelectMissionChange(this.value)">
+              {options_html}
+            </select>
+          </div>
+          <div style="display: flex; gap: 6px;">
+            <input id="input-custom-mission" value="{mission_id}" placeholder="Hoặc nhập Mission ID..." style="flex: 1; font-family: monospace; font-size: 11px;" />
+            <button class="btn btn-secondary" onclick="loadCustomMissionId()" style="padding: 4px 8px; font-size: 11px;">Mở</button>
+          </div>
+          <div style="font-size: 11px; color: var(--text-muted); display: flex; justify-content: space-between;">
+            <span>ID: <b style="color: #38bdf8; font-family: monospace;">{mission_id[:8]}...</b></span>
+            <span>Tọa độ: <b style="color: #10b981;">{min_lat:.5f}, {min_lon:.5f}</b></span>
+          </div>
+        </div>
+      </div>
+
       <!-- Opacity Controller -->
       <div class="card">
         <div class="slider-container">
@@ -299,6 +334,19 @@ def get_map_picker_html(
   <script>
     const missionId = "{mission_id}";
     const tenantId = "{tenant_id}";
+
+    function onSelectMissionChange(newMissionId) {{
+      if (newMissionId && newMissionId !== missionId) {{
+        window.location.href = '/map-picker?mission_id=' + encodeURIComponent(newMissionId);
+      }}
+    }}
+
+    function loadCustomMissionId() {{
+      const customId = document.getElementById('input-custom-mission').value.trim();
+      if (customId && customId !== missionId) {{
+        window.location.href = '/map-picker?mission_id=' + encodeURIComponent(customId);
+      }}
+    }}
     const tifKey = "{tif_key}";
     const imageUrl = "{preview_url}";
     const bounds = [[{min_lat}, {min_lon}], [{max_lat}, {max_lon}]];
@@ -548,13 +596,26 @@ def get_map_picker_html(
     }};
 
     async function downloadCurrentTreesCsv() {{
-      if (!activeTreesList || activeTreesList.length === 0) {{
-        alert("Chưa có danh sách cây để tải!");
+      if ((!activeTreesList || activeTreesList.length === 0) && (!points || points.length === 0)) {{
+        alert("Chưa có danh sách cây hoặc ranh giới viền để tải!");
         return;
       }}
 
       let csv = "tree_id,row,col,latitude,longitude,confidence,status,source\\n";
       const trees = [];
+
+      // 1. Thêm các điểm mốc ranh giới viền đất (Boundary/Border) người dùng đã chọn
+      if (points && points.length > 0) {{
+        points.forEach((pt, idx) => {{
+          const bLat = pt[1];
+          const bLon = pt[0];
+          const bId = `boundary_point_${{idx + 1}}`;
+          trees.push({{ treeId: bId, row: 0, col: 0, latitude: bLat, longitude: bLon, confidence: 1.0, status: 'BOUNDARY', source: 'USER_POLYGON' }});
+          csv += `${{bId}},0,0,${{bLat}},${{bLon}},1.0,BOUNDARY,USER_POLYGON\\n`;
+        }});
+      }}
+
+      // 2. Thêm danh sách cây đã nhận diện
       activeTreesList.forEach((t, i) => {{
         const id = t.id || `tree_r${{t.row || 1}}_c${{t.col || (i+1)}}`;
         const row = t.row || 1;
@@ -566,6 +627,7 @@ def get_map_picker_html(
         csv += `${{id}},${{row}},${{col}},${{t.lat}},${{t.lon}},${{conf}},${{status}},${{source}}\\n`;
       }});
 
+      // 3. Thêm danh sách cây nghi ngờ khuyết
       missingTreesList.forEach(m => {{
         const id = m.id || `missing_r${{m.row}}_c${{m.col}}`;
         trees.push({{ treeId: id, row: m.row, col: m.col, latitude: m.lat, longitude: m.lon, confidence: 0, status: 'MISSING', source: 'INTERPOLATED_GRID' }});
@@ -578,29 +640,7 @@ def get_map_picker_html(
         return;
       }}
 
-      const farmId = document.getElementById('plant-gps-farm-id').value.trim();
-      const apiUrl = document.getElementById('plant-gps-api-url').value.trim().replace(/\\/$/, '');
-      const token = document.getElementById('plant-gps-token').value.trim();
-      if (!farmId || !apiUrl || !token) {{
-        alert('Cần Farm ID, địa chỉ .NET API và Manager JWT token để lưu PostgreSQL.');
-        return;
-      }}
-      const button = document.getElementById('btn-download-csv');
-      button.disabled = true;
-      try {{
-        const response = await fetch(`${{apiUrl}}/api/system-manager/farms/${{encodeURIComponent(farmId)}}/missions/${{encodeURIComponent(missionId)}}/plant-gps`, {{
-          method: 'POST',
-          headers: {{ 'Content-Type': 'application/json', 'Authorization': `Bearer ${{token}}` }},
-          body: JSON.stringify({{ trees }})
-        }});
-        if (!response.ok) throw new Error(`API trả về HTTP ${{response.status}}`);
-      }} catch (error) {{
-        alert(`Không thể lưu dữ liệu cây vào PostgreSQL: ${{error.message}}`);
-        return;
-      }} finally {{
-        button.disabled = false;
-      }}
-
+      // 1. Luôn tải file CSV về máy ngay lập tức
       const blob = new Blob([csv], {{ type: 'text/csv;charset=utf-8;' }});
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -610,6 +650,28 @@ def get_map_picker_html(
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
+
+      // 2. Tùy chọn đồng bộ vào .NET API (PostgreSQL) nếu đã nhập Farm ID và Token
+      const farmId = document.getElementById('plant-gps-farm-id') ? document.getElementById('plant-gps-farm-id').value.trim() : '';
+      const apiUrl = document.getElementById('plant-gps-api-url') ? document.getElementById('plant-gps-api-url').value.trim().replace(/\\/$/, '') : '';
+      const token = document.getElementById('plant-gps-token') ? document.getElementById('plant-gps-token').value.trim() : '';
+      if (farmId && apiUrl && token) {{
+        const button = document.getElementById('btn-download-csv');
+        if (button) button.disabled = true;
+        try {{
+          const response = await fetch(`${{apiUrl}}/api/system-manager/farms/${{encodeURIComponent(farmId)}}/missions/${{encodeURIComponent(missionId)}}/plant-gps`, {{
+            method: 'POST',
+            headers: {{ 'Content-Type': 'application/json', 'Authorization': `Bearer ${{token}}` }},
+            body: JSON.stringify({{ trees }})
+          }});
+          if (!response.ok) throw new Error(`API trả về HTTP ${{response.status}}`);
+          alert('✅ Đã tải file CSV và đồng bộ thành công vào PostgreSQL Database!');
+        }} catch (error) {{
+          alert(`⚠️ Đã tải file CSV về máy, nhưng đồng bộ vào PostgreSQL thất bại: ${{error.message}}`);
+        }} finally {{
+          if (button) button.disabled = false;
+        }}
+      }}
     }}
 
     function updateTreeCounters() {{

@@ -334,9 +334,14 @@ def assign_grid_and_detect_missing(
     return active_trees, missing_trees, suggested_row, suggested_col
 
 
-def export_trees_to_csv(active_trees: List[Dict[str, Any]], missing_trees: List[Dict[str, Any]], csv_path: str):
+def export_trees_to_csv(
+    active_trees: List[Dict[str, Any]],
+    missing_trees: List[Dict[str, Any]],
+    csv_path: str,
+    polygon_geojson: Optional[Dict[str, Any]] = None
+):
     """
-    Gôm tất cả các cây (đã nhận diện và khuyết) xuất ra 1 file CSV tổng duy nhất.
+    Gôm tất cả các cây (đã nhận diện và khuyết) cùng các điểm mốc ranh giới viền đất (Boundary/Border) xuất ra 1 file CSV tổng duy nhất.
     Nếu file đang bị Microsoft Excel / WPS khóa, tự động lưu file _latest.csv thay thế tránh crash.
     """
     import csv
@@ -350,12 +355,47 @@ def export_trees_to_csv(active_trees: List[Dict[str, Any]], missing_trees: List[
         logger.warning(f"File {csv_path} is locked by Excel. Saving to {actual_path} instead.")
         f = open(actual_path, mode="w", newline="", encoding="utf-8")
 
+    boundary_points = []
+    if polygon_geojson:
+        try:
+            coords = []
+            if isinstance(polygon_geojson, dict):
+                g_type = polygon_geojson.get("type", "")
+                if g_type == "Polygon":
+                    coords = polygon_geojson.get("coordinates", [[]])[0]
+                elif g_type == "Feature":
+                    coords = polygon_geojson.get("geometry", {}).get("coordinates", [[]])[0]
+            elif isinstance(polygon_geojson, list):
+                coords = polygon_geojson
+
+            for idx, pt in enumerate(coords):
+                if len(pt) >= 2:
+                    # GeoJSON is [lon, lat]
+                    b_lon, b_lat = float(pt[0]), float(pt[1])
+                    boundary_points.append({
+                        "id": f"boundary_point_{idx + 1}",
+                        "row": 0,
+                        "col": 0,
+                        "lat": b_lat,
+                        "lon": b_lon,
+                        "confidence": 1.0,
+                        "status": "BOUNDARY",
+                        "source": "USER_POLYGON"
+                    })
+        except Exception as e:
+            logger.warning(f"Failed to parse polygon_geojson for CSV boundary points: {e}")
+
     with f:
         writer = csv.writer(f)
         writer.writerow(["tree_id", "row", "col", "latitude", "longitude", "confidence", "status", "source"])
+        for b in boundary_points:
+            writer.writerow([b["id"], b["row"], b["col"], b["lat"], b["lon"], b["confidence"], b["status"], b["source"]])
         for t in active_trees:
             writer.writerow([t["id"], t["row"], t["col"], t["lat"], t["lon"], t["confidence"], t["status"], t["source"]])
         for m in missing_trees:
             writer.writerow([m["id"], m["row"], m["col"], m["lat"], m["lon"], m["confidence"], m["status"], m["source"]])
-    logger.info(f"Exported {len(active_trees) + len(missing_trees)} trees to CSV: {actual_path}")
+
+    total_records = len(boundary_points) + len(active_trees) + len(missing_trees)
+    logger.info(f"Exported {total_records} records ({len(boundary_points)} boundary, {len(active_trees)} active, {len(missing_trees)} missing) to CSV: {actual_path}")
+    return actual_path
     return actual_path

@@ -42,20 +42,32 @@ internal sealed class MetashapeService(
             return new MetashapeTaskCreatedResult(false, null, $"No image items provided for {engine} task.");
         }
 
-        var payload = new
+        var payload = new Dictionary<string, object?>
         {
-            mission_id = missionId.ToString("D"),
-            tenant_id = tenantId.ToString("D"),
-            farm_id = farmId.ToString("D"),
-            images = imageList.Select(img => new
+            ["mission_id"] = missionId.ToString("D"),
+            ["tenant_id"] = tenantId.ToString("D"),
+            ["farm_id"] = farmId.ToString("D"),
+            ["images"] = imageList.Select(img => new
             {
                 storage_key = img.StorageKey,
                 url = img.Url
-            }),
-            camera_type = taskOptions?.CameraType ?? _options.CameraType,
-            align_accuracy = taskOptions?.AlignAccuracy ?? _options.AlignAccuracy,
-            generic_preselection = taskOptions?.GenericPreselection ?? _options.GenericPreselection
+            })
         };
+
+        if (!string.IsNullOrWhiteSpace(taskOptions?.CameraType))
+        {
+            payload["camera_type"] = taskOptions.CameraType;
+        }
+
+        if (!string.IsNullOrWhiteSpace(taskOptions?.AlignAccuracy))
+        {
+            payload["align_accuracy"] = taskOptions.AlignAccuracy;
+        }
+
+        if (taskOptions?.GenericPreselection.HasValue == true)
+        {
+            payload["generic_preselection"] = taskOptions.GenericPreselection.Value;
+        }
 
         var json = JsonSerializer.Serialize(payload, JsonOpts);
         logger.LogInformation(
