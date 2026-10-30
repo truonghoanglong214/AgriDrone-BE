@@ -22,6 +22,25 @@ namespace AgriDrone.Api.Controllers;
 public sealed class SystemManagerFarmBaseMapsController(ISender sender) : ControllerBase
 {
     /// <summary>
+    /// Lấy bản đồ khảo sát nháp mới nhất đang chờ review của trang trại (hoặc theo surveyOrderId).
+    /// </summary>
+    [HttpGet]
+    [ProducesResponseType<FarmBaseMapDraftResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IResult> GetCurrentDraft(
+        [FromRoute] Guid farmId,
+        [FromQuery] Guid? surveyOrderId,
+        CancellationToken cancellationToken)
+    {
+        var result = await sender.Send(
+            new GetFarmBaseMapDraftQuery(farmId, DraftId: null, SurveyOrderId: surveyOrderId),
+            cancellationToken);
+
+        return result.ToHttpResult(HttpContext, Results.Ok);
+    }
+    /// <summary>
     /// Lấy chi tiết bản đồ khảo sát nháp và danh sách các candidate poles cần review.
     /// </summary>
     [HttpGet("{draftId:guid}")]

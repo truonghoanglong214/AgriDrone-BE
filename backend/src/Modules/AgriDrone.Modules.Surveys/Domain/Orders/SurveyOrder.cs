@@ -1,4 +1,4 @@
-using AgriDrone.SharedKernel.Domain;
+﻿using AgriDrone.SharedKernel.Domain;
 
 namespace AgriDrone.Modules.Surveys.Domain;
 
@@ -497,7 +497,8 @@ public sealed class SurveyOrder : AggregateRoot
         Guid farmBaseMapVersionId,
         ConfirmedSurveyPoleCount confirmedPoleCount,
         Guid confirmedBy,
-        DateTimeOffset confirmedAt)
+        DateTimeOffset confirmedAt,
+        Guid? farmBoundaryVersionId = null)
     {
         DomainGuard.NotEmpty(farmBaseMapVersionId);
         DomainGuard.NotEmpty(confirmedBy);
@@ -505,6 +506,24 @@ public sealed class SurveyOrder : AggregateRoot
             global::AgriDrone.Modules.Surveys.Domain.ConfirmedSurveyPoleCount
                 .Create(confirmedPoleCount.Value);
         EnsureTransitionTo(SurveyOrderStatus.AwaitingPricing, confirmedAt);
+
+        if (farmBoundaryVersionId.HasValue && farmBoundaryVersionId.Value != Guid.Empty)
+        {
+            FarmBoundaryVersionId = farmBoundaryVersionId.Value;
+        }
+
+        if (FarmBoundaryVersionId is null || FarmBoundaryVersionId == Guid.Empty)
+        {
+            throw new SurveyDomainException(
+                SurveyOrderDomainErrorCodes.PricingSnapshotIncomplete,
+                "Farm boundary version ID is required when recording baseline publication.");
+        }
+
+        if (ScopeConfirmedBy is null)
+        {
+            ScopeConfirmedBy = confirmedBy;
+            ScopeConfirmedAt = confirmedAt;
+        }
 
         FarmBaseMapVersionId = farmBaseMapVersionId;
         ConfirmedSurveyPoleCount = validatedPoleCount;
