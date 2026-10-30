@@ -7294,10 +7294,10 @@ namespace AgriDrone.Database.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("scope_confirmed_by");
 
-                    b.Property<int>("ScopeType")
+                    b.Property<SurveyScopeType>("ScopeType")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("system.survey_scope_type")
-                        .HasDefaultValue(0)
+                        .HasDefaultValue(SurveyScopeType.FarmWide)
                         .HasColumnName("scope_type");
 
                     b.Property<SurveyOrderStatus>("Status")

@@ -1,4 +1,5 @@
 using AgriDrone.Modules.Farms.Application.Errors;
+using AgriDrone.Modules.Farms.Domain.Maps;
 using AgriDrone.Modules.Farms.Domain.Maps.Staging;
 using AgriDrone.Modules.Farms.Infrastructure.Persistence;
 using AgriDrone.SharedKernel.Application;
@@ -34,11 +35,27 @@ internal sealed class GetFarmBaseMapDraftQueryHandler(
             return Result.Failure<FarmBaseMapDraftResponse>(FarmError.NotFound());
         }
 
-        var draft = await dbContext.FarmBaseMapVersions
+        var queryable = dbContext.FarmBaseMapVersions
             .AsNoTracking()
-            .SingleOrDefaultAsync(
-                m => m.Id == query.DraftId && m.FarmId == query.FarmId,
-                cancellationToken);
+            .Where(m => m.FarmId == query.FarmId);
+
+        if (query.DraftId.HasValue)
+        {
+            queryable = queryable.Where(m => m.Id == query.DraftId.Value);
+        }
+        else
+        {
+            queryable = queryable.Where(m => m.Status == FarmBaseMapStatus.Draft);
+
+            if (query.SurveyOrderId.HasValue)
+            {
+                queryable = queryable.Where(m => m.SourceSurveyOrderId == query.SurveyOrderId.Value);
+            }
+        }
+
+        var draft = query.DraftId.HasValue
+            ? await queryable.SingleOrDefaultAsync(cancellationToken)
+            : await queryable.OrderByDescending(m => m.CreatedAt).FirstOrDefaultAsync(cancellationToken);
 
         if (draft is null)
         {
@@ -50,7 +67,7 @@ internal sealed class GetFarmBaseMapDraftQueryHandler(
             .AsNoTracking()
             .Include(b => b.Candidates)
             .SingleOrDefaultAsync(
-                b => b.FarmBaseMapVersionId == query.DraftId || b.FarmId == query.FarmId && b.SurveyOrderId == draft.SourceSurveyOrderId,
+                b => b.FarmBaseMapVersionId == draft.Id || (b.FarmId == query.FarmId && b.SurveyOrderId == draft.SourceSurveyOrderId),
                 cancellationToken);
 
         var candidates = batch?.Candidates.ToList() ?? [];

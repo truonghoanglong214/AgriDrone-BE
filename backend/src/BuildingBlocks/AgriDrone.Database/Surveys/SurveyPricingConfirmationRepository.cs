@@ -203,34 +203,68 @@ internal sealed class SurveyPricingConfirmationRepository(
     {
         await using var command = CreateCommand(
             """
+            WITH scoped_plants AS (
+                SELECT plant.id, plant.location, plant.zone_id
+                FROM plant.plants AS plant
+                WHERE plant.farm_id = @farm_id
+                  AND (
+                      plant.current_map_version_id = @map_version_id
+                      OR plant.farm_base_map_version_id = @map_version_id
+                  )
+                  AND plant.lifecycle_status = 'ACTIVE'::system.plant_lifecycle_status
+                  AND (
+                      @scope_type = 'FARM_WIDE'
+                      OR EXISTS (
+                          SELECT 1
+                          FROM survey.survey_order_zone_scopes AS order_scope
+                          WHERE order_scope.survey_order_id = @order_id
+                            AND order_scope.farm_id = @farm_id
+                            AND order_scope.zone_id = plant.zone_id
+                      )
+                  )
+            )
             SELECT
-                count(*)::integer AS total_active_count,
+                count(scoped_plant.id)::integer AS total_active_count,
                 count(*) FILTER (
-                    WHERE plant.location IS NOT NULL
-                      AND zone.id IS NOT NULL
-                      AND zone.boundary IS NOT NULL
-                      AND ST_Covers(boundary.geometry, plant.location)
-                      AND ST_Covers(zone.boundary, plant.location)
+                    WHERE scoped_plant.location IS NOT NULL
+                      AND ST_Covers(boundary.geometry, scoped_plant.location)
+                      AND (
+                          @scope_type = 'FARM_WIDE'
+                          OR EXISTS (
+                              SELECT 1
+                              FROM survey.survey_order_zone_scopes AS order_scope
+                              JOIN farm.farm_zones AS zone
+                                ON zone.id = order_scope.zone_id
+                               AND zone.farm_id = order_scope.farm_id
+                               AND zone.status = 'ACTIVE'::system.general_status
+                               AND zone.deleted_at IS NULL
+                              WHERE order_scope.survey_order_id = @order_id
+                                AND order_scope.farm_id = @farm_id
+                                AND order_scope.zone_id = scoped_plant.zone_id
+                                AND order_scope.boundary_snapshot IS NOT NULL
+                                AND zone.boundary IS NOT NULL
+                                AND ST_Covers(order_scope.boundary_snapshot, scoped_plant.location)
+                                AND ST_Covers(zone.boundary, scoped_plant.location)
+                          )
+                      )
                 )::integer AS eligible_active_count
-            FROM plant.plants AS plant
+            FROM scoped_plants AS scoped_plant
             JOIN farm.farm_boundaries AS boundary
               ON boundary.id = @boundary_id
              AND boundary.tenant_id = @tenant_id
-             AND boundary.farm_id = plant.farm_id
+             AND boundary.farm_id = @farm_id
              AND boundary.status = 'APPROVED'::system.farm_boundary_status
-            LEFT JOIN farm.farm_zones AS zone
-              ON zone.id = plant.zone_id
-             AND zone.farm_id = plant.farm_id
-             AND zone.status = 'ACTIVE'::system.general_status
-             AND zone.deleted_at IS NULL
-            WHERE plant.farm_id = @farm_id
-              AND plant.current_map_version_id = @map_version_id
-              AND plant.lifecycle_status = 'ACTIVE'::system.plant_lifecycle_status
             """,
             Id("boundary_id", order.FarmBoundaryVersionId!.Value),
             Id("tenant_id", order.TenantId),
             Id("farm_id", order.FarmId),
-            Id("map_version_id", mapVersionId));
+            Id("map_version_id", mapVersionId),
+            Id("order_id", order.Id),
+            new NpgsqlParameter(
+                "scope_type",
+                order.ScopeType == SurveyScopeType.FarmWide
+                    ? "FARM_WIDE"
+                    : "ZONES"));
         await using var reader = await command.ExecuteReaderAsync(
             cancellationToken);
         if (!await reader.ReadAsync(cancellationToken))
