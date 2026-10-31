@@ -120,6 +120,30 @@ public sealed class VerifyFarmBoundaryCommandHandlerTests
     }
 
     [Fact]
+    public async Task HandleCreatesInitialBoundaryWhenNoCurrentBoundaryExistsAndExpectedVersionIsNull()
+    {
+        var fixture = CreateFixture();
+        fixture.BoundaryRepository.CurrentApproved = null;
+        fixture.BoundaryRepository.NextVersion = 1;
+
+        var command = new VerifyFarmBoundaryCommand(
+            fixture.Farm.Id,
+            fixture.ValidBoundaryPolygon,
+            "Initial approval reason",
+            "evidence-01",
+            fixture.Farm.Version,
+            ExpectedCurrentBoundaryVersionNumber: null);
+
+        var result = await fixture.Handler.Handle(command, CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(1, result.Value.VersionNumber);
+        Assert.Equal(fixture.ValidBoundaryPolygon, result.Value.Geometry);
+        Assert.Equal(1, fixture.BoundaryRepository.AddCallCount);
+        Assert.Equal(0, fixture.BoundaryRepository.UpdateCallCount);
+    }
+
+    [Fact]
     public async Task HandleReturnsBoundaryConcurrentModificationWhenBoundaryVersionMismatch()
     {
         var fixture = CreateFixture();

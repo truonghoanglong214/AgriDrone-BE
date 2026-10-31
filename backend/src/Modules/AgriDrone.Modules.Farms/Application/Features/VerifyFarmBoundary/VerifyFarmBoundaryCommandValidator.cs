@@ -28,8 +28,8 @@ public sealed class VerifyFarmBoundaryCommandValidator
             .WithMessage("Evidence reference must not exceed 1000 characters.");
 
         RuleFor(x => x.ExpectedCurrentBoundaryVersionNumber)
-            .NotNull()
             .GreaterThan(0)
-            .WithMessage("Expected current boundary version number is required and must be greater than 0.");
+            .When(x => x.ExpectedCurrentBoundaryVersionNumber.HasValue)
+            .WithMessage("Expected current boundary version number must be greater than 0 when provided.");
     }
 }

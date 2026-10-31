@@ -1,75 +1,114 @@
-using System.Text.Json;
-using AgriDrone.Modules.Missions.Domain.Media;
-using AgriDrone.Modules.Missions.Domain.Missions;
-using AgriDrone.Modules.Missions.Domain.Processing;
-using AgriDrone.SharedKernel.Domain;
-using NetTopologySuite.Geometries;
-
-namespace AgriDrone.Modules.Missions.Domain.Observations;
-
-public sealed class MissionPlantObservation : Entity
-{
-    private MissionPlantObservation()
-    {
-    }
-
-    public Guid FarmId { get; private set; }
-
-    public Guid MissionId { get; private set; }
-
-    public Guid? AiJobId { get; private set; }
-
-    public Guid? ModelVersionId { get; private set; }
-
-    public string? TrackingId { get; private set; }
-
-    public Point? DetectedLocation { get; private set; }
-
-    public Guid? MapVersionId { get; private set; }
-
-    public Guid? FarmBaseMapVersionId { get; private set; }
-
-    public int? DetectedRowIndex { get; private set; }
-
-    public int? DetectedColumnIndex { get; private set; }
-
-    public decimal? DetectedLocationAccuracyM { get; private set; }
-
-    public decimal? DetectionConfidence { get; private set; }
-
-    public Guid? SuggestedPlantId { get; private set; }
-
-    public decimal? MatchConfidence { get; private set; }
-
-    public decimal? GpsDistanceM { get; private set; }
-
-    public decimal? GridScore { get; private set; }
-
-    public MatchStrategy? SelectedMatchStrategy { get; private set; }
-
-    public string? MatchingAlgorithmVersion { get; private set; }
-
-    public JsonDocument MatchingParameters { get; private set; } = null!;
-
-    public Guid? ResolvedPlantId { get; private set; }
-
-    public ObservationReviewStatus ReviewStatus { get; private set; }
-
-    public Guid? ReviewedBy { get; private set; }
-
-    public DateTimeOffset? ReviewedAt { get; private set; }
-
-    public Guid? EvidenceMediaId { get; private set; }
-
-    public DateTimeOffset CreatedAt { get; private set; }
-
-    public DroneMission Mission { get; private set; } = null!;
-
-    public AiProcessingJob? AiJob { get; private set; }
-
-    public AiModelVersion? ModelVersion { get; private set; }
-
-    public MediaAsset? EvidenceMedia { get; private set; }
-
-    public ICollection<ObservationMatchCandidate> MatchCandidates { get; private set; } = [];
-}
+using System.Text.Json;
+using AgriDrone.Modules.Missions.Domain.Media;
+using AgriDrone.Modules.Missions.Domain.Missions;
+using AgriDrone.Modules.Missions.Domain.Processing;
+using AgriDrone.SharedKernel.Domain;
+using NetTopologySuite.Geometries;
+
+namespace AgriDrone.Modules.Missions.Domain.Observations;
+
+public sealed class MissionPlantObservation : Entity
+{
+    private MissionPlantObservation()
+    {
+    }
+
+    public Guid FarmId { get; private set; }
+
+    public Guid MissionId { get; private set; }
+
+    public Guid? AiJobId { get; private set; }
+
+    public Guid? ModelVersionId { get; private set; }
+
+    public string? TrackingId { get; private set; }
+
+    public Point? DetectedLocation { get; private set; }
+
+    public Guid? MapVersionId { get; private set; }
+
+    public Guid? FarmBaseMapVersionId { get; private set; }
+
+    public int? DetectedRowIndex { get; private set; }
+
+    public int? DetectedColumnIndex { get; private set; }
+
+    public decimal? DetectedLocationAccuracyM { get; private set; }
+
+    public decimal? DetectionConfidence { get; private set; }
+
+    public Guid? SuggestedPlantId { get; private set; }
+
+    public decimal? MatchConfidence { get; private set; }
+
+    public decimal? GpsDistanceM { get; private set; }
+
+    public decimal? GridScore { get; private set; }
+
+    public MatchStrategy? SelectedMatchStrategy { get; private set; }
+
+    public string? MatchingAlgorithmVersion { get; private set; }
+
+    public JsonDocument MatchingParameters { get; private set; } = null!;
+
+    public Guid? ResolvedPlantId { get; private set; }
+
+    public ObservationReviewStatus ReviewStatus { get; private set; }
+
+    public Guid? ReviewedBy { get; private set; }
+
+    public DateTimeOffset? ReviewedAt { get; private set; }
+
+    public Guid? EvidenceMediaId { get; private set; }
+
+    public DateTimeOffset CreatedAt { get; private set; }
+
+    public DroneMission Mission { get; private set; } = null!;
+
+    public AiProcessingJob? AiJob { get; private set; }
+
+    public AiModelVersion? ModelVersion { get; private set; }
+
+    public MediaAsset? EvidenceMedia { get; private set; }
+
+    public ICollection<ObservationMatchCandidate> MatchCandidates { get; private set; } = [];
+
+    public static MissionPlantObservation Create(
+        Guid farmId,
+        Guid missionId,
+        Point? detectedLocation,
+        decimal? detectionConfidence,
+        Guid? suggestedPlantId,
+        Guid? resolvedPlantId,
+        decimal? gpsDistanceM,
+        JsonDocument matchingParameters,
+        Guid? evidenceMediaId = null,
+        ObservationReviewStatus reviewStatus = ObservationReviewStatus.Pending,
+        Guid? aiJobId = null,
+        Guid? modelVersionId = null,
+        decimal? matchConfidence = null,
+        MatchStrategy? selectedMatchStrategy = null,
+        string? matchingAlgorithmVersion = null)
+    {
+        return new MissionPlantObservation
+        {
+            Id = Guid.NewGuid(),
+            FarmId = farmId,
+            MissionId = missionId,
+            DetectedLocation = detectedLocation,
+            DetectionConfidence = detectionConfidence,
+            SuggestedPlantId = suggestedPlantId,
+            ResolvedPlantId = resolvedPlantId,
+            GpsDistanceM = gpsDistanceM,
+            MatchingParameters = matchingParameters,
+            EvidenceMediaId = evidenceMediaId,
+            ReviewStatus = reviewStatus,
+            AiJobId = aiJobId,
+            ModelVersionId = modelVersionId,
+            MatchConfidence = matchConfidence,
+            SelectedMatchStrategy = selectedMatchStrategy,
+            MatchingAlgorithmVersion = matchingAlgorithmVersion,
+            CreatedAt = DateTimeOffset.UtcNow
+        };
+    }
+}

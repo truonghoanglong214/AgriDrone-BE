@@ -64,14 +64,15 @@ internal sealed class VerifyFarmBoundaryCommandHandler(
             command.FarmId,
             cancellationToken);
 
-        if (currentBoundary is null)
+        if (currentBoundary is null && command.ExpectedCurrentBoundaryVersionNumber.HasValue)
         {
             return Result.Failure<VerifyFarmBoundaryResponse>(
                 FarmError.UnmappedFarmBoundaryRequiresCaptureSession());
         }
 
-        if (!command.ExpectedCurrentBoundaryVersionNumber.HasValue ||
-            currentBoundary.VersionNumber != command.ExpectedCurrentBoundaryVersionNumber.Value)
+        if (currentBoundary is not null &&
+            (!command.ExpectedCurrentBoundaryVersionNumber.HasValue ||
+             currentBoundary.VersionNumber != command.ExpectedCurrentBoundaryVersionNumber.Value))
         {
             return Result.Failure<VerifyFarmBoundaryResponse>(
                 FarmError.BoundaryConcurrentModification());
@@ -115,8 +116,11 @@ internal sealed class VerifyFarmBoundaryCommandHandler(
 
         newBoundary.Approve(actorId, command.Reason, now);
 
-        currentBoundary.Supersede(newBoundary.Id, now);
-        boundaryRepository.Update(currentBoundary);
+        if (currentBoundary is not null)
+        {
+            currentBoundary.Supersede(newBoundary.Id, now);
+            boundaryRepository.Update(currentBoundary);
+        }
 
         farm.SetBoundary(newBoundary.Geometry, now);
         farmRepository.Update(farm);

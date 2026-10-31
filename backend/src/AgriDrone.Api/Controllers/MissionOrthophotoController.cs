@@ -339,7 +339,10 @@ public sealed class MissionOrthophotoController(
             farmId,
             missionId,
             req.ConfidenceThreshold,
-            polygon);
+            polygon,
+            req.MatchingToleranceMeters,
+            req.ZoneRadiusMeters,
+            req.MinDiseasedTrees);
 
         var result = await sender.Send(command, cancellationToken);
 

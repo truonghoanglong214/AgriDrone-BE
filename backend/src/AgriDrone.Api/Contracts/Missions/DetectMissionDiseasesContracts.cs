@@ -4,7 +4,10 @@ namespace AgriDrone.Api.Contracts.Missions;
 
 public sealed record DetectMissionDiseasesRequest(
     double ConfidenceThreshold = 0.25,
-    JsonElement? PolygonGeoJson = null);
+    JsonElement? PolygonGeoJson = null,
+    double? MatchingToleranceMeters = null,
+    double? ZoneRadiusMeters = null,
+    int? MinDiseasedTrees = null);
 
 public sealed record DiseaseDetectionItemResponse(
     string Id,
