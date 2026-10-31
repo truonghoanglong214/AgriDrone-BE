@@ -85,26 +85,6 @@ internal sealed class SurveyOrderOperationalContextV3Query(
             (value.Status == PriceAdjustmentStatus.Pending ||
              value.Status == PriceAdjustmentStatus.Approved), cancellationToken);
 
-        var evaluatedAt = clock.GetUtcNow();
-
-        var hasValidConsent = await db.Set<SurveyCaptureAuthorization>().AsNoTracking().AnyAsync(value =>
-            value.SurveyOrderId == order.Id &&
-            value.Type == SurveyCaptureAuthorizationType.WrittenDataUseConsent &&
-            value.Status == SurveyCaptureAuthorizationStatus.Verified &&
-            value.VerifiedAt <= evaluatedAt &&
-            (!value.ExpiresAt.HasValue || evaluatedAt < value.ExpiresAt.Value) &&
-            !value.RevokedAt.HasValue,
-            cancellationToken);
-
-        var hasValidFlightPermission = await db.Set<SurveyCaptureAuthorization>().AsNoTracking().AnyAsync(value =>
-            value.SurveyOrderId == order.Id &&
-            value.Type == SurveyCaptureAuthorizationType.FlightPermission &&
-            value.Status == SurveyCaptureAuthorizationStatus.Verified &&
-            value.VerifiedAt <= evaluatedAt &&
-            (!value.ExpiresAt.HasValue || evaluatedAt < value.ExpiresAt.Value) &&
-            !value.RevokedAt.HasValue,
-            cancellationToken);
-
         var hasPendingSettlement = await db.Set<AdjustmentSettlement>().AsNoTracking().AnyAsync(value =>
             db.Set<PriceAdjustment>().Any(adj => adj.Id == value.PriceAdjustmentId && adj.SurveyOrderId == order.Id) &&
             (value.Status == AdjustmentSettlementStatus.Pending ||
@@ -227,8 +207,6 @@ internal sealed class SurveyOrderOperationalContextV3Query(
             HasPendingPriceAdjustment: pendingAdjustment,
             IsPaymentAmountAndCurrencyMatched: isPaymentAmountAndCurrencyMatched,
             SafetyChecksSatisfied: safetyChecksSatisfied,
-            HasValidWrittenDataUseConsent: hasValidConsent,
-            HasValidFlightPermission: hasValidFlightPermission,
             HasPendingFinancialSettlement: hasPendingSettlement,
             HasUnapprovedExtraFlight: hasUnapprovedExtraFlight,
             HasFinalizedBoundaryCapture: hasFinalizedBoundaryCapture,
@@ -237,7 +215,6 @@ internal sealed class SurveyOrderOperationalContextV3Query(
             IsBaselineRouteWithinSafetyInset: isBaselineRouteWithinSafetyInset,
             DepositPaymentStatus: order.DepositPaymentStatus);
 
-        // BE1 authoritative readiness represents commercial, legal consent/permission, and boundary verification gates
         var decision = SurveyOrderReadinessPolicy.EvaluateCommercialReadiness(snapshot);
 
         var readinessFailures = decision.Failures
@@ -270,8 +247,6 @@ internal sealed class SurveyOrderOperationalContextV3Query(
             hasPendingSettlement,
             hasUnapprovedExtraFlight,
             pendingAdjustment,
-            hasValidConsent,
-            hasValidFlightPermission,
             order.DepositPaymentStatus.ToString(),
             order.DepositAmount,
             order.RemainingAmount,

@@ -340,11 +340,6 @@ internal sealed class SyncBoundaryCaptureSamplesCommandHandler(
                         BoundaryCaptureError.AppointmentWindowClosed());
                 }
 
-                if (!state.Value.HasValidAuthorizations)
-                {
-                    return Result.Failure<BoundaryCaptureResponse>(
-                        BoundaryCaptureError.AuthorizationNotValid());
-                }
 
                 if (session.Version != command.ExpectedSessionVersion)
                 {
@@ -437,11 +432,6 @@ internal sealed class FinalizeBoundaryCaptureCommandHandler(
                         BoundaryCaptureError.AppointmentWindowClosed());
                 }
 
-                if (!state.Value.HasValidAuthorizations)
-                {
-                    return Result.Failure<BoundaryCaptureResponse>(
-                        BoundaryCaptureError.AuthorizationNotValid());
-                }
 
                 if (state.Value.CurrentBoundaryVersionNumber !=
                     command.ExpectedCurrentBoundaryVersionNumber)
@@ -647,11 +637,6 @@ internal sealed class ApproveBaselineRoutePlanCommandHandler(
                     BoundaryCaptureError.AppointmentWindowClosed());
             }
 
-            if (!state.Value.HasValidAuthorizations)
-            {
-                return Result.Failure<BoundaryCaptureResponse>(
-                    BoundaryCaptureError.AuthorizationNotValid());
-            }
 
             if (session.Status != BoundaryCaptureSessionStatus.Finalized ||
                 session.FarmBoundaryVersionId != command.FarmBoundaryVersionId ||

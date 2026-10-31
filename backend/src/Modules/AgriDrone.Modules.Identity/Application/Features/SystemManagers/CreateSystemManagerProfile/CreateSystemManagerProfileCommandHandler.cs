@@ -69,8 +69,7 @@ internal sealed class CreateSystemManagerProfileCommandHandler(
         {
             profile.UserId,
             Status = profile.Status.ToString(),
-            Availability = profile.Availability.ToString(),
-            QualificationStatus = profile.QualificationStatus.ToString()
+            Availability = profile.Availability.ToString()
         });
         auditWriter.AddSystemAdminAction(
             auditLogSink,

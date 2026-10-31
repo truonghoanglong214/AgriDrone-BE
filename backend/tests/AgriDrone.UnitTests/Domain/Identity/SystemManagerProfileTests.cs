@@ -9,25 +9,19 @@ public sealed class SystemManagerProfileTests
         new(2026, 9, 23, 4, 0, 0, TimeSpan.Zero);
 
     [Fact]
-    public void NewProfileIsSuspendedUnavailableAndPendingQualification()
+    public void NewProfileIsSuspendedAndUnavailable()
     {
         var profile = SystemManagerProfile.Create(Guid.NewGuid(), Now);
 
         Assert.Equal(SystemManagerProfileStatus.Suspended, profile.Status);
         Assert.Equal(SystemManagerAvailabilityStatus.Unavailable, profile.Availability);
-        Assert.Equal(FlightQualificationStatus.Pending, profile.QualificationStatus);
         Assert.False(profile.CanBeAssigned(Now));
     }
 
     [Fact]
-    public void ManagerMustBeActiveAvailableAndCurrentlyQualifiedToBeAssigned()
+    public void ManagerMustBeActiveAndAvailableToBeAssigned()
     {
         var profile = SystemManagerProfile.Create(Guid.NewGuid(), Now);
-        profile.UpdateQualification(
-            FlightQualificationStatus.Qualified,
-            Now.AddDays(30),
-            Now,
-            profile.Version);
         profile.Activate(Now, profile.Version);
 
         Assert.False(profile.CanBeAssigned(Now));
@@ -38,18 +32,12 @@ public sealed class SystemManagerProfileTests
             profile.Version);
 
         Assert.True(profile.CanBeAssigned(Now));
-        Assert.False(profile.CanBeAssigned(Now.AddDays(31)));
     }
 
     [Fact]
     public void SuspendingProfileAlsoMakesItUnavailable()
     {
         var profile = SystemManagerProfile.Create(Guid.NewGuid(), Now);
-        profile.UpdateQualification(
-            FlightQualificationStatus.Qualified,
-            Now.AddDays(30),
-            Now,
-            profile.Version);
         profile.Activate(Now, profile.Version);
         profile.UpdateAvailability(
             SystemManagerAvailabilityStatus.Available,
@@ -61,18 +49,6 @@ public sealed class SystemManagerProfileTests
         Assert.Equal(SystemManagerProfileStatus.Suspended, profile.Status);
         Assert.Equal(SystemManagerAvailabilityStatus.Unavailable, profile.Availability);
         Assert.False(profile.CanOperate(Now.AddMinutes(1)));
-    }
-
-    [Fact]
-    public void QualifiedStatusRequiresFutureExpiry()
-    {
-        var profile = SystemManagerProfile.Create(Guid.NewGuid(), Now);
-
-        Assert.Throws<ArgumentException>(() => profile.UpdateQualification(
-            FlightQualificationStatus.Qualified,
-            Now,
-            Now,
-            profile.Version));
     }
 
     [Fact]

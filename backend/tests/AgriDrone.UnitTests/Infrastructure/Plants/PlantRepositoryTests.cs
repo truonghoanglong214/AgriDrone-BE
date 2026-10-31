@@ -296,10 +296,10 @@ public sealed class PlantRepositoryTests
         var gridIndex = Assert.Single(
             entityType.GetIndexes(),
             index => index.GetDatabaseName() ==
-                "ux_plants_active_zone_grid_position");
+                "ux_plants_active_farm_map_grid_position");
         Assert.True(gridIndex.IsUnique);
         Assert.Equal(
-            [nameof(Plant.ZoneId), nameof(Plant.RowIndex), nameof(Plant.ColumnIndex)],
+            [nameof(Plant.FarmBaseMapVersionId), nameof(Plant.RowIndex), nameof(Plant.ColumnIndex)],
             gridIndex.Properties.Select(property => property.Name));
         Assert.Contains("ACTIVE", gridIndex.GetFilter());
         Assert.Contains("MISSING", gridIndex.GetFilter());

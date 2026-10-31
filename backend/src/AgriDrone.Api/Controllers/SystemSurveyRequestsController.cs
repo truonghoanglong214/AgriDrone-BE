@@ -232,11 +232,7 @@ public sealed class SystemSurveyRequestsController(ISender sender)
                 [SurveyRequestReviewChecklistDefinition.ServiceAreaSupportedCode] =
                     checklist.ServiceAreaSupported,
                 [SurveyRequestReviewChecklistDefinition.CandidateLocationSufficientCode] =
-                    checklist.CandidateLocationSufficient,
-                [SurveyRequestReviewChecklistDefinition.ConsentFeasibilityCode] =
-                    checklist.ConsentFeasibility,
-                [SurveyRequestReviewChecklistDefinition.FlightPermissionFeasibilityCode] =
-                    checklist.FlightPermissionFeasibility
+                    checklist.CandidateLocationSufficient
             },
             checklist.Notes);
 }

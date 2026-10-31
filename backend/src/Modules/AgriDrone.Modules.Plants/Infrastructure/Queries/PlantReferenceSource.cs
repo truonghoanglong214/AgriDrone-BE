@@ -32,21 +32,26 @@ internal sealed class PlantReferenceSource(
             return [];
         }
 
-        var scopedPlantIds = await dbContext.Database.SqlQueryRaw<Guid>(
-                "SELECT membership.plant_id AS \"Value\" " +
-                "FROM farm.farm_zone_plant_memberships AS membership " +
-                "WHERE membership.farm_id = {0} AND membership.zone_id = {1} " +
-                "AND membership.effective_to IS NULL AND membership.is_assigned = TRUE",
-                farmId,
-                zoneId)
-            .ToArrayAsync(cancellationToken);
+        var scopedPlantIds = dbContext.Database.IsRelational()
+            ? await dbContext.Database.SqlQueryRaw<Guid>(
+                    "SELECT membership.plant_id AS \"Value\" " +
+                    "FROM farm.farm_zone_plant_memberships AS membership " +
+                    "WHERE membership.farm_id = {0} AND membership.zone_id = {1} " +
+                    "AND membership.effective_to IS NULL AND membership.is_assigned = TRUE",
+                    farmId,
+                    zoneId)
+                .ToArrayAsync(cancellationToken)
+            : await dbContext.Plants
+                .Where(plant => plant.FarmId == farmId && plant.ZoneId == zoneId)
+                .Select(plant => plant.Id)
+                .ToArrayAsync(cancellationToken);
 
         var plants = await dbContext.Plants
             .AsNoTracking()
             .Where(plant =>
                 plant.FarmId == farmId &&
                 scopedPlantIds.Contains(plant.Id) &&
-                plant.FarmBaseMapVersionId == mapVersionId &&
+                (plant.FarmBaseMapVersionId == mapVersionId || plant.CurrentMapVersionId == mapVersionId) &&
                 (plant.LifecycleStatus == PlantLifecycleStatus.Active ||
                  plant.LifecycleStatus == PlantLifecycleStatus.Missing))
             .OrderBy(plant => plant.RowIndex)
@@ -57,7 +62,7 @@ internal sealed class PlantReferenceSource(
                 plant.FarmId,
                 zoneId,
                 plant.LifecycleStatus,
-                plant.FarmBaseMapVersionId,
+                (plant.FarmBaseMapVersionId ?? plant.CurrentMapVersionId),
                 plant.Location == null ? null : plant.Location.Y,
                 plant.Location == null ? null : plant.Location.X,
                 plant.RowIndex,

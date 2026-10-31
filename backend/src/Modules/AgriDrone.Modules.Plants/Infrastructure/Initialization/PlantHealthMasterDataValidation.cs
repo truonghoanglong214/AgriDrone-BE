@@ -109,6 +109,14 @@ internal sealed class PlantHealthMasterDataValidator(
                 condition.IsActive))
             .ToArrayAsync(cancellationToken);
 
-        return PlantHealthMasterDataRules.Validate(targetLabels);
+        var result = PlantHealthMasterDataRules.Validate(targetLabels);
+        var hasUnknownHealthLevel = await dbContext.HealthLevels
+            .AsNoTracking()
+            .AnyAsync(level => level.Code == "UNKNOWN", cancellationToken);
+
+        return hasUnknownHealthLevel
+            ? result
+            : new PlantHealthMasterDataValidationResult(
+                [..result.Errors, "Required health level 'UNKNOWN' is missing."]);
     }
 }

@@ -38,8 +38,6 @@ public sealed record SurveyOrderOperationalContextV3(
     bool HasPendingSettlement = false,
     bool HasUnapprovedExtraFlight = false,
     bool HasPendingAdjustment = false,
-    bool HasValidWrittenDataUseConsent = false,
-    bool HasValidFlightPermission = false,
     string? DepositPaymentStatus = null,
     decimal? DepositAmount = null,
     decimal? RemainingAmount = null,

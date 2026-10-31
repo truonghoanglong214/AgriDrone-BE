@@ -124,18 +124,6 @@ public static class SurveyOrderReadinessPolicy
             }
         }
 
-        if (!snapshot.HasValidWrittenDataUseConsent)
-        {
-            failures.Add(
-                SurveyOrderReadinessFailure.WrittenConsentNotValid);
-        }
-
-        if (!snapshot.HasValidFlightPermission)
-        {
-            failures.Add(
-                SurveyOrderReadinessFailure.FlightPermissionNotValid);
-        }
-
         var expectedAppointmentPurpose = snapshot.Purpose switch
         {
             SurveyOperationPurpose.BaselineMapping =>

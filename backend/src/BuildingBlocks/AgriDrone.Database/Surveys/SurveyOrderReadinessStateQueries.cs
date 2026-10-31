@@ -52,8 +52,6 @@ internal sealed class SurveyOrderReadinessStateQueries(NpgsqlDataSource dataSour
                 profile.user_id AS manager_user_id,
                 profile.status::text AS manager_status,
                 profile.availability::text AS manager_availability,
-                profile.qualification_status::text AS qualification_status,
-                profile.qualification_expires_at,
                 mission.id AS mission_id,
                 mission.mission_purpose::text AS mission_purpose,
                 mission.status::text AS mission_status,
@@ -74,33 +72,7 @@ internal sealed class SurveyOrderReadinessStateQueries(NpgsqlDataSource dataSour
                       AND adjustment.status IN (
                         'PENDING'::system.price_adjustment_status,
                         'APPROVED'::system.price_adjustment_status)
-                ) AS has_open_adjustment,
-                EXISTS (
-                    SELECT 1
-                    FROM survey.survey_capture_authorizations AS auth
-                    WHERE auth.survey_order_id = survey_order.id
-                      AND auth.authorization_type =
-                        'WRITTEN_DATA_USE_CONSENT'::system.survey_capture_authorization_type
-                      AND auth.status =
-                        'VERIFIED'::system.survey_capture_authorization_status
-                      AND auth.verified_at <= @evaluated_at
-                      AND (auth.expires_at IS NULL OR
-                           @evaluated_at < auth.expires_at)
-                      AND auth.revoked_at IS NULL
-                ) AS has_valid_consent,
-                EXISTS (
-                    SELECT 1
-                    FROM survey.survey_capture_authorizations AS auth
-                    WHERE auth.survey_order_id = survey_order.id
-                      AND auth.authorization_type =
-                        'FLIGHT_PERMISSION'::system.survey_capture_authorization_type
-                      AND auth.status =
-                        'VERIFIED'::system.survey_capture_authorization_status
-                      AND auth.verified_at <= @evaluated_at
-                      AND (auth.expires_at IS NULL OR
-                           @evaluated_at < auth.expires_at)
-                      AND auth.revoked_at IS NULL
-                ) AS has_valid_flight_permission
+                ) AS has_open_adjustment
                 , EXISTS (
                     SELECT 1
                     FROM survey.adjustment_settlements AS settlement
@@ -309,11 +281,7 @@ internal sealed class SurveyOrderReadinessStateQueries(NpgsqlDataSource dataSour
                 : null,
             appointmentStatus,
             paymentStatus,
-            ReadNullableString(reader, "manager_status") == "ACTIVE" &&
-                ReadNullableString(reader, "qualification_status") ==
-                    "QUALIFIED" &&
-                ReadNullableTimestamp(reader, "qualification_expires_at") >
-                    evaluatedAt,
+            ReadNullableString(reader, "manager_status") == "ACTIVE",
             ReadNullableString(reader, "manager_availability") == "AVAILABLE",
             appointmentStatus == SurveyAppointmentStatus.Confirmed &&
                 appointmentEnd > evaluatedAt,
@@ -324,9 +292,6 @@ internal sealed class SurveyOrderReadinessStateQueries(NpgsqlDataSource dataSour
             reader.GetBoolean(reader.GetOrdinal("has_open_adjustment")),
             paymentMatches,
             safetySatisfied,
-            reader.GetBoolean(reader.GetOrdinal("has_valid_consent")),
-            reader.GetBoolean(reader.GetOrdinal(
-                "has_valid_flight_permission")),
             reader.GetBoolean(reader.GetOrdinal("has_pending_settlement")),
             reader.GetBoolean(reader.GetOrdinal(
                 "has_unapproved_extra_flight")),

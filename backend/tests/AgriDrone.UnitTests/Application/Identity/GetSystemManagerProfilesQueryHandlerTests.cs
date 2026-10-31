@@ -17,8 +17,6 @@ public sealed class GetSystemManagerProfilesQueryHandlerTests
         "System Manager",
         SystemManagerProfileStatus.Suspended,
         SystemManagerAvailabilityStatus.Unavailable,
-        FlightQualificationStatus.Pending,
-        QualificationExpiresAt: null,
         Version: 1);
 
     [Fact]
@@ -58,7 +56,6 @@ public sealed class GetSystemManagerProfilesQueryHandlerTests
         var query = new GetSystemManagerProfilesQuery(
             SystemManagerProfileStatus.Suspended,
             SystemManagerAvailabilityStatus.Unavailable,
-            FlightQualificationStatus.Pending,
             PageNumber: 2,
             PageSize: 10);
 
@@ -67,7 +64,6 @@ public sealed class GetSystemManagerProfilesQueryHandlerTests
         Assert.True(result.IsSuccess);
         Assert.Equal(query.Status, queries.Status);
         Assert.Equal(query.Availability, queries.Availability);
-        Assert.Equal(query.QualificationStatus, queries.QualificationStatus);
         Assert.Equal(2, queries.PageRequest!.PageNumber);
         Assert.Equal(10, queries.PageRequest.PageSize);
     }
@@ -78,19 +74,16 @@ public sealed class GetSystemManagerProfilesQueryHandlerTests
     {
         public SystemManagerProfileStatus? Status { get; private set; }
         public SystemManagerAvailabilityStatus? Availability { get; private set; }
-        public FlightQualificationStatus? QualificationStatus { get; private set; }
         public PagedRequest? PageRequest { get; private set; }
 
         public Task<PagedResult<SystemManagerProfileResponse>> GetPageAsync(
             SystemManagerProfileStatus? status,
             SystemManagerAvailabilityStatus? availability,
-            FlightQualificationStatus? qualificationStatus,
             PagedRequest pageRequest,
             CancellationToken cancellationToken = default)
         {
             Status = status;
             Availability = availability;
-            QualificationStatus = qualificationStatus;
             PageRequest = pageRequest;
             IReadOnlyList<SystemManagerProfileResponse> items =
                 profile is null ? [] : [profile];

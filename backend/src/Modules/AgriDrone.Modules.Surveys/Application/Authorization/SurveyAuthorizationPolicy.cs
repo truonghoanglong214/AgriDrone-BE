@@ -28,8 +28,7 @@ public enum SurveyAuthorizationAction
 public sealed record SurveyAuthorizationContext(
     SurveyActorKind Actor,
     bool OwnsTenant = false,
-    bool HasActiveFarmAssignment = false,
-    bool HasCurrentQualification = false);
+    bool HasActiveFarmAssignment = false);
 
 public static class SurveyAuthorizationPolicy
 {
@@ -58,7 +57,6 @@ public static class SurveyAuthorizationPolicy
 
             SurveyActorKind.SystemManager =>
                 context.HasActiveFarmAssignment &&
-                context.HasCurrentQualification &&
                 action is
                     SurveyAuthorizationAction.ConfirmScope or
                     SurveyAuthorizationAction.ProposeAppointment or

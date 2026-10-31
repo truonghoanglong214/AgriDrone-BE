@@ -412,4 +412,26 @@ public sealed class SystemSurveyOrdersController(ISender sender)
                 status,
                 "Unsupported survey-order status.")
         };
+
+    /// <summary>Dọn dẹp các tài liệu ủy quyền khảo sát mồ côi trong MinIO bucket (dành cho SystemAdmin).</summary>
+    [HttpPost("evidences/purge-orphaned")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<IResult> PurgeOrphanedEvidences(
+        [FromServices] AgriDrone.Integrations.Media.ISurveyAuthorizationStorageCleaner cleaner,
+        CancellationToken cancellationToken)
+    {
+        var purgedCount = await cleaner.PurgeOrphanedEvidencesAsync(cancellationToken);
+        return Results.Ok(new { PurgedCount = purgedCount });
+    }
+
+    /// <summary>Liệt kê các tài liệu ủy quyền khảo sát mồ côi trong MinIO bucket (dành cho SystemAdmin).</summary>
+    [HttpGet("evidences/orphaned")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<IResult> ListOrphanedEvidences(
+        [FromServices] AgriDrone.Integrations.Media.ISurveyAuthorizationStorageCleaner cleaner,
+        CancellationToken cancellationToken)
+    {
+        var items = await cleaner.ListOrphanedEvidencesAsync(cancellationToken);
+        return Results.Ok(new { Count = items.Count, Items = items });
+    }
 }

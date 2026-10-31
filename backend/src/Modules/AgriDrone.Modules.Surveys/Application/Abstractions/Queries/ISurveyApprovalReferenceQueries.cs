@@ -90,8 +90,6 @@ public sealed record SurveyApprovalManagerReference(
     bool IsUserActive,
     bool IsProfileActive,
     bool IsAvailable,
-    bool IsFlightQualified,
-    DateTimeOffset? QualificationExpiresAt,
     long Version);
 
 public sealed record SurveyApprovalPrimaryAssignmentReference(

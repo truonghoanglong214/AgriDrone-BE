@@ -66,7 +66,6 @@ namespace AgriDrone.Database.Migrations
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "farm_boundary_status", new[] { "DRAFT", "APPROVED", "REJECTED", "SUPERSEDED" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "farm_member_role", new[] { "MANAGER", "WORKER" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "finding_source", new[] { "AI", "MANUAL" });
-            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "flight_qualification_status", new[] { "PENDING", "QUALIFIED", "SUSPENDED", "REVOKED" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "general_status", new[] { "ACTIVE", "INACTIVE" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "harvest_readiness_criterion_status", new[] { "EXPERIMENTAL", "VALIDATED", "RETIRED" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "harvest_readiness_granularity", new[] { "PLANT", "FARM" });
@@ -95,8 +94,6 @@ namespace AgriDrone.Database.Migrations
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "scan_source", new[] { "DRONE_AI", "FIELD_MANUAL", "MANAGER" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "survey_appointment_purpose", new[] { "BASELINE_MAPPING", "PAID_SERVICE" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "survey_appointment_status", new[] { "PROPOSED", "CONFIRMED", "RESCHEDULE_REQUESTED", "CANCELLED", "SUPERSEDED" });
-            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "survey_capture_authorization_status", new[] { "PENDING", "VERIFIED", "REVOKED" });
-            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "survey_capture_authorization_type", new[] { "WRITTEN_DATA_USE_CONSENT", "FLIGHT_PERMISSION" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "survey_order_status", new[] { "PENDING_BOUNDARY_VERIFICATION", "AWAITING_BASELINE_APPOINTMENT", "AWAITING_BASELINE_DEPOSIT", "AWAITING_BOUNDARY_CAPTURE", "BASELINE_READY", "BASELINE_IN_PROGRESS", "AWAITING_BASELINE_REVIEW", "AWAITING_PRICING", "AWAITING_PAID_APPOINTMENT", "AWAITING_PAYMENT", "READY_FOR_PAID_SERVICE", "IN_PROGRESS", "PENDING_REVIEW", "COMPLETED", "CANCELLED" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "survey_payment_status", new[] { "PENDING", "PROCESSING", "PAID", "FAILED", "REFUNDED", "ADJUSTMENT_REQUIRED" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "survey_pole_count_source", new[] { "BASELINE_PUBLICATION", "CURRENT_PUBLISHED_INVENTORY" });
@@ -1591,14 +1588,6 @@ namespace AgriDrone.Database.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
-                    b.Property<DateTimeOffset?>("QualificationExpiresAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("qualification_expires_at");
-
-                    b.Property<FlightQualificationStatus>("QualificationStatus")
-                        .HasColumnType("system.flight_qualification_status")
-                        .HasColumnName("qualification_status");
-
                     b.Property<SystemManagerProfileStatus>("Status")
                         .HasColumnType("system.system_manager_profile_status")
                         .HasColumnName("status");
@@ -1625,7 +1614,7 @@ namespace AgriDrone.Database.Migrations
                         .IsUnique()
                         .HasDatabaseName("uq_system_manager_profiles_user");
 
-                    b.HasIndex("Status", "Availability", "QualificationStatus", "QualificationExpiresAt")
+                    b.HasIndex("Status", "Availability")
                         .HasDatabaseName("ix_system_manager_profiles_assignability");
 
                     b.ToTable("system_manager_profiles", "identity", t =>
@@ -7049,90 +7038,6 @@ namespace AgriDrone.Database.Migrations
                         });
                 });
 
-            modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.SurveyCaptureAuthorization", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
-
-                    b.Property<string>("EvidenceReference")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)")
-                        .HasColumnName("evidence_reference");
-
-                    b.Property<DateTimeOffset?>("ExpiresAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("expires_at");
-
-                    b.Property<DateTimeOffset?>("IssuedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("issued_at");
-
-                    b.Property<string>("RevocationReason")
-                        .HasMaxLength(2000)
-                        .HasColumnType("character varying(2000)")
-                        .HasColumnName("revocation_reason");
-
-                    b.Property<DateTimeOffset?>("RevokedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("revoked_at");
-
-                    b.Property<Guid?>("RevokedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("revoked_by");
-
-                    b.Property<SurveyCaptureAuthorizationStatus>("Status")
-                        .HasColumnType("system.survey_capture_authorization_status")
-                        .HasColumnName("status");
-
-                    b.Property<Guid>("SurveyOrderId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("survey_order_id");
-
-                    b.Property<SurveyCaptureAuthorizationType>("Type")
-                        .HasColumnType("system.survey_capture_authorization_type")
-                        .HasColumnName("authorization_type");
-
-                    b.Property<DateTimeOffset>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at");
-
-                    b.Property<DateTimeOffset?>("VerifiedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("verified_at");
-
-                    b.Property<Guid?>("VerifiedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("verified_by");
-
-                    b.Property<uint>("Version")
-                        .IsConcurrencyToken()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("xid")
-                        .HasColumnName("xmin");
-
-                    b.HasKey("Id")
-                        .HasName("pk_survey_capture_authorizations");
-
-                    b.HasIndex("SurveyOrderId", "Type")
-                        .IsUnique()
-                        .HasDatabaseName("uq_capture_authorizations_order_type");
-
-                    b.ToTable("survey_capture_authorizations", "survey", t =>
-                        {
-                            t.HasCheckConstraint("ck_capture_authorizations_expiry", "expires_at IS NULL OR expires_at > verified_at");
-
-                            t.HasCheckConstraint("ck_capture_authorizations_revocation", "(status <> 'REVOKED'::system.survey_capture_authorization_status) OR (revoked_at IS NOT NULL AND revoked_by IS NOT NULL AND revocation_reason IS NOT NULL)");
-
-                            t.HasCheckConstraint("ck_capture_authorizations_verified_evidence", "(status <> 'VERIFIED'::system.survey_capture_authorization_status) OR (evidence_reference IS NOT NULL AND issued_at IS NOT NULL AND verified_at IS NOT NULL AND verified_by IS NOT NULL)");
-                        });
-                });
-
             modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.SurveyOrder", b =>
                 {
                     b.Property<Guid>("Id")
@@ -7294,10 +7199,10 @@ namespace AgriDrone.Database.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("scope_confirmed_by");
 
-                    b.Property<int>("ScopeType")
+                    b.Property<SurveyScopeType>("ScopeType")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("system.survey_scope_type")
-                        .HasDefaultValue(0)
+                        .HasDefaultValue(SurveyScopeType.FarmWide)
                         .HasColumnName("scope_type");
 
                     b.Property<SurveyOrderStatus>("Status")
@@ -10038,18 +9943,6 @@ namespace AgriDrone.Database.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_survey_approval_idempotency_requests_request_id");
-                });
-
-            modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.SurveyCaptureAuthorization", b =>
-                {
-                    b.HasOne("AgriDrone.Modules.Surveys.Domain.SurveyOrder", "SurveyOrder")
-                        .WithMany()
-                        .HasForeignKey("SurveyOrderId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_capture_authorizations_orders_order_id");
-
-                    b.Navigation("SurveyOrder");
                 });
 
             modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.SurveyOrder", b =>

@@ -10,8 +10,6 @@ public sealed class GetSystemManagersRequest
 
     public SystemManagerAvailabilityValue? Availability { get; init; }
 
-    public FlightQualificationStatusValue? QualificationStatus { get; init; }
-
     public int PageNumber { get; init; } = 1;
 
     public int PageSize { get; init; } = 20;
@@ -23,12 +21,6 @@ public sealed record SystemManagerStateChangeRequest(
 
 public sealed record UpdateSystemManagerAvailabilityRequest(
     SystemManagerAvailabilityValue Availability,
-    string Reason,
-    long ExpectedVersion);
-
-public sealed record UpdateSystemManagerQualificationRequest(
-    FlightQualificationStatusValue Status,
-    DateTimeOffset? ExpiresAt,
     string Reason,
     long ExpectedVersion);
 
@@ -60,21 +52,5 @@ public enum SystemManagerAvailabilityValue
 
     [JsonStringEnumMemberName("UNAVAILABLE")]
     UNAVAILABLE
-}
-
-[JsonConverter(typeof(JsonStringEnumConverter<FlightQualificationStatusValue>))]
-public enum FlightQualificationStatusValue
-{
-    [JsonStringEnumMemberName("PENDING")]
-    PENDING,
-
-    [JsonStringEnumMemberName("QUALIFIED")]
-    QUALIFIED,
-
-    [JsonStringEnumMemberName("SUSPENDED")]
-    SUSPENDED,
-
-    [JsonStringEnumMemberName("REVOKED")]
-    REVOKED
 }
 #pragma warning restore CA1707

@@ -81,11 +81,11 @@ internal sealed class SurveyOrderMissionPlanningQuery(
                                    source.AppointmentEndAt.HasValue &&
                                    source.AppointmentEndAt.Value >
                                    source.AppointmentStartAt.Value;
-        var canPlan = purposeMatches && appointmentConfirmed;
-        var canSchedule = canPlan && source.AppointmentStatus == "Confirmed" &&
-                          source.AppointmentStartAt.HasValue &&
-                          source.AppointmentEndAt.HasValue &&
-                          source.AppointmentEndAt.Value > source.AppointmentStartAt.Value;
+        var isPaid = isBaselinePlanning
+            ? source.DepositPaymentStatus is "Confirmed" or "Paid"
+            : source.PaymentStatus is "Confirmed" or "Paid";
+        var canPlan = purposeMatches && appointmentConfirmed && isPaid;
+        var canSchedule = canPlan && appointmentConfirmed;
         var scopeType = source.ScopeType == SurveyScopeType.Zones
             ? MissionScopeType.Zones
             : MissionScopeType.FarmWide;

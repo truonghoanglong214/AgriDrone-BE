@@ -93,30 +93,4 @@ public sealed class SurveyRequestPersistenceModelTests
         Assert.Equal(100, policyVersion.GetMaxLength());
         Assert.Equal(100, reason.GetMaxLength());
     }
-
-    [Fact]
-    public void CaptureAuthorizationHasOneRequirementPerOrderAndType()
-    {
-        var options = new DbContextOptionsBuilder<SurveysDbContext>()
-            .UseNpgsql(
-                "Host=localhost;Database=unused;Username=unused;Password=unused",
-                npgsql => npgsql.UseNetTopologySuite())
-            .Options;
-
-        using var context = new SurveysDbContext(options);
-        var entityType = context.Model.FindEntityType(
-            typeof(SurveyCaptureAuthorization));
-        var index = entityType?.GetIndexes().Single(candidate =>
-            candidate.GetDatabaseName() ==
-                "uq_capture_authorizations_order_type");
-
-        Assert.NotNull(index);
-        Assert.True(index.IsUnique);
-        Assert.Equal(
-            [
-                nameof(SurveyCaptureAuthorization.SurveyOrderId),
-                nameof(SurveyCaptureAuthorization.Type)
-            ],
-            index.Properties.Select(property => property.Name));
-    }
 }

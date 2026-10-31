@@ -30,7 +30,7 @@ public sealed class Step0RDiseaseZoneMigrationIntegrationTests
             await RecreateDatabaseAsync(freshDatabase);
             await using (var freshContext = CreateContext(freshDatabase))
             {
-                await freshContext.Database.MigrateAsync();
+                await freshContext.Database.MigrateAsync(DiseaseZoneMigration);
                 await AssertSchemaAsync(freshDatabase);
             }
 
@@ -38,13 +38,13 @@ public sealed class Step0RDiseaseZoneMigrationIntegrationTests
             await using (var upgradeContext = CreateContext(upgradeDatabase))
             {
                 await upgradeContext.Database.MigrateAsync(PreviousMigration);
-                await upgradeContext.Database.MigrateAsync();
+                await upgradeContext.Database.MigrateAsync(DiseaseZoneMigration);
                 await AssertSchemaAsync(upgradeDatabase);
 
                 await upgradeContext.Database.MigrateAsync(PreviousMigration);
                 await AssertRolledBackAsync(upgradeDatabase);
 
-                await upgradeContext.Database.MigrateAsync();
+                await upgradeContext.Database.MigrateAsync(DiseaseZoneMigration);
                 await AssertDatabaseInvariantsAsync(upgradeDatabase);
 
                 var rollbackException = await Record.ExceptionAsync(() =>

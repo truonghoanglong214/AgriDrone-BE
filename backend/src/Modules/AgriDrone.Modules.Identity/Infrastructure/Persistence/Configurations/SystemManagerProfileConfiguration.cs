@@ -38,15 +38,6 @@ public sealed class SystemManagerProfileConfiguration
             .HasColumnType("system.system_manager_availability_status")
             .IsRequired();
 
-        builder.Property(profile => profile.QualificationStatus)
-            .HasColumnName("qualification_status")
-            .HasColumnType("system.flight_qualification_status")
-            .IsRequired();
-
-        builder.Property(profile => profile.QualificationExpiresAt)
-            .HasColumnName("qualification_expires_at")
-            .HasColumnType("timestamp with time zone");
-
         builder.Property(profile => profile.CreatedAt)
             .HasColumnName("created_at")
             .HasColumnType("timestamp with time zone")
@@ -71,9 +62,7 @@ public sealed class SystemManagerProfileConfiguration
         builder.HasIndex(profile => new
         {
             profile.Status,
-            profile.Availability,
-            profile.QualificationStatus,
-            profile.QualificationExpiresAt
+            profile.Availability
         })
             .HasDatabaseName("ix_system_manager_profiles_assignability");
 

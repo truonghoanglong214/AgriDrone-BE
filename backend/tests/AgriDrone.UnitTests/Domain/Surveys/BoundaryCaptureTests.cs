@@ -149,8 +149,6 @@ public sealed class BoundaryCaptureTests
             HasPendingPriceAdjustment: false,
             IsPaymentAmountAndCurrencyMatched: true,
             SafetyChecksSatisfied: false,
-            HasValidWrittenDataUseConsent: true,
-            HasValidFlightPermission: true,
             DepositPaymentStatus: SurveyPaymentStatus.Pending));
 
         Assert.Contains(

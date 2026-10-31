@@ -10,8 +10,6 @@ public sealed record SystemManagerProfileResponse(
     string FullName,
     SystemManagerProfileStatus Status,
     SystemManagerAvailabilityStatus Availability,
-    FlightQualificationStatus QualificationStatus,
-    DateTimeOffset? QualificationExpiresAt,
     long Version);
 
 internal static class SystemManagerProfileResponseMapper
@@ -26,7 +24,5 @@ internal static class SystemManagerProfileResponseMapper
             (user ?? profile.User).FullName,
             profile.Status,
             profile.Availability,
-            profile.QualificationStatus,
-            profile.QualificationExpiresAt,
             profile.Version);
 }

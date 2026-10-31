@@ -202,7 +202,7 @@ namespace AgriDrone.Database.Migrations
                 table: "survey_orders",
                 type: "system.survey_payment_status",
                 nullable: false,
-                defaultValue: SurveyPaymentStatus.Pending);
+                defaultValueSql: "'PENDING'::system.survey_payment_status");
 
             migrationBuilder.AddColumn<decimal>(
                 name: "remaining_amount",

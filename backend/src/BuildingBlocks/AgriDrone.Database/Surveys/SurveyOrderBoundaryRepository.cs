@@ -243,13 +243,10 @@ internal sealed class SurveyOrderBoundaryRepository(
               AND app_user.id = @actor_id
               AND app_user.status = 'ACTIVE'::system.user_status
               AND profile.status = 'ACTIVE'::system.system_manager_profile_status
-              AND profile.qualification_status = 'QUALIFIED'::system.flight_qualification_status
-              AND profile.qualification_expires_at > @verified_at
             FOR SHARE OF farm, assignment, profile, app_user
             """,
             Id("order_id", surveyOrderId),
-            Id("actor_id", actorUserId),
-            new NpgsqlParameter("verified_at", verifiedAt));
+            Id("actor_id", actorUserId));
 
         var value = await command.ExecuteScalarAsync(cancellationToken);
         return value is Guid profileId ? profileId : null;

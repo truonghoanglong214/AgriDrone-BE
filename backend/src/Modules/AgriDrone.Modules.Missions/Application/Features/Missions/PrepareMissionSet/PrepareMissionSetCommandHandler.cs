@@ -362,9 +362,7 @@ internal sealed class PrepareMissionSetCommandHandler(
                 return purpose == MissionPurpose.BaselineMapping
                     ? PrepareMissionSetErrors.BaselineWindowRequired()
                     : PrepareMissionSetErrors.ServiceWindowRequired();
-            if (!window.Overlaps(
-                    context.AppointmentStartAt,
-                    context.AppointmentEndAt))
+            if (window.StartAt < context.AppointmentStartAt || window.EndAt > context.AppointmentEndAt)
                 return PrepareMissionSetErrors.ScheduleOutsideAppointment();
         }
 
@@ -392,6 +390,9 @@ internal sealed class PrepareMissionSetCommandHandler(
         existing.Any(mission =>
             mission.TenantId != order.TenantId ||
             mission.FarmId != order.FarmId ||
+            (mission.FarmBoundaryVersionId.HasValue &&
+             order.FarmBoundaryVersionId != Guid.Empty &&
+             mission.FarmBoundaryVersionId != order.FarmBoundaryVersionId) ||
             !mission.ScopeZoneIds.Order().SequenceEqual(order.ScopeZoneIds.Order()) ||
             mission.ScopeFingerprint != order.ScopeFingerprint ||
             mission.Purpose is not { } purpose ||

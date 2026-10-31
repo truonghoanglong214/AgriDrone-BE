@@ -41,5 +41,4 @@ public sealed record BoundaryCaptureMutationState(
     BoundaryCaptureSession Session,
     Guid SystemManagerProfileId,
     int? CurrentBoundaryVersionNumber,
-    bool IsAppointmentCurrent,
-    bool HasValidAuthorizations);
+    bool IsAppointmentCurrent);

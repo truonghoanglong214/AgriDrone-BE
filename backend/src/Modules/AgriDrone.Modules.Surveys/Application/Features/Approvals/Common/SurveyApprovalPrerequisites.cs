@@ -119,10 +119,7 @@ internal static class SurveyApprovalManagerEligibilityPolicy
         DateTimeOffset now) =>
         manager.IsUserActive &&
         manager.IsProfileActive &&
-        manager.IsAvailable &&
-        manager.IsFlightQualified &&
-        manager.QualificationExpiresAt is DateTimeOffset expiresAt &&
-        expiresAt > now;
+        manager.IsAvailable;
 }
 
 internal static class SurveyApprovalTenantOwnerEligibilityPolicy

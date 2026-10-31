@@ -99,14 +99,6 @@ public static class DependencyInjection
                         "price_adjustment_status",
                         "system",
                         translator)
-                    .MapEnum<SurveyCaptureAuthorizationType>(
-                        "survey_capture_authorization_type",
-                        "system",
-                        translator)
-                    .MapEnum<SurveyCaptureAuthorizationStatus>(
-                        "survey_capture_authorization_status",
-                        "system",
-                        translator)
                     .MapEnum<SurveyResultStatus>(
                         "survey_result_status",
                         "system",
@@ -131,8 +123,6 @@ public static class DependencyInjection
         services.AddScoped<ISurveysUnitOfWork>(serviceProvider =>
             serviceProvider.GetRequiredService<SurveysDbContext>());
         services.AddScoped<ISurveyServiceRepository, SurveyServiceRepository>();
-        services.AddScoped<ISurveyCaptureAuthorizationRepository,
-            SurveyCaptureAuthorizationRepository>();
         services.AddScoped<IScopeAdjustmentRepository, ScopeAdjustmentRepository>();
         services.AddScoped<IAdjustmentSettlementRepository, AdjustmentSettlementRepository>();
         services.AddScoped<IExtraFlightRequestRepository, ExtraFlightRequestRepository>();

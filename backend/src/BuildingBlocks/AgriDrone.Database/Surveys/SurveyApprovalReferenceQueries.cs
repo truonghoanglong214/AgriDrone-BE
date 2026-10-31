@@ -166,8 +166,6 @@ internal sealed class SurveyApprovalReferenceQueries(
             user.Status == UserStatus.Active,
             profile.Status == SystemManagerProfileStatus.Active,
             profile.Availability == SystemManagerAvailabilityStatus.Available,
-            profile.QualificationStatus == FlightQualificationStatus.Qualified,
-            profile.QualificationExpiresAt,
             profile.Version);
     }
 

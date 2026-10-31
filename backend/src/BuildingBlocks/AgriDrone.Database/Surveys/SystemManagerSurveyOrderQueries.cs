@@ -10,8 +10,7 @@ using Microsoft.EntityFrameworkCore;
 namespace AgriDrone.Database.Surveys;
 
 internal sealed class SystemManagerSurveyOrderQueries(
-    AgriDroneSchemaDbContext context,
-    TimeProvider timeProvider) : ISystemManagerSurveyOrderQueries
+    AgriDroneSchemaDbContext context) : ISystemManagerSurveyOrderQueries
 {
     private const int MaximumPageSize = 100;
 
@@ -25,16 +24,12 @@ internal sealed class SystemManagerSurveyOrderQueries(
         ArgumentNullException.ThrowIfNull(filter);
         EnsureValidPage(page);
 
-        var now = timeProvider.GetUtcNow();
         var managerProfile = await context.Set<SystemManagerProfile>()
             .AsNoTracking()
             .Where(profile =>
                 profile.UserId == actorId &&
                 profile.User.Status == UserStatus.Active &&
-                profile.Status == SystemManagerProfileStatus.Active &&
-                profile.QualificationStatus == FlightQualificationStatus.Qualified &&
-                profile.QualificationExpiresAt.HasValue &&
-                profile.QualificationExpiresAt.Value > now)
+                profile.Status == SystemManagerProfileStatus.Active)
             .Select(profile => new { profile.Id })
             .SingleOrDefaultAsync(cancellationToken);
 

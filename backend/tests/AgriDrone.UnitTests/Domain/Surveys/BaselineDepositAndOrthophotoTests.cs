@@ -209,8 +209,6 @@ public sealed class BaselineDepositAndOrthophotoTests
             HasPendingPriceAdjustment: false,
             IsPaymentAmountAndCurrencyMatched: true,
             SafetyChecksSatisfied: true,
-            HasValidWrittenDataUseConsent: true,
-            HasValidFlightPermission: true,
             HasPendingFinancialSettlement: false,
             HasUnapprovedExtraFlight: false,
             HasFinalizedBoundaryCapture: true,

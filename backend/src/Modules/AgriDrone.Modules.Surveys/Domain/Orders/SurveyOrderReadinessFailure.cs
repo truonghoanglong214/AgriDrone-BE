@@ -24,8 +24,6 @@ public enum SurveyOrderReadinessFailure
     SafetyChecksNotSatisfied,
     OrderNotEligible,
     ServiceDisabled,
-    WrittenConsentNotValid,
-    FlightPermissionNotValid,
     FinancialSettlementPending,
     ExtraFlightNotApproved,
     BoundaryCaptureNotFinalized,

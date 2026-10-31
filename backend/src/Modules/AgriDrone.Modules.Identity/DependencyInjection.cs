@@ -96,7 +96,6 @@ public static class DependencyInjection
                     .MapEnum<UserStatus>("user_status", "system", translator)
                     .MapEnum<SystemManagerProfileStatus>("system_manager_profile_status", "system", translator)
                     .MapEnum<SystemManagerAvailabilityStatus>("system_manager_availability_status", "system", translator)
-                    .MapEnum<FlightQualificationStatus>("flight_qualification_status", "system", translator)
                     .MapEnum<FarmMemberRole>("farm_member_role", "system", translator)
                     .MapEnum<FarmAccessScope>("farm_access_scope", "system", translator)
                     .MapEnum<TenantMemberRole>("tenant_member_role", "system", translator)
