@@ -173,24 +173,9 @@ public static class DependencyInjection
         services.AddScoped<
             IMissionUploadReadinessQueries, MissionUploadReadinessQueries>();
 
-        // Geotagging & Metashape Processing Services
-        services.Configure<GeotagOptions>(configuration.GetSection(GeotagOptions.SectionName));
-        services.Configure<MetashapeOptions>(configuration.GetSection(MetashapeOptions.SectionName));
-
         services.AddSingleton<IMissionProcessingQueue, MissionProcessingQueue>();
-        services.AddScoped<IGeotagService, PythonGeotagService>();
         services.AddScoped<IMissionProcessor, MissionProcessor>();
         services.AddHostedService<MissionProcessingBackgroundService>();
-
-        services.AddHttpClient<IMetashapeService, MetashapeService>((serviceProvider, client) =>
-        {
-            var metashapeOpts = serviceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<MetashapeOptions>>().Value;
-            if (Uri.TryCreate(metashapeOpts.Endpoint, UriKind.Absolute, out var endpointUri))
-            {
-                client.BaseAddress = endpointUri;
-            }
-            client.Timeout = TimeSpan.FromMinutes(metashapeOpts.TimeoutMinutes);
-        });
 
         return services;
     }

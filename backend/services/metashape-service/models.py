@@ -1,5 +1,24 @@
 from typing import Any, Dict, List, Optional
+import json
 from pydantic import BaseModel, Field, field_validator
+
+def normalize_polygon_geojson(v: Any) -> Optional[Dict[str, Any]]:
+    if not v:
+        return None
+    if isinstance(v, dict):
+        return v if v else None
+    if isinstance(v, str):
+        v_str = v.strip()
+        if not v_str or v_str.lower() in ("string", "null", "none"):
+            return None
+        try:
+            parsed = json.loads(v_str)
+            if isinstance(parsed, dict):
+                return parsed if parsed else None
+        except Exception:
+            pass
+        return None
+    return None
 
 class ImageItem(BaseModel):
     storage_key: str
@@ -97,6 +116,11 @@ class TileSliceRequest(BaseModel):
     polygon_geojson: Optional[Dict[str, Any]] = None
     upload_to_minio: bool = False
 
+    @field_validator("polygon_geojson", mode="before")
+    @classmethod
+    def validate_polygon_geojson(cls, v: Any) -> Optional[Dict[str, Any]]:
+        return normalize_polygon_geojson(v)
+
 class TileSliceResponse(BaseModel):
     mission_id: str
     total_tiles: int
@@ -129,6 +153,11 @@ class YoloDetectMissionRequest(BaseModel):
     custom_angle_deg: Optional[float] = None
     polygon_geojson: Optional[Dict[str, Any]] = None
 
+    @field_validator("polygon_geojson", mode="before")
+    @classmethod
+    def validate_polygon_geojson(cls, v: Any) -> Optional[Dict[str, Any]]:
+        return normalize_polygon_geojson(v)
+
 
 class YoloRecalculateGridRequest(BaseModel):
     mission_id: str
@@ -139,6 +168,11 @@ class YoloRecalculateGridRequest(BaseModel):
     anchor_lon: Optional[float] = None
     custom_angle_deg: Optional[float] = None
     polygon_geojson: Optional[Dict[str, Any]] = None
+
+    @field_validator("polygon_geojson", mode="before")
+    @classmethod
+    def validate_polygon_geojson(cls, v: Any) -> Optional[Dict[str, Any]]:
+        return normalize_polygon_geojson(v)
 
 
 class YoloDetectMissionResponse(BaseModel):
@@ -183,6 +217,11 @@ class DiseaseDetectMissionRequest(BaseModel):
     confidence_threshold: float = 0.25
     polygon_geojson: Optional[Dict[str, Any]] = None
     images: Optional[List[ImageItem]] = None
+
+    @field_validator("polygon_geojson", mode="before")
+    @classmethod
+    def validate_polygon_geojson(cls, v: Any) -> Optional[Dict[str, Any]]:
+        return normalize_polygon_geojson(v)
 
 
 class DiseaseDetectMissionResponse(BaseModel):

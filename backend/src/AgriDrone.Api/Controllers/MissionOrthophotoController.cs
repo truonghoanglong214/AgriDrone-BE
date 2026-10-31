@@ -284,4 +284,88 @@ public sealed class MissionOrthophotoController(
             HttpContext,
             value => Results.File(value.Bytes, "text/csv", value.FileName));
     }
+    /// <summary>
+    /// Quét các ảnh thô đã gắn GPS bằng mô hình AI nhận diện bệnh (best_disease.pt),
+    /// vẽ khung viền vùng bệnh trên ảnh (annotated images), trích xuất tọa độ GPS và xuất CSV.
+    /// </summary>
+    [HttpPost("api/missions/{missionId:guid}/farms/{farmId:guid}/disease-detect")]
+    [Authorize(Policy = AccessAuthorizationPolicies.SystemManager)]
+    public async Task<IResult> DetectDiseases(
+        [FromRoute] Guid farmId,
+        [FromRoute] Guid missionId,
+        [FromBody] DetectMissionDiseasesRequest? request,
+        CancellationToken cancellationToken)
+    {
+        var access = await managerAccessService.ResolveFarmAccessAsync(farmId, cancellationToken);
+        if (!access.IsAllowed || access.TenantId is not Guid tenantId || access.FarmId != farmId)
+        {
+            return Results.Forbid();
+        }
+
+        var req = request ?? new DetectMissionDiseasesRequest();
+
+        object? polygon = null;
+        if (req.PolygonGeoJson is System.Text.Json.JsonElement je)
+        {
+            if (je.ValueKind == System.Text.Json.JsonValueKind.Object)
+            {
+                polygon = je;
+            }
+            else if (je.ValueKind == System.Text.Json.JsonValueKind.String)
+            {
+                var s = je.GetString()?.Trim();
+                if (!string.IsNullOrWhiteSpace(s) &&
+                    !s.Equals("string", StringComparison.OrdinalIgnoreCase) &&
+                    !s.Equals("null", StringComparison.OrdinalIgnoreCase))
+                {
+                    try
+                    {
+                        using var doc = System.Text.Json.JsonDocument.Parse(s);
+                        if (doc.RootElement.ValueKind == System.Text.Json.JsonValueKind.Object)
+                        {
+                            polygon = doc.RootElement.Clone();
+                        }
+                    }
+                    catch
+                    {
+                        polygon = null;
+                    }
+                }
+            }
+        }
+
+        var command = new DetectMissionDiseasesCommand(
+            tenantId,
+            farmId,
+            missionId,
+            req.ConfidenceThreshold,
+            polygon);
+
+        var result = await sender.Send(command, cancellationToken);
+
+        return result.ToHttpResult(
+            HttpContext,
+            value => Results.Ok(new DetectMissionDiseasesResponse(
+                value.MissionId,
+                value.ModelName,
+                value.TotalImagesScanned,
+                value.TotalDetections,
+                value.DiseaseSummary,
+                value.CsvDownloadUrl,
+                value.Detections.Select(d => new DiseaseDetectionItemResponse(
+                    d.Id,
+                    d.ClassId,
+                    d.ClassName,
+                    d.Lat,
+                    d.Lon,
+                    d.Confidence,
+                    d.BboxX,
+                    d.BboxY,
+                    d.BboxW,
+                    d.BboxH,
+                    d.ImageName,
+                    d.CropImageUrl,
+                    d.AnnotatedImageUrl)).ToList(),
+                value.AnnotatedImageUrls)));
+    }
 }

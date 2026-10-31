@@ -1,4 +1,4 @@
-namespace AgriDrone.Modules.Missions.Infrastructure.Processing;
+namespace AgriDrone.Integrations.AI;
 
 public sealed class MetashapeOptions
 {
@@ -8,3 +8,4 @@ public sealed class MetashapeOptions
 
     public int TimeoutMinutes { get; set; } = 180;
 }
+

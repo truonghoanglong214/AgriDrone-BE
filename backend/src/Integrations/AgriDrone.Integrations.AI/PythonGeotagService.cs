@@ -5,9 +5,9 @@ using AgriDrone.Modules.Missions.Application.Abstractions.Processing;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace AgriDrone.Modules.Missions.Infrastructure.Processing;
+namespace AgriDrone.Integrations.AI;
 
-internal sealed class PythonGeotagService(
+public sealed class PythonGeotagService(
     IOptions<GeotagOptions> options,
     ILogger<PythonGeotagService> logger) : IGeotagService
 {
@@ -183,3 +183,4 @@ internal sealed class PythonGeotagService(
         return configuredPath;
     }
 }
+

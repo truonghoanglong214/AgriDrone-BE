@@ -15,6 +15,7 @@
     <ProjectReference Include="..\..\src\Modules\AgriDrone.Modules.Notifications\AgriDrone.Modules.Notifications.csproj" />
     <ProjectReference Include="..\..\src\Modules\AgriDrone.Modules.Surveys\AgriDrone.Modules.Surveys.csproj" />
     <ProjectReference Include="..\..\src\Integrations\AgriDrone.Integrations.Media\AgriDrone.Integrations.Media.csproj" />
+    <ProjectReference Include="..\..\src\Integrations\AgriDrone.Integrations.AI\AgriDrone.Integrations.AI.csproj" />
   </ItemGroup>
 
   <ItemGroup>

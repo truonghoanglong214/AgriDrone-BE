@@ -1,7 +1,7 @@
 using System.Net;
 using System.Text.Json;
 using AgriDrone.Modules.Missions.Application.Abstractions.Processing;
-using AgriDrone.Modules.Missions.Infrastructure.Processing;
+using AgriDrone.Integrations.AI;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;

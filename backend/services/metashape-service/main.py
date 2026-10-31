@@ -59,6 +59,9 @@ from models import (
     YoloDetectMissionRequest,
     YoloDetectMissionResponse,
     YoloRecalculateGridRequest,
+    DiseaseDetectionItem,
+    DiseaseDetectMissionRequest,
+    DiseaseDetectMissionResponse,
 )
 from orchard_postprocessor import (
     assign_grid_and_detect_missing,
@@ -1006,13 +1009,24 @@ def recalculate_tree_grid(request: YoloRecalculateGridRequest):
 
 @app.get("/api/v1/yolo/download-csv/{mission_id}", tags=["YOLO Tree Detection"])
 def download_trees_csv(mission_id: str):
+    """Tải file CSV kết quả YOLO của mission (tự động nhận diện trees CSV hoặc diseases CSV)."""
+    # 1. Kiểm tra trees CSV (Mission tạo bản đồ / định danh cây)
     tiles_dir = os.path.join(settings.temp_dir, f"tiling_{mission_id}", "tiles")
-    latest_path = os.path.join(tiles_dir, f"trees_{mission_id}_latest.csv")
-    csv_path = os.path.join(tiles_dir, f"trees_{mission_id}.csv")
-    actual_path = latest_path if os.path.exists(latest_path) else csv_path
-    if os.path.exists(actual_path):
-        return FileResponse(actual_path, media_type="text/csv", filename=f"trees_{mission_id}.csv")
-    raise HTTPException(status_code=404, detail="Trees CSV file not found for this mission.")
+    latest_trees = os.path.join(tiles_dir, f"trees_{mission_id}_latest.csv")
+    csv_trees = os.path.join(tiles_dir, f"trees_{mission_id}.csv")
+    actual_trees = latest_trees if os.path.exists(latest_trees) else csv_trees
+    if os.path.exists(actual_trees):
+        return FileResponse(actual_trees, media_type="text/csv", filename=f"trees_{mission_id}.csv")
+
+    # 2. Kiểm tra diseases CSV (Mission quét bệnh cây)
+    disease_dir = os.path.join(settings.temp_dir, f"disease_{mission_id}")
+    latest_disease = os.path.join(disease_dir, f"diseases_{mission_id}_latest.csv")
+    csv_disease = os.path.join(disease_dir, f"diseases_{mission_id}.csv")
+    actual_disease = latest_disease if os.path.exists(latest_disease) else csv_disease
+    if os.path.exists(actual_disease):
+        return FileResponse(actual_disease, media_type="text/csv", filename=f"diseases_{mission_id}.csv")
+
+    raise HTTPException(status_code=404, detail="YOLO CSV file not found for this mission.")
 
 
 @app.get("/api/v1/yolo/trees/{mission_id}", tags=["YOLO Tree Detection"])
@@ -1063,6 +1077,445 @@ def get_mission_trees(mission_id: str):
         "boundary_points": boundary_points
     }
 
+
+
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ───  Disease Detection Pipeline (best_disease.pt & BBox Crops & Plots)  ─────
+# ═══════════════════════════════════════════════════════════════════════════════
+
+disease_model = None
+
+def get_disease_model():
+    """Load the disease detection YOLO model (best_disease.pt).
+    Falls back to best.pt if best_disease.pt is not found so the API
+    can still be tested during development."""
+    global disease_model
+    if disease_model is None:
+        if YOLO is None:
+            raise RuntimeError("Ultralytics YOLO is not installed.")
+        service_dir = os.path.dirname(__file__)
+        primary_path = os.path.join(service_dir, "best_disease.pt")
+        weights_path = os.path.join(service_dir, "weights", "best_disease.pt")
+        fallback_path = os.path.join(service_dir, "best.pt")
+        if os.path.exists(primary_path):
+            model_path = primary_path
+        elif os.path.exists(weights_path):
+            model_path = weights_path
+        elif os.path.exists(fallback_path):
+            logger.warning(
+                "best_disease.pt not found, falling back to best.pt for disease detection."
+            )
+            model_path = fallback_path
+        else:
+            raise FileNotFoundError(
+                f"Neither best_disease.pt nor best.pt found at {service_dir}"
+            )
+        disease_model = YOLO(model_path)
+        logger.info(f"Loaded Disease YOLO model from {model_path}")
+    return disease_model
+
+
+def extract_exif_gps(image_path: str):
+    """Extract decimal (latitude, longitude) from JPEG EXIF GPS metadata."""
+    try:
+        import piexif
+        exif_dict = piexif.load(image_path)
+        gps = exif_dict.get("GPS")
+        if not gps or piexif.GPSIFD.GPSLatitude not in gps or piexif.GPSIFD.GPSLongitude not in gps:
+            return None
+
+        lat_data = gps[piexif.GPSIFD.GPSLatitude]
+        lat_ref = gps.get(piexif.GPSIFD.GPSLatitudeRef, b'N')
+        if isinstance(lat_ref, bytes):
+            lat_ref = lat_ref.decode('latin1', errors='ignore')
+
+        lon_data = gps[piexif.GPSIFD.GPSLongitude]
+        lon_ref = gps.get(piexif.GPSIFD.GPSLongitudeRef, b'E')
+        if isinstance(lon_ref, bytes):
+            lon_ref = lon_ref.decode('latin1', errors='ignore')
+
+        lat = (lat_data[0][0] / lat_data[0][1] +
+               lat_data[1][0] / (lat_data[1][1] * 60) +
+               lat_data[2][0] / (lat_data[2][1] * 3600))
+        if str(lat_ref).strip().upper() == 'S':
+            lat = -lat
+
+        lon = (lon_data[0][0] / lon_data[0][1] +
+               lon_data[1][0] / (lon_data[1][1] * 60) +
+               lon_data[2][0] / (lon_data[2][1] * 3600))
+        if str(lon_ref).strip().upper() == 'W':
+            lon = -lon
+
+        return lat, lon
+    except Exception as e:
+        logger.warning(f"Could not extract EXIF GPS from {image_path}: {e}")
+        return None
+
+
+@app.post("/api/v1/disease/detect-mission", response_model=DiseaseDetectMissionResponse, tags=["Disease Detection"])
+def detect_mission_diseases(request: DiseaseDetectMissionRequest):
+    """
+    Nhận diện bệnh trên cây trồng bằng mô hình best_disease.pt:
+    - Quét trực tiếp các ảnh thô đã gắn GPS (raw images từ MinIO).
+    - Tự động trích xuất tọa độ GPS từ EXIF từng ảnh.
+    - Chạy mô hình YOLO phát hiện các loại bệnh.
+    - Tạo ảnh đã vẽ boundary viền bao quanh vết bệnh (annotated images).
+    - Cắt (crop) ảnh vùng cây bệnh lưu vào thư mục ảnh tạm phục vụ xem bằng chứng.
+    - Xuất file CSV: diseases_{mission_id}.csv.
+    """
+    import csv as csv_module
+    import cv2
+    from PIL import Image
+
+    model = get_disease_model()
+    class_names = model.names if hasattr(model, "names") else {}
+
+    disease_dir = os.path.join(settings.temp_dir, f"disease_{request.mission_id}")
+    images_dir = os.path.join(disease_dir, "images")
+    crops_dir = os.path.join(disease_dir, "crops")
+    annotated_dir = os.path.join(disease_dir, "annotated")
+    os.makedirs(images_dir, exist_ok=True)
+    os.makedirs(crops_dir, exist_ok=True)
+    os.makedirs(annotated_dir, exist_ok=True)
+
+    local_image_items: list[tuple[str, str, Optional[tuple[float, float]]]] = []
+
+    # 1. Thu thập ảnh: từ request.images (MinIO hoặc disk)
+    if request.images and len(request.images) > 0:
+        logger.info(f"Preparing {len(request.images)} raw images for Disease detection (Mission {request.mission_id})...")
+        for idx, img in enumerate(request.images):
+            ext = os.path.splitext(img.storage_key)[1] or ".jpg"
+            img_filename = f"img_{idx:04d}{ext}"
+            local_path = os.path.join(images_dir, img_filename)
+
+            if os.path.isabs(img.storage_key) and os.path.exists(img.storage_key):
+                if not os.path.exists(local_path):
+                    shutil.copy(img.storage_key, local_path)
+            elif not os.path.exists(local_path) or os.path.getsize(local_path) == 0:
+                try:
+                    minio_storage.download_file(img.storage_key, local_path)
+                except Exception as ex:
+                    logger.warning(f"Failed to download image {img.storage_key} from MinIO: {ex}")
+                    continue
+
+            gps_coords = extract_exif_gps(local_path)
+            local_image_items.append((local_path, img_filename, gps_coords))
+
+    # Fallback: kiểm tra nếu ảnh đã có trong thư mục images
+    elif os.path.exists(images_dir):
+        for fn in sorted(os.listdir(images_dir)):
+            if fn.lower().endswith((".jpg", ".jpeg", ".png")):
+                local_path = os.path.join(images_dir, fn)
+                gps_coords = extract_exif_gps(local_path)
+                local_image_items.append((local_path, fn, gps_coords))
+
+    if not local_image_items:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Không tìm thấy ảnh để nhận diện bệnh cho mission {request.mission_id}. "
+                   f"Vui lòng cung cấp danh sách ảnh thô đã gắn GPS (images)."
+        )
+
+    total_scanned = len(local_image_items)
+    image_paths = [item[0] for item in local_image_items]
+
+    device = 0 if (torch is not None and torch.cuda.is_available()) else "cpu"
+    batch_size = 4 if device == 0 else 2
+    logger.info(f"Running Disease YOLO inference on {total_scanned} images for mission {request.mission_id} (device={device}, batch={batch_size})...")
+    if torch is not None and torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
+    results = model.predict(
+        source=image_paths,
+        conf=request.confidence_threshold,
+        device=device,
+        batch=batch_size,
+        stream=True,
+        verbose=False
+    )
+
+    detections: list[DiseaseDetectionItem] = []
+    disease_counter: dict[str, int] = {}
+    annotated_image_urls: list[str] = []
+    det_idx = 0
+
+    for (img_path, img_filename, gps_coords), r in zip(local_image_items, results):
+        img_lat = gps_coords[0] if gps_coords else 0.0
+        img_lon = gps_coords[1] if gps_coords else 0.0
+
+        if request.polygon_geojson and gps_coords and not is_inside_polygon(
+            img_lat, img_lon, request.polygon_geojson
+        ):
+            continue
+
+        annotated_url = None
+        pil_img = None
+        if len(r.boxes) > 0:
+            # 1. Tạo và lưu ảnh vẽ sẵn khung boundary bao quanh các vết bệnh (Annotated Image)
+            try:
+                annotated_frame = r.plot()
+                annotated_filename = f"annotated_{img_filename}"
+                annotated_path = os.path.join(annotated_dir, annotated_filename)
+                cv2.imwrite(annotated_path, annotated_frame)
+                annotated_url = f"/api/v1/disease/annotated/{request.mission_id}/{annotated_filename}"
+                annotated_image_urls.append(annotated_url)
+            except Exception as ex:
+                logger.warning(f"Failed to plot annotated image for {img_filename}: {ex}")
+
+            # 2. Chuẩn bị crop ảnh
+            try:
+                pil_img = Image.open(img_path)
+                im_w, im_h = pil_img.size
+            except Exception:
+                pil_img = None
+
+        for box in r.boxes:
+            x, y, w, h = box.xywh[0].tolist()
+            conf = float(box.conf[0])
+            cls_id = int(box.cls[0])
+            cls_name = class_names.get(cls_id, f"class_{cls_id}")
+
+            det_idx += 1
+            crop_filename = f"crop_{det_idx:04d}_{cls_name}.jpg"
+            crop_path = os.path.join(crops_dir, crop_filename)
+            crop_url = f"/api/v1/disease/crops/{request.mission_id}/{crop_filename}"
+
+            # Crop vùng ảnh cây bị bệnh lưu file tạm
+            if pil_img is not None:
+                try:
+                    xmin, ymin, xmax, ymax = box.xyxy[0].tolist()
+                    pad_x = (xmax - xmin) * 0.1
+                    pad_y = (ymax - ymin) * 0.1
+                    c_xmin = max(0, int(xmin - pad_x))
+                    c_ymin = max(0, int(ymin - pad_y))
+                    c_xmax = min(im_w, int(xmax + pad_x))
+                    c_ymax = min(im_h, int(ymax + pad_y))
+                    cropped = pil_img.crop((c_xmin, c_ymin, c_xmax, c_ymax))
+                    cropped.convert("RGB").save(crop_path, "JPEG", quality=95)
+                except Exception as ex:
+                    logger.warning(f"Failed to crop image {crop_path}: {ex}")
+
+            detections.append(
+                DiseaseDetectionItem(
+                    id=f"disease_{det_idx:04d}",
+                    class_id=cls_id,
+                    class_name=cls_name,
+                    lat=img_lat,
+                    lon=img_lon,
+                    confidence=round(conf, 4),
+                    bbox_x=round(x, 2),
+                    bbox_y=round(y, 2),
+                    bbox_w=round(w, 2),
+                    bbox_h=round(h, 2),
+                    image_name=img_filename,
+                    crop_image_url=crop_url if os.path.exists(crop_path) else None,
+                    annotated_image_url=annotated_url,
+                )
+            )
+            disease_counter[cls_name] = disease_counter.get(cls_name, 0) + 1
+
+    logger.info(
+        f"Disease detection complete: {len(detections)} detections across {total_scanned} images. Summary: {disease_counter}"
+    )
+
+    # Xuất file CSV
+    csv_filename = f"diseases_{request.mission_id}.csv"
+    actual_csv_path = os.path.join(disease_dir, csv_filename)
+    try:
+        f_csv = open(actual_csv_path, mode="w", newline="", encoding="utf-8")
+    except PermissionError:
+        actual_csv_path = os.path.join(disease_dir, f"diseases_{request.mission_id}_latest.csv")
+        f_csv = open(actual_csv_path, mode="w", newline="", encoding="utf-8")
+
+    with f_csv:
+        writer = csv_module.writer(f_csv)
+        writer.writerow([
+            "detection_id", "class_id", "class_name",
+            "latitude", "longitude", "confidence",
+            "bbox_x", "bbox_y", "bbox_w", "bbox_h",
+            "image_name", "crop_image_url", "annotated_image_url"
+        ])
+        for d in detections:
+            writer.writerow([
+                d.id, d.class_id, d.class_name,
+                d.lat, d.lon, d.confidence,
+                d.bbox_x, d.bbox_y, d.bbox_w, d.bbox_h,
+                d.image_name, d.crop_image_url or "",
+                d.annotated_image_url or ""
+            ])
+
+    logger.info(f"Exported disease CSV to {actual_csv_path}")
+
+    csv_url = f"/api/v1/yolo/download-csv/{request.mission_id}"
+    model_file = os.path.basename(model.ckpt_path) if hasattr(model, "ckpt_path") else "best_disease.pt"
+
+    return DiseaseDetectMissionResponse(
+        mission_id=request.mission_id,
+        model_name=f"{model_file} (Disease-Detection)",
+        total_images_scanned=total_scanned,
+        total_detections=len(detections),
+        disease_summary=disease_counter,
+        csv_download_url=csv_url,
+        annotated_image_urls=annotated_image_urls,
+        detections=detections,
+    )
+
+
+@app.get("/api/v1/disease/annotated/{mission_id}/{filename}", tags=["Disease Detection"])
+def get_disease_annotated_image(mission_id: str, filename: str):
+    """Phục vụ ảnh gốc đã vẽ sẵn bounding box các vết bệnh (annotated image)."""
+    annotated_path = os.path.join(settings.temp_dir, f"disease_{mission_id}", "annotated", filename)
+    if os.path.exists(annotated_path):
+        return FileResponse(annotated_path, media_type="image/jpeg", filename=filename)
+    raise HTTPException(status_code=404, detail="Annotated image not found.")
+
+
+@app.get("/api/v1/disease/crops/{mission_id}/{filename}", tags=["Disease Detection"])
+def get_disease_crop(mission_id: str, filename: str):
+    """Phục vụ ảnh crop các vết bệnh đã phát hiện."""
+    crop_path = os.path.join(settings.temp_dir, f"disease_{mission_id}", "crops", filename)
+    if os.path.exists(crop_path):
+        return FileResponse(crop_path, media_type="image/jpeg", filename=filename)
+    raise HTTPException(status_code=404, detail="Crop image not found.")
+
+
+@app.get("/api/v1/disease/download-csv/{mission_id}", tags=["Disease Detection"])
+def download_diseases_csv(mission_id: str):
+    """Tải file CSV chứa toàn bộ vết bệnh cây đã nhận diện cho mission."""
+    disease_dir = os.path.join(settings.temp_dir, f"disease_{mission_id}")
+    latest_path = os.path.join(disease_dir, f"diseases_{mission_id}_latest.csv")
+    csv_path = os.path.join(disease_dir, f"diseases_{mission_id}.csv")
+    actual_path = latest_path if os.path.exists(latest_path) else csv_path
+    if os.path.exists(actual_path):
+        return FileResponse(actual_path, media_type="text/csv", filename=f"diseases_{mission_id}.csv")
+    raise HTTPException(status_code=404, detail="Diseases CSV file not found for this mission.")
+
+
+@app.get("/api/v1/disease/detections/{mission_id}", tags=["Disease Detection"])
+def get_mission_disease_detections(mission_id: str):
+    """Đọc toàn bộ kết quả phát hiện bệnh cây từ file CSV của mission."""
+    import csv as csv_module
+    disease_dir = os.path.join(settings.temp_dir, f"disease_{mission_id}")
+    latest_path = os.path.join(disease_dir, f"diseases_{mission_id}_latest.csv")
+    csv_path = os.path.join(disease_dir, f"diseases_{mission_id}.csv")
+    actual_path = latest_path if os.path.exists(latest_path) else csv_path
+    if not os.path.exists(actual_path):
+        return {"has_detections": False, "total_detections": 0, "detections": []}
+
+    detections = []
+    with open(actual_path, "r", encoding="utf-8") as f:
+        reader = csv_module.DictReader(f)
+        for r in reader:
+            detections.append({
+                "id": r.get("detection_id", ""),
+                "class_id": int(r.get("class_id", 0)),
+                "class_name": r.get("class_name", ""),
+                "lat": float(r.get("latitude", 0)),
+                "lon": float(r.get("longitude", 0)),
+                "confidence": float(r.get("confidence", 0)),
+                "bbox_x": float(r.get("bbox_x", 0)),
+                "bbox_y": float(r.get("bbox_y", 0)),
+                "bbox_w": float(r.get("bbox_w", 0)),
+                "bbox_h": float(r.get("bbox_h", 0)),
+                "image_name": r.get("image_name", ""),
+                "crop_image_url": r.get("crop_image_url", ""),
+                "annotated_image_url": r.get("annotated_image_url", "")
+            })
+
+    return {
+        "has_detections": True,
+        "total_detections": len(detections),
+        "detections": detections
+    }
+
+
+
+
+
+
+@app.get("/api/v1/disease/gallery/{mission_id}", response_class=HTMLResponse, tags=["Disease Detection"])
+def view_disease_gallery(mission_id: str):
+    """Giao diện web trực quan hiển thị toàn bộ 61 vết bệnh, ảnh crop và ảnh vẽ boundary."""
+    import csv as csv_module
+    disease_dir = os.path.join(settings.temp_dir, f"disease_{mission_id}")
+    csv_path = os.path.join(disease_dir, f"diseases_{mission_id}.csv")
+    if not os.path.exists(csv_path):
+        return HTMLResponse(f"<h3>Chưa có dữ liệu nhận diện bệnh cho mission {mission_id}</h3>", status_code=404)
+
+    rows = []
+    with open(csv_path, "r", encoding="utf-8") as f:
+        reader = csv_module.DictReader(f)
+        for r in reader:
+            rows.append(r)
+
+    summary = {}
+    for r in rows:
+        c = r.get("class_name", "Unknown")
+        summary[c] = summary.get(c, 0) + 1
+
+    cards_html = ""
+    for r in rows:
+        cls = r.get("class_name", "")
+        conf = float(r.get("confidence", 0)) * 100
+        lat = r.get("latitude", "")
+        lon = r.get("longitude", "")
+        crop_url = r.get("crop_image_url", "")
+        annotated_url = r.get("annotated_image_url", "")
+        det_id = r.get("detection_id", "")
+        img_name = r.get("image_name", "")
+
+        is_healthy = "Healthy" in cls
+        badge_color = "#10b981" if is_healthy else "#ef4444"
+
+        cards_html += f"""
+        <div style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,0.06);border:1px solid #e5e7eb;display:flex;flex-direction:column;">
+            <div style="position:relative;background:#f3f4f6;text-align:center;">
+                <img src="{crop_url}" alt="{cls}" style="height:190px;width:100%;object-fit:cover;cursor:pointer;" onclick="window.open('{crop_url}','_blank')"/>
+                <span style="position:absolute;top:8px;left:8px;background:{badge_color};color:#fff;font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px;">{cls}</span>
+                <span style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.65);color:#fff;font-size:11px;font-weight:600;padding:3px 8px;border-radius:999px;">{conf:.1f}%</span>
+            </div>
+            <div style="padding:14px;font-size:13px;color:#374151;display:flex;flex-direction:column;gap:6px;flex:1;">
+                <div style="font-weight:700;color:#111827;font-size:14px;">#{det_id} · <span style="font-weight:400;color:#6b7280;font-size:13px;">{img_name}</span></div>
+                <div style="font-size:12px;color:#4b5563;">📍 Tọa độ GPS: <b>{lat[:9]}, {lon[:9]}</b></div>
+                <div style="margin-top:auto;padding-top:10px;display:flex;gap:8px;">
+                    <a href="{annotated_url}" target="_blank" style="flex:1;text-align:center;background:#2563eb;color:#fff;text-decoration:none;padding:7px 0;border-radius:6px;font-size:12px;font-weight:600;">Xem ảnh khoanh viền</a>
+                    <a href="https://www.google.com/maps?q={lat},{lon}" target="_blank" style="background:#f3f4f6;color:#374151;text-decoration:none;padding:7px 12px;border-radius:6px;font-size:12px;font-weight:500;">Bản đồ</a>
+                </div>
+            </div>
+        </div>
+        """
+
+    summary_pills = "".join(f"<span style='background:#fff;padding:6px 12px;border-radius:20px;font-size:13px;border:1px solid #d1d5db;box-shadow:0 1px 2px rgba(0,0,0,0.05);'><b>{k}</b>: <span style=\'color:#2563eb;font-weight:700;\'>{v}</span></span>" for k, v in summary.items())
+
+    html = f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Kết Quả Nhận Diện Bệnh - Mission {mission_id}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background:#f8fafc; margin:0; padding:28px; color:#111827; }}
+        .header {{ max-width:1380px; margin:0 auto 24px; }}
+        .grid {{ max-width:1380px; margin:0 auto; display:grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap:20px; }}
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1 style="margin:0 0 6px 0;font-size:24px;color:#0f172a;">🌿 Báo Cáo Nhận Diện Cây Bệnh (Mission: {mission_id})</h1>
+        <p style="margin:0 0 16px 0;color:#64748b;font-size:14px;">Đã quét xong toàn bộ <b>216 ảnh</b> thô đã gắn GPS. Phát hiện <b>{len(rows)} vết bệnh</b>.</p>
+        <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;">
+            {summary_pills}
+            <a href="/api/v1/yolo/download-csv/{mission_id}" style="margin-left:auto;background:#059669;color:#fff;text-decoration:none;padding:7px 16px;border-radius:6px;font-size:13px;font-weight:600;">📥 Tải CSV</a>
+        </div>
+    </div>
+    <div class="grid">
+        {cards_html}
+    </div>
+</body>
+</html>"""
+    return HTMLResponse(content=html)
 
 
 if __name__ == "__main__":

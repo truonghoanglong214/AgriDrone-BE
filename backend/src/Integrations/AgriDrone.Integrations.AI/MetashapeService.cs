@@ -5,9 +5,9 @@ using AgriDrone.Modules.Missions.Application.Abstractions.Processing;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace AgriDrone.Modules.Missions.Infrastructure.Processing;
+namespace AgriDrone.Integrations.AI;
 
-internal sealed class MetashapeService(
+public sealed class MetashapeService(
     HttpClient httpClient,
     IOptions<MetashapeOptions> options,
     ILogger<MetashapeService> logger) : IMetashapeService
@@ -23,16 +23,16 @@ internal sealed class MetashapeService(
         Guid tenantId,
         Guid farmId,
         IEnumerable<MetashapeTaskImageItem> images,
-        MetashapeTaskOptions? taskOptions = null,
+        MetashapeTaskOptions? options = null,
         CancellationToken cancellationToken = default)
-        => CreateTaskAsync(missionId, tenantId, farmId, images, taskOptions, "metashape", cancellationToken);
+        => CreateTaskAsync(missionId, tenantId, farmId, images, options, "metashape", cancellationToken);
 
     public async Task<MetashapeTaskCreatedResult> CreateTaskAsync(
         Guid missionId,
         Guid tenantId,
         Guid farmId,
         IEnumerable<MetashapeTaskImageItem> images,
-        MetashapeTaskOptions? taskOptions,
+        MetashapeTaskOptions? options,
         string engine,
         CancellationToken cancellationToken = default)
     {
@@ -54,19 +54,19 @@ internal sealed class MetashapeService(
             })
         };
 
-        if (!string.IsNullOrWhiteSpace(taskOptions?.CameraType))
+        if (!string.IsNullOrWhiteSpace(options?.CameraType))
         {
-            payload["camera_type"] = taskOptions.CameraType;
+            payload["camera_type"] = options.CameraType;
         }
 
-        if (!string.IsNullOrWhiteSpace(taskOptions?.AlignAccuracy))
+        if (!string.IsNullOrWhiteSpace(options?.AlignAccuracy))
         {
-            payload["align_accuracy"] = taskOptions.AlignAccuracy;
+            payload["align_accuracy"] = options.AlignAccuracy;
         }
 
-        if (taskOptions?.GenericPreselection.HasValue == true)
+        if (options?.GenericPreselection.HasValue == true)
         {
-            payload["generic_preselection"] = taskOptions.GenericPreselection.Value;
+            payload["generic_preselection"] = options.GenericPreselection.Value;
         }
 
         var json = JsonSerializer.Serialize(payload, JsonOpts);
@@ -403,7 +403,7 @@ internal sealed class MetashapeService(
                 anchor_lat = anchorLat,
                 anchor_lon = anchorLon,
                 custom_angle_deg = customAngleDeg,
-                polygon_geojson = polygonGeoJson
+                polygon_geojson = CleanPolygonGeoJson(polygonGeoJson)
             };
 
             var json = JsonSerializer.Serialize(payload, JsonOpts);
@@ -532,6 +532,65 @@ internal sealed class MetashapeService(
         }
     }
 
+    private static object? CleanPolygonGeoJson(object? polygonGeoJson)
+    {
+        if (polygonGeoJson is null) return null;
+        if (polygonGeoJson is JsonElement jsonElement)
+        {
+            if (jsonElement.ValueKind == JsonValueKind.Object)
+            {
+                return jsonElement;
+            }
+            if (jsonElement.ValueKind == JsonValueKind.String)
+            {
+                var strVal = jsonElement.GetString()?.Trim();
+                if (string.IsNullOrWhiteSpace(strVal) ||
+                    strVal.Equals("string", StringComparison.OrdinalIgnoreCase) ||
+                    strVal.Equals("null", StringComparison.OrdinalIgnoreCase))
+                {
+                    return null;
+                }
+                try
+                {
+                    using var doc = JsonDocument.Parse(strVal);
+                    if (doc.RootElement.ValueKind == JsonValueKind.Object)
+                    {
+                        return doc.RootElement.Clone();
+                    }
+                }
+                catch
+                {
+                    return null;
+                }
+            }
+            return null;
+        }
+        if (polygonGeoJson is string str)
+        {
+            var strVal = str.Trim();
+            if (string.IsNullOrWhiteSpace(strVal) ||
+                strVal.Equals("string", StringComparison.OrdinalIgnoreCase) ||
+                strVal.Equals("null", StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+            try
+            {
+                using var doc = JsonDocument.Parse(strVal);
+                if (doc.RootElement.ValueKind == JsonValueKind.Object)
+                {
+                    return doc.RootElement.Clone();
+                }
+            }
+            catch
+            {
+                return null;
+            }
+            return null;
+        }
+        return polygonGeoJson;
+    }
+
     public async Task<DetectMissionDiseasesResult> DetectMissionDiseasesAsync(
         Guid missionId,
         Guid tenantId,
@@ -546,7 +605,7 @@ internal sealed class MetashapeService(
             mission_id = missionId.ToString("D"),
             tenant_id = tenantId.ToString("D"),
             confidence_threshold = confidenceThreshold,
-            polygon_geojson = polygonGeoJson,
+            polygon_geojson = CleanPolygonGeoJson(polygonGeoJson),
             images = imageList.Select(img => new
             {
                 storage_key = img.StorageKey,
@@ -658,3 +717,4 @@ internal sealed class MetashapeService(
         }
     }
 }
+
