@@ -19,15 +19,15 @@ def run_metashape_orthophoto_pipeline(
     photo_paths: List[str],
     output_tif_path: str,
     output_jpg_path: str,
-    camera_type: str = "equidistant_fisheye",
+    camera_type: str = "frame",
     align_accuracy: str = "medium",
     generic_preselection: bool = True,
     progress_callback: Optional[Callable[[int, str], None]] = None
 ) -> Tuple[Dict, Dict, int, int]:
     """
-    Executes the automated Agisoft Metashape Pro workflow for GoPro 5 / Fisheye cameras:
+    Executes the automated Agisoft Metashape Pro workflow:
     1. Add photos to new Chunk.
-    2. Set camera type to Equidistant Fisheye.
+    2. Configure camera sensor type (Frame/Linear or Fisheye).
     3. Align photos (Medium accuracy, Generic preselection).
     4. Build Mesh Model (Height Field, Tie Points data).
     5. Build Orthomosaic (EPSG::4326, Mesh surface, Mosaic blending).
@@ -70,9 +70,11 @@ def run_metashape_orthophoto_pipeline(
         if len(chunk.cameras) == 0:
             raise MetashapeProcessingError("Failed to add cameras to Metashape chunk.")
 
-        report(15, "Configuring camera sensor type (Equidistant Fisheye)")
+        is_fisheye = camera_type.lower() in ["fisheye", "equidistant_fisheye"]
+        sensor_type = Metashape.Sensor.Type.Fisheye if is_fisheye else Metashape.Sensor.Type.Frame
+        report(15, f"Configuring camera sensor type ({'Fisheye' if is_fisheye else 'Frame/Linear'})")
         for sensor in chunk.sensors:
-            sensor.type = Metashape.Sensor.Type.Fisheye
+            sensor.type = sensor_type
 
         # Accuracy mapping for matchPhotos (downscale)
         accuracy_map = {

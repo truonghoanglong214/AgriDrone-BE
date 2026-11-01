@@ -1,6 +1,10 @@
 using System.Globalization;
 using System.Text.Json;
 using AgriDrone.Api.Contracts.Missions;
+using AgriDrone.Api.Contracts.Farms;
+using AgriDrone.Api.Mapping;
+using AgriDrone.Modules.Farms.Application.Features.GetAssignedFarmOperationalContext;
+using AgriDrone.Modules.Farms.Application.Features.VerifyFarmBoundary;
 using AgriDrone.Modules.Missions.Application.Features.Missions.CompleteMissionPreflight;
 using AgriDrone.Modules.Missions.Application.Features.Missions.GetActivePreflightChecklist;
 using AgriDrone.Modules.Missions.Application.Features.Missions.GetMissionDetails;
@@ -15,6 +19,7 @@ using AgriDrone.SharedKernel.Application.Abstractions.Authorization;
 using AgriDrone.SharedKernel.Application.Abstractions.Execution;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using NetTopologySuite.Geometries;
 
 namespace AgriDrone.Api.Controllers;
 
@@ -64,7 +69,7 @@ public sealed class SystemManagerMissionsController(
         });
     }
 
-    /// <summary>Lưu bản CSV cây hiện tại theo mission trước khi tải xuống.</summary>
+    /// <summary>Lưu cây GPS và tùy chọn đồng bộ Farm boundary bằng JSON.</summary>
     [HttpPost("plant-gps")]
     public async Task<IResult> ReplacePlantGps(
         [FromRoute] Guid farmId, [FromRoute] Guid missionId,
@@ -76,6 +81,7 @@ public sealed class SystemManagerMissionsController(
             return Results.Forbid();
 
         var trees = request.Trees;
+        var boundaryPoints = request.Boundary;
         if (trees is null || trees.Count is < 1 or > 10000 ||
             trees.Any(tree => string.IsNullOrWhiteSpace(tree.TreeId) || tree.TreeId.Length > 100 ||
                 tree.Row < 1 || tree.Col < 1 ||
@@ -92,25 +98,153 @@ public sealed class SystemManagerMissionsController(
             });
         }
 
+        Polygon? boundary = null;
+        var boundaryPointCount = 0;
+        if (boundaryPoints is { Count: > 0 })
+        {
+            if (boundaryPoints.Any(point =>
+                    point.Longitude is < -180 or > 180 ||
+                    point.Latitude is < -90 or > 90) ||
+                boundaryPoints.DistinctBy(point =>
+                    (point.Longitude, point.Latitude)).Count() < 3)
+            {
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    ["boundary"] = ["Provide at least three distinct valid WGS84 boundary points."]
+                });
+            }
+
+            var positions = boundaryPoints
+                .Select(point => new[]
+                {
+                    (double)point.Longitude,
+                    (double)point.Latitude
+                })
+                .ToList();
+            var first = positions[0];
+            var last = positions[^1];
+            var isClosed = first[0] == last[0] && first[1] == last[1];
+            if (!isClosed)
+            {
+                positions.Add([first[0], first[1]]);
+            }
+
+            boundaryPointCount = isClosed
+                ? boundaryPoints.Count - 1
+                : boundaryPoints.Count;
+            boundary = GeoJsonGeometryMapper.ToPolygon(
+                new GeoJsonPolygonRequest(
+                    "Polygon",
+                    [positions.ToArray()]));
+
+            if (boundary is null || !boundary.IsValid ||
+                boundary.IsEmpty || boundary.Area <= 0)
+            {
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    ["boundary"] = ["Boundary points do not form a valid WGS84 polygon."]
+                });
+            }
+
+            var outsideTreeIds = trees
+                .Where(tree => !boundary.Covers(
+                    boundary.Factory.CreatePoint(new Coordinate(
+                        (double)tree.Longitude!.Value,
+                        (double)tree.Latitude!.Value))))
+                .Select(tree => tree.TreeId)
+                .Take(10)
+                .ToArray();
+            if (outsideTreeIds.Length > 0)
+            {
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    ["trees"] =
+                    [$"Every tree must be covered by the boundary. Outside treeId values: {string.Join(", ", outsideTreeIds)}."]
+                });
+            }
+        }
+
+        var missionRows = await plantGpsStore.GetAsync(
+            access.TenantId!.Value, farmId, missionId, cancellationToken);
+        if (missionRows is null)
+            return Results.NotFound();
+
+        Guid? boundaryId = null;
+        int? boundaryVersionNumber = null;
+        if (boundary is not null)
+        {
+            var contextResult = await sender.Send(
+                new GetAssignedFarmOperationalContextQuery(farmId),
+                cancellationToken);
+            if (contextResult.IsFailure)
+            {
+                return contextResult.ToHttpResult(
+                    HttpContext,
+                    _ => Results.NoContent());
+            }
+
+            var operationalContext = contextResult.Value;
+            var currentBoundary = operationalContext.ApprovedBoundary;
+            if (currentBoundary is not null &&
+                currentBoundary.Geometry.EqualsTopologically(boundary))
+            {
+                boundaryId = currentBoundary.Id;
+                boundaryVersionNumber = currentBoundary.VersionNumber;
+            }
+            else
+            {
+                var boundaryResult = await sender.Send(
+                    new VerifyFarmBoundaryCommand(
+                        farmId,
+                        boundary,
+                        "Update Farm boundary from mission plant GPS JSON.",
+                        $"mission:{missionId:D}",
+                        operationalContext.Version,
+                        currentBoundary?.VersionNumber),
+                    cancellationToken);
+                if (boundaryResult.IsFailure)
+                {
+                    return boundaryResult.ToHttpResult(
+                        HttpContext,
+                        _ => Results.NoContent());
+                }
+
+                boundaryId = boundaryResult.Value.BoundaryId;
+                boundaryVersionNumber = boundaryResult.Value.VersionNumber;
+            }
+        }
+
         var rows = trees.Select(tree => new MissionPlantGpsRow(
             tree.TreeId, tree.Row, tree.Col, tree.Latitude!.Value, tree.Longitude!.Value,
             tree.Confidence, tree.Status, tree.Source)).ToArray();
         var saved = await plantGpsStore.ReplaceAsync(access.TenantId.Value,
             farmId, missionId, rows, cancellationToken);
-        return saved ? Results.Ok(new { missionId, savedCount = rows.Length })
+        return saved
+            ? Results.Ok(new
+            {
+                missionId,
+                savedCount = rows.Length,
+                boundaryPointCount,
+                boundaryId,
+                boundaryVersionNumber,
+                boundaryStatus = boundaryId.HasValue ? "Approved" : null
+            })
             : Results.NotFound();
     }
 
-    /// <summary>Lưu danh sách cây từ file CSV cho mission.</summary>
+    /// <summary>
+    /// Lưu cây và cập nhật Farm boundary từ các dòng BOUNDARY trong CSV.
+    /// </summary>
     [HttpPost("plant-gps/csv")]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(5 * 1024 * 1024)]
     public async Task<IResult> ReplacePlantGpsFromCsv(
         [FromRoute] Guid farmId,
         [FromRoute] Guid missionId,
-        IFormFile file,
+        [FromForm] UploadMissionPlantGpsCsvRequest request,
         CancellationToken cancellationToken)
     {
+        var file = request.File;
         const long maximumFileSizeBytes = 5 * 1024 * 1024;
         const string expectedHeader =
             "tree_id,row,col,latitude,longitude,confidence,status,source";
@@ -130,6 +264,8 @@ public sealed class SystemManagerMissionsController(
             return Results.Forbid();
 
         var rows = new List<MissionPlantGpsRow>();
+        var boundaryPositions = new List<double[]>();
+        var boundaryPointIds = new HashSet<string>(StringComparer.Ordinal);
         using var reader = new StreamReader(file.OpenReadStream());
         var header = await reader.ReadLineAsync(cancellationToken);
 
@@ -143,11 +279,14 @@ public sealed class SystemManagerMissionsController(
         }
 
         var lineNumber = 1;
+        var dataRowCount = 0;
         while (await reader.ReadLineAsync(cancellationToken) is { } line)
         {
             lineNumber++;
             if (string.IsNullOrWhiteSpace(line))
                 continue;
+
+            dataRowCount++;
 
             // Python currently emits unquoted scalar values with this exact 8-column schema.
             var columns = line.Split(',');
@@ -169,11 +308,36 @@ public sealed class SystemManagerMissionsController(
                 });
             }
 
-            rows.Add(new MissionPlantGpsRow(
-                columns[0].Trim(), row, col, latitude, longitude,
-                confidence, columns[6].Trim(), columns[7].Trim()));
+            var treeId = columns[0].Trim();
+            var status = columns[6].Trim();
+            var source = columns[7].Trim();
 
-            if (rows.Count > 10000)
+            if (string.Equals(status, "BOUNDARY", StringComparison.OrdinalIgnoreCase))
+            {
+                if (string.IsNullOrWhiteSpace(treeId) || treeId.Length > 100 ||
+                    !boundaryPointIds.Add(treeId) || row != 0 || col != 0 ||
+                    latitude is < -90 or > 90 ||
+                    longitude is < -180 or > 180 ||
+                    confidence is < 0 or > 1 ||
+                    string.IsNullOrWhiteSpace(source) || source.Length > 100)
+                {
+                    return Results.ValidationProblem(new Dictionary<string, string[]>
+                    {
+                        ["file"] =
+                        [$"CSV boundary row {lineNumber} must have a unique tree_id, row/col 0, valid coordinates, confidence, and source."]
+                    });
+                }
+
+                boundaryPositions.Add([(double)longitude, (double)latitude]);
+            }
+            else
+            {
+                rows.Add(new MissionPlantGpsRow(
+                    treeId, row, col, latitude, longitude,
+                    confidence, status, source));
+            }
+
+            if (dataRowCount > 10000)
             {
                 return Results.ValidationProblem(new Dictionary<string, string[]>
                 {
@@ -201,11 +365,126 @@ public sealed class SystemManagerMissionsController(
             });
         }
 
+        Polygon? csvBoundary = null;
+        if (boundaryPositions.Count > 0)
+        {
+            if (boundaryPositions.Count < 3 ||
+                boundaryPositions.DistinctBy(position =>
+                    (position[0], position[1])).Count() < 3)
+            {
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    ["file"] =
+                    ["CSV boundary must contain at least three distinct coordinate points."]
+                });
+            }
+
+            var first = boundaryPositions[0];
+            var last = boundaryPositions[^1];
+            if (first[0] != last[0] || first[1] != last[1])
+            {
+                boundaryPositions.Add([first[0], first[1]]);
+            }
+
+            csvBoundary = GeoJsonGeometryMapper.ToPolygon(
+                new GeoJsonPolygonRequest(
+                    "Polygon",
+                    [boundaryPositions.ToArray()]));
+
+            if (csvBoundary is null || !csvBoundary.IsValid ||
+                csvBoundary.IsEmpty || csvBoundary.Area <= 0)
+            {
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    ["file"] =
+                    ["CSV boundary points do not form a valid WGS84 polygon."]
+                });
+            }
+
+            var outsideTreeIds = rows
+                .Where(tree => !csvBoundary.Covers(
+                    csvBoundary.Factory.CreatePoint(new Coordinate(
+                        (double)tree.Longitude,
+                        (double)tree.Latitude))))
+                .Select(tree => tree.TreeId)
+                .Take(10)
+                .ToArray();
+
+            if (outsideTreeIds.Length > 0)
+            {
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    ["file"] =
+                    [$"Every tree must be covered by the CSV boundary. Outside tree_id values: {string.Join(", ", outsideTreeIds)}."]
+                });
+            }
+        }
+
+        var missionRows = await plantGpsStore.GetAsync(
+            access.TenantId.Value, farmId, missionId, cancellationToken);
+        if (missionRows is null)
+            return Results.NotFound();
+
+        Guid? boundaryId = null;
+        int? boundaryVersionNumber = null;
+        if (csvBoundary is not null)
+        {
+            var contextResult = await sender.Send(
+                new GetAssignedFarmOperationalContextQuery(farmId),
+                cancellationToken);
+            if (contextResult.IsFailure)
+            {
+                return contextResult.ToHttpResult(
+                    HttpContext,
+                    _ => Results.NoContent());
+            }
+
+            var operationalContext = contextResult.Value;
+            var currentBoundary = operationalContext.ApprovedBoundary;
+            if (currentBoundary is not null &&
+                currentBoundary.Geometry.EqualsTopologically(csvBoundary))
+            {
+                boundaryId = currentBoundary.Id;
+                boundaryVersionNumber = currentBoundary.VersionNumber;
+            }
+            else
+            {
+                var boundaryResult = await sender.Send(
+                    new VerifyFarmBoundaryCommand(
+                        farmId,
+                        csvBoundary,
+                        "Update Farm boundary from mission plant GPS CSV.",
+                        $"mission:{missionId:D}",
+                        operationalContext.Version,
+                        currentBoundary?.VersionNumber),
+                    cancellationToken);
+                if (boundaryResult.IsFailure)
+                {
+                    return boundaryResult.ToHttpResult(
+                        HttpContext,
+                        _ => Results.NoContent());
+                }
+
+                boundaryId = boundaryResult.Value.BoundaryId;
+                boundaryVersionNumber = boundaryResult.Value.VersionNumber;
+            }
+        }
+
         var saved = await plantGpsStore.ReplaceAsync(
             access.TenantId.Value, farmId, missionId, rows, cancellationToken);
 
         return saved
-            ? Results.Ok(new { missionId, savedCount = rows.Count })
+            ? Results.Ok(new
+            {
+                missionId,
+                savedCount = rows.Count,
+                boundaryPointCount = boundaryPositions.Count == 0
+                    ? 0
+                    : boundaryPositions.Count - 1,
+                boundaryId,
+                boundaryVersionNumber,
+                boundaryStatus = boundaryId.HasValue ? "Approved" : null
+            })
             : Results.NotFound();
     }
 

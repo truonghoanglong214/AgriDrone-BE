@@ -49,11 +49,59 @@ public interface IMetashapeService
         MetashapeTaskOptions? options = null,
         CancellationToken cancellationToken = default);
 
+    Task<MetashapeTaskCreatedResult> CreateTaskAsync(
+        Guid missionId,
+        Guid tenantId,
+        Guid farmId,
+        IEnumerable<MetashapeTaskImageItem> images,
+        MetashapeTaskOptions? options,
+        string engine,
+        CancellationToken cancellationToken = default);
+
     Task<MetashapeTaskStatusResult> GetTaskStatusAsync(
         string taskId,
         CancellationToken cancellationToken = default);
 
     Task<bool> CancelTaskAsync(
         string taskId,
+        CancellationToken cancellationToken = default);
+
+    Task<SliceTilesResult> SliceTilesAsync(
+        Guid missionId,
+        Guid tenantId,
+        string? tifStorageKey = null,
+        int tileSize = 640,
+        int overlap = 64,
+        bool dualScale = true,
+        object? polygonGeoJson = null,
+        bool uploadToMinio = false,
+        CancellationToken cancellationToken = default);
+
+    Task<DetectMissionTreesResult> DetectMissionTreesAsync(
+        Guid missionId,
+        Guid tenantId,
+        double confidenceThreshold = 0.25,
+        double rowSpacing = 2.8,
+        double colSpacing = 2.5,
+        object? polygonGeoJson = null,
+        double? anchorLat = null,
+        double? anchorLon = null,
+        double? customAngleDeg = null,
+        CancellationToken cancellationToken = default);
+
+    Task<(byte[] Bytes, string FileName)?> DownloadTreesCsvAsync(
+        Guid missionId,
+        CancellationToken cancellationToken = default);
+
+    Task<DetectMissionDiseasesResult> DetectMissionDiseasesAsync(
+        Guid missionId,
+        Guid tenantId,
+        IEnumerable<MetashapeTaskImageItem>? images = null,
+        double confidenceThreshold = 0.25,
+        object? polygonGeoJson = null,
+        CancellationToken cancellationToken = default);
+
+    Task<(byte[] Bytes, string FileName)?> DownloadDiseasesCsvAsync(
+        Guid missionId,
         CancellationToken cancellationToken = default);
 }

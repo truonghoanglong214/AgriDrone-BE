@@ -1,5 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
     <ProjectReference Include="..\..\BuildingBlocks\AgriDrone.SharedKernel\AgriDrone.SharedKernel.csproj" />
+    <ProjectReference Include="..\..\Modules\AgriDrone.Modules.Missions\AgriDrone.Modules.Missions.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 </Project>

@@ -1,4 +1,4 @@
-namespace AgriDrone.Modules.Missions.Infrastructure.Processing;
+namespace AgriDrone.Integrations.AI;
 
 public sealed class GeotagOptions
 {
@@ -12,3 +12,4 @@ public sealed class GeotagOptions
 
     public double DefaultMaxDiffSeconds { get; set; } = 3.0;
 }
+

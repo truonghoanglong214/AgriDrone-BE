@@ -19,4 +19,8 @@ class Settings(BaseModel):
         os.path.abspath(os.path.join(os.path.dirname(__file__), "temp"))
     )
 
+    # NodeODM Configuration
+    nodeodm_host: str = os.getenv("NODEODM_HOST", "localhost")
+    nodeodm_port: int = int(os.getenv("NODEODM_PORT", "3000"))
+
 settings = Settings()

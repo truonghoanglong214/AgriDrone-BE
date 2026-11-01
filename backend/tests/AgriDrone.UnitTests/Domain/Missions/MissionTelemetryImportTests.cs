@@ -86,8 +86,8 @@ public sealed class MissionTelemetryImportTests
         var point = segment.RootElement
             .GetProperty("points")[0];
 
-        Assert.True(segment.RootElement.GetProperty("segmentIndex").ValueKind == System.Text.Json.JsonValueKind.Null); // segmentIndex
-
+        Assert.Equal(JsonValueKind.Null, segment.RootElement
+            .GetProperty("segmentIndex").ValueKind);
         Assert.Equal(4, point.EnumerateObject().Count());
         Assert.Equal("2026-10-13 10:12:44", point
             .GetProperty("timestamp").GetString());
@@ -126,7 +126,6 @@ public sealed class MissionTelemetryImportTests
         Assert.NotNull(telemetryImport.SelectedSegmentJson);
         Assert.Equal(1, telemetryImport.SelectedSegmentJson.RootElement
             .GetProperty("segmentIndex").GetInt32());
-
         Assert.Equal(2, telemetryImport.SelectedSegmentJson.RootElement
             .GetProperty("points").GetArrayLength());
     }

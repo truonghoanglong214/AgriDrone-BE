@@ -8,7 +8,8 @@ public sealed record ProcessMetashapeCommand(
     Guid TenantId,
     Guid FarmId,
     Guid MissionId,
-    MetashapeTaskOptions? CustomOptions = null)
+    MetashapeTaskOptions? CustomOptions = null,
+    string Engine = "metashape")
     : IRequest<Result<ProcessMetashapeResult>>;
 
 public sealed record ProcessMetashapeResult(

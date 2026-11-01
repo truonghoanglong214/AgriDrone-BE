@@ -55,10 +55,31 @@ internal sealed class ProcessMetashapeCommandHandler(
 
         if (mission.Status == MissionStatus.Processing)
         {
-            return Result.Failure<ProcessMetashapeResult>(
-                AppError.Conflict(
-                    "ProcessMetashape.AlreadyProcessing",
-                    "Nhiệm vụ này đang trong quá trình ghép ảnh (PROCESSING). Vui lòng dùng endpoint orthophoto-status để theo dõi tiến độ."));
+            var existingTaskId = ExtractTaskId(mission.Notes);
+            var isGhostTask = false;
+
+            if (!string.IsNullOrWhiteSpace(existingTaskId))
+            {
+                var checkStatus = await metashapeService.GetTaskStatusAsync(existingTaskId, cancellationToken);
+                if (!checkStatus.IsSuccess && checkStatus.ErrorMessage is not null &&
+                    (checkStatus.ErrorMessage.Contains("NotFound", StringComparison.OrdinalIgnoreCase) ||
+                     checkStatus.ErrorMessage.Contains("not found", StringComparison.OrdinalIgnoreCase)))
+                {
+                    isGhostTask = true;
+                    logger.LogWarning(
+                        "Mission {MissionId} was locked in Processing by ghost task {TaskId} that no longer exists on engine. Auto-recovering.",
+                        request.MissionId,
+                        existingTaskId);
+                }
+            }
+
+            if (!isGhostTask)
+            {
+                return Result.Failure<ProcessMetashapeResult>(
+                    AppError.Conflict(
+                        "ProcessMetashape.AlreadyProcessing",
+                        "Nhiệm vụ này đang trong quá trình ghép ảnh (PROCESSING). Vui lòng dùng endpoint orthophoto-status để theo dõi tiến độ."));
+            }
         }
 
         if (mission.Status is not (MissionStatus.AwaitingReview or MissionStatus.ReadyForProcessing or MissionStatus.ProcessingFailed))
@@ -106,29 +127,33 @@ internal sealed class ProcessMetashapeCommandHandler(
             request.FarmId,
             imageItems,
             request.CustomOptions,
+            request.Engine,
             cancellationToken);
 
         if (!taskResult.IsSuccess || string.IsNullOrWhiteSpace(taskResult.TaskId))
         {
             logger.LogError(
-                "Metashape task creation failed for Mission {MissionId}: {Error}",
+                "{Engine} task creation failed for Mission {MissionId}: {Error}",
+                request.Engine,
                 request.MissionId,
                 taskResult.ErrorMessage);
 
             return Result.Failure<ProcessMetashapeResult>(
                 AppError.Failure(
                     "ProcessMetashape.CreationFailed",
-                    taskResult.ErrorMessage ?? "Failed to create task in Metashape."));
+                    taskResult.ErrorMessage ?? $"Failed to create task in {request.Engine}."));
         }
 
         var now = timeProvider.GetUtcNow();
         mission.StartMapProcessing(now);
-        mission.UpdateNotes($"[METASHAPE] TaskId:{taskResult.TaskId}|StartedAt:{now:O}");
+        var engineTag = request.Engine.ToUpperInvariant();
+        mission.UpdateNotes($"[{engineTag}] TaskId:{taskResult.TaskId}|StartedAt:{now:O}");
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         logger.LogInformation(
-            "Metashape task {TaskId} successfully initiated for Mission {MissionId}.",
+            "{Engine} task {TaskId} successfully initiated for Mission {MissionId}.",
+            request.Engine,
             taskResult.TaskId,
             request.MissionId);
 
@@ -136,6 +161,13 @@ internal sealed class ProcessMetashapeCommandHandler(
             mission.Id,
             taskResult.TaskId,
             "QUEUED",
-            "Metashape photogrammetry task successfully submitted."));
+            $"{request.Engine} photogrammetry task successfully submitted."));
+    }
+
+    private static string? ExtractTaskId(string? notes)
+    {
+        if (string.IsNullOrWhiteSpace(notes)) return null;
+        var match = System.Text.RegularExpressions.Regex.Match(notes, @"(?:TaskId:|uuid:)([a-zA-Z0-9\-]+)");
+        return match.Success ? match.Groups[1].Value : null;
     }
 }

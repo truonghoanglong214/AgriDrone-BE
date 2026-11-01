@@ -1,5 +1,24 @@
 from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, Field
+import json
+from pydantic import BaseModel, Field, field_validator
+
+def normalize_polygon_geojson(v: Any) -> Optional[Dict[str, Any]]:
+    if not v:
+        return None
+    if isinstance(v, dict):
+        return v if v else None
+    if isinstance(v, str):
+        v_str = v.strip()
+        if not v_str or v_str.lower() in ("string", "null", "none"):
+            return None
+        try:
+            parsed = json.loads(v_str)
+            if isinstance(parsed, dict):
+                return parsed if parsed else None
+        except Exception:
+            pass
+        return None
+    return None
 
 class ImageItem(BaseModel):
     storage_key: str
@@ -10,10 +29,25 @@ class ProcessMetashapeRequest(BaseModel):
     tenant_id: str
     farm_id: str
     images: List[ImageItem] = Field(default_factory=list)
-    camera_type: str = "equidistant_fisheye"
+    camera_type: str = "frame"
     align_accuracy: str = "medium"
     generic_preselection: bool = True
     delete_source_images: bool = True
+
+    @field_validator("camera_type", mode="before")
+    @classmethod
+    def default_camera_type(cls, v):
+        return v or "frame"
+
+    @field_validator("align_accuracy", mode="before")
+    @classmethod
+    def default_align_accuracy(cls, v):
+        return v or "medium"
+
+    @field_validator("generic_preselection", mode="before")
+    @classmethod
+    def default_generic_preselection(cls, v):
+        return True if v is None else v
 
 class ProcessMetashapeResponse(BaseModel):
     mission_id: str
@@ -82,6 +116,11 @@ class TileSliceRequest(BaseModel):
     polygon_geojson: Optional[Dict[str, Any]] = None
     upload_to_minio: bool = False
 
+    @field_validator("polygon_geojson", mode="before")
+    @classmethod
+    def validate_polygon_geojson(cls, v: Any) -> Optional[Dict[str, Any]]:
+        return normalize_polygon_geojson(v)
+
 class TileSliceResponse(BaseModel):
     mission_id: str
     total_tiles: int
@@ -105,7 +144,7 @@ class TreeItem(BaseModel):
 
 class YoloDetectMissionRequest(BaseModel):
     mission_id: str
-    tenant_id: str = "tenant-001"
+    tenant_id: str
     confidence_threshold: float = 0.25
     row_spacing: float = 2.8
     col_spacing: float = 2.7
@@ -113,6 +152,27 @@ class YoloDetectMissionRequest(BaseModel):
     anchor_lon: Optional[float] = None
     custom_angle_deg: Optional[float] = None
     polygon_geojson: Optional[Dict[str, Any]] = None
+
+    @field_validator("polygon_geojson", mode="before")
+    @classmethod
+    def validate_polygon_geojson(cls, v: Any) -> Optional[Dict[str, Any]]:
+        return normalize_polygon_geojson(v)
+
+
+class YoloRecalculateGridRequest(BaseModel):
+    mission_id: str
+    active_trees: List[Dict[str, Any]]
+    row_spacing: float = 2.5
+    col_spacing: float = 2.5
+    anchor_lat: Optional[float] = None
+    anchor_lon: Optional[float] = None
+    custom_angle_deg: Optional[float] = None
+    polygon_geojson: Optional[Dict[str, Any]] = None
+
+    @field_validator("polygon_geojson", mode="before")
+    @classmethod
+    def validate_polygon_geojson(cls, v: Any) -> Optional[Dict[str, Any]]:
+        return normalize_polygon_geojson(v)
 
 
 class YoloDetectMissionResponse(BaseModel):
@@ -129,4 +189,51 @@ class YoloDetectMissionResponse(BaseModel):
     csv_download_url: Optional[str] = None
     active_trees: List[TreeItem] = Field(default_factory=list)
     missing_trees: List[TreeItem] = Field(default_factory=list)
+
+
+# ─── Disease Detection Models ─────────────────────────────────────────────────
+
+class DiseaseDetectionItem(BaseModel):
+    """A single disease detection instance with GPS coordinates, cropped image and annotated image."""
+    id: str
+    class_id: int
+    class_name: str
+    lat: float
+    lon: float
+    confidence: float
+    bbox_x: float
+    bbox_y: float
+    bbox_w: float
+    bbox_h: float
+    image_name: str
+    crop_image_url: Optional[str] = None
+    annotated_image_url: Optional[str] = None
+
+
+class DiseaseDetectMissionRequest(BaseModel):
+    """Request to run disease detection directly on raw geotagged mission images."""
+    mission_id: str
+    tenant_id: str = "tenant-001"
+    confidence_threshold: float = 0.25
+    polygon_geojson: Optional[Dict[str, Any]] = None
+    images: Optional[List[ImageItem]] = None
+
+    @field_validator("polygon_geojson", mode="before")
+    @classmethod
+    def validate_polygon_geojson(cls, v: Any) -> Optional[Dict[str, Any]]:
+        return normalize_polygon_geojson(v)
+
+
+class DiseaseDetectMissionResponse(BaseModel):
+    """Response containing all disease detections for a mission."""
+    mission_id: str
+    model_name: str
+    total_images_scanned: int
+    total_detections: int
+    disease_summary: Dict[str, int] = Field(default_factory=dict)
+    csv_download_url: Optional[str] = None
+    annotated_image_urls: List[str] = Field(default_factory=list)
+    detections: List[DiseaseDetectionItem] = Field(default_factory=list)
+
+
 

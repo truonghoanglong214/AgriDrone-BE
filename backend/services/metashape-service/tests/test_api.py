@@ -51,3 +51,30 @@ def test_cancel_task():
     assert response.status_code == 200
     assert response.json()["status"] == "CANCELED"
     assert tasks_db[task_id].status == "CANCELED"
+
+
+def test_disease_detections_not_found():
+    response = client.get("/api/v1/disease/detections/non-existent-mission")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["has_detections"] is False
+    assert data["detections"] == []
+
+
+def test_disease_csv_not_found():
+    response = client.get("/api/v1/disease/download-csv/non-existent-mission")
+    assert response.status_code == 404
+
+
+def test_disease_crop_not_found():
+    response = client.get("/api/v1/disease/crops/non-existent-mission/crop_0001.jpg")
+    assert response.status_code == 404
+
+
+def test_disease_detect_missing_images():
+    response = client.post("/api/v1/disease/detect-mission", json={
+        "mission_id": "non-existent-mission-id",
+        "confidence_threshold": 0.25
+    })
+    assert response.status_code == 400
+

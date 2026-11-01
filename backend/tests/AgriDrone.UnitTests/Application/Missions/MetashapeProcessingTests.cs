@@ -1,7 +1,7 @@
 using System.Net;
 using System.Text.Json;
 using AgriDrone.Modules.Missions.Application.Abstractions.Processing;
-using AgriDrone.Modules.Missions.Infrastructure.Processing;
+using AgriDrone.Integrations.AI;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -46,6 +46,45 @@ public sealed class MetashapeProcessingTests
         };
 
         var result = await service.CreateTaskAsync(missionId, tenantId, farmId, images);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(expectedTaskId, result.TaskId);
+    }
+
+    [Fact]
+    public async Task CreateTaskAsyncWhenEngineIsOdmSubmitsToOdmEndpoint()
+    {
+        var expectedTaskId = Guid.NewGuid().ToString("D");
+        var responseJson = JsonSerializer.Serialize(new
+        {
+            task_id = expectedTaskId,
+            status = "QUEUED",
+            message = "OpenDroneMap task submitted"
+        });
+
+        var handler = new MockHttpMessageHandler((req, _) =>
+        {
+            Assert.Equal(HttpMethod.Post, req.Method);
+            Assert.Contains("/api/v1/odm/process", req.RequestUri?.ToString());
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(responseJson, System.Text.Encoding.UTF8, "application/json")
+            });
+        });
+
+        using var client = new HttpClient(handler) { BaseAddress = new Uri("http://localhost:8000") };
+        var options = Options.Create(new MetashapeOptions { Endpoint = "http://localhost:8000" });
+        var service = new MetashapeService(client, options, NullLogger<MetashapeService>.Instance);
+
+        var missionId = Guid.NewGuid();
+        var tenantId = Guid.NewGuid();
+        var farmId = Guid.NewGuid();
+        var images = new List<MetashapeTaskImageItem>
+        {
+            new("tenants/test/media/img1.jpg", "http://minio/img1.jpg")
+        };
+
+        var result = await service.CreateTaskAsync(missionId, tenantId, farmId, images, null, "odm");
 
         Assert.True(result.IsSuccess);
         Assert.Equal(expectedTaskId, result.TaskId);

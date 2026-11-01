@@ -3,6 +3,7 @@ using AgriDrone.Api.ModelBinding;
 using AgriDrone.Api.Surveys;
 using AgriDrone.Api.Swagger;
 using AgriDrone.Database;
+using AgriDrone.Integrations.AI;
 using AgriDrone.Integrations.Email;
 using AgriDrone.Integrations.Media;
 using AgriDrone.Integrations.Media.Telemetry;
@@ -133,6 +134,7 @@ builder.Services
     .AddPlantsModule(builder.Configuration)
     .AddSurveysModule(builder.Configuration)
     .AddSePayIntegration(builder.Configuration)
+    .AddAiIntegration(builder.Configuration)
     .AddIntegrationMessagingFoundation(builder.Configuration)
     .AddMappingPublicationPersistence(builder.Configuration)
     .AddSurveyResultPublicationPersistence(builder.Configuration)
