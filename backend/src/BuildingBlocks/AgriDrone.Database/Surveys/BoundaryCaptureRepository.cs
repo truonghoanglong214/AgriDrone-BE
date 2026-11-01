@@ -53,7 +53,7 @@ internal sealed class BoundaryCaptureRepository(
         var appointment = await context.SurveyAppointments
             .Where(item => item.SurveyOrderId == surveyOrderId &&
                            item.Purpose ==
-                               SurveyAppointmentPurpose.BaselineMapping &&
+                                SurveyAppointmentPurpose.BaselineMapping &&
                            item.Status == SurveyAppointmentStatus.Confirmed)
             .OrderByDescending(item => item.RevisionNumber)
             .FirstOrDefaultAsync(cancellationToken);
@@ -68,15 +68,6 @@ internal sealed class BoundaryCaptureRepository(
         {
             return Result.Failure<BoundaryCaptureStartState>(
                 BoundaryCaptureError.AppointmentWindowClosed());
-        }
-
-        if (!await HasBothValidAuthorizationsAsync(
-                surveyOrderId,
-                evaluatedAt,
-                cancellationToken))
-        {
-            return Result.Failure<BoundaryCaptureStartState>(
-                BoundaryCaptureError.AuthorizationNotValid());
         }
 
         var existingSession = await context.BoundaryCaptureSessions
@@ -144,7 +135,7 @@ internal sealed class BoundaryCaptureRepository(
         var currentBoundaryVersion = await context.FarmBoundaries
             .Where(item => item.FarmId == session.FarmId &&
                            item.Status ==
-                               Modules.Farms.Domain.Boundaries.FarmBoundaryStatus.Approved)
+                                Modules.Farms.Domain.Boundaries.FarmBoundaryStatus.Approved)
             .Select(item => (int?)item.VersionNumber)
             .SingleOrDefaultAsync(cancellationToken);
         var isAppointmentCurrent = await context.SurveyAppointments
@@ -157,10 +148,6 @@ internal sealed class BoundaryCaptureRepository(
                         item.ProposedStartAt <= evaluatedAt &&
                         evaluatedAt <= item.ProposedEndAt,
                 cancellationToken);
-        var hasValidAuthorizations = await HasBothValidAuthorizationsAsync(
-            surveyOrderId,
-            evaluatedAt,
-            cancellationToken);
 
         return Result.Success(new BoundaryCaptureMutationState(
             await context.SurveyOrders.SingleAsync(
@@ -169,8 +156,7 @@ internal sealed class BoundaryCaptureRepository(
             session,
             managerProfileId.Value,
             currentBoundaryVersion,
-            isAppointmentCurrent,
-            hasValidAuthorizations));
+            isAppointmentCurrent));
     }
 
     public Task<BoundaryCaptureSession?> GetAsync(
@@ -231,39 +217,12 @@ internal sealed class BoundaryCaptureRepository(
               AND app_user.status = 'ACTIVE'::system.user_status
               AND profile.status = 'ACTIVE'::system.system_manager_profile_status
               AND profile.availability = 'AVAILABLE'::system.system_manager_availability_status
-              AND profile.qualification_status = 'QUALIFIED'::system.flight_qualification_status
-              AND profile.qualification_expires_at > @evaluated_at
             FOR SHARE OF assignment, profile, app_user
             """,
             Id("order_id", surveyOrderId),
-            Id("actor_id", actorUserId),
-            new NpgsqlParameter("evaluated_at", evaluatedAt));
+            Id("actor_id", actorUserId));
         var value = await command.ExecuteScalarAsync(cancellationToken);
         return value is Guid id ? id : null;
-    }
-
-    private async Task<bool> HasBothValidAuthorizationsAsync(
-        Guid surveyOrderId,
-        DateTimeOffset evaluatedAt,
-        CancellationToken cancellationToken)
-    {
-        await using var command = CreateCommand(
-            """
-SELECT count(DISTINCT auth.authorization_type)
-FROM survey.survey_capture_authorizations AS auth
-WHERE auth.survey_order_id = @order_id
-  AND auth.authorization_type IN (
-    'WRITTEN_DATA_USE_CONSENT'::system.survey_capture_authorization_type,
-    'FLIGHT_PERMISSION'::system.survey_capture_authorization_type)
-  AND auth.status = 'VERIFIED'::system.survey_capture_authorization_status
-  AND auth.verified_at <= @evaluated_at
-  AND (auth.expires_at IS NULL OR @evaluated_at < auth.expires_at)
-  AND auth.revoked_at IS NULL
-""",
-            Id("order_id", surveyOrderId),
-            new NpgsqlParameter("evaluated_at", evaluatedAt));
-        var value = await command.ExecuteScalarAsync(cancellationToken);
-        return Convert.ToInt64(value, System.Globalization.CultureInfo.InvariantCulture) == 2;
     }
 
     private Task<bool> DroneIsAvailableAsync(
@@ -273,9 +232,9 @@ WHERE auth.survey_order_id = @order_id
             SELECT drone.id
             FROM mission.drones AS drone
             WHERE drone.id = @drone_id
-              AND drone.status = 'AVAILABLE'::system.drone_status
-              AND drone.deleted_at IS NULL
-              AND NOT EXISTS (
+            AND drone.status = 'AVAILABLE'::system.drone_status
+            AND drone.deleted_at IS NULL
+            AND NOT EXISTS (
                 SELECT 1
                 FROM survey.boundary_capture_sessions AS active_capture
                 WHERE active_capture.drone_id = drone.id

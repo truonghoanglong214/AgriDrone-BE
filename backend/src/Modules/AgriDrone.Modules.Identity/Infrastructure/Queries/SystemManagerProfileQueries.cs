@@ -14,7 +14,6 @@ internal sealed class SystemManagerProfileQueries(IdentityDbContext dbContext)
     public Task<PagedResult<SystemManagerProfileResponse>> GetPageAsync(
         SystemManagerProfileStatus? status,
         SystemManagerAvailabilityStatus? availability,
-        FlightQualificationStatus? qualificationStatus,
         PagedRequest pageRequest,
         CancellationToken cancellationToken = default)
     {
@@ -29,13 +28,6 @@ internal sealed class SystemManagerProfileQueries(IdentityDbContext dbContext)
         {
             query = query.Where(
                 profile => profile.Availability == availability.Value);
-        }
-
-        if (qualificationStatus.HasValue)
-        {
-            query = query.Where(
-                profile =>
-                    profile.QualificationStatus == qualificationStatus.Value);
         }
 
         return Project(query
@@ -61,7 +53,5 @@ internal sealed class SystemManagerProfileQueries(IdentityDbContext dbContext)
             profile.User.FullName,
             profile.Status,
             profile.Availability,
-            profile.QualificationStatus,
-            profile.QualificationExpiresAt,
             profile.Version));
 }

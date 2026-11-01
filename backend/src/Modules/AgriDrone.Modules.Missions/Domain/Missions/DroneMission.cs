@@ -313,15 +313,15 @@ public sealed class DroneMission : AggregateRoot
                 nameof(scopeZoneIds));
         }
 
-        if (purpose == global::AgriDrone.Modules.Missions.Domain.Missions.MissionPurpose.BaselineMapping)
+        if (purpose == global::AgriDrone.Modules.Missions.Domain.Missions.MissionPurpose.BaselineMapping &&
+            string.IsNullOrWhiteSpace(scopeFingerprint))
         {
-            normalizedScope = [];
             scopeFingerprint = "FARM_WIDE";
         }
 
         var effectiveScopeType = normalizedScope.Length == 0
             ? MissionScopeType.FarmWide
-            : MissionScopeType.Zones;
+            : scopeType;
         if (!Enum.IsDefined(scopeType) ||
             (scopeType == MissionScopeType.Zones && normalizedScope.Length == 0))
         {

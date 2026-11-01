@@ -69,7 +69,7 @@ public sealed class StartFlightGateTests
     [Fact]
     public async Task ChangedBoundaryOrZonePlanCannotStartFlight()
     {
-        var fixture = new Fixture(MissionPurpose.BaselineMapping);
+        var fixture = new Fixture(MissionPurpose.PlantHealth);
         fixture.Planning.Context = fixture.Planning.Context with
         {
             FarmBoundaryVersionId = Guid.NewGuid()
@@ -115,15 +115,16 @@ public sealed class StartFlightGateTests
     }
 
     [Fact]
-    public async Task MissingFlightAuthorizationEvidenceCannotStartFlight()
+    public async Task FlightStartsSuccessfullyWithoutAuthorizationEvidence()
     {
         var fixture = new Fixture(MissionPurpose.BaselineMapping,
             includeSafetyEvidence: false);
 
         var result = await fixture.Start();
 
-        Assert.Equal("MissionOperation.SafetyEvidenceRequired", result.Error.Code);
-        Assert.Equal(MissionStatus.Scheduled, fixture.Mission.Status);
+        Assert.True(result.IsSuccess);
+        Assert.Equal(MissionStatus.InFlight, fixture.Mission.Status);
+
     }
 
     [Fact]
@@ -309,7 +310,7 @@ public sealed class StartFlightGateTests
                 null, null, Now.AddDays(-1));
             var orderId = Guid.NewGuid();
             var boundaryId = Guid.NewGuid();
-            var zoneIds = new[] { Guid.NewGuid() };
+            var zoneIds = purpose == MissionPurpose.BaselineMapping ? Array.Empty<Guid>() : new[] { Guid.NewGuid() };
             var mapId = purpose == MissionPurpose.BaselineMapping
                 ? (Guid?)null : Guid.NewGuid();
             using var parameters = JsonDocument.Parse("{}");
@@ -337,7 +338,7 @@ public sealed class StartFlightGateTests
                 orderId, _tenantId, FarmId, SurveyServiceType.PlantHealth,
                 purpose == MissionPurpose.BaselineMapping, mapId, zoneIds,
                 Now.AddHours(-1), Now.AddHours(1), true, null,
-                true, true, boundaryId, _managerId));
+                true, true, boundaryId, _managerId, ScopeFingerprint: Mission.ScopeFingerprint));
             UnitOfWork = new UnitOfWork();
             Audit = new Audit();
             Maintenance = new MaintenanceRepository();

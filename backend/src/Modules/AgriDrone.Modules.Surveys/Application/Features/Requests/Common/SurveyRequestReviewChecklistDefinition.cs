@@ -2,7 +2,7 @@ namespace AgriDrone.Modules.Surveys.Application.Features.Requests.Common;
 
 public static class SurveyRequestReviewChecklistDefinition
 {
-    public const string Version = "survey-request-review.v6";
+    public const string Version = "survey-request-review.v7";
     public const string ContactValidCode = "contact-valid";
     public const string DragonFruitFarmConfirmedCode =
         "dragon-fruit-farm-confirmed";
@@ -10,10 +10,6 @@ public static class SurveyRequestReviewChecklistDefinition
         "service-area-supported";
     public const string CandidateLocationSufficientCode =
         "candidate-location-sufficient";
-    public const string ConsentFeasibilityCode =
-        "consent-feasibility";
-    public const string FlightPermissionFeasibilityCode =
-        "flight-permission-feasibility";
 
     public static IReadOnlyList<SurveyRequestReviewChecklistItem> Items { get; } =
     [
@@ -28,13 +24,7 @@ public static class SurveyRequestReviewChecklistDefinition
             "The Farm is within a supported service area."),
         new(
             CandidateLocationSufficientCode,
-            "The intake location is sufficient for preliminary review and is not an approved Farm boundary."),
-        new(
-            ConsentFeasibilityCode,
-            "Written data-use consent appears obtainable; this does not verify consent."),
-        new(
-            FlightPermissionFeasibilityCode,
-            "Flight permission appears obtainable; this does not verify permission.")
+            "The intake location is sufficient for preliminary review and is not an approved Farm boundary.")
     ];
 
     private static IReadOnlyList<string> RequiredCodes { get; } = Items

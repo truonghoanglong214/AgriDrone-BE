@@ -40,7 +40,7 @@ internal sealed class SystemManagerAccessService(
             !profile.CanOperate(timeProvider.GetUtcNow()))
         {
             return SystemManagerFarmAccess.Denied(
-                "The SystemManager profile is not active and flight-qualified.");
+                "The SystemManager profile is not active.");
         }
 
         var assignment = await assignmentRepository.GetActiveByFarmIdAsync(

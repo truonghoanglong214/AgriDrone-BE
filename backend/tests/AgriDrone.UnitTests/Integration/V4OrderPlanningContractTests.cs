@@ -20,7 +20,6 @@ public sealed class V4OrderPlanningContractTests
             AssignmentId: Guid.NewGuid(),
             AssignmentVersion: 1,
             IsActive: true,
-            IsQualified: true,
             IsAvailable: true);
 
         var adjustments = new List<OperationalAdjustmentDetail>
@@ -121,10 +120,6 @@ public sealed class V4OrderPlanningContractTests
             HasPendingAdjustment: false,
             HasPendingSettlement: false,
             HasUnapprovedExtraFlight: false,
-            HasValidWrittenDataUseConsent: true,
-            WrittenDataUseConsentId: Guid.NewGuid(),
-            HasValidFlightPermission: true,
-            FlightPermissionId: Guid.NewGuid(),
             Adjustments: adjustments,
             Settlements: settlements,
             ExtraFlights: extraFlights,
@@ -144,6 +139,7 @@ public sealed class V4OrderPlanningContractTests
         Assert.Single(context.Adjustments);
         Assert.Single(context.Settlements);
         Assert.Single(context.ExtraFlights);
-        Assert.True(context.ManagerContext.IsQualified);
+        Assert.True(context.ManagerContext.IsActive);
+        Assert.True(context.ManagerContext.IsAvailable);
     }
 }

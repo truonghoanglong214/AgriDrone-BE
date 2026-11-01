@@ -74,11 +74,6 @@ public sealed class SystemManagerAccessServiceTests
     private static SystemManagerProfile CreateOperationalProfile(Guid userId)
     {
         var profile = SystemManagerProfile.Create(userId, Now);
-        profile.UpdateQualification(
-            FlightQualificationStatus.Qualified,
-            Now.AddYears(1),
-            Now,
-            profile.Version);
         profile.Activate(Now, profile.Version);
         return profile;
     }

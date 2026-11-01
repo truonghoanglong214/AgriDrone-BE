@@ -91,10 +91,6 @@ internal sealed class SurveyOrderReadinessService(
                 "ORDER_NOT_ELIGIBLE",
             SurveyOrderReadinessFailure.ServiceDisabled =>
                 "SERVICE_DISABLED",
-            SurveyOrderReadinessFailure.WrittenConsentNotValid =>
-                "WRITTEN_CONSENT_NOT_VALID",
-            SurveyOrderReadinessFailure.FlightPermissionNotValid =>
-                "FLIGHT_PERMISSION_NOT_VALID",
             SurveyOrderReadinessFailure.FinancialSettlementPending =>
                 "FINANCIAL_SETTLEMENT_PENDING",
             SurveyOrderReadinessFailure.ExtraFlightNotApproved =>

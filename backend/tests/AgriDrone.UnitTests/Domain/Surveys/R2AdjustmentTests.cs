@@ -176,15 +176,12 @@ public sealed class R2AdjustmentTests
             HasPendingPriceAdjustment: false,
             IsPaymentAmountAndCurrencyMatched: true,
             SafetyChecksSatisfied: true,
-            HasValidWrittenDataUseConsent: false, // missing consent
-            HasValidFlightPermission: true,
             HasPendingFinancialSettlement: true,  // pending settlement
             HasUnapprovedExtraFlight: true);      // unapproved extra flight
 
         var decision = SurveyOrderReadinessPolicy.Evaluate(snapshot);
 
         Assert.False(decision.IsReady);
-        Assert.Contains(SurveyOrderReadinessFailure.WrittenConsentNotValid, decision.Failures);
         Assert.Contains(SurveyOrderReadinessFailure.FinancialSettlementPending, decision.Failures);
         Assert.Contains(SurveyOrderReadinessFailure.ExtraFlightNotApproved, decision.Failures);
     }

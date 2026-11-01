@@ -154,8 +154,6 @@ public static class DependencyInjection
             SurveyApprovalRequestRepository>();
         services.AddScoped<ISurveyApprovalIdempotencyRepository,
             SurveyApprovalIdempotencyRepository>();
-        services.AddScoped<ISurveyApprovalCaptureAuthorizationRepository,
-            SurveyApprovalCaptureAuthorizationRepository>();
         services.AddScoped<ISurveyApprovalReferenceQueries,
             SurveyApprovalReferenceQueries>();
         services.AddScoped<ISurveyApprovalProvisioningPort,

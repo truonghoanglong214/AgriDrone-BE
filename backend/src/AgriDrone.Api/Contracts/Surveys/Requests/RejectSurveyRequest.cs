@@ -25,12 +25,4 @@ public sealed record SurveyRequestReviewChecklistRequest(
     [property: JsonRequired]
     [property: JsonPropertyName("candidate-location-sufficient")]
     bool CandidateLocationSufficient,
-    [param: Required]
-    [property: JsonRequired]
-    [property: JsonPropertyName("consent-feasibility")]
-    bool ConsentFeasibility,
-    [param: Required]
-    [property: JsonRequired]
-    [property: JsonPropertyName("flight-permission-feasibility")]
-    bool FlightPermissionFeasibility,
     string? Notes);

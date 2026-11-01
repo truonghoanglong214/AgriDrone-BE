@@ -18,7 +18,6 @@ internal sealed class GetSystemManagerProfilesQueryHandler(
         var profiles = await queries.GetPageAsync(
             request.Status,
             request.Availability,
-            request.QualificationStatus,
             new PagedRequest(request.PageNumber, request.PageSize),
             cancellationToken);
 

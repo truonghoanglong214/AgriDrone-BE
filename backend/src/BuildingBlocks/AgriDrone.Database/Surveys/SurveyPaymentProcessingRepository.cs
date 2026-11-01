@@ -392,15 +392,12 @@ internal sealed class SurveyPaymentProcessingRepository(
               ON profile.id = assignment.system_manager_profile_id
              AND profile.user_id = @actor_id
              AND profile.status = 'ACTIVE'::system.system_manager_profile_status
-             AND profile.qualification_status = 'QUALIFIED'::system.flight_qualification_status
-             AND profile.qualification_expires_at > @evaluated_at
             WHERE survey_order.id = @order_id
             FOR SHARE OF assignment, profile
             """,
             cancellationToken,
             Id("order_id", surveyOrderId),
-            Id("actor_id", actorUserId),
-            new NpgsqlParameter("evaluated_at", evaluatedAt));
+            Id("actor_id", actorUserId));
 
     private async Task<List<EffectiveSurveyPrice>> ReadEffectivePricesAsync(
         Guid surveyServiceId,

@@ -54,6 +54,7 @@ public sealed class MappingApprovalIdempotencyIntegrationTests
         services.AddLogging();
         services.AddIntegrationMessagingFoundation(configuration);
         services.AddPlantsModule(configuration);
+        services.AddAgriDroneDatabase(configuration);
         services.AddMappingPublicationPersistence(configuration);
         services.AddSingleton<IEffectiveAccessService, AllowAllAccessService>();
         await using var provider = services.BuildServiceProvider();

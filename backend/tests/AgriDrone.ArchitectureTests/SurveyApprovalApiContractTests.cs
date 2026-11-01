@@ -12,15 +12,13 @@ public sealed class SurveyApprovalApiContractTests
     [Fact]
     public void ReviewChecklistContainsOnlyManualApprovalChecks()
     {
-        Assert.Equal("survey-request-review.v6",
+        Assert.Equal("survey-request-review.v7",
             SurveyRequestReviewChecklistDefinition.Version);
         Assert.Equal(
             [
                 "candidate-location-sufficient",
-                "consent-feasibility",
                 "contact-valid",
                 "dragon-fruit-farm-confirmed",
-                "flight-permission-feasibility",
                 "service-area-supported"
             ],
             SurveyRequestReviewChecklistDefinition.Items.Select(
@@ -30,14 +28,6 @@ public sealed class SurveyApprovalApiContractTests
             item => item.Code.Contains(
                 "verified",
                 StringComparison.OrdinalIgnoreCase));
-        Assert.All(
-            SurveyRequestReviewChecklistDefinition.Items.Where(item =>
-                item.Code is "consent-feasibility" or
-                    "flight-permission-feasibility"),
-            item => Assert.Contains(
-                "does not verify",
-                item.Description,
-                StringComparison.OrdinalIgnoreCase));
 
         Assert.Equal(
             new HashSet<string>
@@ -46,8 +36,6 @@ public sealed class SurveyApprovalApiContractTests
                 "DragonFruitFarmConfirmed",
                 "ServiceAreaSupported",
                 "CandidateLocationSufficient",
-                "ConsentFeasibility",
-                "FlightPermissionFeasibility",
                 "Notes"
             },
             typeof(SurveyRequestReviewChecklistRequest)
@@ -64,9 +52,7 @@ public sealed class SurveyApprovalApiContractTests
             ["contact-valid"] = true,
             ["dragon-fruit-farm-confirmed"] = true,
             ["service-area-supported"] = true,
-            ["candidate-location-sufficient"] = true,
-            ["consent-feasibility"] = true,
-            ["flight-permission-feasibility"] = true
+            ["candidate-location-sufficient"] = true
         };
 
         Assert.True(
@@ -95,8 +81,6 @@ public sealed class SurveyApprovalApiContractTests
             DragonFruitFarmConfirmed: true,
             ServiceAreaSupported: true,
             CandidateLocationSufficient: true,
-            ConsentFeasibility: true,
-            FlightPermissionFeasibility: true,
             Notes: null);
 
         using var json = JsonDocument.Parse(JsonSerializer.Serialize(payload));
@@ -107,12 +91,6 @@ public sealed class SurveyApprovalApiContractTests
             .GetBoolean());
         Assert.True(json.RootElement
             .GetProperty("candidate-location-sufficient")
-            .GetBoolean());
-        Assert.True(json.RootElement
-            .GetProperty("consent-feasibility")
-            .GetBoolean());
-        Assert.True(json.RootElement
-            .GetProperty("flight-permission-feasibility")
             .GetBoolean());
         Assert.False(json.RootElement.TryGetProperty("version", out _));
         Assert.False(json.RootElement.TryGetProperty("answers", out _));
@@ -147,8 +125,6 @@ public sealed class SurveyApprovalApiContractTests
     [InlineData("DragonFruitFarmConfirmed")]
     [InlineData("ServiceAreaSupported")]
     [InlineData("CandidateLocationSufficient")]
-    [InlineData("ConsentFeasibility")]
-    [InlineData("FlightPermissionFeasibility")]
     public void ChecklistRequiredMetadataIsOnConstructorParameters(
         string parameterName)
     {

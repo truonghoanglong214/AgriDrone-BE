@@ -121,8 +121,6 @@ public sealed class BaselineLifecycleSyncContractTests
             false,
             false,
             false,
-            true,
-            true,
             "Confirmed",
             500_000m,
             null,

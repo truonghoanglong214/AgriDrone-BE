@@ -160,10 +160,10 @@ internal sealed class TransitionMissionCommandHandler(
             return MissionOperationError.InvalidOrderContext();
         if ((mission.Purpose != MissionPurpose.BaselineMapping &&
              (order.FarmBoundaryVersionId is null ||
-              order.FarmBoundaryVersionId != mission.FarmBoundaryVersionId)) ||
-            order.ScopeZoneIds is null ||
-            !order.ScopeZoneIds.Order().SequenceEqual(mission.ScopeZoneIds.Order()) ||
-            order.ScopeFingerprint != mission.ScopeFingerprint ||
+              order.FarmBoundaryVersionId != mission.FarmBoundaryVersionId ||
+              order.ScopeZoneIds is null ||
+              !order.ScopeZoneIds.Order().SequenceEqual(mission.ScopeZoneIds.Order()) ||
+              order.ScopeFingerprint != mission.ScopeFingerprint)) ||
             managerProfileId is null ||
             order.PrimarySystemManagerId != managerProfileId)
             return MissionOperationError.InvalidOrderContext();

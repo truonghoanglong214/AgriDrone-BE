@@ -46,11 +46,10 @@ public sealed record PrimaryManagerOperationalContext(
     Guid? AssignmentId,
     uint? AssignmentVersion,
     bool IsActive,
-    bool IsQualified,
     bool IsAvailable);
 
 /// <summary>
-/// V4 Operational Context: Decouples BE1 commercial/authorization readiness from BE2 hardware/drone readiness,
+/// V4 Operational Context: Decouples BE1 commercial readiness from BE2 hardware/drone readiness,
 /// while providing comprehensive versions, price snapshots, and operational references.
 /// </summary>
 public sealed record SurveyOrderOperationalContextV4(
@@ -101,10 +100,6 @@ public sealed record SurveyOrderOperationalContextV4(
     bool HasPendingAdjustment,
     bool HasPendingSettlement,
     bool HasUnapprovedExtraFlight,
-    bool HasValidWrittenDataUseConsent,
-    Guid? WrittenDataUseConsentId,
-    bool HasValidFlightPermission,
-    Guid? FlightPermissionId,
     IReadOnlyList<OperationalAdjustmentDetail> Adjustments,
     IReadOnlyList<OperationalSettlementDetail> Settlements,
     IReadOnlyList<OperationalExtraFlightDetail> ExtraFlights,

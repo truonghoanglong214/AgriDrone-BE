@@ -167,6 +167,9 @@ if (builder.Configuration.GetValue(
 }
 await app.Services.BootstrapSystemAdminAsync();
 
+// Purge orphaned survey authorization evidences from MinIO on startup
+await app.Services.PurgeOrphanedSurveyAuthorizationsAsync();
+
 
 app.UseExceptionHandler();
 
