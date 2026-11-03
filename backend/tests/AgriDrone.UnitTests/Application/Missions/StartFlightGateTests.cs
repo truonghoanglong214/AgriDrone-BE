@@ -1,4 +1,5 @@
 using System.Text.Json;
+using AgriDrone.IntegrationContracts.Missions;
 using AgriDrone.Modules.Missions.Application.Abstractions;
 using AgriDrone.Modules.Missions.Application.Abstractions.MissionPlanning;
 using AgriDrone.Modules.Missions.Application.Abstractions.Missions;
@@ -30,6 +31,27 @@ public sealed class StartFlightGateTests
         Assert.Equal(MissionStatus.InFlight, fixture.Mission.Status);
         Assert.Equal(1, fixture.UnitOfWork.SaveCount);
         Assert.Contains("START_FLIGHT", fixture.Audit.Actions);
+        var startedEvent = Assert.Single(fixture.MissionStartedOutbox.BaselineEvents);
+        Assert.Equal(fixture.Mission.SurveyOrderId, startedEvent.SurveyOrderId);
+        Assert.Equal(fixture.Mission.Id, startedEvent.MissionId);
+        Assert.Equal(fixture.Mission.TenantId, startedEvent.TenantId);
+        Assert.Equal(fixture.FarmId, startedEvent.FarmId);
+        Assert.Equal(Now, startedEvent.StartedAt);
+    }
+
+    [Fact]
+    public async Task PaidServiceStartPublishesPaidEventOnly()
+    {
+        var fixture = new Fixture(MissionPurpose.PlantHealth);
+
+        var result = await fixture.Start();
+
+        Assert.True(result.IsSuccess);
+        Assert.Empty(fixture.MissionStartedOutbox.BaselineEvents);
+        var startedEvent = Assert.Single(fixture.MissionStartedOutbox.PaidEvents);
+        Assert.Equal(fixture.Mission.SurveyOrderId, startedEvent.SurveyOrderId);
+        Assert.Equal(fixture.Mission.Id, startedEvent.MissionId);
+        Assert.Equal(Now, startedEvent.StartedAt);
     }
 
     [Fact]
@@ -47,6 +69,8 @@ public sealed class StartFlightGateTests
         Assert.True(result.IsFailure);
         Assert.Equal("MissionOperation.OrderNotReady", result.Error.Code);
         Assert.Equal(MissionStatus.Scheduled, fixture.Mission.Status);
+        Assert.Empty(fixture.MissionStartedOutbox.BaselineEvents);
+        Assert.Empty(fixture.MissionStartedOutbox.PaidEvents);
         Assert.Equal(0, fixture.UnitOfWork.SaveCount);
     }
 
@@ -340,6 +364,7 @@ public sealed class StartFlightGateTests
                 Now.AddHours(-1), Now.AddHours(1), true, null,
                 true, true, boundaryId, _managerId, ScopeFingerprint: Mission.ScopeFingerprint));
             UnitOfWork = new UnitOfWork();
+            MissionStartedOutbox = new TestMissionStartedOutbox();
             Audit = new Audit();
             Maintenance = new MaintenanceRepository();
             Notes = new FieldNotesRepository();
@@ -348,7 +373,7 @@ public sealed class StartFlightGateTests
                 new MissionRepository(Mission), new DroneRepository(Drone),
                 Maintenance, checklistRepository, Notes,
                 new ManagerAccess(_tenantId, FarmId, _managerId), Planning,
-                UnitOfWork, Audit, new Actor(_actorId), new FixedClock());
+                MissionStartedOutbox, UnitOfWork, Audit, new Actor(_actorId), new FixedClock());
             RecoveryHandler = new RescheduleOrderMissionCommandHandler(
                 new MissionRepository(Mission), Planning,
                 new DroneQueries(Drone, ReplacementDrone),
@@ -363,6 +388,7 @@ public sealed class StartFlightGateTests
         public Drone ReplacementDrone { get; }
         public PlanningQuery Planning { get; }
         public UnitOfWork UnitOfWork { get; }
+        public TestMissionStartedOutbox MissionStartedOutbox { get; }
         public Audit Audit { get; }
         public MaintenanceRepository Maintenance { get; }
         public FieldNotesRepository Notes { get; }
@@ -390,6 +416,22 @@ public sealed class StartFlightGateTests
                 Now.AddMinutes(10), Now.AddMinutes(20),
                 replacementDroneId),
                 CancellationToken.None);
+    }
+
+    private sealed class TestMissionStartedOutbox : IMissionStartedOutbox
+    {
+        public List<BaselineMissionStartedV1> BaselineEvents { get; } = [];
+        public List<PaidMissionStartedV1> PaidEvents { get; } = [];
+
+        public void Enqueue(
+            BaselineMissionStartedV1 payload,
+            Guid actorId,
+            Guid correlationId) => BaselineEvents.Add(payload);
+
+        public void Enqueue(
+            PaidMissionStartedV1 payload,
+            Guid actorId,
+            Guid correlationId) => PaidEvents.Add(payload);
     }
 
     private sealed class PlanningQuery(SurveyOrderMissionPlanningContext context)

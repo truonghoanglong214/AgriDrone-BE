@@ -72,6 +72,9 @@ namespace AgriDrone.IntegrationContracts.Messaging
         public const string BaselineMissionStartedV1 =
             "mission.baseline-started.v1";
 
+        public const string PaidMissionStartedV1 =
+            "mission.paid-started.v1";
+
         public const string BaselineOrthophotoCompletedV1 =
             "mission.baseline-orthophoto-completed.v1";
     }

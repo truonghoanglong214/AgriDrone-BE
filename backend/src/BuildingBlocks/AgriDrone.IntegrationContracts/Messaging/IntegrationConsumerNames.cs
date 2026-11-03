@@ -47,6 +47,9 @@ public static class IntegrationConsumerNames
     public const string Be1BaselineMissionStartedV1 =
         "be1-baseline-mission-started-v1";
 
+    public const string Be1PaidMissionStartedV1 =
+        "be1-paid-mission-started-v1";
+
     public const string Be1BaselineOrthophotoCompletedV1 =
         "be1-baseline-orthophoto-completed-v1";
 }

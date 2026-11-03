@@ -1,12 +1,17 @@
 using System.Text.Json;
+using AgriDrone.IntegrationContracts.Messaging;
+using AgriDrone.IntegrationContracts.Missions;
 using AgriDrone.Database;
 using AgriDrone.Modules.Missions;
 using AgriDrone.Modules.Missions.Application.Abstractions.MissionPlanning;
 using AgriDrone.Modules.Missions.Application.Features.Missions.TransitionMission;
+using AgriDrone.Modules.Missions.Domain.Drones;
 using AgriDrone.Modules.Missions.Domain.Missions;
 using AgriDrone.Modules.Missions.Infrastructure.Persistence;
 using AgriDrone.Modules.Missions.Infrastructure.Repositories;
 using AgriDrone.SharedInfrastructure.Auditing;
+using AgriDrone.SharedInfrastructure.Messaging;
+using AgriDrone.SharedInfrastructure.Messaging.Outbox;
 using AgriDrone.SharedKernel.Application.Abstractions.Authorization;
 using AgriDrone.SharedKernel.Application.Abstractions.Execution;
 using Microsoft.EntityFrameworkCore;
@@ -135,18 +140,34 @@ public sealed class Uc03FlightEvidencePersistenceTests
             await using (var scope = provider.CreateAsyncScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<MissionsDbContext>();
+                var clock = new FixedClock(now);
+                var serializer = new SystemTextJsonIntegrationMessageSerializer();
+                var missionStartedOutbox = new MissionStartedOutbox(
+                    db, new OutboxMessageFactory(serializer, clock));
                 var handler = new TransitionMissionCommandHandler(
                     new DroneMissionRepository(db), new DroneRepository(db),
                     new DroneMaintenanceRepository(db), new PreflightChecklistRepository(db),
                     new MissionFieldNoteRepository(db),
-                    new Access(tenantId, farmId, managerId), planning, db,
-                    new Audit(), new Actor(actorId), new FixedClock(now));
+                    new Access(tenantId, farmId, managerId), planning,
+                    missionStartedOutbox, db, new Audit(), new Actor(actorId), clock);
                 var storedMission = await db.DroneMissions.SingleAsync(value =>
                     value.Id == mission.Id);
                 var started = await handler.Handle(new TransitionMissionCommand(
                     farmId, mission.Id, MissionStatus.InFlight,
                     storedMission.Version, null), CancellationToken.None);
                 Assert.True(started.IsSuccess);
+                var queued = await db.OutboxMessages.SingleAsync(message =>
+                    message.EventType == IntegrationEventTypes.BaselineMissionStartedV1);
+                var envelope = serializer.Deserialize<BaselineMissionStartedV1>(queued.Body);
+                Assert.NotNull(envelope);
+                Assert.Equal(orderId, envelope!.Payload.SurveyOrderId);
+                Assert.Equal(mission.Id, envelope.Payload.MissionId);
+                Assert.Equal(tenantId, envelope.Payload.TenantId);
+                Assert.Equal(farmId, envelope.Payload.FarmId);
+                Assert.Equal(now, envelope.Payload.StartedAt);
+                var persistedDrone = await db.Drones.AsNoTracking()
+                    .SingleAsync(value => value.Id == droneId);
+                Assert.Equal(DroneStatus.InMission, persistedDrone.Status);
             }
             var note = MissionFieldNote.Create(tenantId, farmId, mission.Id,
                 Guid.NewGuid(), actorId, "Signal recovered", now.AddMinutes(1),
