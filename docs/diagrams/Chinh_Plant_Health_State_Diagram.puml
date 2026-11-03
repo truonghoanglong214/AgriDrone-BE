@@ -1,0 +1,34 @@
+@startuml
+skinparam style strictuml
+hide footbox
+skinparam defaultFontName Arial
+skinparam defaultFontSize 11
+skinparam StateBackgroundColor white
+skinparam StateBorderColor black
+skinparam ArrowColor black
+skinparam ArrowThickness 1
+
+title STM-01 (System level) — Plant Health Survey Result Lifecycle
+
+[*] --> ReadyForProcessing
+
+state "Ready for processing\n<size:10><color:#555555>ReadyForProcessing</color></size>" as ReadyForProcessing
+state "AI disease analysis in progress\n<size:10><color:#555555>AnalyzingPlantHealth</color></size>" as AnalyzingPlantHealth
+state "Awaiting preliminary review\n<size:10><color:#555555>PendingReview</color></size>" as PendingReview
+state "Approved for publication\n<size:10><color:#555555>Approved</color></size>" as Approved
+state "Published survey result\n<size:10><color:#555555>Published</color></size>" as Published
+state "Survey completed & delivered\n<size:10><color:#555555>Completed</color></size>" as Completed
+
+ReadyForProcessing --> AnalyzingPlantHealth : Manager triggers AI disease detection (UC-26)
+AnalyzingPlantHealth --> PendingReview : Detections extracted; poles matched & outliers flagged
+
+PendingReview --> PendingReview : Review crops (UC-28), resolve flags (UC-29),\nadjust zones (UC-30), attach guidance (UC-31)
+
+PendingReview --> Approved : Manager approves survey result [all outliers resolved] (UC-32)
+Approved --> Published : Manager confirms publication; Outbox event recorded (UC-33)
+Published --> Completed : Tenant owner views map & downloads report (UC-34)
+
+Completed --> [*]
+
+@enduml
+
