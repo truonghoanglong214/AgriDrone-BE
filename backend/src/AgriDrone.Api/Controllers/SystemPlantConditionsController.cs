@@ -1,6 +1,7 @@
 using AgriDrone.Api.Contracts.PlantConditions;
 using AgriDrone.Modules.Plants.Application.Features.CreatePlantCondition;
 using AgriDrone.Modules.Plants.Application.Features.RetirePlantCondition;
+using AgriDrone.Modules.Plants.Application.Features.UpdatePlantCondition;
 using AgriDrone.Modules.Plants.Application.Features.VersionPlantCondition;
 using AgriDrone.Modules.Plants.Domain.Conditions;
 using AgriDrone.SharedInfrastructure.Authorization;
@@ -50,6 +51,27 @@ public sealed class SystemPlantConditionsController(
             response => Results.Json(
                 MapResponse(response),
                 statusCode: StatusCodes.Status201Created));
+    }
+
+    /// <summary>Chỉnh sửa thông tin của một plant condition đang active (in-place).</summary>
+    [HttpPut("{conditionId:guid}")]
+    public async Task<IResult> Update(
+        [FromRoute] Guid conditionId,
+        [FromBody] UpdatePlantConditionRequest request,
+        CancellationToken cancellationToken)
+    {
+        var command = new UpdatePlantConditionCommand(
+            conditionId,
+            request.Name,
+            request.ScientificName,
+            request.Description,
+            request.ExpectedVersion);
+
+        var result = await sender.Send(command, cancellationToken);
+
+        return result.ToHttpResult(
+            HttpContext,
+            response => Results.Ok(MapResponse(response)));
     }
 
     /// <summary>Tạo revision tiếp theo từ một plant condition đang active.</summary>

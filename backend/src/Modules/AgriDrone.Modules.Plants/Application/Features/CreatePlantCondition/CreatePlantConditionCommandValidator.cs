@@ -1,20 +1,20 @@
-﻿using FluentValidation;
+using FluentValidation;
 using System;
 using System.Collections.Generic;
 using System.Text;
 
 namespace AgriDrone.Modules.Plants.Application.Features.CreatePlantCondition
 {
-    internal sealed class CreatePlantConditionCommandValidator :AbstractValidator<CreatePlantConditionCommand>
+    internal sealed class CreatePlantConditionCommandValidator : AbstractValidator<CreatePlantConditionCommand>
     {
         public CreatePlantConditionCommandValidator()
         {
             RuleFor(command => command.Code)
-            .NotEmpty()
-            .MaximumLength(50)
-            .Matches("^[A-Za-z][A-Za-z0-9_]*$")
-            .WithMessage(
-                "Condition code may contain letters, numbers and underscores.");
+                .NotEmpty()
+                .MaximumLength(50)
+                .Matches("^[A-Za-z][A-Za-z0-9_]*$")
+                .WithMessage(
+                    "Condition code may contain letters, numbers and underscores.");
 
             RuleFor(command => command.Name)
                 .NotEmpty()
@@ -30,19 +30,13 @@ namespace AgriDrone.Modules.Plants.Application.Features.CreatePlantCondition
                 .MaximumLength(2000);
 
             RuleFor(command => command.DatasetVersion)
-                .NotEmpty()
-                .MaximumLength(100)
-                .When(command => command.PlantHealthLabelKind.HasValue);
+                .MaximumLength(100);
 
             RuleFor(command => command.AnnotationRuleVersion)
-                .NotEmpty()
-                .MaximumLength(100)
-                .When(command => command.PlantHealthLabelKind.HasValue);
+                .MaximumLength(100);
 
             RuleFor(command => command.TeamLabelLimitation)
-                .NotEmpty()
-                .MaximumLength(1000)
-                .When(command => command.PlantHealthLabelKind.HasValue);
+                .MaximumLength(1000);
 
             RuleFor(command => command.PlantHealthLabelKind)
                 .IsInEnum()

@@ -28,7 +28,9 @@ namespace AgriDrone.Api.Controllers;
 [ApiController]
 [Route("api/system-manager/survey-orders")]
 [Authorize(Policy = AccessAuthorizationPolicies.SystemManager)]
-public sealed class SystemManagerSurveyOrdersController(ISender sender)
+public sealed class SystemManagerSurveyOrdersController(
+    ISender sender,
+    TimeProvider timeProvider)
     : ControllerBase
 {
     /// <summary>Lấy danh sách SurveyOrder thuộc các farm đang được phân công.</summary>
@@ -181,13 +183,70 @@ public sealed class SystemManagerSurveyOrdersController(ISender sender)
         [FromBody] ProposeSurveyAppointmentRequest request,
         CancellationToken cancellationToken)
     {
+        DateTimeOffset proposedStartAt;
+        DateTimeOffset proposedEndAt;
+        var nowUtc = timeProvider.GetUtcNow();
+
+        if (request.ScheduledDate.HasValue)
+        {
+            if (!SurveyAppointmentWindow.TryResolveForDate(
+                request.ScheduledDate.Value,
+                nowUtc,
+                out proposedStartAt,
+                out proposedEndAt,
+                out var errorMessage))
+            {
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    [nameof(request.ScheduledDate)] = [errorMessage!]
+                });
+            }
+        }
+        else if (request.ScheduledStartDate.HasValue || request.ScheduledEndDate.HasValue)
+        {
+            if (!request.ScheduledStartDate.HasValue || !request.ScheduledEndDate.HasValue)
+            {
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    [nameof(request.ScheduledStartDate)] = ["Both ScheduledStartDate and ScheduledEndDate must be provided."],
+                    [nameof(request.ScheduledEndDate)] = ["Both ScheduledStartDate and ScheduledEndDate must be provided."]
+                });
+            }
+
+            if (!SurveyAppointmentWindow.TryResolveForDateRange(
+                request.ScheduledStartDate.Value,
+                request.ScheduledEndDate.Value,
+                nowUtc,
+                out proposedStartAt,
+                out proposedEndAt,
+                out var errorMessage))
+            {
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    [nameof(request.ScheduledStartDate)] = [errorMessage!]
+                });
+            }
+        }
+        else if (request.ProposedStartAt.HasValue && request.ProposedEndAt.HasValue)
+        {
+            proposedStartAt = request.ProposedStartAt.Value;
+            proposedEndAt = request.ProposedEndAt.Value;
+        }
+        else
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["Schedule"] = ["Either ScheduledDate, a date range (ScheduledStartDate and ScheduledEndDate), or ProposedStartAt and ProposedEndAt must be provided."]
+            });
+        }
+
         var result = await sender.Send(
             new ProposeSurveyAppointmentCommand(
                 orderId,
                 SurveyAppointmentResponseMapper.ToDomain(
                     request.Purpose!.Value),
-                request.ProposedStartAt!.Value,
-                request.ProposedEndAt!.Value,
+                proposedStartAt,
+                proposedEndAt,
                 request.ExpectedOrderVersion!.Value,
                 request.ExpectedCurrentAppointmentId,
                 request.ExpectedCurrentAppointmentVersion),

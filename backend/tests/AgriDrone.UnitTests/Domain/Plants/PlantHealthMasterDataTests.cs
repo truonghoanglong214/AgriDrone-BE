@@ -57,35 +57,41 @@ public sealed class PlantHealthMasterDataTests
     }
 
     [Fact]
-    public void UnapprovedClassCannotEnterLockedTargetSet()
+    public void CustomDiseaseClassCanEnterTargetSet()
     {
-        Assert.Throws<ArgumentException>(() => PlantCondition.Create(
-            "UNAPPROVED_DISEASE",
-            "Unapproved",
-            null,
+        var condition = PlantCondition.Create(
+            "STEM_CANKER",
+            "Stem Canker",
+            "Neoscytalidium dimidiatum",
             ConditionType.Disease,
-            null,
+            "Canker on stem",
             Now,
-            PlantHealthLabelKind.SuspectedDisease,
-            PlantHealthLabelPolicy.DatasetVersion,
-            PlantHealthLabelPolicy.AnnotationRuleVersion,
-            PlantHealthLabelPolicy.TeamLabelLimitation));
+            PlantHealthLabelKind.SuspectedDisease);
+
+        Assert.Equal("STEM_CANKER", condition.Code);
+        Assert.Equal(PlantHealthLabelKind.SuspectedDisease, condition.PlantHealthLabelKind);
+        Assert.Equal(PlantHealthLabelPolicy.DefaultDatasetVersion, condition.DatasetVersion);
     }
 
     [Fact]
-    public void TargetClassCannotUseUnapprovedProvenance()
+    public void TargetClassCanUseCustomProvenance()
     {
-        Assert.Throws<ArgumentException>(() => PlantCondition.Create(
-            "BROWN_SPOT",
-            "Brown spot",
+        var condition = PlantCondition.Create(
+            "MOSAIC_VIRUS",
+            "Mosaic Virus",
             null,
             ConditionType.Disease,
             null,
             Now,
             PlantHealthLabelKind.SuspectedDisease,
-            "UNAPPROVED_DATASET",
-            PlantHealthLabelPolicy.AnnotationRuleVersion,
-            PlantHealthLabelPolicy.TeamLabelLimitation));
+            "CUSTOM_DATASET_V2",
+            "CUSTOM_RULES_V2",
+            "Custom limitation note");
+
+        Assert.Equal("MOSAIC_VIRUS", condition.Code);
+        Assert.Equal("CUSTOM_DATASET_V2", condition.DatasetVersion);
+        Assert.Equal("CUSTOM_RULES_V2", condition.AnnotationRuleVersion);
+        Assert.Equal("Custom limitation note", condition.TeamLabelLimitation);
     }
 
     [Fact]
