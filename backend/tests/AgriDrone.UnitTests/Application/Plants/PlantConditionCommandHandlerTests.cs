@@ -1,6 +1,7 @@
 using AgriDrone.Modules.Plants.Application.Abstractions.Persistence;
 using AgriDrone.Modules.Plants.Application.Features.CreatePlantCondition;
 using AgriDrone.Modules.Plants.Application.Features.RetirePlantCondition;
+using AgriDrone.Modules.Plants.Application.Features.UpdatePlantCondition;
 using AgriDrone.Modules.Plants.Application.Features.VersionPlantCondition;
 using AgriDrone.Modules.Plants.Domain.Conditions;
 using AgriDrone.SharedInfrastructure.Auditing;
@@ -50,6 +51,99 @@ public sealed class PlantConditionCommandHandlerTests
         Assert.Empty(repository.AddedConditions);
         Assert.Equal(0, unitOfWork.SaveCallCount);
         Assert.Empty(unitOfWork.AuditLogs);
+    }
+
+    [Fact]
+    public async Task CreateSucceedsWithCustomDiseaseAndSuspectedKind()
+    {
+        var repository = new FakePlantConditionRepository(condition: null);
+        var unitOfWork = new FakePlantsUnitOfWork();
+        var handler = new CreatePlantConditionHandler(
+            repository,
+            unitOfWork,
+            new FakeAuditWriter(),
+            new FakeExecutionContext(ActorId, CorrelationId),
+            new FixedTimeProvider(Now));
+
+        var result = await handler.Handle(
+            new CreatePlantConditionCommand(
+                "STEM_CANKER",
+                "Stem Canker",
+                "Neoscytalidium dimidiatum",
+                ConditionType.Disease,
+                "Canker description",
+                PlantHealthLabelKind.SuspectedDisease),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        var created = Assert.Single(repository.AddedConditions);
+        Assert.Equal("STEM_CANKER", created.Code);
+        Assert.Equal(PlantHealthLabelKind.SuspectedDisease, created.PlantHealthLabelKind);
+        Assert.Equal(1, unitOfWork.SaveCallCount);
+        var audit = Assert.Single(unitOfWork.AuditLogs);
+        Assert.Equal("CREATE", audit.Action);
+    }
+
+    [Fact]
+    public async Task UpdateModifiesMetadataAtomically()
+    {
+        var current = CreateCondition();
+        var repository = new FakePlantConditionRepository(current);
+        var unitOfWork = new FakePlantsUnitOfWork();
+        var handler = new UpdatePlantConditionHandler(
+            repository,
+            unitOfWork,
+            new FakeAuditWriter(),
+            new FakeExecutionContext(ActorId, CorrelationId),
+            new FixedTimeProvider(Now));
+
+        var result = await handler.Handle(
+            new UpdatePlantConditionCommand(
+                current.Id,
+                "Updated Sunburn",
+                "Scientific Sunburn",
+                "Updated description",
+                current.Version),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("Updated Sunburn", current.Name);
+        Assert.Equal("Scientific Sunburn", current.ScientificName);
+        Assert.Equal("Updated description", current.Description);
+        Assert.Equal(2, current.Version);
+        Assert.Equal(1, repository.UpdateCallCount);
+        Assert.Equal(1, unitOfWork.SaveCallCount);
+        var audit = Assert.Single(unitOfWork.AuditLogs);
+        Assert.Equal("UPDATE", audit.Action);
+        Assert.Equal(current.Id, audit.EntityId);
+    }
+
+    [Fact]
+    public async Task UpdateRejectsStaleExpectedVersion()
+    {
+        var current = CreateCondition();
+        var repository = new FakePlantConditionRepository(current);
+        var unitOfWork = new FakePlantsUnitOfWork();
+        var handler = new UpdatePlantConditionHandler(
+            repository,
+            unitOfWork,
+            new FakeAuditWriter(),
+            new FakeExecutionContext(ActorId, CorrelationId),
+            new FixedTimeProvider(Now));
+
+        var result = await handler.Handle(
+            new UpdatePlantConditionCommand(
+                current.Id,
+                "Updated Sunburn",
+                null,
+                null,
+                ExpectedVersion: 99),
+            CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("PlantCondition.ConcurrentUpdate", result.Error.Code);
+        Assert.Equal(0, repository.UpdateCallCount);
+        Assert.Equal(0, unitOfWork.SaveCallCount);
     }
 
     [Fact]

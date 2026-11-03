@@ -19,4 +19,7 @@ public sealed record TenantOwnerAppointmentApiResponse(
     DateTimeOffset StartAt,
     DateTimeOffset EndAt,
     string Status,
-    uint AppointmentVersion);
+    uint AppointmentVersion,
+    DateOnly? ScheduledDate = null,
+    DateOnly? ScheduledStartDate = null,
+    DateOnly? ScheduledEndDate = null);

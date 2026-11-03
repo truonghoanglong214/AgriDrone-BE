@@ -15,4 +15,7 @@ public sealed record SurveyAppointmentApiResponse(
     Guid? ConfirmedBy,
     DateTimeOffset? ConfirmedAt,
     string? RescheduleReason,
-    DateTimeOffset ChangedAt);
+    DateTimeOffset ChangedAt,
+    DateOnly? ScheduledDate = null,
+    DateOnly? ScheduledStartDate = null,
+    DateOnly? ScheduledEndDate = null);

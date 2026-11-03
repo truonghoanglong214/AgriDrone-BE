@@ -43,6 +43,8 @@ internal static class PlantHealthMasterDataRules
         ArgumentNullException.ThrowIfNull(actualLabels);
 
         var errors = new List<string>();
+
+        // 1. Verify all required baseline labels exist and are active
         foreach (var expected in RequiredLabels)
         {
             var matches = actualLabels
@@ -64,25 +66,47 @@ internal static class PlantHealthMasterDataRules
             if (actual.LabelKind != expected.Value)
                 errors.Add($"Plant-health label '{expected.Key}' has an invalid kind.");
 
-            if (actual.DatasetVersion != PlantHealthLabelPolicy.DatasetVersion ||
-                actual.AnnotationRuleVersion != PlantHealthLabelPolicy.AnnotationRuleVersion ||
-                actual.TeamLabelLimitation != PlantHealthLabelPolicy.TeamLabelLimitation)
+            if (string.IsNullOrWhiteSpace(actual.DatasetVersion) ||
+                string.IsNullOrWhiteSpace(actual.AnnotationRuleVersion) ||
+                string.IsNullOrWhiteSpace(actual.TeamLabelLimitation))
             {
                 errors.Add(
                     $"Plant-health label '{expected.Key}' has invalid provenance metadata.");
             }
         }
 
-        var unexpectedTargetLabels = actualLabels
+        // 2. Verify additional active labels are well-formed and unique
+        var additionalLabels = actualLabels
             .Where(actual => !RequiredLabels.ContainsKey(actual.Code))
-            .Select(actual => actual.Code)
+            .ToArray();
+
+        var duplicates = actualLabels
+            .GroupBy(label => label.Code, StringComparer.Ordinal)
+            .Where(group => group.Count() > 1 && !RequiredLabels.ContainsKey(group.Key))
+            .Select(group => group.Key)
             .OrderBy(code => code, StringComparer.Ordinal)
             .ToArray();
-        if (unexpectedTargetLabels.Length > 0)
+
+        foreach (var dup in duplicates)
         {
-            errors.Add(
-                "Unexpected pilot plant-health labels: " +
-                string.Join(", ", unexpectedTargetLabels) + ".");
+            errors.Add($"Plant-health label '{dup}' is duplicated.");
+        }
+
+        foreach (var label in additionalLabels)
+        {
+            if (!label.IsActive)
+                errors.Add($"Plant-health label '{label.Code}' must be active.");
+
+            if (!label.LabelKind.HasValue || !Enum.IsDefined(label.LabelKind.Value))
+                errors.Add($"Plant-health label '{label.Code}' has an invalid kind.");
+
+            if (string.IsNullOrWhiteSpace(label.DatasetVersion) ||
+                string.IsNullOrWhiteSpace(label.AnnotationRuleVersion) ||
+                string.IsNullOrWhiteSpace(label.TeamLabelLimitation))
+            {
+                errors.Add(
+                    $"Plant-health label '{label.Code}' has invalid provenance metadata.");
+            }
         }
 
         return new PlantHealthMasterDataValidationResult(errors);

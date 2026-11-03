@@ -27,11 +27,6 @@ public sealed class PlantConditionConfiguration : IEntityTypeConfiguration<Plant
                     "(plant_health_label_kind IS NULL) OR " +
                     "(plant_health_label_kind = 'SuspectedDisease' AND condition_type = 'DISEASE'::system.condition_type) OR " +
                     "(plant_health_label_kind = 'ConfusingNonDisease' AND condition_type <> 'DISEASE'::system.condition_type)");
-                tableBuilder.HasCheckConstraint(
-                    "ck_plant_conditions_health_label_code",
-                    "plant_health_label_kind IS NULL OR " +
-                    "(plant_health_label_kind = 'SuspectedDisease' AND code IN ('BROWN_SPOT', 'ANTHRACNOSE')) OR " +
-                    "(plant_health_label_kind = 'ConfusingNonDisease' AND code IN ('SUNBURN', 'MECHANICAL_SCAR'))");
             });
 
         builder.HasKey(condition => condition.Id).HasName("pk_plant_conditions");

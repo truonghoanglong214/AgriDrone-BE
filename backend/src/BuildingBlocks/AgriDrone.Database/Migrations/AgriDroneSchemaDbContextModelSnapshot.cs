@@ -4651,8 +4651,6 @@ namespace AgriDrone.Database.Migrations
                         {
                             t.HasComment("Global catalog of diseases, abiotic damage and mechanical plant conditions.");
 
-                            t.HasCheckConstraint("ck_plant_conditions_health_label_code", "plant_health_label_kind IS NULL OR (plant_health_label_kind = 'SuspectedDisease' AND code IN ('BROWN_SPOT', 'ANTHRACNOSE')) OR (plant_health_label_kind = 'ConfusingNonDisease' AND code IN ('SUNBURN', 'MECHANICAL_SCAR'))");
-
                             t.HasCheckConstraint("ck_plant_conditions_health_label_kind", "plant_health_label_kind IS NULL OR plant_health_label_kind IN ('SuspectedDisease', 'ConfusingNonDisease')");
 
                             t.HasCheckConstraint("ck_plant_conditions_health_label_metadata", "(plant_health_label_kind IS NULL AND dataset_version IS NULL AND annotation_rule_version IS NULL AND team_label_limitation IS NULL) OR (plant_health_label_kind IS NOT NULL AND dataset_version IS NOT NULL AND annotation_rule_version IS NOT NULL AND team_label_limitation IS NOT NULL)");

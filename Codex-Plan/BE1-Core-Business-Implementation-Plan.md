@@ -1036,15 +1036,15 @@ Core/result files:
 | `[Sửa]` | `SURVEYS/Domain/Results/SurveyResult.cs` |
 | `[Sửa]` | `SURVEYS/Application/Errors/SurveyResultError.cs` |
 | `[Giữ/Sửa khi mapping cần]` | `SURVEYS/Application/Abstractions/Persistence/ISurveyResultPublicationUnitOfWork.cs` |
-| `[Tạo]` | `DB/Surveys/SurveyResultPublicationDbContext.cs` |
-| `[Tạo]` | `DB/Surveys/SurveyResultPublicationUnitOfWork.cs` |
+| `[Sửa]` | `DB/SurveyResultPublicationDbContext.cs` |
+| `[Tạo hoặc tách từ DbContext hiện hữu]` | `DB/Surveys/SurveyResultPublicationUnitOfWork.cs` |
 
 Ingestion và feature folders:
 
 | Folder/file | Files hoặc trách nhiệm |
 |---|---|
-| `SURVEYS/Infrastructure/Messaging/PlantHealthAnalysisReadyV4Consumer.cs` | Transport validation cho suspected findings/zones/sourced-guidance/boundary exceptions/uncertainty; V2/V3 chỉ drain |
-| `.../Features/Results/PlantHealth/ImportPlantHealthObservations/` | `ImportPlantHealthObservationsCommand.cs`, validator, handler, response |
+| `[BE2] PlantHealthAnalysisReadyV4Consumer` | Transport validation, Inbox/dedup và pending import; BE1 chỉ khóa target schema/application boundary, V2/V3 chỉ drain |
+| `[BE2] ImportPlantHealthObservations` | Pending import qua typed port/staging contract đã thống nhất; không truy cập repository/entity nội bộ của BE1 |
 | `.../Features/Results/PlantHealth/GetPlantHealthReviewQueue/` | query, validator, handler, `PlantHealthReviewQueueItemResponse.cs` |
 | `.../Features/Results/PlantHealth/ReviewPlantHealthFinding/` | command, validator, handler, response |
 | `.../Features/Results/PlantHealth/ReviewPlantHealthFindingBatch/` | command, validator, handler, response |
@@ -1053,7 +1053,7 @@ Ingestion và feature folders:
 | `.../Features/Results/PlantHealth/SelectSourcedGuidance/` | command, validator, handler, response; resolve guidance theo suspected class/source/version, không severity |
 | `.../Features/Results/PlantHealth/ApprovePlantHealthSurveyResult/` | command, validator, handler, response |
 | `.../Features/Results/PlantHealth/PublishPlantHealthSurveyResult/` | command, validator, handler, response |
-| `.../Features/Results/PlantHealth/GetPublishedPlantHealthResult/` | query, validator, handler, response |
+| `[BE2] GetPublishedPlantHealthResult` | Published-only owner read model/query; BE1 phát publication event và không dựng lại owner portal query |
 
 Trong các folder trên, tên file command/handler phải lấy đầy đủ tên folder, ví dụ `ReviewPlantHealthFindingCommandHandler.cs`; không dùng tên chung `Handler.cs`.
 
@@ -2366,6 +2366,107 @@ Chưa viết/chạy trong Step 6. Toàn bộ backlog kiểm thử của Step 6 �
 > - **Phase 7A (AI Ingestion Consumer):** Chuyển giao cho **BE2** triển khai. BE2 xây dựng `PlantHealthAnalysisReadyV4Consumer` lắng nghe message từ exchange của BE2, deduplicate và import pending observations, proposed disease zones geometry vào DB.
 > - **Phase 7B–7E (Manager Review & Publication UoW):** **BE1** triển khai toàn bộ logic nghiệp vụ SystemManager review, phê duyệt kết quả, transaction công bố (Publication Unit of Work) và cập nhật trạng thái SurveyOrder.
 
+### 15.0.1. Kế hoạch thực thi Step 7 theo source audit 2026-11-01
+
+#### Hiểu đúng phạm vi và mốc hoàn thành
+
+- `Step 7` trong backlog này tương ứng **Business Phase 12**, không phải Phase 7 ở bảng phase cũ.
+- BE1 chỉ chịu trách nhiệm **7B–7E**. BE2 chịu trách nhiệm transport consumer, Inbox/dedup và pending import của **7A**.
+- BE1 vẫn phải khóa contract, schema ownership và application boundary để BE2 không truy cập repository/entity nội bộ của Surveys/Plants.
+- Published-only TenantOwner portal/read model đã được chuyển sang BE2 ở Step 9/12. Trong Step 7, BE1 chỉ phát publication event đầy đủ và cung cấp contract/query nội bộ tối thiểu nếu publication transaction cần; không tạo lại owner portal controller trong BE1.
+- Step 7 chỉ được ghi `CodeComplete — AwaitingFinalTest` sau các PR implementation bên dưới. Chỉ ghi `Done` sau khi backlog test ở mục 27 đã được viết và chạy đạt trong Final Test Phase.
+
+#### Audit hiện trạng cần dùng làm baseline
+
+- `dotnet build AgriDrone.sln --no-restore` đang đạt 0 warning, 0 error ngày 2026-11-01.
+- Đã có `PlantHealthAnalysisReadyV4`, `SurveyResult`, `DiseaseZone`, `SourcedGuidance`, Outbox/Audit và khung `SurveyResultPublicationDbContext`/`ISurveyResultPublicationUnitOfWork`.
+- Chưa có `ISurveyResultRepository`, `IPlantHealthResultQueries`, result feature folders, `SystemManagerSurveyResultsController` và Step 7 DI wiring.
+- `ISurveyResultPublicationUnitOfWork` hiện mới chỉ bọc transaction; chưa có publication orchestration, latest-reviewed update, Order transition, audit và outbox trong cùng commit.
+- `ConditionDetection`/`ConditionDetectionReview` legacy vẫn bắt buộc severity; `DiseaseZone` legacy vẫn có `HealthLevelId` và `TreatmentRecommendation`. Các model này không thể được dùng nguyên trạng cho V4 no-severity.
+- `SurveyResultPublicationDbContext` hiện map legacy `TreatmentRecommendation`, chưa map target `SourcedGuidance`, finding/review target và latest-reviewed Plant Health state.
+
+#### Quyết định thiết kế bắt buộc trước khi code feature
+
+1. Viết ADR ngắn cho target Plant Health model. Khuyến nghị giữ `ConditionDetection`/`ConditionDetectionReview` legacy ở compatibility-read-only và tạo target `PlantHealthFinding`/`PlantHealthFindingReview` trong Plants; không tạo bản sao finding trong Surveys.
+2. Mở rộng `DiseaseZone` hiện hữu theo expand/backfill/contract: target dùng `SuspectedClassCode` + `SelectedSourcedGuidanceId`; các cột severity/recommendation cũ chỉ giữ cho compatibility và không xuất hiện trong V4/API target.
+3. Tạo derived table/entity riêng cho `LatestReviewedPlantHealth` theo Plant thay vì ghi suspected class vào `Plant.HealthLevelId`. Đây là preliminary state, không phải diagnosis/current official health.
+4. Khóa ordering rule: so sánh `ObservedAt`, sau đó publication/result version và ID tie-break ổn định; result cũ đến muộn vẫn được publish vào history nhưng không ghi đè latest-reviewed mới hơn.
+5. Khóa ownership 7A: BE2 sở hữu consumer + Inbox claim; BE1 sở hữu target domain/schema và review/publication. Pending import phải đi qua typed port/command hoặc staging contract đã thống nhất, không gọi repository nội bộ chéo module.
+6. Khóa publication outcome contract cho BE2: event chỉ được tạo trong Outbox cùng transaction publish; BE2 chỉ complete Mission sau outcome `Published` hợp lệ.
+
+#### Thứ tự PR triển khai
+
+| PR | Phạm vi | Công việc chính | Gate để merge |
+|---:|---|---|---|
+| 7.0 | Contract + ADR | Chốt V4 golden payload, error codes, actor/assignment policy, target entities, ordering rule, BE1/BE2 ownership và publication outcome event | Không còn field severity/diagnosis; BE2 xác nhận đọc/ghi đúng boundary |
+| 7.1 | Domain + expand migration | Thêm finding/review target, latest-reviewed state; mở rộng `SurveyResult` và `DiseaseZone`; thêm configuration/index/FK/concurrency; repository/query abstractions; cập nhật publication DbContext | Migration chỉ expand, không drop legacy; EF model build sạch |
+| 7.2 | Finding review | Viết pending queue, review một finding và review batch; giữ original/corrected values, reason/evidence/reviewer; current assignment + optimistic concurrency | Pending/rejected không đổi latest-reviewed; stale version trả conflict |
+| 7.3 | Zone + guidance review | Viết Disease Zone queue/review, boundary validation, membership snapshot và `SelectSourcedGuidance`; chỉ chọn guidance active/effective đúng suspected class/version | Unresolved boundary exception hoặc guidance không hợp lệ chặn approval |
+| 7.4 | Result approval | Viết `ApprovePlantHealthSurveyResult`; kiểm tra Order `PendingReview`, tất cả blocking item đã final, class/catalogue hợp lệ và result nature luôn Preliminary | Approved vẫn không owner-visible, không cập nhật latest-reviewed |
+| 7.5 | Atomic publication | Viết publication orchestrator/UoW: publish result/findings/zones/guidance, apply ordered latest-reviewed state, complete Order, audit và ghi outbox trong một transaction | Failure tại Plant thứ N rollback toàn bộ; concurrent publish chỉ một commit thắng |
+| 7.6 | API + integration wiring | Tạo controller/contracts, DI registrations, error mapping, OpenAPI; phát preliminary publication outcome cho BE2 và owner-notification event | Sáu endpoint manager đúng contract; không có owner/raw pending route ở BE1 |
+| 7.7 | CodeComplete gate | Review file manifest, chạy build, EF pending-model check, cập nhật checklist 15.1–15.4 và thêm đủ test case vào mục 27 | Ghi `CodeComplete — AwaitingFinalTest`, chưa ghi `Done` |
+| 7.8 | Final Test Phase | Viết/chạy unit, contract, PostgreSQL/PostGIS integration, concurrency, rollback, security và E2E Step 7 | Tất cả acceptance/negative test đạt mới ghi Step 7 `Done` |
+
+#### Chi tiết đầu ra từng PR
+
+**PR 7.0 — Contract/ADR gate**
+
+- ADR trả lời rõ reuse hay tách target finding model; với source hiện tại chọn tách target no-severity trong Plants và giữ legacy read-only là đường ít rủi ro hơn.
+- V4 validation phải khóa `ResultNature = Preliminary`, classification là suspected/team-labelled, 2–3 configured class, confidence/geometry/media/provenance hợp lệ và tuyệt đối không nhận severity.
+- Chốt event output, ví dụ `PlantHealthPreliminaryResultPublishedV1`, gồm Order/Mission/Farm/result/base-map version, publication version/time, outcome và limitation; không nhét raw media hoặc pending AI payload vào event.
+- Chốt retry semantics: duplicate handoff/source version không tạo finding mới; reprocess version mới tạo revision có `Supersedes`, không overwrite.
+
+**PR 7.1 — Domain/schema foundation**
+
+- `SurveyResult`: bổ sung Mission, Handoff/source version, FarmBoundary/BaseMap version, result nature, observed/effective time, limitation/disclaimer và publication version cần thiết; không chỉ để toàn bộ invariant trong JSON `Provenance`.
+- `PlantHealthFinding`: immutable AI original, corrected review value, Plant/source observation association, boundary state, provenance/media reference, lifecycle và `Version` concurrency token.
+- `PlantHealthFindingReview`: append-only decision history; current decision được derive hoặc trỏ bằng reviewed version, không update mất lịch sử.
+- `DiseaseZone`: giữ original/corrected geometry và membership snapshot; target guidance là `SourcedGuidance`, không dùng severity-dependent `TreatmentRecommendation`.
+- `LatestReviewedPlantHealth`: unique theo Plant, lưu source result/finding, suspected class, observed/effective time và publication ordering key.
+- Tạo migration mới `Step7PlantHealthPreliminaryPublication`; có preflight query và roll-forward recovery note; không sửa migration lịch sử.
+
+**PR 7.2–7.3 — Human review**
+
+- Query queue luôn filter current primary assignment active + available và Order/Farm; không dựa vào client-supplied tenant.
+- Single/batch command đều dùng expected version. Batch phải quyết định rõ atomic-all-or-nothing; khuyến nghị atomic trong một Order để tránh nửa batch được review.
+- Correction không sửa AI original. `Approve`, `Correct`, `Reject`, `Ambiguous/NonDisease` phải là decision rõ ràng theo annotation rule.
+- Zone reviewed geometry phải nằm trong approved FarmBoundary; memberships phải thuộc cùng Farm/base-map/result và chỉ tham chiếu finding đã resolved.
+- Guidance được resolve server-side bằng ID + code + version + effective window; API không nhận free-form advice.
+
+**PR 7.4 — Approval gate**
+
+- Tải result aggregate cùng blocking summary trong một consistent read/transaction.
+- Từ chối approve nếu còn pending finding, unresolved boundary exception, proposed zone chưa quyết định, zone approved thiếu guidance decision hoặc provenance thiếu.
+- Lưu reviewer, reviewed time, expected version và approval audit; không complete Order, publish zone hoặc update Plant state tại bước này.
+
+**PR 7.5 — Publication transaction**
+
+Thứ tự trong một transaction:
+
+1. Lock/reload `SurveyResult`, `SurveyOrder` và current publication/latest-state rows cần thiết.
+2. Re-check assignment, expected versions, Order `PendingReview`, result `Approved` và toàn bộ blocking rules.
+3. Publish reviewed findings, approved zones và selected sourced guidance references.
+4. Upsert `LatestReviewedPlantHealth` chỉ khi ordering key mới hơn; record lịch sử vẫn được giữ nếu cũ hơn.
+5. Transition `SurveyResult` sang `Published` và `SurveyOrder` sang `Completed`.
+6. Ghi audit + BE2 publication outcome + notification Outbox.
+7. `SaveChanges` một lần và commit; mọi conflict/failure rollback toàn bộ.
+
+**PR 7.6 — API/output**
+
+- Implement đúng các route ở mục 15.4 và thêm batch review/guidance selection route nếu FE cần; không tạo generic endpoint cho client tự set status.
+- Response manager có original/corrected/provenance/version; response/event published luôn có `Suspected`, `Preliminary`, team-label limitation và không có severity/diagnosis wording.
+- BE2 chịu trách nhiệm owner published-only portal. BE1 cung cấp publication event đủ dữ liệu/reference để BE2 dựng read model mà không đọc bảng pending.
+
+#### Checklist thực thi hằng ngày
+
+1. Chỉ bắt đầu PR 7.0 sau khi xác nhận BE2 đọc được `FarmBaseMapPublishedV3`/Plant snapshot đúng version và Plant Health Order có thể tới `PendingReview`.
+2. Mỗi PR cập nhật file manifest, migration impact, error codes và test scenarios ở mục 27 ngay trong cùng PR.
+3. Mỗi handler mutation kiểm tra actor assignment ở server, expected version và business state trước persistence.
+4. Không đưa severity, diagnosis, free-form advice hoặc raw/pending data vào API/event owner-facing.
+5. Sau mỗi PR chạy build targeted/solution; chưa viết/chạy backlog test Step 7 trước Final Test Phase theo chiến lược hiện tại của tài liệu.
+6. Sau PR 7.7 review toàn bộ checklist 15.1–15.4; mục nào thuộc BE2 phải kèm contract/evidence handoff, không tự đánh dấu bằng code BE1.
+
 | Phase | Nghiệp vụ | Dữ liệu được phép thay đổi |
 |---|---|---|
 | 7A — Health/zone ingestion | Import suspected observations và proposed Disease Zones/guidance | Chỉ pending/provenance; không severity |
@@ -2425,7 +2526,7 @@ Khi áp dụng latest-reviewed state, so sánh observed/effective time và publi
 #### Phase 7E — API và output cần viết
 
 - SystemManager pending findings/Disease Zones query, review/correction actions, sourced-guidance selection, approve result và publish result.
-- TenantOwner result query chỉ đọc Published.
+- BE2 dựng TenantOwner result query chỉ đọc Published từ publication event/read model; BE1 không tạo owner portal query trùng lặp.
 - Event cho BE2 biết reviewed preliminary publication outcome để complete Mission theo contract.
 - Notification event cho owner sau commit.
 - Previous comparison resolver chỉ chọn compatible completed/published Plant Health order cùng Farm/service và lưu compatibility reason.

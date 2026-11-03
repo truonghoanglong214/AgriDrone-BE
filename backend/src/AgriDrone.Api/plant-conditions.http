@@ -1,0 +1,80 @@
+@baseUrl = https://localhost:7080
+# @baseUrl = http://localhost:5080
+
+### 1. Đăng nhập với quyền System Admin để lấy Bearer Token
+# @name login
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "agridronefruit@gmail.com",
+  "password": "YourPasswordHere"
+}
+
+### Lưu token từ kết quả đăng nhập vào biến (hoặc điền trực tiếp vào đây)
+@authToken = {{login.response.body.accessToken}}
+
+
+### 2. Lấy danh sách plant conditions hiện có trong Catalog
+GET {{baseUrl}}/api/catalog/plant-conditions
+Authorization: Bearer {{authToken}}
+
+
+### 3. Tạo một bệnh mới bất kỳ (Ví dụ: Bệnh Đạo ôn lúa - RICE_BLAST)
+# @name createDisease
+POST {{baseUrl}}/api/system/plant-conditions
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "code": "RICE_BLAST",
+  "name": "Bệnh đạo ôn lúa",
+  "scientificName": "Magnaporthe oryzae",
+  "conditionType": "DISEASE",
+  "description": "Bệnh do nấm Magnaporthe oryzae gây ra trên lá và cổ bông lúa.",
+  "plantHealthLabelKind": "SUSPECTED_DISEASE",
+  "datasetVersion": "RiceHealth-V1-2026",
+  "annotationRuleVersion": "RICE-ANN-01",
+  "teamLabelLimitation": "Chỉ áp dụng với cây lúa"
+}
+
+
+### 4. Kiểm tra lại: Lấy danh sách catalog xem bệnh mới RICE_BLAST đã xuất hiện chưa
+GET {{baseUrl}}/api/catalog/plant-conditions
+Authorization: Bearer {{authToken}}
+
+
+### 5. Chỉnh sửa thông tin bệnh vừa tạo (In-place Update)
+# Thay {{createDisease.response.body.id}} bằng ID thực tế trả về từ bước 3
+PUT {{baseUrl}}/api/system/plant-conditions/{{createDisease.response.body.id}}
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "name": "Bệnh đạo ôn lúa (Cập nhật 2026)",
+  "scientificName": "Magnaporthe oryzae Cavara",
+  "description": "Bệnh do nấm gây tổn hại nghiêm trọng đến năng suất lúa vụ Đông Xuân.",
+  "datasetVersion": "RiceHealth-V2-2026",
+  "annotationRuleVersion": "RICE-ANN-02",
+  "teamLabelLimitation": "Áp dụng cả giai đoạn mạ và trổ bông"
+}
+
+
+### 6. Tạo revision / phiên bản mới cho bệnh (Versioning)
+POST {{baseUrl}}/api/system/plant-conditions/{{createDisease.response.body.id}}/versions
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "name": "Bệnh đạo ôn lúa v2",
+  "scientificName": "Magnaporthe oryzae Cavara",
+  "description": "Bản cập nhật nghiên cứu mới",
+  "datasetVersion": "RiceHealth-V3-2026",
+  "annotationRuleVersion": "RICE-ANN-03",
+  "teamLabelLimitation": "Toàn diện"
+}
+
+
+### 7. Lưu kho / Ngừng kích hoạt bệnh (Retire)
+POST {{baseUrl}}/api/system/plant-conditions/{{createDisease.response.body.id}}/retire
+Authorization: Bearer {{authToken}}
