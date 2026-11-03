@@ -163,6 +163,12 @@ public static class DependencyInjection
             IntegrationConsumerNames.Be1BaselineMissionStartedV1);
 
         services.AddScoped<
+            IIntegrationMessageHandler<PaidMissionStartedV1>,
+            PaidMissionStartedHandler>();
+        services.AddIntegrationConsumer<PaidMissionStartedProcessor>(
+            IntegrationConsumerNames.Be1PaidMissionStartedV1);
+
+        services.AddScoped<
             IIntegrationMessageHandler<BaselineOrthophotoCompletedV1>,
             BaselineOrthophotoCompletedHandler>();
         services.AddIntegrationConsumer<BaselineOrthophotoCompletedProcessor>(

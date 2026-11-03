@@ -166,6 +166,13 @@ public static class IntegrationEventDescriptors
             IntegrationSchemaVersions.V1,
             RequiresActorId: false);
 
+    public static IntegrationEventDescriptor<PaidMissionStartedV1>
+        PaidMissionStartedV1 { get; } =
+        new(
+            IntegrationEventTypes.PaidMissionStartedV1,
+            IntegrationSchemaVersions.V1,
+            RequiresActorId: false);
+
     public static IntegrationEventDescriptor<BaselineOrthophotoCompletedV1>
         BaselineOrthophotoCompletedV1 { get; } =
         new(
