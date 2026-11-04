@@ -73,7 +73,7 @@ public sealed class PaidMissionStartedHandlerTests
             createdAt: Now);
         var managerId = Guid.NewGuid();
         order.MarkBaselineAppointmentConfirmed(Now.AddMinutes(1));
-        order.RecordBaselineDepositConfirmed(Guid.NewGuid(), 500_000m, Now.AddMinutes(5));
+        order.RecordBaselineDepositConfirmed(Guid.NewGuid(), 5_000m, Now.AddMinutes(5));
         order.StartBaselineMapping(Now.AddHours(1));
         order.MarkBaselineCandidatesReady(Now.AddHours(2));
         order.SetFarmBoundaryFromOrthophoto(Guid.NewGuid(), managerId, Now.AddHours(3));

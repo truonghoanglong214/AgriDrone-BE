@@ -122,6 +122,25 @@ internal sealed class PrepareMissionSetCommandHandler(
                 PrepareMissionSetErrors.ExistingMissionSetRequiresRecovery());
         }
 
+        var scheduleValidation = ResolveScheduleWindows(
+            purposeContexts, existing, out var scheduleWindows);
+        if (scheduleValidation is not null)
+        {
+            return Result.Failure<PrepareMissionSetResult>(scheduleValidation);
+        }
+
+        if (existing.Any(mission =>
+            mission.Status == MissionStatus.Scheduled &&
+            mission.Purpose is { } purpose &&
+            purposeContexts.TryGetValue(purpose, out var context) &&
+            context.IsReadyToSchedule &&
+            (mission.ScheduledAt < context.AppointmentStartAt ||
+             mission.ScheduledEndAt > context.AppointmentEndAt)))
+        {
+            return Result.Failure<PrepareMissionSetResult>(
+                PrepareMissionSetErrors.ScheduleNeedsReschedule());
+        }
+
         if (HasCompleteSet(existing, expectedPurposes) &&
             existing.All(mission =>
                 mission.Status != MissionStatus.Draft ||
@@ -134,13 +153,6 @@ internal sealed class PrepareMissionSetCommandHandler(
                 true));
         }
 
-        var scheduleValidation = ValidateSchedules(
-            request, order, purposeContexts, existing);
-        if (scheduleValidation is not null)
-        {
-            return Result.Failure<PrepareMissionSetResult>(scheduleValidation);
-        }
-
         foreach (var purpose in expectedPurposes)
         {
             if (!purposeContexts[purpose].IsReadyToSchedule ||
@@ -150,9 +162,7 @@ internal sealed class PrepareMissionSetCommandHandler(
                 continue;
             }
 
-            var window = purpose == MissionPurpose.BaselineMapping
-                ? request.BaselineWindow!
-                : request.ServiceWindow!;
+            var window = scheduleWindows[purpose];
             var availableDrones = await droneQueries.GetAvailableAsync(
                 window.StartAt,
                 window.EndAt,
@@ -180,9 +190,7 @@ internal sealed class PrepareMissionSetCommandHandler(
             {
                 if (purposeContexts[purpose].IsReadyToSchedule)
                 {
-                    var window = purpose == MissionPurpose.BaselineMapping
-                        ? request.BaselineWindow!
-                        : request.ServiceWindow!;
+                    var window = scheduleWindows[purpose];
                     draft.Schedule(window.StartAt, window.EndAt, now);
                     AddScheduleAudit(draft, actorId, now);
                 }
@@ -216,9 +224,7 @@ internal sealed class PrepareMissionSetCommandHandler(
                 order.ScopeFingerprint);
             if (purposeContexts[purpose].IsReadyToSchedule)
             {
-                var window = purpose == MissionPurpose.BaselineMapping
-                    ? request.BaselineWindow!
-                    : request.ServiceWindow!;
+                var window = scheduleWindows[purpose];
                 mission.Schedule(window.StartAt, window.EndAt, now);
             }
             missionRepository.Add(mission);
@@ -340,35 +346,32 @@ internal sealed class PrepareMissionSetCommandHandler(
             : [servicePurpose];
     }
 
-    private static AppError? ValidateSchedules(
-        PrepareMissionSetCommand request,
-        SurveyOrderMissionPlanningContext order,
+    private static AppError? ResolveScheduleWindows(
         IReadOnlyDictionary<MissionPurpose, SurveyOrderMissionPlanningContext> purposeContexts,
-        IReadOnlyCollection<DroneMission> existing)
+        IReadOnlyCollection<DroneMission> existing,
+        out Dictionary<MissionPurpose, MissionScheduleWindow> scheduleWindows)
     {
-        if (order.RequiresBaselineMapping && request.ServiceWindow is not null)
-            return PrepareMissionSetErrors.ServiceWindowNotAllowed();
-        if (!order.RequiresBaselineMapping && request.BaselineWindow is not null)
-            return PrepareMissionSetErrors.BaselineWindowNotAllowed();
+        scheduleWindows = [];
 
         foreach (var (purpose, context) in purposeContexts)
         {
             if (!context.IsReadyToSchedule)
                 continue;
-            var window = purpose == MissionPurpose.BaselineMapping
-                ? request.BaselineWindow
-                : request.ServiceWindow;
-            if (window is null)
-                return purpose == MissionPurpose.BaselineMapping
-                    ? PrepareMissionSetErrors.BaselineWindowRequired()
-                    : PrepareMissionSetErrors.ServiceWindowRequired();
-            if (window.StartAt < context.AppointmentStartAt || window.EndAt > context.AppointmentEndAt)
-                return PrepareMissionSetErrors.ScheduleOutsideAppointment();
+            if (context.AppointmentStartAt.Offset != TimeSpan.Zero ||
+                context.AppointmentEndAt.Offset != TimeSpan.Zero ||
+                context.AppointmentEndAt <= context.AppointmentStartAt)
+                return PrepareMissionSetErrors.InvalidOrderContext();
+            scheduleWindows[purpose] = new MissionScheduleWindow(
+                context.AppointmentStartAt, context.AppointmentEndAt);
         }
 
         var baselinePublishedAt = existing.FirstOrDefault(mission =>
             mission.Purpose == MissionPurpose.BaselineMapping)?.MapPublishedAt;
-        if (request.ServiceWindow is { } serviceWindow &&
+        var serviceWindow = scheduleWindows
+            .Where(pair => pair.Key != MissionPurpose.BaselineMapping)
+            .Select(pair => pair.Value)
+            .FirstOrDefault();
+        if (serviceWindow is not null &&
             baselinePublishedAt.HasValue &&
             serviceWindow.StartAt < baselinePublishedAt.Value)
             return PrepareMissionSetErrors.BaselineMustPrecedeService();

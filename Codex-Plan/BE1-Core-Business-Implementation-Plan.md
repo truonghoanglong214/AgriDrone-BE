@@ -104,7 +104,7 @@ User actors chỉ gồm Public Applicant, SystemAdmin, SystemManager và TenantO
 | Plant Health là paid service duy nhất; Harvest Readiness là Stretch | R2, 1, 2, 8 | Catalogue/request/API negative tests và runtime DI inventory |
 | Baseline khảo sát thực địa yêu cầu cọc cam kết (Deposit deducted from FinalPrice); paid flight bị chặn trước khi thanh toán nốt phần còn lại | 4, 5, 6 | Purpose-aware readiness + E2E |
 | Baseline appointment trước boundary; bay chụp -> ghép Orthophoto -> chấm 4 góc FarmBoundary | 3, 4, 5 + BE2 | Order-state/deposit/orthophoto/route-plan contract + E2E |
-| Đặt lịch hẹn và nộp cọc Baseline trước capture | R2, 3, 4, 5 | Appointment window, deposit confirmation (500k), BE2 re-check contract |
+| Đặt lịch hẹn và nộp cọc Baseline trước capture | R2, 3, 4, 5 | Appointment window, deposit confirmation (5k), BE2 re-check contract |
 | Count × PricePerPole snapshot; cấn trừ cọc (RemainingAmount = FinalPrice - DepositAmount); difference có payment/refund, không silent repricing | 1, 4 | Immutable original snapshot + adjustment settlement ledger tests |
 | Scope change audit; extra flight chỉ khi justified | R2, 4, 5 | ScopeAdjustment/ExtraFlightRequest audit và negative start tests |
 | GNSS+grid pole identity, near/outside boundary NeedsReview | 5, 6, 27 | PostGIS/contract tests và RQ1 evidence |
@@ -140,7 +140,7 @@ User actors chỉ gồm Public Applicant, SystemAdmin, SystemManager và TenantO
 19. Chuyến bay Baseline chụp toàn cảnh nông trại; ảnh được ghép thành Orthophoto georeferenced;
     Manager mở Orthophoto chấm 4 góc ranh giới để hệ thống tạo `FarmBoundary` (WGS84);
     sau khi duyệt boundary và AI đếm trụ, tiến hành xuất bản Base Map.
-20. Tiền cọc Baseline Survey Deposit là mức cố định do hệ thống cấu hình (mặc định 500.000 VNĐ cho farm chưa có bản đồ). BE1 tính `FinalPrice = ConfirmedSurveyPoleCount × PricePerPoleSnapshot` và cấn trừ
+20. Tiền cọc Baseline Survey Deposit là mức cố định do hệ thống cấu hình (mặc định 5.000 VNĐ cho farm chưa có bản đồ). BE1 tính `FinalPrice = ConfirmedSurveyPoleCount × PricePerPoleSnapshot` và cấn trừ
     tiền cọc: `RemainingAmount = FinalPrice - DepositAmount`. Owner thanh toán số tiền
     còn lại trước khi mở gate `ReadyForPaidService` cho chuyến bay Plant Health.
 
@@ -517,7 +517,7 @@ Step này sửa baseline/code đã hoàn thành nhưng không còn đúng nghi�
 
 - [x] Bãi bỏ toàn bộ bảng `survey_capture_authorizations`, cột qualification của SystemManager và các điều kiện readiness về giấy tờ bay.
 - [x] Approval Step 3 duyệt yêu cầu dịch vụ và phân công Manager active/available, không tạo hồ sơ capture authorization.
-- [x] `SurveyOrderReadinessSnapshot` và BE2 operational contract không còn kiểm tra giấy tờ bay. Chuyến bay Baseline sẵn sàng khi lịch hẹn confirmed, cọc 500.000 VNĐ confirmed, drone và route ready.
+- [x] `SurveyOrderReadinessSnapshot` và BE2 operational contract không còn kiểm tra giấy tờ bay. Chuyến bay Baseline sẵn sàng khi lịch hẹn confirmed, cọc 5.000 VNĐ confirmed, drone và route ready.
 
 #### R2-C2 — Baseline appointment, Baseline Survey Deposit và Orthophoto boundary marking
 
@@ -1792,7 +1792,7 @@ trong mục này được implement.
 
 | Phase | Nghiệp vụ | Trạng thái/order outcome |
 |---|---|---|
-| 4A0 — Điều kiện bay Baseline | Kiểm tra appointment và cọc khảo sát 500k | Cọc Confirmed + appointment hợp lệ → BaselineReady |
+| 4A0 — Điều kiện bay Baseline | Kiểm tra appointment và cọc khảo sát 5k | Cọc Confirmed + appointment hợp lệ → BaselineReady |
 | 4A — Baseline appointment | Với Farm chưa mapped, Manager đề xuất lịch và TenantOwner confirm trước khi có boundary | Có confirmed field window cho một lần đến Farm |
 | 4B — Baseline flight & Orthophoto boundary | Cọc Confirmed + an toàn bay hợp lệ; drone bay chụp toàn cảnh; ghép Orthophoto, Manager chấm 4 góc FarmBoundary và duyệt | Base map sẵn sàng, AI đếm trụ |
 | 4C — Confirm pole count/pricing snapshot | Publish baseline, snapshot Original giá/trụ, tính FinalPrice và cấn trừ tiền cọc | Có RemainingAmount = FinalPrice - DepositAmount |
@@ -1809,7 +1809,7 @@ này đã được implement.
 
 #### Phase 4A0 — Điều kiện sẵn sàng bay Baseline (theo Be-Plan-v2)
 
-Theo Be-Plan-v2, hệ thống bãi bỏ hoàn toàn các điều kiện về giấy phép bay và giấy đồng ý sử dụng dữ liệu. Chuyến bay Baseline chỉ yêu cầu: lịch hẹn hợp lệ, cọc 500.000 VNĐ Confirmed, SystemManager phân công active/available, Drone sẵn sàng và hoàn thành preflight checklist.
+Theo Be-Plan-v2, hệ thống bãi bỏ hoàn toàn các điều kiện về giấy phép bay và giấy đồng ý sử dụng dữ liệu. Chuyến bay Baseline chỉ yêu cầu: lịch hẹn hợp lệ, cọc 5.000 VNĐ Confirmed, SystemManager phân công active/available, Drone sẵn sàng và hoàn thành preflight checklist.
 
 #### Phase 4A — Baseline appointment trước boundary
 
@@ -1824,7 +1824,7 @@ Với Farm chưa có approved base map/confirmed inventory:
    `AwaitingBaselineAppointment → AwaitingBaselineDeposit`. Sau khi cọc Confirmed và an toàn bay đạt mới sang
    `BaselineReady`.
 5. Reschedule/cancel giữ revision/history và đóng capture/start gate cho window cũ.
-6. Tiền cọc khảo sát (500.000 VNĐ) phải được xác nhận Confirmed trước khi phiên bay Baseline bắt đầu.
+6. Tiền cọc khảo sát (5.000 VNĐ) phải được xác nhận Confirmed trước khi phiên bay Baseline bắt đầu.
 
 Farm mapped không tạo Baseline appointment giả; nó đi qua current boundary/scope
 verification rồi tới count/pricing/paid appointment.
@@ -1836,7 +1836,7 @@ Theo quy định nghiệp vụ mới nhất tại `Be-Plan-v2.md` và Amendment 
 1. **Lên lịch hẹn & Chuyển trạng thái cọc:**
    Manager đề xuất lịch hẹn Baseline Mapping. Khi TenantOwner xác nhận, Order chuyển `AwaitingBaselineAppointment → AwaitingBaselineDeposit`.
 2. **Nộp tiền cọc khảo sát (Baseline Survey Deposit):**
-   TenantOwner thanh toán khoản cọc cam kết cố định 500.000 VNĐ (`DepositAmount = 500_000m`) qua module Payments (BE2).
+   TenantOwner thanh toán khoản cọc cam kết cố định 5.000 VNĐ (`DepositAmount = 5_000m`) qua module Payments (BE2).
 3. **Mở khóa chuyến bay Baseline:**
    Khi cổng thanh toán xác nhận tiền cọc `Confirmed` + Lịch hẹn Baseline hợp lệ + Drone/phi công/preflight sẵn sàng $\rightarrow$ Order chuyển sang `BaselineReady`.
    *(Lưu ý: Tại thời điểm này, Farm chưa có official `FarmBoundary`. Drone bay khảo sát toàn cảnh dựa trên tọa độ ước lượng / candidate location của nông trại).*
@@ -1849,12 +1849,12 @@ Theo quy định nghiệp vụ mới nhất tại `Be-Plan-v2.md` và Amendment 
 7. **Định giá & Cấn trừ cọc:**
    Order chuyển sang `AwaitingPricing`. Hệ thống snapshot đơn giá theo trụ, tính tổng giá trị:
    $$\text{FinalPrice} = \text{ConfirmedSurveyPoleCount} \times \text{PricePerPoleSnapshot}$$
-   Đồng thời tự động cấn trừ 100% tiền cọc 500.000 VNĐ đã nộp:
+   Đồng thời tự động cấn trừ 100% tiền cọc 5.000 VNĐ đã nộp:
    $$\text{RemainingAmount} = \max(0, \text{FinalPrice} - \text{DepositAmount})$$
 8. **Đặt lịch dịch vụ & Thanh toán số dư:**
    TenantOwner xác nhận lịch hẹn dịch vụ có phí (Plant Health) và thanh toán nốt số tiền còn lại (`RemainingAmount`). Sau khi thanh toán số dư `Confirmed`, Order chuyển sang `ReadyForPaidService` để drone bay dịch vụ chính thức.
 9. **Chính sách phạt cọc (Non-refundable deposit):**
-   Nếu TenantOwner hủy đơn sau khi đã bay Baseline, khoản cọc 500.000 VNĐ không được hoàn lại để bù đắp chi phí khảo sát thực địa của SystemManager.
+   Nếu TenantOwner hủy đơn sau khi đã bay Baseline, khoản cọc 5.000 VNĐ không được hoàn lại để bù đắp chi phí khảo sát thực địa của SystemManager.
 
 *(Toàn bộ luồng cũ `BoundaryCaptureSession` đi chấm GNSS thực địa trước khi bay, yêu cầu official FarmBoundary trước Baseline và giả định Baseline miễn phí chính thức bị superseded).*
 
@@ -1985,7 +1985,7 @@ database rồi gọi domain policy. Migration/evidence tại
 - [x] Source có create/confirm/reschedule appointment purpose `BaselineMapping`; giữ revision/audit foundation.
 - [x] Cho phép propose/confirm khi `FarmBoundaryVersionId = null` và Order ở `AwaitingBaselineAppointment`.
 - [x] Confirm Baseline appointment chuyển Order tới `AwaitingBaselineDeposit`.
-- [x] TenantOwner thanh toán cọc cam kết cố định 500.000 VNĐ (`DepositAmount = 500_000m`, `PaymentPurpose = BaselineDeposit`). Khi cọc `Confirmed` $\rightarrow$ Order chuyển sang `BaselineReady`.
+- [x] TenantOwner thanh toán cọc cam kết cố định 5.000 VNĐ (`DepositAmount = 5_000m`, `PaymentPurpose = BaselineDeposit`). Khi cọc `Confirmed` $\rightarrow$ Order chuyển sang `BaselineReady`.
 - [x] Reschedule/cancel đóng readiness gate và cập nhật appointment lifecycle tương ứng.
 - [x] Work queue/read model trả nullable boundary, candidate survey envelope (`CandidateCenterLongitude/Latitude`, `ApproximateAreaHa`, `SurveyRadiusMeters`).
 
@@ -2120,9 +2120,9 @@ Chưa viết/chạy trong Step 4. Toàn bộ backlog kiểm thử của Step 4 �
 
 ### Definition of Done Step 4
 
-- Flow unmapped chạy chuẩn: Baseline appointment confirmed $\rightarrow$ Nộp cọc 500.000 VNĐ $\rightarrow$ `BaselineReady` $\rightarrow$ Bay chụp toàn cảnh nông trại $\rightarrow$ Ghép ảnh Orthophoto $\rightarrow$ Manager chấm 4 góc tạo `FarmBoundary` $\rightarrow$ Duyệt boundary và AI đếm trụ $\rightarrow$ Xuất bản Base Map V3 $\rightarrow$ Chốt `FinalPrice` và cấn trừ tiền cọc (`RemainingAmount = FinalPrice - DepositAmount`) $\rightarrow$ Hẹn lịch dịch vụ trả phí $\rightarrow$ Thanh toán nốt số dư `RemainingAmount` $\rightarrow$ `ReadyForPaidService`.
+- Flow unmapped chạy chuẩn: Baseline appointment confirmed $\rightarrow$ Nộp cọc 5.000 VNĐ $\rightarrow$ `BaselineReady` $\rightarrow$ Bay chụp toàn cảnh nông trại $\rightarrow$ Ghép ảnh Orthophoto $\rightarrow$ Manager chấm 4 góc tạo `FarmBoundary` $\rightarrow$ Duyệt boundary và AI đếm trụ $\rightarrow$ Xuất bản Base Map V3 $\rightarrow$ Chốt `FinalPrice` và cấn trừ tiền cọc (`RemainingAmount = FinalPrice - DepositAmount`) $\rightarrow$ Hẹn lịch dịch vụ trả phí $\rightarrow$ Thanh toán nốt số dư `RemainingAmount` $\rightarrow$ `ReadyForPaidService`.
 - Chuyến bay Baseline không yêu cầu official `FarmBoundary` trước khi bay; ranh giới nông trại được thành lập từ ảnh trực giao Orthophoto sau chuyến bay.
-- Chuyến bay Baseline bắt buộc tiền cọc 500.000 VNĐ (`DepositPaymentStatus == Confirmed`); chuyến bay Paid Service bắt buộc thanh toán đủ số dư `RemainingAmount`.
+- Chuyến bay Baseline bắt buộc tiền cọc 5.000 VNĐ (`DepositPaymentStatus == Confirmed`); chuyến bay Paid Service bắt buộc thanh toán đủ số dư `RemainingAmount`.
 - BE2 nhận authoritative readiness decision và failure reasons chính xác cho từng mục đích (Baseline Mapping vs Plant Health).
 - Không actor/client nào tự set payment/order ready.
 - Original count/price snapshot không đổi; mọi difference truy được adjustment → additional payment/refund; extra flight có approval/evidence.
@@ -3062,7 +3062,7 @@ Step 0R–4 có evidence baseline cũ nhưng đang `RebaselineRequired`. Thứ t
 10. Nối producer initial-map publication ở Step 6C vào
    `SurveyOrder.RecordBaselinePublication`; không nhận authoritative count từ client.
 11. Không bắt đầu paid Plant Health mission/result flow trước khi Baseline
-   appointment → deposit 500k → Baseline flight → Orthophoto 4-corner boundary marking
+   appointment → deposit 5k → Baseline flight → Orthophoto 4-corner boundary marking
    → Base map/count → price → paid appointment/payment đã hoàn chỉnh về code và
    contract; integration test xác nhận ở Final Test Phase.
 
@@ -3077,7 +3077,7 @@ Chỉ đánh dấu kế hoạch `Done` khi:
 - [ ] Ba request kinds và flow chung chạy end-to-end.
 - [ ] Không có public/tenant path tạo trực tiếp Tenant/Farm/Mission/Drone.
 - [ ] Unmapped Order khởi tạo `AwaitingBaselineAppointment`; confirm lịch khi
-  boundary còn null chuyển `AwaitingBaselineDeposit`, nộp cọc 500.000 VNĐ confirmed chuyển `BaselineReady`.
+  boundary còn null chuyển `AwaitingBaselineDeposit`, nộp cọc 5.000 VNĐ confirmed chuyển `BaselineReady`.
 - [ ] Drone bay khảo sát toàn cảnh nông trại dựa trên Candidate Survey Envelope, ghép ảnh
   Orthophoto, Manager chấm 4 góc tạo FarmBoundary chuẩn xác, AI đếm trụ xuất bản Base Map.
 - [ ] Purpose-aware gate không thể bypass: mọi flight cần appointment +
@@ -3227,7 +3227,7 @@ Không viết lại test lịch sử 0R; bổ sung R2 tests chứng minh target 
 - [ ] Duplicate/concurrent refund/chargeback callback idempotent, giữ PaymentEvent và chỉ đóng Order gate khi paid flight chưa bắt đầu.
 - [ ] Appointment cancel/reschedule, refund/chargeback và pending adjustment đóng gate.
 - [ ] Direct readiness/handler invocation không bypass rule.
-- [ ] Baseline bắt buộc cọc 500.000 VNĐ Confirmed; nếu thiếu cọc phải fail với PaymentNotConfirmed; không bắt buộc official FarmBoundary trước chuyến bay Baseline.
+- [ ] Baseline bắt buộc cọc 5.000 VNĐ Confirmed; nếu thiếu cọc phải fail với PaymentNotConfirmed; không bắt buộc official FarmBoundary trước chuyến bay Baseline.
 - [ ] Plant Health bắt buộc thanh toán đủ số tiền còn lại (RemainingAmount ?? FinalPrice), đã xuất bản Base Map và duyệt FarmBoundary; Harvest Readiness luôn disabled trong MVP.
 - [ ] Mỗi readiness failure code có ít nhất một test; state đổi sau khi snapshot được đọc phải được re-check.
 - [ ] Concurrent appointment/capture/boundary/route/count/payment mutations trả conflict đúng.

@@ -24,4 +24,11 @@ public sealed record MissionScheduleWindow(
 
     public bool Overlaps(DateTimeOffset startAt, DateTimeOffset endAt) =>
         StartAt < endAt && EndAt > startAt;
+
+    public MissionScheduleWindow? Intersect(DateTimeOffset startAt, DateTimeOffset endAt)
+    {
+        var start = StartAt > startAt ? StartAt : startAt;
+        var end = EndAt < endAt ? EndAt : endAt;
+        return start < end ? new MissionScheduleWindow(start, end) : null;
+    }
 }

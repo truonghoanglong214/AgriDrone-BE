@@ -183,60 +183,25 @@ public sealed class SystemManagerSurveyOrdersController(
         [FromBody] ProposeSurveyAppointmentRequest request,
         CancellationToken cancellationToken)
     {
-        DateTimeOffset proposedStartAt;
-        DateTimeOffset proposedEndAt;
-        var nowUtc = timeProvider.GetUtcNow();
-
-        if (request.ScheduledDate.HasValue)
-        {
-            if (!SurveyAppointmentWindow.TryResolveForDate(
-                request.ScheduledDate.Value,
-                nowUtc,
-                out proposedStartAt,
-                out proposedEndAt,
-                out var errorMessage))
-            {
-                return Results.ValidationProblem(new Dictionary<string, string[]>
-                {
-                    [nameof(request.ScheduledDate)] = [errorMessage!]
-                });
-            }
-        }
-        else if (request.ScheduledStartDate.HasValue || request.ScheduledEndDate.HasValue)
-        {
-            if (!request.ScheduledStartDate.HasValue || !request.ScheduledEndDate.HasValue)
-            {
-                return Results.ValidationProblem(new Dictionary<string, string[]>
-                {
-                    [nameof(request.ScheduledStartDate)] = ["Both ScheduledStartDate and ScheduledEndDate must be provided."],
-                    [nameof(request.ScheduledEndDate)] = ["Both ScheduledStartDate and ScheduledEndDate must be provided."]
-                });
-            }
-
-            if (!SurveyAppointmentWindow.TryResolveForDateRange(
-                request.ScheduledStartDate.Value,
-                request.ScheduledEndDate.Value,
-                nowUtc,
-                out proposedStartAt,
-                out proposedEndAt,
-                out var errorMessage))
-            {
-                return Results.ValidationProblem(new Dictionary<string, string[]>
-                {
-                    [nameof(request.ScheduledStartDate)] = [errorMessage!]
-                });
-            }
-        }
-        else if (request.ProposedStartAt.HasValue && request.ProposedEndAt.HasValue)
-        {
-            proposedStartAt = request.ProposedStartAt.Value;
-            proposedEndAt = request.ProposedEndAt.Value;
-        }
-        else
+        if (request.ScheduledDate is not DateOnly scheduledDate ||
+            scheduledDate == default)
         {
             return Results.ValidationProblem(new Dictionary<string, string[]>
             {
-                ["Schedule"] = ["Either ScheduledDate, a date range (ScheduledStartDate and ScheduledEndDate), or ProposedStartAt and ProposedEndAt must be provided."]
+                [nameof(request.ScheduledDate)] = ["A valid scheduled date is required."]
+            });
+        }
+
+        if (!SurveyAppointmentWindow.TryResolveForDate(
+            scheduledDate,
+            timeProvider.GetUtcNow(),
+            out var proposedStartAt,
+            out var proposedEndAt,
+            out var errorMessage))
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                [nameof(request.ScheduledDate)] = [errorMessage!]
             });
         }
 

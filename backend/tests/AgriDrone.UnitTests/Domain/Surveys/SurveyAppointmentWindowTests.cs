@@ -46,7 +46,7 @@ public sealed class SurveyAppointmentWindowTests
     }
 
     [Fact]
-    public void TryResolveForDateWithTodayShouldAdjustStartToFuture()
+    public void TryResolveForDateWithTodayShouldStartAtRequestTime()
     {
         // Arrange: Now is 2026-11-03 11:30:00 VN time (04:30:00 UTC)
         var nowUtc = new DateTimeOffset(2026, 11, 3, 4, 30, 0, TimeSpan.Zero);
@@ -64,10 +64,10 @@ public sealed class SurveyAppointmentWindowTests
         Assert.True(success);
         Assert.Null(errorMessage);
 
-        // Start should be adjusted to strictly > nowUtc (nowUtc + 5 minutes)
-        Assert.True(startUtc > nowUtc);
-        Assert.Equal(nowUtc.AddMinutes(5), startUtc);
+        Assert.Equal(nowUtc, startUtc);
         Assert.True(endUtc > startUtc);
+        Assert.Equal(new DateTimeOffset(2026, 11, 3, 17, 0, 0, TimeSpan.Zero),
+            endUtc);
 
         // Local date conversion should still correctly identify today
         var (singleDate, startDate, endDate) = SurveyAppointmentWindow.ToLocalDates(startUtc, endUtc);

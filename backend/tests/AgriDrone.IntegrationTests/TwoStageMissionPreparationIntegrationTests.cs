@@ -93,7 +93,7 @@ public sealed class TwoStageMissionPreparationIntegrationTests
                     VALUES
                         ('{orderId}', 'ORD-{orderId:N}', '{tenantId}', '{farmId}', '{requestId}',
                          '10000000-0000-0000-0000-000000000001', TRUE, 'PENDING_BOUNDARY_VERIFICATION',
-                         500000, 'PENDING'::system.survey_payment_status);
+                         5000, 'PENDING'::system.survey_payment_status);
                     INSERT INTO mission.drones (id, code, name)
                     VALUES ('{droneId}', 'UC02-{droneId.ToString("N")[..20]}', 'UC02 Drone');
                     """, seed);
@@ -113,8 +113,7 @@ public sealed class TwoStageMissionPreparationIntegrationTests
             services.AddMissionsModule(configuration);
             await using var provider = services.BuildServiceProvider();
 
-            async Task<AgriDrone.SharedKernel.Application.Result<PrepareMissionSetResult>> Prepare(
-                MissionScheduleWindow? service, MissionScheduleWindow? baseline)
+            async Task<AgriDrone.SharedKernel.Application.Result<PrepareMissionSetResult>> Prepare()
             {
                 await using var scope = provider.CreateAsyncScope();
                 var db = scope.ServiceProvider.GetRequiredService<MissionsDbContext>();
@@ -123,12 +122,11 @@ public sealed class TwoStageMissionPreparationIntegrationTests
                     new DroneMissionRepository(db), new AvailableDrone(droneId),
                     db, new Audit(), new Actor(actorId), TimeProvider.System);
                 return await handler.Handle(new PrepareMissionSetCommand(
-                    orderId, droneId, Guid.NewGuid(), service, baseline),
+                    orderId, droneId, Guid.NewGuid()),
                     CancellationToken.None);
             }
 
-            var baseline = await Prepare(null,
-                new MissionScheduleWindow(start.AddMinutes(10), start.AddMinutes(50)));
+            var baseline = await Prepare();
             Assert.True(baseline.IsSuccess);
             Assert.Single(baseline.Value.Missions);
             await AssertPersisted(1);
@@ -137,12 +135,13 @@ public sealed class TwoStageMissionPreparationIntegrationTests
             {
                 RequiresBaselineMapping = false,
                 CurrentBaseMapVersionId = Guid.NewGuid(),
+                AppointmentStartAt = start.AddHours(2),
+                AppointmentEndAt = start.AddHours(4),
                 IsEligibleForPlanning = false,
                 IsReadyToSchedule = false,
                 ReadinessFailureCode = "PaymentNotConfirmed"
             };
-            var unpaid = await Prepare(new MissionScheduleWindow(
-                start.AddHours(1), start.AddHours(2)), null);
+            var unpaid = await Prepare();
             Assert.True(unpaid.IsFailure);
             Assert.Equal("MissionPlanning.OrderNotReady", unpaid.Error.Code);
             await AssertPersisted(1);
@@ -154,8 +153,7 @@ public sealed class TwoStageMissionPreparationIntegrationTests
                 IsReadyForOperations = true,
                 ReadinessFailureCode = null
             };
-            var paid = await Prepare(new MissionScheduleWindow(
-                start.AddHours(1), start.AddHours(2)), null);
+            var paid = await Prepare();
             Assert.True(paid.IsSuccess);
             Assert.Equal(2, paid.Value.Missions.Count);
             await AssertPersisted(2);

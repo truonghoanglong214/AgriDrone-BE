@@ -230,7 +230,7 @@ public sealed class MarkFarmBoundaryOnOrthophotoCommandHandlerTests
         var fixture = CreateFixture();
         // Order in BaselineReady cannot mark boundary on orthophoto
         fixture.Order.MarkBaselineAppointmentConfirmed(Now.AddMinutes(1));
-        fixture.Order.RecordBaselineDepositConfirmed(Guid.NewGuid(), 500_000m, Now.AddMinutes(5));
+        fixture.Order.RecordBaselineDepositConfirmed(Guid.NewGuid(), 5_000m, Now.AddMinutes(5));
 
         var result = await fixture.Handler.Handle(
             CreateCommand(fixture.Order.Id, ValidCorners(), fixture.Order.Version),
@@ -245,7 +245,7 @@ public sealed class MarkFarmBoundaryOnOrthophotoCommandHandlerTests
     {
         var fixture = CreateFixture();
         fixture.Order.MarkBaselineAppointmentConfirmed(Now.AddMinutes(1));
-        fixture.Order.RecordBaselineDepositConfirmed(Guid.NewGuid(), 500_000m, Now.AddMinutes(5));
+        fixture.Order.RecordBaselineDepositConfirmed(Guid.NewGuid(), 5_000m, Now.AddMinutes(5));
         fixture.Order.StartBaselineMapping(Now.AddHours(1));
         fixture.Order.MarkBaselineCandidatesReady(Now.AddHours(2));
 

@@ -30,33 +30,10 @@ Content-Type: application/json
 }
 
 
-### 3. Đề xuất lịch hẹn THEO KHOẢNG NGÀY (Date Range - Ví dụ từ ngày 10/11 đến 12/11/2026)
-POST {{baseUrl}}/api/system-manager/survey-orders/{{surveyOrderId}}/appointments
-Authorization: Bearer {{authToken}}
-Content-Type: application/json
-
-{
-  "purpose": "PaidService",
-  "scheduledStartDate": "2026-11-10",
-  "scheduledEndDate": "2026-11-12",
-  "expectedOrderVersion": 2
-}
+### 3. Nếu chọn hôm nay, Start là thời điểm BE nhận yêu cầu; End là 00:00 ngày mai theo giờ Việt Nam.
 
 
-### 4. Đề xuất lịch hẹn THEO GIỜ CỤ THỂ (Backward compatibility - Vẫn hỗ trợ nếu cần)
-POST {{baseUrl}}/api/system-manager/survey-orders/{{surveyOrderId}}/appointments
-Authorization: Bearer {{authToken}}
-Content-Type: application/json
-
-{
-  "purpose": "BaselineMapping",
-  "proposedStartAt": "2026-11-10T08:00:00Z",
-  "proposedEndAt": "2026-11-10T11:00:00Z",
-  "expectedOrderVersion": 1
-}
-
-
-### 5. Chủ vườn (Tenant Owner) xác nhận lịch hẹn (Confirm Appointment)
+### 4. Chủ vườn (Tenant Owner) xác nhận lịch hẹn (Confirm Appointment)
 @appointmentId = 3fa85f64-5717-4562-b3fc-2c963f66afa6
 POST {{baseUrl}}/api/tenant-owner/survey-orders/{{surveyOrderId}}/appointments/{{appointmentId}}/confirm
 Authorization: Bearer {{authToken}}
@@ -65,6 +42,24 @@ Content-Type: application/json
 {
   "expectedOrderVersion": 1,
   "expectedAppointmentVersion": 1
+}
+
+
+### 5. Xem Drone available theo khung giờ lịch hẹn đã xác nhận
+GET {{baseUrl}}/api/system-manager/survey-orders/{{surveyOrderId}}/drones/available
+Authorization: Bearer {{authToken}}
+
+
+### 6. Chuẩn bị Mission; BE tự chọn Baseline hoặc dịch vụ theo SurveyOrder
+@droneId = 3fa85f64-5717-4562-b3fc-2c963f66afa6
+@idempotencyKey = 3fa85f64-5717-4562-b3fc-2c963f66afa6
+POST {{baseUrl}}/api/system-manager/survey-orders/{{surveyOrderId}}/missions/prepare
+Authorization: Bearer {{authToken}}
+Idempotency-Key: {{idempotencyKey}}
+Content-Type: application/json
+
+{
+  "droneId": "{{droneId}}"
 }
 
 

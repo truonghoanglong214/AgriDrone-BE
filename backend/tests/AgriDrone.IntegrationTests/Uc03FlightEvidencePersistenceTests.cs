@@ -83,7 +83,7 @@ public sealed class Uc03FlightEvidencePersistenceTests
                     VALUES
                         ('{orderId}', 'ORD-{orderId:N}', '{tenantId}', '{farmId}', '{requestId}',
                          '10000000-0000-0000-0000-000000000001', TRUE, 'PENDING_BOUNDARY_VERIFICATION',
-                         500000, 'PENDING'::system.survey_payment_status);
+                         5000, 'PENDING'::system.survey_payment_status);
                     INSERT INTO mission.drones
                         (id, code, name, specifications, registration_number,
                          registration_date, registration_expiry_date)

@@ -6,6 +6,9 @@ namespace AgriDrone.Modules.Missions.Domain.Drones;
 
 public sealed class Drone : AggregateRoot
 {
+    private static readonly TimeZoneInfo OperationsTimeZone =
+        TimeZoneInfo.FindSystemTimeZoneById("Asia/Ho_Chi_Minh");
+
     // Dành cho EF Core.
     private Drone()
     {
@@ -328,8 +331,10 @@ public sealed class Drone : AggregateRoot
         DomainGuard.Utc(endAt);
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(endAt, startAt);
 
-        var startDate = DateOnly.FromDateTime(startAt.UtcDateTime);
-        var endDate = DateOnly.FromDateTime(endAt.UtcDateTime);
+        var startDate = DateOnly.FromDateTime(
+            TimeZoneInfo.ConvertTime(startAt, OperationsTimeZone).DateTime);
+        var endDate = DateOnly.FromDateTime(
+            TimeZoneInfo.ConvertTime(endAt.AddTicks(-1), OperationsTimeZone).DateTime);
         return DeletedAt is null && Status == DroneStatus.Available &&
                !string.IsNullOrWhiteSpace(RegistrationNumber) &&
                RegistrationDate is DateOnly registrationDate &&
