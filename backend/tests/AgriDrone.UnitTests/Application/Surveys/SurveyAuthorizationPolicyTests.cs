@@ -38,18 +38,15 @@ public sealed class SurveyAuthorizationPolicyTests
     }
 
     [Theory]
-    [InlineData(true, true, true)]
-    [InlineData(false, true, false)]
-    [InlineData(true, false, false)]
-    public void ManagerMutationRequiresActiveAssignmentAndQualification(
+    [InlineData(true, true)]
+    [InlineData(false, false)]
+    public void ManagerMutationRequiresActiveAssignment(
         bool assigned,
-        bool qualified,
         bool expected)
     {
         var context = new SurveyAuthorizationContext(
             SurveyActorKind.SystemManager,
-            HasActiveFarmAssignment: assigned,
-            HasCurrentQualification: qualified);
+            HasActiveFarmAssignment: assigned);
 
         Assert.Equal(expected, SurveyAuthorizationPolicy.IsAllowed(
             SurveyAuthorizationAction.ReviewOrPublishResult,

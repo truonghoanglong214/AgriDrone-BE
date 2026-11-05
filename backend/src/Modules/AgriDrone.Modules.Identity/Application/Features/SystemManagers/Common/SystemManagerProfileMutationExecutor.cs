@@ -80,8 +80,6 @@ internal static class SystemManagerProfileMutationExecutor
         {
             profile.Status,
             profile.Availability,
-            profile.QualificationStatus,
-            profile.QualificationExpiresAt,
             profile.Version,
             Reason = reason
         });

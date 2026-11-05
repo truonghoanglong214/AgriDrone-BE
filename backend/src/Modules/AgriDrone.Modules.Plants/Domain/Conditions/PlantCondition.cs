@@ -210,6 +210,35 @@ public sealed class PlantCondition : Entity
         return true;
     }
 
+    public void UpdateDetails(
+        string name,
+        string? scientificName,
+        string? description,
+        DateTimeOffset updatedAt)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        DomainGuard.Utc(updatedAt);
+
+        if (!IsActive)
+        {
+            throw new InvalidOperationException(
+                "Only an active plant condition can be updated.");
+        }
+
+        if (updatedAt < CreatedAt)
+        {
+            throw new ArgumentException(
+                "Update time cannot be earlier than creation time.",
+                nameof(updatedAt));
+        }
+
+        Name = name.Trim();
+        ScientificName = NormalizeOptional(scientificName);
+        Description = NormalizeOptional(description);
+        UpdatedAt = updatedAt;
+        Version++;
+    }
+
     private static string? NormalizeOptional(string? value) =>
         string.IsNullOrWhiteSpace(value)
             ? null
@@ -244,7 +273,7 @@ public sealed class PlantCondition : Entity
         if (!PlantHealthLabelPolicy.IsAllowed(code, labelKind.Value))
         {
             throw new ArgumentException(
-                $"Condition code '{code.Trim().ToUpperInvariant()}' is not in the locked Plant Health label set.",
+                $"Condition code '{code.Trim().ToUpperInvariant()}' is not valid for Plant Health label.",
                 nameof(code));
         }
 
@@ -262,26 +291,30 @@ public sealed class PlantCondition : Entity
                 "A confusing/non-disease label cannot use the Disease condition type.");
         }
 
+        var resolvedDatasetVersion = string.IsNullOrWhiteSpace(datasetVersion)
+            ? PlantHealthLabelPolicy.DefaultDatasetVersion
+            : datasetVersion.Trim();
+
+        var resolvedAnnotationRuleVersion = string.IsNullOrWhiteSpace(annotationRuleVersion)
+            ? PlantHealthLabelPolicy.DefaultAnnotationRuleVersion
+            : annotationRuleVersion.Trim();
+
+        var resolvedTeamLabelLimitation = string.IsNullOrWhiteSpace(teamLabelLimitation)
+            ? PlantHealthLabelPolicy.DefaultTeamLabelLimitation
+            : teamLabelLimitation.Trim();
+
         var normalizedDatasetVersion = NormalizeRequired(
-            datasetVersion,
+            resolvedDatasetVersion,
             100,
             nameof(datasetVersion));
         var normalizedAnnotationRuleVersion = NormalizeRequired(
-            annotationRuleVersion,
+            resolvedAnnotationRuleVersion,
             100,
             nameof(annotationRuleVersion));
         var normalizedTeamLabelLimitation = NormalizeRequired(
-            teamLabelLimitation,
+            resolvedTeamLabelLimitation,
             1000,
             nameof(teamLabelLimitation));
-
-        if (normalizedDatasetVersion != PlantHealthLabelPolicy.DatasetVersion ||
-            normalizedAnnotationRuleVersion != PlantHealthLabelPolicy.AnnotationRuleVersion ||
-            normalizedTeamLabelLimitation != PlantHealthLabelPolicy.TeamLabelLimitation)
-        {
-            throw new ArgumentException(
-                "Plant Health provenance must match the locked pilot policy.");
-        }
 
         return new PlantHealthMetadata(
             labelKind,

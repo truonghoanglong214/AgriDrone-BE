@@ -8,7 +8,6 @@ namespace AgriDrone.Modules.Identity.Application.Features.SystemManagers.GetSyst
 public sealed record GetSystemManagerProfilesQuery(
     SystemManagerProfileStatus? Status,
     SystemManagerAvailabilityStatus? Availability,
-    FlightQualificationStatus? QualificationStatus,
     int PageNumber,
     int PageSize)
     : IRequest<Result<PagedResult<SystemManagerProfileResponse>>>;

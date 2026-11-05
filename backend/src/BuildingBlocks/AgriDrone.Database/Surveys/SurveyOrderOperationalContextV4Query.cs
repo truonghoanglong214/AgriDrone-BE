@@ -105,29 +105,6 @@ internal sealed class SurveyOrderOperationalContextV4Query(
 
         var evaluatedAt = clock.GetUtcNow();
 
-        // Consent and flight permission authorizations
-        var consentAuth = await db.Set<SurveyCaptureAuthorization>().AsNoTracking()
-            .Where(value =>
-                value.SurveyOrderId == order.Id &&
-                value.Type == SurveyCaptureAuthorizationType.WrittenDataUseConsent &&
-                value.Status == SurveyCaptureAuthorizationStatus.Verified &&
-                value.VerifiedAt <= evaluatedAt &&
-                (!value.ExpiresAt.HasValue || evaluatedAt < value.ExpiresAt.Value) &&
-                !value.RevokedAt.HasValue)
-            .OrderByDescending(value => value.VerifiedAt)
-            .FirstOrDefaultAsync(cancellationToken);
-
-        var flightPermissionAuth = await db.Set<SurveyCaptureAuthorization>().AsNoTracking()
-            .Where(value =>
-                value.SurveyOrderId == order.Id &&
-                value.Type == SurveyCaptureAuthorizationType.FlightPermission &&
-                value.Status == SurveyCaptureAuthorizationStatus.Verified &&
-                value.VerifiedAt <= evaluatedAt &&
-                (!value.ExpiresAt.HasValue || evaluatedAt < value.ExpiresAt.Value) &&
-                !value.RevokedAt.HasValue)
-            .OrderByDescending(value => value.VerifiedAt)
-            .FirstOrDefaultAsync(cancellationToken);
-
         // Adjustments
         var priceAdjustments = await db.Set<PriceAdjustment>().AsNoTracking()
             .Where(value => value.SurveyOrderId == order.Id)
@@ -261,8 +238,6 @@ internal sealed class SurveyOrderOperationalContextV4Query(
             HasPendingPriceAdjustment: hasPendingAdjustment,
             IsPaymentAmountAndCurrencyMatched: isPaymentAmountAndCurrencyMatched,
             SafetyChecksSatisfied: false,
-            HasValidWrittenDataUseConsent: consentAuth is not null,
-            HasValidFlightPermission: flightPermissionAuth is not null,
             HasPendingFinancialSettlement: hasPendingSettlement,
             HasUnapprovedExtraFlight: hasUnapprovedExtraFlight,
             HasFinalizedBoundaryCapture: hasFinalizedBoundaryCapture,
@@ -278,7 +253,6 @@ internal sealed class SurveyOrderOperationalContextV4Query(
             AssignmentId: null,
             AssignmentVersion: null,
             IsActive: managerReady,
-            IsQualified: managerReady,
             IsAvailable: managerReady);
 
         var commercialReadiness = new CommercialReadinessEvaluation(
@@ -341,10 +315,6 @@ internal sealed class SurveyOrderOperationalContextV4Query(
             HasPendingAdjustment: hasPendingAdjustment,
             HasPendingSettlement: hasPendingSettlement,
             HasUnapprovedExtraFlight: hasUnapprovedExtraFlight,
-            HasValidWrittenDataUseConsent: consentAuth is not null,
-            WrittenDataUseConsentId: consentAuth?.Id,
-            HasValidFlightPermission: flightPermissionAuth is not null,
-            FlightPermissionId: flightPermissionAuth?.Id,
             Adjustments: adjustmentsSummary,
             Settlements: settlementsSummary,
             ExtraFlights: extraFlightsSummary,

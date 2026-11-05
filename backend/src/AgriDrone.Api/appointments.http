@@ -1,0 +1,75 @@
+@baseUrl = https://localhost:7080
+# @baseUrl = http://localhost:5080
+
+### 1. Đăng nhập tài khoản System Manager để lấy Bearer Token
+# @name managerLogin
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "manager@agridrone.com",
+  "password": "YourPasswordHere"
+}
+
+@authToken = {{managerLogin.response.body.accessToken}}
+@surveyOrderId = 3fa85f64-5717-4562-b3fc-2c963f66afa6
+
+
+### 2. Đề xuất lịch hẹn THEO NGÀY (Single Date - Ví dụ ngày 10/11/2026)
+# Hệ thống sẽ tự động map thành khung giờ trọn ngày theo múi giờ Việt Nam (UTC+7):
+# Start: 2026-11-10 00:00:00 +07:00 (2026-11-09 17:00:00Z)
+# End:   2026-11-11 00:00:00 +07:00 (2026-11-10 17:00:00Z)
+POST {{baseUrl}}/api/system-manager/survey-orders/{{surveyOrderId}}/appointments
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "purpose": "BaselineMapping",
+  "scheduledDate": "2026-11-10",
+  "expectedOrderVersion": 1
+}
+
+
+### 3. Nếu chọn hôm nay, Start là thời điểm BE nhận yêu cầu; End là 00:00 ngày mai theo giờ Việt Nam.
+
+
+### 4. Chủ vườn (Tenant Owner) xác nhận lịch hẹn (Confirm Appointment)
+@appointmentId = 3fa85f64-5717-4562-b3fc-2c963f66afa6
+POST {{baseUrl}}/api/tenant-owner/survey-orders/{{surveyOrderId}}/appointments/{{appointmentId}}/confirm
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "expectedOrderVersion": 1,
+  "expectedAppointmentVersion": 1
+}
+
+
+### 5. Xem Drone available theo khung giờ lịch hẹn đã xác nhận
+GET {{baseUrl}}/api/system-manager/survey-orders/{{surveyOrderId}}/drones/available
+Authorization: Bearer {{authToken}}
+
+
+### 6. Chuẩn bị Mission; BE tự chọn Baseline hoặc dịch vụ theo SurveyOrder
+@droneId = 3fa85f64-5717-4562-b3fc-2c963f66afa6
+@idempotencyKey = 3fa85f64-5717-4562-b3fc-2c963f66afa6
+POST {{baseUrl}}/api/system-manager/survey-orders/{{surveyOrderId}}/missions/prepare
+Authorization: Bearer {{authToken}}
+Idempotency-Key: {{idempotencyKey}}
+Content-Type: application/json
+
+{
+  "droneId": "{{droneId}}"
+}
+
+
+### 6. Chủ vườn yêu cầu dời lịch (Request Reschedule)
+POST {{baseUrl}}/api/tenant-owner/survey-orders/{{surveyOrderId}}/appointments/{{appointmentId}}/request-reschedule
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "reason": "Dự báo thời tiết có mưa bão, xin dời sang ngày khác",
+  "expectedOrderVersion": 2,
+  "expectedAppointmentVersion": 2
+}

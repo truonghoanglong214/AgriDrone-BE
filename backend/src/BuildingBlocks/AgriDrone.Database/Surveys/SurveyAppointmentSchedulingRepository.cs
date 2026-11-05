@@ -187,13 +187,10 @@ internal sealed class SurveyAppointmentSchedulingRepository(
               AND app_user.status = 'ACTIVE'::system.user_status
               AND profile.status = 'ACTIVE'::system.system_manager_profile_status
               AND profile.availability = 'AVAILABLE'::system.system_manager_availability_status
-              AND profile.qualification_status = 'QUALIFIED'::system.flight_qualification_status
-              AND profile.qualification_expires_at > @evaluated_at
             FOR SHARE OF farm, assignment, profile, app_user
             """,
             Id("order_id", surveyOrderId),
-            Id("actor_id", actorUserId),
-            new NpgsqlParameter("evaluated_at", evaluatedAt));
+            Id("actor_id", actorUserId));
         var value = await command.ExecuteScalarAsync(cancellationToken);
         return value is Guid id ? id : null;
     }

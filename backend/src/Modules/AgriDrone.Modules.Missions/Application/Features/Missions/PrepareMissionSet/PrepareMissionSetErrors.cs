@@ -36,30 +36,10 @@ internal static class PrepareMissionSetErrors
             "MissionPlanning.InvalidOrderContext",
             "The authoritative Survey Order planning context is inconsistent.");
 
-    public static AppError BaselineWindowRequired() =>
-        AppError.Validation(
-            "MissionPlanning.BaselineWindowRequired",
-            "A baseline schedule window is required to schedule the confirmed baseline appointment.");
-
-    public static AppError ServiceWindowRequired() =>
-        AppError.Validation(
-            "MissionPlanning.ServiceWindowRequired",
-            "A service schedule window is required to schedule the confirmed paid-service appointment.");
-
-    public static AppError ServiceWindowNotAllowed() =>
-        AppError.Validation(
-            "MissionPlanning.ServiceWindowNotAllowed",
-            "A paid-service schedule window is not accepted while baseline mapping is required.");
-
-    public static AppError BaselineWindowNotAllowed() =>
-        AppError.Validation(
-            "MissionPlanning.BaselineWindowNotAllowed",
-            "A baseline schedule window is not allowed when the Farm already has an approved base map.");
-
-    public static AppError ScheduleOutsideAppointment() =>
-        AppError.Validation(
-            "MissionPlanning.ScheduleOutsideAppointment",
-            "Every Mission schedule must be inside the confirmed appointment window.");
+    public static AppError ScheduleNeedsReschedule() =>
+        AppError.Conflict(
+            "MissionPlanning.ScheduleNeedsReschedule",
+            "The existing Mission schedule is outside the current appointment. Reschedule it first.");
 
     public static AppError ScheduleOverlap() =>
         AppError.Validation(

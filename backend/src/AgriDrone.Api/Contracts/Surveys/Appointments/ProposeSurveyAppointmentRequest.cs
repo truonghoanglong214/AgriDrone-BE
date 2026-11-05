@@ -4,11 +4,10 @@ namespace AgriDrone.Api.Contracts.Surveys.Appointments;
 
 public sealed record ProposeSurveyAppointmentRequest(
     [param: Required] SurveyAppointmentPurposeValue? Purpose,
-    [param: Required] DateTimeOffset? ProposedStartAt,
-    [param: Required] DateTimeOffset? ProposedEndAt,
-    [param: Required] uint? ExpectedOrderVersion,
-    Guid? ExpectedCurrentAppointmentId,
-    uint? ExpectedCurrentAppointmentVersion);
+    [param: Required] DateOnly? ScheduledDate = null,
+    [param: Required] uint? ExpectedOrderVersion = null,
+    Guid? ExpectedCurrentAppointmentId = null,
+    uint? ExpectedCurrentAppointmentVersion = null);
 
 public enum SurveyAppointmentPurposeValue
 {

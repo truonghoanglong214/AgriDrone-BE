@@ -7,6 +7,4 @@ public sealed record SystemManagerProfileApiResponse(
     string FullName,
     string Status,
     string Availability,
-    string QualificationStatus,
-    DateTimeOffset? QualificationExpiresAt,
     long Version);

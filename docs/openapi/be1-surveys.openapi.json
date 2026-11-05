@@ -2944,13 +2944,6 @@
             }
           },
           {
-            "name": "QualificationStatus",
-            "in": "query",
-            "schema": {
-              "$ref": "#/components/schemas/FlightQualificationStatusValue"
-            }
-          },
-          {
             "name": "PageNumber",
             "in": "query",
             "schema": {
@@ -3363,127 +3356,6 @@
           },
           "409": {
             "description": "Conflict",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/system/managers/{profileId}/qualification": {
-      "put": {
-        "tags": [
-          "SystemManagers"
-        ],
-        "summary": "Cập nhật tình trạng chứng chỉ bay của System Manager.",
-        "description": "Cập nhật Pending, Qualified, Suspended hoặc Revoked. Trạng thái Qualified yêu\r\ncầu expiresAt ở tương lai; mọi trạng thái khác Qualified sẽ tự đặt manager về\r\nUnavailable.",
-        "parameters": [
-          {
-            "name": "profileId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateSystemManagerQualificationRequest"
-              }
-            },
-            "text/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateSystemManagerQualificationRequest"
-              }
-            },
-            "application/*+json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateSystemManagerQualificationRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "$ref": "#/components/schemas/SystemManagerProfileApiResponse"
-                }
-              },
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SystemManagerProfileApiResponse"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SystemManagerProfileApiResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflict",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Unprocessable Content",
             "content": {
               "text/plain": {
                 "schema": {
@@ -5043,106 +4915,6 @@
           },
           "404": {
             "description": "Not Found"
-          }
-        }
-      }
-    },
-    "/api/system-admin/survey-orders/{orderId}/capture-authorizations/{type}/verify": {
-      "put": {
-        "tags": [
-          "SystemSurveyOrderAuthorizations"
-        ],
-        "parameters": [
-          {
-            "name": "orderId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "type",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/VerifySurveyCaptureAuthorizationRequest"
-              }
-            },
-            "text/json": {
-              "schema": {
-                "$ref": "#/components/schemas/VerifySurveyCaptureAuthorizationRequest"
-              }
-            },
-            "application/*+json": {
-              "schema": {
-                "$ref": "#/components/schemas/VerifySurveyCaptureAuthorizationRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        }
-      }
-    },
-    "/api/system-admin/survey-orders/{orderId}/capture-authorizations/{type}/revoke": {
-      "put": {
-        "tags": [
-          "SystemSurveyOrderAuthorizations"
-        ],
-        "parameters": [
-          {
-            "name": "orderId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "type",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RevokeSurveyCaptureAuthorizationRequest"
-              }
-            },
-            "text/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RevokeSurveyCaptureAuthorizationRequest"
-              }
-            },
-            "application/*+json": {
-              "schema": {
-                "$ref": "#/components/schemas/RevokeSurveyCaptureAuthorizationRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "OK"
           }
         }
       }
@@ -8054,266 +7826,6 @@
           }
         }
       }
-    },
-    "/api/system-admin/survey-orders/{orderId}/capture-authorizations/consent/verify": {
-      "put": {
-        "tags": [
-          "SystemSurveyOrderAuthorizations"
-        ],
-        "summary": "Xác thực văn bản đồng ý sử dụng dữ liệu nông trại (Consent).",
-        "parameters": [
-          {
-            "name": "orderId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/VerifySurveyCaptureAuthorizationRequest"
-              }
-            },
-            "text/json": {
-              "schema": {
-                "$ref": "#/components/schemas/VerifySurveyCaptureAuthorizationRequest"
-              }
-            },
-            "application/*+json": {
-              "schema": {
-                "$ref": "#/components/schemas/VerifySurveyCaptureAuthorizationRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SurveyCaptureAuthorizationApiResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
-          },
-          "404": {
-            "description": "Not Found"
-          },
-          "409": {
-            "description": "Conflict"
-          }
-        }
-      }
-    },
-    "/api/system-admin/survey-orders/{orderId}/capture-authorizations/consent/revoke": {
-      "put": {
-        "tags": [
-          "SystemSurveyOrderAuthorizations"
-        ],
-        "summary": "Thu hồi văn bản đồng ý sử dụng dữ liệu nông trại (Consent).",
-        "parameters": [
-          {
-            "name": "orderId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RevokeSurveyCaptureAuthorizationRequest"
-              }
-            },
-            "text/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RevokeSurveyCaptureAuthorizationRequest"
-              }
-            },
-            "application/*+json": {
-              "schema": {
-                "$ref": "#/components/schemas/RevokeSurveyCaptureAuthorizationRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SurveyCaptureAuthorizationApiResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
-          },
-          "404": {
-            "description": "Not Found"
-          },
-          "409": {
-            "description": "Conflict"
-          }
-        }
-      }
-    },
-    "/api/system-admin/survey-orders/{orderId}/capture-authorizations/flight-permission/verify": {
-      "put": {
-        "tags": [
-          "SystemSurveyOrderAuthorizations"
-        ],
-        "summary": "Xác thực giấy phép bay từ cơ quan có thẩm quyền (Flight Permission).",
-        "parameters": [
-          {
-            "name": "orderId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/VerifySurveyCaptureAuthorizationRequest"
-              }
-            },
-            "text/json": {
-              "schema": {
-                "$ref": "#/components/schemas/VerifySurveyCaptureAuthorizationRequest"
-              }
-            },
-            "application/*+json": {
-              "schema": {
-                "$ref": "#/components/schemas/VerifySurveyCaptureAuthorizationRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SurveyCaptureAuthorizationApiResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
-          },
-          "404": {
-            "description": "Not Found"
-          },
-          "409": {
-            "description": "Conflict"
-          }
-        }
-      }
-    },
-    "/api/system-admin/survey-orders/{orderId}/capture-authorizations/flight-permission/revoke": {
-      "put": {
-        "tags": [
-          "SystemSurveyOrderAuthorizations"
-        ],
-        "summary": "Thu hồi giấy phép bay (Flight Permission).",
-        "parameters": [
-          {
-            "name": "orderId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RevokeSurveyCaptureAuthorizationRequest"
-              }
-            },
-            "text/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RevokeSurveyCaptureAuthorizationRequest"
-              }
-            },
-            "application/*+json": {
-              "schema": {
-                "$ref": "#/components/schemas/RevokeSurveyCaptureAuthorizationRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SurveyCaptureAuthorizationApiResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
-          },
-          "404": {
-            "description": "Not Found"
-          },
-          "409": {
-            "description": "Conflict"
-          }
-        }
-      }
     }
   },
   "components": {
@@ -9218,15 +8730,6 @@
           }
         },
         "additionalProperties": false
-      },
-      "FlightQualificationStatusValue": {
-        "enum": [
-          "PENDING",
-          "QUALIFIED",
-          "SUSPENDED",
-          "REVOKED"
-        ],
-        "type": "string"
       },
       "ForgotPasswordRequest": {
         "type": "object",
@@ -10417,20 +9920,6 @@
         },
         "additionalProperties": false
       },
-      "RevokeSurveyCaptureAuthorizationRequest": {
-        "type": "object",
-        "properties": {
-          "reason": {
-            "type": "string",
-            "nullable": true
-          },
-          "expectedVersion": {
-            "type": "integer",
-            "format": "int32"
-          }
-        },
-        "additionalProperties": false
-      },
       "ScheduleMissionRequest": {
         "type": "object",
         "properties": {
@@ -11283,10 +10772,8 @@
       "SurveyRequestReviewChecklistRequest": {
         "required": [
           "candidate-location-sufficient",
-          "consent-feasibility",
           "contact-valid",
           "dragon-fruit-farm-confirmed",
-          "flight-permission-feasibility",
           "service-area-supported"
         ],
         "type": "object",
@@ -11301,12 +10788,6 @@
             "type": "boolean"
           },
           "candidate-location-sufficient": {
-            "type": "boolean"
-          },
-          "consent-feasibility": {
-            "type": "boolean"
-          },
-          "flight-permission-feasibility": {
             "type": "boolean"
           },
           "notes": {
@@ -11466,15 +10947,6 @@
           },
           "availability": {
             "type": "string",
-            "nullable": true
-          },
-          "qualificationStatus": {
-            "type": "string",
-            "nullable": true
-          },
-          "qualificationExpiresAt": {
-            "type": "string",
-            "format": "date-time",
             "nullable": true
           },
           "version": {
@@ -11758,28 +11230,6 @@
         },
         "additionalProperties": false
       },
-      "UpdateSystemManagerQualificationRequest": {
-        "type": "object",
-        "properties": {
-          "status": {
-            "$ref": "#/components/schemas/FlightQualificationStatusValue"
-          },
-          "expiresAt": {
-            "type": "string",
-            "format": "date-time",
-            "nullable": true
-          },
-          "reason": {
-            "type": "string",
-            "nullable": true
-          },
-          "expectedVersion": {
-            "type": "integer",
-            "format": "int64"
-          }
-        },
-        "additionalProperties": false
-      },
       "UpdateUserPasswordRequest": {
         "type": "object",
         "properties": {
@@ -11855,29 +11305,6 @@
           "errorMessage": {
             "type": "string",
             "nullable": true
-          }
-        },
-        "additionalProperties": false
-      },
-      "VerifySurveyCaptureAuthorizationRequest": {
-        "type": "object",
-        "properties": {
-          "evidenceReference": {
-            "type": "string",
-            "nullable": true
-          },
-          "issuedAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "expiresAt": {
-            "type": "string",
-            "format": "date-time",
-            "nullable": true
-          },
-          "expectedVersion": {
-            "type": "integer",
-            "format": "int32"
           }
         },
         "additionalProperties": false
@@ -12285,9 +11712,6 @@
     },
     {
       "name": "SystemPlantHealthGuidance"
-    },
-    {
-      "name": "SystemSurveyOrderAuthorizations"
     },
     {
       "name": "SystemSurveyOrders"

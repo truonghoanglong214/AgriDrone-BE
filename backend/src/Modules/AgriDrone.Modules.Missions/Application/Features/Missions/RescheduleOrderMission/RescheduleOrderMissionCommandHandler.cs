@@ -81,10 +81,9 @@ internal sealed class RescheduleOrderMissionCommandHandler(
         if (!order.IsReadyForOperations || !order.IsReadyToSchedule)
             return Result.Failure<MissionResponse>(MissionOperationError.OrderNotReady(
                 order.ReadinessFailureCode));
-        var scheduleWindow = MissionScheduleWindow.ForDate(request.ScheduledDate);
-        if (!scheduleWindow.Overlaps(
-                order.AppointmentStartAt,
-                order.AppointmentEndAt))
+        var scheduleWindow = MissionScheduleWindow.ForDate(request.ScheduledDate)
+            .Intersect(order.AppointmentStartAt, order.AppointmentEndAt);
+        if (scheduleWindow is null)
             return Result.Failure<MissionResponse>(MissionOperationError.AppointmentWindowClosed());
         if (!recovering && mission.ScheduledAt == scheduleWindow.StartAt &&
             mission.ScheduledEndAt == scheduleWindow.EndAt &&

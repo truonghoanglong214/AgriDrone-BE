@@ -359,5 +359,18 @@ public sealed class PlantReferenceSourceTests
                 requestedZoneId == zoneId &&
                 requestedMapVersionId == mapVersionId);
         }
+
+        public Task<bool> IsPublishedFarmBaseMapVersionAsync(
+            Guid requestedTenantId,
+            Guid requestedFarmId,
+            Guid requestedMapVersionId,
+            CancellationToken cancellationToken = default)
+        {
+            MapCheckCallCount++;
+            return Task.FromResult(
+                requestedTenantId == tenantId &&
+                requestedFarmId == farmId &&
+                requestedMapVersionId == mapVersionId);
+        }
     }
 }

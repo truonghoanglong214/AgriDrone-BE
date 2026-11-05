@@ -516,47 +516,61 @@ public sealed class PrepareMissionSetHandlerTests
     }
 
     [Fact]
-    public async Task ScheduleOutsideConfirmedAppointmentIsRejected()
+    public async Task PrepareUsesPartialTodayAppointmentWindow()
     {
         var fixture = new Fixture(requiresBaselineMapping: false);
+        var start = Now.AddMinutes(20);
+        var end = Now.AddHours(8);
+        fixture.PlanningQuery.Context = fixture.PlanningQuery.Context with
+        {
+            AppointmentStartAt = start,
+            AppointmentEndAt = end
+        };
 
         var result = await fixture.Handler.Handle(
-            fixture.CreateCommand(
-                serviceStart: Now.AddMinutes(30),
-                serviceEnd: Now.AddHours(2)),
+            fixture.CreateCommand(),
             CancellationToken.None);
 
-        Assert.True(result.IsFailure);
-        Assert.Equal(
-            "MissionPlanning.ScheduleOutsideAppointment",
-            result.Error.Code);
-        Assert.Empty(fixture.Repository.Added);
+        Assert.True(result.IsSuccess);
+        var mission = Assert.Single(fixture.Repository.Added);
+        Assert.Equal(start, mission.ScheduledAt);
+        Assert.Equal(end, mission.ScheduledEndAt);
+        Assert.Equal(start, fixture.DroneQueries.LastStartAt);
+        Assert.Equal(end, fixture.DroneQueries.LastEndAt);
     }
 
     [Fact]
-    public async Task ServiceWindowIsRejectedWhileBaselineIsRequired()
+    public async Task ChangedAppointmentRequiresRescheduleBeforeRetry()
     {
-        var fixture = new Fixture(requiresBaselineMapping: true);
+        var fixture = new Fixture(requiresBaselineMapping: false);
+        var first = await fixture.Handler.Handle(
+            fixture.CreateCommand(serviceStart: Now.AddHours(2),
+                serviceEnd: Now.AddHours(3)), CancellationToken.None);
+        Assert.True(first.IsSuccess);
+        fixture.PlanningQuery.Context = fixture.PlanningQuery.Context with
+        {
+            AppointmentStartAt = Now.AddHours(4),
+            AppointmentEndAt = Now.AddHours(5)
+        };
 
         var result = await fixture.Handler.Handle(
-            fixture.CreateCommand(Now.AddHours(2), Now.AddHours(3),
-                Now.AddHours(4), Now.AddHours(5)), CancellationToken.None);
+            fixture.CreateCommand(), CancellationToken.None);
 
         Assert.True(result.IsFailure);
-        Assert.Equal("MissionPlanning.ServiceWindowNotAllowed", result.Error.Code);
-        Assert.Empty(fixture.Repository.Added);
+        Assert.Equal("MissionPlanning.ScheduleNeedsReschedule", result.Error.Code);
     }
 
     [Fact]
-    public async Task ScheduledPaidServiceRequiresServiceWindow()
+    public async Task PaidServiceUsesConfirmedAppointmentWithoutClientWindow()
     {
         var fixture = new Fixture(requiresBaselineMapping: false);
         var result = await fixture.Handler.Handle(fixture.CreateCommand(),
             CancellationToken.None);
 
-        Assert.True(result.IsFailure);
-        Assert.Equal("MissionPlanning.ServiceWindowRequired", result.Error.Code);
-        Assert.Empty(fixture.Repository.Added);
+        Assert.True(result.IsSuccess);
+        var mission = Assert.Single(fixture.Repository.Added);
+        Assert.Equal(fixture.PlanningQuery.Context.AppointmentStartAt, mission.ScheduledAt);
+        Assert.Equal(fixture.PlanningQuery.Context.AppointmentEndAt, mission.ScheduledEndAt);
     }
 
     private sealed class Fixture
@@ -639,19 +653,23 @@ public sealed class PrepareMissionSetHandlerTests
             DateTimeOffset? serviceStart = null,
             DateTimeOffset? serviceEnd = null,
             DateTimeOffset? baselineStart = null,
-            DateTimeOffset? baselineEnd = null) =>
-            new(
-                OrderId,
-                DroneId,
-                _operationId,
-                serviceStart.HasValue && serviceEnd.HasValue
-                    ? new MissionScheduleWindow(serviceStart.Value, serviceEnd.Value)
-                    : null,
-                baselineStart.HasValue && baselineEnd.HasValue
-                    ? new MissionScheduleWindow(
-                        baselineStart.Value,
-                        baselineEnd.Value)
-                    : null);
+            DateTimeOffset? baselineEnd = null)
+        {
+            var start = PlanningQuery.Context.RequiresBaselineMapping
+                ? baselineStart : serviceStart;
+            var end = PlanningQuery.Context.RequiresBaselineMapping
+                ? baselineEnd : serviceEnd;
+            if (start.HasValue && end.HasValue)
+            {
+                PlanningQuery.Context = PlanningQuery.Context with
+                {
+                    AppointmentStartAt = start.Value,
+                    AppointmentEndAt = end.Value
+                };
+            }
+
+            return new PrepareMissionSetCommand(OrderId, DroneId, _operationId);
+        }
 
         public DroneMission CreateExistingMission(
             MissionPurpose purpose,
@@ -796,12 +814,18 @@ public sealed class PrepareMissionSetHandlerTests
 
         public int AvailabilityCallCount { get; private set; }
 
+        public DateTimeOffset? LastStartAt { get; private set; }
+
+        public DateTimeOffset? LastEndAt { get; private set; }
+
         public Task<IReadOnlyList<AvailableDroneResponse>> GetAvailableAsync(
             DateTimeOffset startAt,
             DateTimeOffset endAt,
             CancellationToken cancellationToken = default)
         {
             AvailabilityCallCount++;
+            LastStartAt = startAt;
+            LastEndAt = endAt;
             IReadOnlyList<AvailableDroneResponse> result = IsAvailable
                 ? [new AvailableDroneResponse(
                     availableDroneId,

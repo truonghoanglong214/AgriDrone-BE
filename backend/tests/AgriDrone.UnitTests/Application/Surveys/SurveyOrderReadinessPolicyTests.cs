@@ -59,34 +59,6 @@ public sealed class SurveyOrderReadinessPolicyTests
     }
 
     [Fact]
-    public void EvaluateReturnsFailureWhenConsentNotValid()
-    {
-        var snapshot = CreateValidSnapshot(SurveyOperationPurpose.BaselineMapping) with
-        {
-            HasValidWrittenDataUseConsent = false
-        };
-
-        var decision = SurveyOrderReadinessPolicy.Evaluate(snapshot);
-
-        Assert.False(decision.IsReady);
-        Assert.Contains(SurveyOrderReadinessFailure.WrittenConsentNotValid, decision.Failures);
-    }
-
-    [Fact]
-    public void EvaluateReturnsFailureWhenFlightPermissionNotValid()
-    {
-        var snapshot = CreateValidSnapshot(SurveyOperationPurpose.BaselineMapping) with
-        {
-            HasValidFlightPermission = false
-        };
-
-        var decision = SurveyOrderReadinessPolicy.Evaluate(snapshot);
-
-        Assert.False(decision.IsReady);
-        Assert.Contains(SurveyOrderReadinessFailure.FlightPermissionNotValid, decision.Failures);
-    }
-
-    [Fact]
     public void EvaluateReturnsFailureWhenPendingFinancialSettlementExists()
     {
         var snapshot = CreateValidSnapshot(SurveyOperationPurpose.BaselineMapping) with
@@ -212,8 +184,6 @@ public sealed class SurveyOrderReadinessPolicyTests
             HasPendingPriceAdjustment: false,
             IsPaymentAmountAndCurrencyMatched: true,
             SafetyChecksSatisfied: true,
-            HasValidWrittenDataUseConsent: true,
-            HasValidFlightPermission: true,
             HasPendingFinancialSettlement: false,
             HasUnapprovedExtraFlight: false,
             HasFinalizedBoundaryCapture: false,

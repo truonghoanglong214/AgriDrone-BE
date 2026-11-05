@@ -15,14 +15,6 @@ public enum SystemManagerAvailabilityStatus
     Unavailable
 }
 
-public enum FlightQualificationStatus
-{
-    Pending,
-    Qualified,
-    Suspended,
-    Revoked
-}
-
 public sealed class SystemManagerProfile : AggregateRoot
 {
     private SystemManagerProfile()
@@ -35,7 +27,6 @@ public sealed class SystemManagerProfile : AggregateRoot
         UserId = userId;
         Status = SystemManagerProfileStatus.Suspended;
         Availability = SystemManagerAvailabilityStatus.Unavailable;
-        QualificationStatus = FlightQualificationStatus.Pending;
         CreatedAt = createdAt;
         UpdatedAt = createdAt;
     }
@@ -45,10 +36,6 @@ public sealed class SystemManagerProfile : AggregateRoot
     public SystemManagerProfileStatus Status { get; private set; }
 
     public SystemManagerAvailabilityStatus Availability { get; private set; }
-
-    public FlightQualificationStatus QualificationStatus { get; private set; }
-
-    public DateTimeOffset? QualificationExpiresAt { get; private set; }
 
     public DateTimeOffset CreatedAt { get; private set; }
 
@@ -121,57 +108,12 @@ public sealed class SystemManagerProfile : AggregateRoot
         Touch(updatedAt);
     }
 
-    public void UpdateQualification(
-        FlightQualificationStatus status,
-        DateTimeOffset? expiresAt,
-        DateTimeOffset updatedAt,
-        long expectedVersion)
-    {
-        EnsureVersion(expectedVersion);
-        DomainGuard.Utc(updatedAt);
-
-        if (!Enum.IsDefined(status))
-        {
-            throw new ArgumentOutOfRangeException(nameof(status));
-        }
-
-        if (expiresAt.HasValue)
-        {
-            DomainGuard.Utc(expiresAt.Value);
-        }
-
-        if (status == FlightQualificationStatus.Qualified &&
-            (!expiresAt.HasValue || expiresAt.Value <= updatedAt))
-        {
-            throw new ArgumentException(
-                "A qualified manager requires a future qualification expiry.",
-                nameof(expiresAt));
-        }
-
-        QualificationStatus = status;
-        QualificationExpiresAt = expiresAt;
-
-        if (status != FlightQualificationStatus.Qualified)
-        {
-            Availability = SystemManagerAvailabilityStatus.Unavailable;
-        }
-
-        Touch(updatedAt);
-    }
-
     public bool CanBeAssigned(DateTimeOffset now) =>
         Status == SystemManagerProfileStatus.Active &&
-        Availability == SystemManagerAvailabilityStatus.Available &&
-        HasCurrentQualification(now);
+        Availability == SystemManagerAvailabilityStatus.Available;
 
     public bool CanOperate(DateTimeOffset now) =>
-        Status == SystemManagerProfileStatus.Active &&
-        HasCurrentQualification(now);
-
-    private bool HasCurrentQualification(DateTimeOffset now) =>
-        QualificationStatus == FlightQualificationStatus.Qualified &&
-        QualificationExpiresAt is DateTimeOffset expiresAt &&
-        expiresAt > now;
+        Status == SystemManagerProfileStatus.Active;
 
     private void EnsureVersion(long expectedVersion)
     {

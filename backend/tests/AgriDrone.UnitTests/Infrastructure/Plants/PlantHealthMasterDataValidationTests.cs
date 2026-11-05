@@ -53,7 +53,7 @@ public sealed class PlantHealthMasterDataValidationTests
                 ? label with
                 {
                     LabelKind = PlantHealthLabelKind.ConfusingNonDisease,
-                    DatasetVersion = "OUTDATED"
+                    DatasetVersion = ""
                 }
                 : label)
             .ToArray();
@@ -69,19 +69,18 @@ public sealed class PlantHealthMasterDataValidationTests
     }
 
     [Fact]
-    public void UnexpectedPilotLabelIsRejected()
+    public void AdditionalActiveLabelsAreAccepted()
     {
         var labels = CreateValidLabels()
             .Append(CreateLabel(
-                "UNAPPROVED",
+                "STEM_CANKER",
                 PlantHealthLabelKind.SuspectedDisease))
             .ToArray();
 
         var result = PlantHealthMasterDataRules.Validate(labels);
 
-        Assert.Contains(
-            "Unexpected pilot plant-health labels: UNAPPROVED.",
-            result.Errors);
+        Assert.True(result.IsValid);
+        Assert.Empty(result.Errors);
     }
 
     private static PlantHealthLabelSeedSnapshot[] CreateValidLabels() =>

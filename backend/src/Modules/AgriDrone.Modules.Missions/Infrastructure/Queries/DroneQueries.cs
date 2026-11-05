@@ -2,6 +2,7 @@
 using AgriDrone.Modules.Missions.Application
     .Features.Drones.GetAvailableDrones;
 using AgriDrone.Modules.Missions.Application.Features.Drones.GetDroneRegistry;
+using AgriDrone.Modules.Missions.Application.Features.Missions.PrepareMissionSet;
 using AgriDrone.Modules.Missions.Domain.Drones;
 using AgriDrone.Modules.Missions.Domain.Missions;
 using AgriDrone.Modules.Missions.Infrastructure.Persistence;
@@ -28,11 +29,9 @@ internal sealed class DroneQueries(
         DateTimeOffset startAt, DateTimeOffset endAt, Guid? excludedMissionId,
         CancellationToken cancellationToken)
     {
-        var startDate =
-            DateOnly.FromDateTime(startAt.UtcDateTime);
-
-        var endDate =
-            DateOnly.FromDateTime(endAt.UtcDateTime);
+        var startDate = MissionScheduleWindow.DateAtOperationsLocation(startAt);
+        var endDate = MissionScheduleWindow.DateAtOperationsLocation(
+            endAt.AddTicks(-1));
 
         return await dbContext.Drones
             .AsNoTracking()

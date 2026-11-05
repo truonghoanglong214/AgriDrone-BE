@@ -1,9 +1,11 @@
-﻿using AgriDrone.SharedKernel.Domain;
+using AgriDrone.SharedKernel.Domain;
 
 namespace AgriDrone.Modules.Surveys.Domain;
 
 public sealed class SurveyOrder : AggregateRoot
 {
+    public const decimal DefaultBaselineDepositAmountVnd = 5_000m;
+
     private static readonly Dictionary<SurveyOrderStatus, IReadOnlySet<SurveyOrderStatus>>
         AllowedTransitions = new Dictionary<SurveyOrderStatus, IReadOnlySet<SurveyOrderStatus>>
         {
@@ -111,7 +113,7 @@ public sealed class SurveyOrder : AggregateRoot
     public string? Currency { get; private set; }
     public decimal? FinalPrice { get; private set; }
     public SurveyPaymentStatus DepositPaymentStatus { get; private set; } = SurveyPaymentStatus.Pending;
-    public decimal DepositAmount { get; private set; } = 10_000m;
+    public decimal DepositAmount { get; private set; } = DefaultBaselineDepositAmountVnd;
     public decimal? RemainingAmount { get; private set; }
     public Guid? DepositPaymentId { get; private set; }
     public DateTimeOffset? DepositConfirmedAt { get; private set; }
@@ -195,7 +197,7 @@ public sealed class SurveyOrder : AggregateRoot
             DepositPaymentStatus = requiresBaselineMapping
                 ? SurveyPaymentStatus.Pending
                 : SurveyPaymentStatus.Paid,
-            DepositAmount = requiresBaselineMapping ? 10_000m : 0m,
+            DepositAmount = requiresBaselineMapping ? DefaultBaselineDepositAmountVnd : 0m,
             CreatedAt = createdAt,
             UpdatedAt = createdAt
         };

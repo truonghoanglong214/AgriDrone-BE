@@ -55,6 +55,7 @@ public sealed class TwoStageMissionPreparationIntegrationTests
             var tenantId = Guid.NewGuid();
             var farmId = Guid.NewGuid();
             var droneId = Guid.NewGuid();
+            var requestId = Guid.NewGuid();
             var orderId = Guid.NewGuid();
             var boundaryId = Guid.NewGuid();
             var zoneIds = new[] { Guid.NewGuid(), Guid.NewGuid() };
@@ -69,6 +70,30 @@ public sealed class TwoStageMissionPreparationIntegrationTests
                     VALUES ('{tenantId}', 'UC02-{tenantId:N}', 'UC02 Tenant');
                     INSERT INTO farm.farms (id, tenant_id, code, name, created_by)
                     VALUES ('{farmId}', '{tenantId}', 'UC02-FARM', 'UC02 Farm', '{actorId}');
+                    INSERT INTO farm.farm_zones (id, farm_id, code, name, boundary, status, created_by)
+                    VALUES
+                        ('{zoneIds[0]}', '{farmId}', 'UC02-A', 'UC02 Zone A',
+                         ST_GeomFromText('POLYGON((0 0,10 0,10 10,0 10,0 0))', 4326), 'ACTIVE', '{actorId}'),
+                        ('{zoneIds[1]}', '{farmId}', 'UC02-B', 'UC02 Zone B',
+                         ST_GeomFromText('POLYGON((10 0,20 0,20 10,10 10,10 0))', 4326), 'ACTIVE', '{actorId}');
+                    INSERT INTO survey.survey_requests
+                        (id, request_number, kind, tenant_id, farm_id, requested_by_user_id,
+                         survey_service_id, caller_scope, idempotency_key, applicant_name,
+                         applicant_email, applicant_phone, farm_name, farm_address,
+                         approximate_area_ha, map_location, status)
+                    VALUES
+                        ('{requestId}', 'REQ-{requestId:N}', 'EXISTING_FARM_SURVEY', '{tenantId}', '{farmId}', '{actorId}',
+                         '10000000-0000-0000-0000-000000000001', 'tenant:{tenantId}', 'uc02-{requestId:N}', 'UC02 Applicant',
+                         'uc02@example.test', '0900000000', 'UC02 Farm', 'Test address',
+                         1.0000, ST_SetSRID(ST_MakePoint(106.5, 10.5), 4326), 'SUBMITTED');
+                    INSERT INTO survey.survey_orders
+                        (id, order_number, tenant_id, farm_id, survey_request_id,
+                         survey_service_id, requires_baseline_mapping, status,
+                         deposit_amount, deposit_payment_status)
+                    VALUES
+                        ('{orderId}', 'ORD-{orderId:N}', '{tenantId}', '{farmId}', '{requestId}',
+                         '10000000-0000-0000-0000-000000000001', TRUE, 'PENDING_BOUNDARY_VERIFICATION',
+                         5000, 'PENDING'::system.survey_payment_status);
                     INSERT INTO mission.drones (id, code, name)
                     VALUES ('{droneId}', 'UC02-{droneId.ToString("N")[..20]}', 'UC02 Drone');
                     """, seed);
@@ -88,8 +113,7 @@ public sealed class TwoStageMissionPreparationIntegrationTests
             services.AddMissionsModule(configuration);
             await using var provider = services.BuildServiceProvider();
 
-            async Task<AgriDrone.SharedKernel.Application.Result<PrepareMissionSetResult>> Prepare(
-                MissionScheduleWindow? service, MissionScheduleWindow? baseline)
+            async Task<AgriDrone.SharedKernel.Application.Result<PrepareMissionSetResult>> Prepare()
             {
                 await using var scope = provider.CreateAsyncScope();
                 var db = scope.ServiceProvider.GetRequiredService<MissionsDbContext>();
@@ -98,12 +122,11 @@ public sealed class TwoStageMissionPreparationIntegrationTests
                     new DroneMissionRepository(db), new AvailableDrone(droneId),
                     db, new Audit(), new Actor(actorId), TimeProvider.System);
                 return await handler.Handle(new PrepareMissionSetCommand(
-                    orderId, droneId, Guid.NewGuid(), service, baseline),
+                    orderId, droneId, Guid.NewGuid()),
                     CancellationToken.None);
             }
 
-            var baseline = await Prepare(null,
-                new MissionScheduleWindow(start.AddMinutes(10), start.AddMinutes(50)));
+            var baseline = await Prepare();
             Assert.True(baseline.IsSuccess);
             Assert.Single(baseline.Value.Missions);
             await AssertPersisted(1);
@@ -112,12 +135,13 @@ public sealed class TwoStageMissionPreparationIntegrationTests
             {
                 RequiresBaselineMapping = false,
                 CurrentBaseMapVersionId = Guid.NewGuid(),
+                AppointmentStartAt = start.AddHours(2),
+                AppointmentEndAt = start.AddHours(4),
                 IsEligibleForPlanning = false,
                 IsReadyToSchedule = false,
                 ReadinessFailureCode = "PaymentNotConfirmed"
             };
-            var unpaid = await Prepare(new MissionScheduleWindow(
-                start.AddHours(1), start.AddHours(2)), null);
+            var unpaid = await Prepare();
             Assert.True(unpaid.IsFailure);
             Assert.Equal("MissionPlanning.OrderNotReady", unpaid.Error.Code);
             await AssertPersisted(1);
@@ -129,8 +153,7 @@ public sealed class TwoStageMissionPreparationIntegrationTests
                 IsReadyForOperations = true,
                 ReadinessFailureCode = null
             };
-            var paid = await Prepare(new MissionScheduleWindow(
-                start.AddHours(1), start.AddHours(2)), null);
+            var paid = await Prepare();
             Assert.True(paid.IsSuccess);
             Assert.Equal(2, paid.Value.Missions.Count);
             await AssertPersisted(2);

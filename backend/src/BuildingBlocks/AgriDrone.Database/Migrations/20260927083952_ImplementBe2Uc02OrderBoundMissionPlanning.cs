@@ -374,7 +374,7 @@ namespace AgriDrone.Database.Migrations
                 table: "drone_missions",
                 type: "system.mission_type",
                 nullable: false,
-                defaultValue: 0,
+                defaultValueSql: "'MAPPING'::system.mission_type",
                 oldClrType: typeof(int),
                 oldType: "system.mission_type",
                 oldNullable: true);

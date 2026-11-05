@@ -60,8 +60,6 @@ public sealed class SurveyPoliciesTests
             HasPendingPriceAdjustment: false,
             IsPaymentAmountAndCurrencyMatched: true,
             SafetyChecksSatisfied: true,
-            HasValidWrittenDataUseConsent: true,
-            HasValidFlightPermission: true,
             DepositPaymentStatus: SurveyPaymentStatus.Paid));
 
         Assert.True(decision.IsReady);
@@ -92,9 +90,7 @@ public sealed class SurveyPoliciesTests
             IsPreflightCompleted: true,
             HasPendingPriceAdjustment: false,
             IsPaymentAmountAndCurrencyMatched: true,
-            SafetyChecksSatisfied: true,
-            HasValidWrittenDataUseConsent: true,
-            HasValidFlightPermission: true));
+            SafetyChecksSatisfied: true));
 
         Assert.True(decision.IsReady);
         Assert.Empty(decision.Failures);

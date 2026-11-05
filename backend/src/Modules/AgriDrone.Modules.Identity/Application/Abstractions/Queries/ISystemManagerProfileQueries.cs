@@ -9,7 +9,6 @@ internal interface ISystemManagerProfileQueries
     Task<PagedResult<SystemManagerProfileResponse>> GetPageAsync(
         SystemManagerProfileStatus? status,
         SystemManagerAvailabilityStatus? availability,
-        FlightQualificationStatus? qualificationStatus,
         PagedRequest pageRequest,
         CancellationToken cancellationToken = default);
 

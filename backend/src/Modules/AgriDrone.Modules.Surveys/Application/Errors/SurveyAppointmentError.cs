@@ -82,5 +82,5 @@ public static class SurveyAppointmentError
 
     public static AppError InvalidWindow() => AppError.Validation(
         InvalidWindowCode,
-        "The appointment window must be a future UTC interval with end after start.");
+        "The appointment window must end in the future and after its start.");
 }

@@ -24,7 +24,7 @@ public sealed class BaselineLifecycleSyncHandlerTests
         var paymentId = Guid.NewGuid();
 
         order.MarkBaselineAppointmentConfirmed(Now.AddMinutes(1));
-        order.RecordBaselineDepositConfirmed(paymentId, 500_000m, Now.AddMinutes(5));
+        order.RecordBaselineDepositConfirmed(paymentId, 5_000m, Now.AddMinutes(5));
         Assert.Equal(SurveyOrderStatus.BaselineReady, order.Status);
 
         context.SurveyOrders.Add(order);
@@ -63,7 +63,7 @@ public sealed class BaselineLifecycleSyncHandlerTests
         var paymentId = Guid.NewGuid();
 
         order.MarkBaselineAppointmentConfirmed(Now.AddMinutes(1));
-        order.RecordBaselineDepositConfirmed(paymentId, 500_000m, Now.AddMinutes(5));
+        order.RecordBaselineDepositConfirmed(paymentId, 5_000m, Now.AddMinutes(5));
         order.StartBaselineMapping(Now.AddHours(1));
         Assert.Equal(SurveyOrderStatus.BaselineInProgress, order.Status);
 
@@ -102,7 +102,7 @@ public sealed class BaselineLifecycleSyncHandlerTests
         var paymentId = Guid.NewGuid();
 
         order.MarkBaselineAppointmentConfirmed(Now.AddMinutes(1));
-        order.RecordBaselineDepositConfirmed(paymentId, 500_000m, Now.AddMinutes(5));
+        order.RecordBaselineDepositConfirmed(paymentId, 5_000m, Now.AddMinutes(5));
         order.StartBaselineMapping(Now.AddHours(1));
         Assert.Equal(SurveyOrderStatus.BaselineInProgress, order.Status);
 
@@ -143,7 +143,7 @@ public sealed class BaselineLifecycleSyncHandlerTests
         var paymentId = Guid.NewGuid();
 
         order.MarkBaselineAppointmentConfirmed(Now.AddMinutes(1));
-        order.RecordBaselineDepositConfirmed(paymentId, 500_000m, Now.AddMinutes(5));
+        order.RecordBaselineDepositConfirmed(paymentId, 5_000m, Now.AddMinutes(5));
         order.StartBaselineMapping(Now.AddHours(1));
         order.MarkBaselineCandidatesReady(Now.AddHours(2));
         Assert.Equal(SurveyOrderStatus.AwaitingBaselineReview, order.Status);

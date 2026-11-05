@@ -38,7 +38,6 @@ internal static class PostgreSqlEnumMappings
         modelBuilder.HasPostgresEnum<UserStatus>(DbSchemas.System, "user_status", translator);
         modelBuilder.HasPostgresEnum<SystemManagerProfileStatus>(DbSchemas.System, "system_manager_profile_status", translator);
         modelBuilder.HasPostgresEnum<SystemManagerAvailabilityStatus>(DbSchemas.System, "system_manager_availability_status", translator);
-        modelBuilder.HasPostgresEnum<FlightQualificationStatus>(DbSchemas.System, "flight_qualification_status", translator);
         modelBuilder.HasPostgresEnum<FarmMemberRole>(DbSchemas.System, "farm_member_role", translator);
         modelBuilder.HasPostgresEnum<FarmAccessScope>(DbSchemas.System, "farm_access_scope", translator);
         modelBuilder.HasPostgresEnum<TenantMemberRole>(DbSchemas.System, "tenant_member_role", translator);
@@ -98,8 +97,6 @@ internal static class PostgreSqlEnumMappings
         modelBuilder.HasPostgresEnum<SurveyAppointmentStatus>(DbSchemas.System, "survey_appointment_status", translator);
         modelBuilder.HasPostgresEnum<SurveyPaymentStatus>(DbSchemas.System, "survey_payment_status", translator);
         modelBuilder.HasPostgresEnum<PriceAdjustmentStatus>(DbSchemas.System, "price_adjustment_status", translator);
-        modelBuilder.HasPostgresEnum<SurveyCaptureAuthorizationType>(DbSchemas.System, "survey_capture_authorization_type", translator);
-        modelBuilder.HasPostgresEnum<SurveyCaptureAuthorizationStatus>(DbSchemas.System, "survey_capture_authorization_status", translator);
         modelBuilder.HasPostgresEnum<SurveyResultStatus>(DbSchemas.System, "survey_result_status", translator);
         modelBuilder.HasPostgresEnum<HarvestReadinessReviewStatus>(DbSchemas.System, "harvest_readiness_review_status", translator);
         modelBuilder.HasPostgresEnum<HarvestReadinessCriterionStatus>(DbSchemas.System, "harvest_readiness_criterion_status", translator);
@@ -114,7 +111,6 @@ internal static class PostgreSqlEnumMappings
         dataSourceBuilder.MapEnum<UserStatus>("system.user_status", translator);
         dataSourceBuilder.MapEnum<SystemManagerProfileStatus>("system.system_manager_profile_status", translator);
         dataSourceBuilder.MapEnum<SystemManagerAvailabilityStatus>("system.system_manager_availability_status", translator);
-        dataSourceBuilder.MapEnum<FlightQualificationStatus>("system.flight_qualification_status", translator);
         dataSourceBuilder.MapEnum<FarmMemberRole>("system.farm_member_role", translator);
         dataSourceBuilder.MapEnum<FarmAccessScope>("system.farm_access_scope", translator);
         dataSourceBuilder.MapEnum<TenantMemberRole>("system.tenant_member_role", translator);
@@ -174,8 +170,6 @@ internal static class PostgreSqlEnumMappings
         dataSourceBuilder.MapEnum<SurveyAppointmentStatus>("system.survey_appointment_status", translator);
         dataSourceBuilder.MapEnum<SurveyPaymentStatus>("system.survey_payment_status", translator);
         dataSourceBuilder.MapEnum<PriceAdjustmentStatus>("system.price_adjustment_status", translator);
-        dataSourceBuilder.MapEnum<SurveyCaptureAuthorizationType>("system.survey_capture_authorization_type", translator);
-        dataSourceBuilder.MapEnum<SurveyCaptureAuthorizationStatus>("system.survey_capture_authorization_status", translator);
         dataSourceBuilder.MapEnum<SurveyResultStatus>("system.survey_result_status", translator);
         dataSourceBuilder.MapEnum<HarvestReadinessReviewStatus>("system.harvest_readiness_review_status", translator);
         dataSourceBuilder.MapEnum<HarvestReadinessCriterionStatus>("system.harvest_readiness_criterion_status", translator);
@@ -190,7 +184,6 @@ internal static class PostgreSqlEnumMappings
         optionsBuilder.MapEnum<UserStatus>("user_status", DbSchemas.System, translator);
         optionsBuilder.MapEnum<SystemManagerProfileStatus>("system_manager_profile_status", DbSchemas.System, translator);
         optionsBuilder.MapEnum<SystemManagerAvailabilityStatus>("system_manager_availability_status", DbSchemas.System, translator);
-        optionsBuilder.MapEnum<FlightQualificationStatus>("flight_qualification_status", DbSchemas.System, translator);
         optionsBuilder.MapEnum<FarmMemberRole>("farm_member_role", DbSchemas.System, translator);
         optionsBuilder.MapEnum<FarmAccessScope>("farm_access_scope", DbSchemas.System, translator);
         optionsBuilder.MapEnum<TenantMemberRole>("tenant_member_role", DbSchemas.System, translator);
@@ -250,8 +243,6 @@ internal static class PostgreSqlEnumMappings
         optionsBuilder.MapEnum<SurveyAppointmentStatus>("survey_appointment_status", DbSchemas.System, translator);
         optionsBuilder.MapEnum<SurveyPaymentStatus>("survey_payment_status", DbSchemas.System, translator);
         optionsBuilder.MapEnum<PriceAdjustmentStatus>("price_adjustment_status", DbSchemas.System, translator);
-        optionsBuilder.MapEnum<SurveyCaptureAuthorizationType>("survey_capture_authorization_type", DbSchemas.System, translator);
-        optionsBuilder.MapEnum<SurveyCaptureAuthorizationStatus>("survey_capture_authorization_status", DbSchemas.System, translator);
         optionsBuilder.MapEnum<SurveyResultStatus>("survey_result_status", DbSchemas.System, translator);
         optionsBuilder.MapEnum<HarvestReadinessReviewStatus>("harvest_readiness_review_status", DbSchemas.System, translator);
         optionsBuilder.MapEnum<HarvestReadinessCriterionStatus>("harvest_readiness_criterion_status", DbSchemas.System, translator);

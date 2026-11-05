@@ -115,24 +115,6 @@ public sealed class SurveyApprovalStep3Tests
             decision.Reason);
     }
 
-    [Theory]
-    [InlineData(SurveyCaptureAuthorizationType.WrittenDataUseConsent)]
-    [InlineData(SurveyCaptureAuthorizationType.FlightPermission)]
-    public void ApprovalAuthorizationRequirementsStartPendingWithoutEvidence(
-        SurveyCaptureAuthorizationType type)
-    {
-        var authorization = SurveyCaptureAuthorization.CreatePending(
-            Guid.NewGuid(),
-            type,
-            Now);
-
-        Assert.Equal(SurveyCaptureAuthorizationStatus.Pending,
-            authorization.Status);
-        Assert.Null(authorization.EvidenceReference);
-        Assert.Null(authorization.VerifiedAt);
-        Assert.Null(authorization.VerifiedBy);
-    }
-
     private static SurveyOrder CreateOrder(bool requiresBaselineMapping) =>
         SurveyOrder.Create(
             $"SO-{Guid.NewGuid():N}"[..20],

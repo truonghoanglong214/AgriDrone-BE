@@ -6,7 +6,5 @@ namespace AgriDrone.Modules.Missions.Application.Features.Missions.PrepareMissio
 public sealed record PrepareMissionSetCommand(
     Guid SurveyOrderId,
     Guid DroneId,
-    Guid IdempotencyKey,
-    MissionScheduleWindow? ServiceWindow,
-    MissionScheduleWindow? BaselineWindow)
+    Guid IdempotencyKey)
     : IRequest<Result<PrepareMissionSetResult>>;

@@ -37,7 +37,7 @@ internal sealed class ProposeSurveyAppointmentCommandHandler(
         }
 
         var proposedAt = timeProvider.GetUtcNow();
-        if (command.ProposedStartAt <= proposedAt ||
+        if (command.ProposedEndAt <= proposedAt ||
             command.ProposedEndAt <= command.ProposedStartAt)
         {
             return Result.Failure<ProposeSurveyAppointmentResponse>(

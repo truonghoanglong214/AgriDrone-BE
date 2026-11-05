@@ -1,4 +1,5 @@
 using System.Text.Json;
+using AgriDrone.IntegrationContracts.Missions;
 using AgriDrone.Modules.Missions.Application.Abstractions;
 using AgriDrone.Modules.Missions.Application.Abstractions.MissionPlanning;
 using AgriDrone.Modules.Missions.Application.Abstractions.Missions;
@@ -20,6 +21,7 @@ internal sealed class TransitionMissionCommandHandler(
     IMissionFieldNoteRepository fieldNoteRepository,
     ISystemManagerAccessService managerAccessService,
     ISurveyOrderMissionPlanningQuery orderQuery,
+    IMissionStartedOutbox missionStartedOutbox,
     IMissionsUnitOfWork unitOfWork,
     IAuditWriter auditWriter,
     IExecutionContext executionContext,
@@ -104,6 +106,20 @@ internal sealed class TransitionMissionCommandHandler(
         if (previousDroneStatus != drone.Status)
             AddDroneAudit(drone, mission, previousDroneStatus, actorId, now);
 
+        if (request.TargetStatus == MissionStatus.InFlight)
+        {
+            if (mission.Purpose == MissionPurpose.BaselineMapping)
+                missionStartedOutbox.Enqueue(
+                    new BaselineMissionStartedV1(
+                        surveyOrderId, mission.Id, mission.TenantId, mission.FarmId, now),
+                    actorId, executionContext.CorrelationId);
+            else
+                missionStartedOutbox.Enqueue(
+                    new PaidMissionStartedV1(
+                        surveyOrderId, mission.Id, mission.TenantId, mission.FarmId, now),
+                    actorId, executionContext.CorrelationId);
+        }
+
         try
         {
             await unitOfWork.SaveChangesAsync(cancellationToken);
@@ -160,10 +176,10 @@ internal sealed class TransitionMissionCommandHandler(
             return MissionOperationError.InvalidOrderContext();
         if ((mission.Purpose != MissionPurpose.BaselineMapping &&
              (order.FarmBoundaryVersionId is null ||
-              order.FarmBoundaryVersionId != mission.FarmBoundaryVersionId)) ||
-            order.ScopeZoneIds is null ||
-            !order.ScopeZoneIds.Order().SequenceEqual(mission.ScopeZoneIds.Order()) ||
-            order.ScopeFingerprint != mission.ScopeFingerprint ||
+              order.FarmBoundaryVersionId != mission.FarmBoundaryVersionId ||
+              order.ScopeZoneIds is null ||
+              !order.ScopeZoneIds.Order().SequenceEqual(mission.ScopeZoneIds.Order()) ||
+              order.ScopeFingerprint != mission.ScopeFingerprint)) ||
             managerProfileId is null ||
             order.PrimarySystemManagerId != managerProfileId)
             return MissionOperationError.InvalidOrderContext();

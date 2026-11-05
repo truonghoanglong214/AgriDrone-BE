@@ -4,6 +4,7 @@ using AgriDrone.Modules.Missions.Application.Abstractions;
 using AgriDrone.Modules.Missions.Application.Features.Drones.GetAvailableDrones;
 using AgriDrone.Modules.Missions.Application.Features.Drones.GetDroneRegistry;
 using AgriDrone.Modules.Missions.Application.Features.Drones.RegisterDrone;
+using AgriDrone.Modules.Missions.Application.Abstractions.MissionPlanning;
 using AgriDrone.Modules.Missions.Domain.Drones;
 using AgriDrone.Modules.Missions.Domain.Missions;
 using AgriDrone.SharedInfrastructure.Auditing;
@@ -33,6 +34,19 @@ public sealed class SystemOwnedDroneAvailabilityTests
 
         drone.SendToMaintenance(StartAt);
         Assert.False(drone.IsOperationalFor(StartAt, StartAt.AddHours(1)));
+    }
+
+    [Fact]
+    public void RegistrationOnVietnameseMissionDateIsValidAtUtcPreviousDay()
+    {
+        var start = new DateTimeOffset(2026, 11, 3, 17, 0, 0, TimeSpan.Zero);
+        var end = start.AddDays(1);
+        var missionDate = new DateOnly(2026, 11, 4);
+        var drone = Drone.Create("SYS-VN", "Survey Drone", null, null,
+            null, "SERIAL-VN", "VN-004", missionDate, missionDate,
+            null, null, start);
+
+        Assert.True(drone.IsOperationalFor(start, end));
     }
 
     [Fact]
@@ -98,6 +112,75 @@ public sealed class SystemOwnedDroneAvailabilityTests
         Assert.Equal(capableId, Assert.Single(result.Value).Id);
     }
 
+    [Fact]
+    public async Task OrderAvailabilityUsesConfirmedBaselineAppointmentWindow()
+    {
+        var orderId = Guid.NewGuid();
+        var tenantId = Guid.NewGuid();
+        var farmId = Guid.NewGuid();
+        var appointmentStart = StartAt.AddHours(2);
+        var appointmentEnd = StartAt.AddHours(8);
+        var context = new SurveyOrderMissionPlanningContext(
+            orderId, tenantId, farmId, SurveyServiceType.PlantHealth,
+            true, null, [], appointmentStart, appointmentEnd,
+            true, null);
+        var droneQueries = new RecordingDroneQueries
+        {
+            Available =
+            [
+                Available(Guid.NewGuid(), """{"capabilities":["BASELINE_MAPPING"]}"""),
+                Available(Guid.NewGuid(), """{"capabilities":["PLANT_HEALTH"]}""")
+            ]
+        };
+        var handler = new GetAvailableDronesForOrderQueryHandler(
+            new PlanningQuery(context),
+            new MatchingManagerAccessService(tenantId, farmId),
+            droneQueries);
+
+        var result = await handler.Handle(
+            new GetAvailableDronesForOrderQuery(orderId), CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("BaselineMapping", result.Value.Purpose);
+        Assert.Equal(appointmentStart, result.Value.StartAt);
+        Assert.Equal(appointmentEnd, result.Value.EndAt);
+        Assert.Single(result.Value.Drones);
+        Assert.Equal(appointmentStart, droneQueries.LastStartAt);
+        Assert.Equal(appointmentEnd, droneQueries.LastEndAt);
+    }
+
+    [Fact]
+    public async Task OrderAvailabilitySelectsPlantHealthAfterBaselinePublication()
+    {
+        var orderId = Guid.NewGuid();
+        var tenantId = Guid.NewGuid();
+        var farmId = Guid.NewGuid();
+        var context = new SurveyOrderMissionPlanningContext(
+            orderId, tenantId, farmId, SurveyServiceType.PlantHealth,
+            false, Guid.NewGuid(), [], StartAt.AddDays(1),
+            StartAt.AddDays(1).AddHours(4), true, null);
+        var capableDroneId = Guid.NewGuid();
+        var droneQueries = new RecordingDroneQueries
+        {
+            Available =
+            [
+                Available(Guid.NewGuid(), """{"capabilities":["BASELINE_MAPPING"]}"""),
+                Available(capableDroneId, """{"capabilities":["PLANT_HEALTH"]}""")
+            ]
+        };
+        var handler = new GetAvailableDronesForOrderQueryHandler(
+            new PlanningQuery(context),
+            new MatchingManagerAccessService(tenantId, farmId),
+            droneQueries);
+
+        var result = await handler.Handle(
+            new GetAvailableDronesForOrderQuery(orderId), CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("PlantHealth", result.Value.Purpose);
+        Assert.Equal(capableDroneId, Assert.Single(result.Value.Drones).Id);
+    }
+
     private static AvailableDroneResponse Available(Guid id, string specifications) =>
         new(id, "CAP", "Survey Drone", null, null,
             JsonSerializer.Deserialize<JsonElement>(specifications),
@@ -145,6 +228,8 @@ public sealed class SystemOwnedDroneAvailabilityTests
     {
         public int AvailabilityCallCount { get; private set; }
         public IReadOnlyList<AvailableDroneResponse> Available { get; set; } = [];
+        public DateTimeOffset? LastStartAt { get; private set; }
+        public DateTimeOffset? LastEndAt { get; private set; }
 
         public Task<IReadOnlyList<AvailableDroneResponse>> GetAvailableAsync(
             DateTimeOffset startAt,
@@ -152,12 +237,31 @@ public sealed class SystemOwnedDroneAvailabilityTests
             CancellationToken cancellationToken = default)
         {
             AvailabilityCallCount++;
+            LastStartAt = startAt;
+            LastEndAt = endAt;
             return Task.FromResult(Available);
         }
 
         public Task<IReadOnlyList<DroneRegistryItemResponse>> GetRegistryAsync(
             CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<DroneRegistryItemResponse>>([]);
+    }
+
+    private sealed class PlanningQuery(SurveyOrderMissionPlanningContext context)
+        : ISurveyOrderMissionPlanningQuery
+    {
+        public Task<SurveyOrderMissionPlanningContext?> GetAsync(
+            Guid surveyOrderId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<SurveyOrderMissionPlanningContext?>(context);
+    }
+
+    private sealed class MatchingManagerAccessService(Guid tenantId, Guid farmId)
+        : ISystemManagerAccessService
+    {
+        public Task<SystemManagerFarmAccess> ResolveFarmAccessAsync(
+            Guid requestedFarmId, CancellationToken cancellationToken = default) =>
+            Task.FromResult(SystemManagerFarmAccess.Allowed(
+                tenantId, farmId, Guid.NewGuid()));
     }
 
     private sealed class DeniedManagerAccessService : ISystemManagerAccessService

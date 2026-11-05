@@ -46,6 +46,19 @@ public sealed class BaselineLifecycleSyncContractTests
     }
 
     [Fact]
+    public void PaidMissionStartedContractAcceptsValidPayload()
+    {
+        var payload = new PaidMissionStartedV1(
+            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Now);
+
+        Assert.Empty(PaidMissionStartedV1Validator.Validate(payload));
+        Assert.Equal("mission.paid-started.v1",
+            IntegrationEventDescriptors.PaidMissionStartedV1.EventType);
+        Assert.Equal("be1-paid-mission-started-v1",
+            IntegrationConsumerNames.Be1PaidMissionStartedV1);
+    }
+
+    [Fact]
     public void BaselineOrthophotoCompletedValidatorAcceptsValidPayload()
     {
         var payload = new BaselineOrthophotoCompletedV1(
@@ -121,8 +134,6 @@ public sealed class BaselineLifecycleSyncContractTests
             false,
             false,
             false,
-            true,
-            true,
             "Confirmed",
             500_000m,
             null,

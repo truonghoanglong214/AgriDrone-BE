@@ -28,7 +28,9 @@ namespace AgriDrone.Api.Controllers;
 [ApiController]
 [Route("api/system-manager/survey-orders")]
 [Authorize(Policy = AccessAuthorizationPolicies.SystemManager)]
-public sealed class SystemManagerSurveyOrdersController(ISender sender)
+public sealed class SystemManagerSurveyOrdersController(
+    ISender sender,
+    TimeProvider timeProvider)
     : ControllerBase
 {
     /// <summary>Lấy danh sách SurveyOrder thuộc các farm đang được phân công.</summary>
@@ -181,13 +183,35 @@ public sealed class SystemManagerSurveyOrdersController(ISender sender)
         [FromBody] ProposeSurveyAppointmentRequest request,
         CancellationToken cancellationToken)
     {
+        if (request.ScheduledDate is not DateOnly scheduledDate ||
+            scheduledDate == default)
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                [nameof(request.ScheduledDate)] = ["A valid scheduled date is required."]
+            });
+        }
+
+        if (!SurveyAppointmentWindow.TryResolveForDate(
+            scheduledDate,
+            timeProvider.GetUtcNow(),
+            out var proposedStartAt,
+            out var proposedEndAt,
+            out var errorMessage))
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                [nameof(request.ScheduledDate)] = [errorMessage!]
+            });
+        }
+
         var result = await sender.Send(
             new ProposeSurveyAppointmentCommand(
                 orderId,
                 SurveyAppointmentResponseMapper.ToDomain(
                     request.Purpose!.Value),
-                request.ProposedStartAt!.Value,
-                request.ProposedEndAt!.Value,
+                proposedStartAt,
+                proposedEndAt,
                 request.ExpectedOrderVersion!.Value,
                 request.ExpectedCurrentAppointmentId,
                 request.ExpectedCurrentAppointmentVersion),

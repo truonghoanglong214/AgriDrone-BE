@@ -22,7 +22,6 @@ internal sealed partial class ApproveSurveyRequestCommandHandler(
     ISurveyApprovalUnitOfWork unitOfWork,
     ISurveyApprovalRequestRepository requestRepository,
     ISurveyApprovalIdempotencyRepository idempotencyRepository,
-    ISurveyApprovalCaptureAuthorizationRepository authorizationRepository,
     ISurveyApprovalPrerequisiteResolver prerequisiteResolver,
     IEnumerable<ISurveyRequestKindApprovalOrchestrator> orchestrators,
     ISurveyApprovalOutbox approvalOutbox,
@@ -306,16 +305,6 @@ internal sealed partial class ApproveSurveyRequestCommandHandler(
         }
 
         var approval = orchestrationResult.Value;
-        authorizationRepository.Add(
-            SurveyCaptureAuthorization.CreatePending(
-                approval.Order.Id,
-                SurveyCaptureAuthorizationType.WrittenDataUseConsent,
-                approvedAt));
-        authorizationRepository.Add(
-            SurveyCaptureAuthorization.CreatePending(
-                approval.Order.Id,
-                SurveyCaptureAuthorizationType.FlightPermission,
-                approvedAt));
 
         var eventMessageId = Guid.CreateVersion7();
         var approvalEvent = new SurveyRequestApprovedV1(

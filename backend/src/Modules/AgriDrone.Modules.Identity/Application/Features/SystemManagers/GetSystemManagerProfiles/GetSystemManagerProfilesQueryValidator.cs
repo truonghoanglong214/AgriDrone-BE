@@ -15,8 +15,5 @@ internal sealed class GetSystemManagerProfilesQueryValidator
         RuleFor(query => query.Availability)
             .IsInEnum()
             .When(query => query.Availability.HasValue);
-        RuleFor(query => query.QualificationStatus)
-            .IsInEnum()
-            .When(query => query.QualificationStatus.HasValue);
     }
 }

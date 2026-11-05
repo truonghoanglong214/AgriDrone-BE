@@ -24,8 +24,6 @@ internal static class SystemManagerProfileResponseMapper
             response.FullName,
             MapStatus(response.Status),
             MapAvailability(response.Availability),
-            MapQualificationStatus(response.QualificationStatus),
-            response.QualificationExpiresAt,
             response.Version);
 
     private static string MapStatus(SystemManagerProfileStatus status) =>
@@ -49,19 +47,5 @@ internal static class SystemManagerProfileResponseMapper
                 nameof(availability),
                 availability,
                 "Unsupported System Manager availability status.")
-        };
-
-    private static string MapQualificationStatus(
-        FlightQualificationStatus status) =>
-        status switch
-        {
-            FlightQualificationStatus.Pending => "PENDING",
-            FlightQualificationStatus.Qualified => "QUALIFIED",
-            FlightQualificationStatus.Suspended => "SUSPENDED",
-            FlightQualificationStatus.Revoked => "REVOKED",
-            _ => throw new ArgumentOutOfRangeException(
-                nameof(status),
-                status,
-                "Unsupported System Manager qualification status.")
         };
 }

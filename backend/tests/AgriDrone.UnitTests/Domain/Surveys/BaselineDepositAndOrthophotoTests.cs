@@ -16,7 +16,7 @@ public sealed class BaselineDepositAndOrthophotoTests
         Assert.True(order.RequiresBaselineMapping);
         Assert.Equal(SurveyOrderStatus.AwaitingBaselineAppointment, order.Status);
         Assert.Equal(SurveyPaymentStatus.Pending, order.DepositPaymentStatus);
-        Assert.Equal(500_000m, order.DepositAmount);
+        Assert.Equal(5_000m, order.DepositAmount);
         Assert.Null(order.RemainingAmount);
         Assert.Null(order.DepositPaymentId);
         Assert.Null(order.DepositConfirmedAt);
@@ -41,7 +41,7 @@ public sealed class BaselineDepositAndOrthophotoTests
         var confirmedAt = Now.AddMinutes(5);
 
         order.MarkBaselineAppointmentConfirmed(Now.AddMinutes(1));
-        order.RecordBaselineDepositConfirmed(paymentId, 500_000m, confirmedAt);
+        order.RecordBaselineDepositConfirmed(paymentId, 5_000m, confirmedAt);
 
         Assert.Equal(SurveyOrderStatus.BaselineReady, order.Status);
         Assert.Equal(SurveyPaymentStatus.Paid, order.DepositPaymentStatus);
@@ -70,7 +70,7 @@ public sealed class BaselineDepositAndOrthophotoTests
         var boundaryId = Guid.NewGuid();
 
         order.MarkBaselineAppointmentConfirmed(Now.AddMinutes(1));
-        order.RecordBaselineDepositConfirmed(paymentId, 500_000m, Now.AddMinutes(5));
+        order.RecordBaselineDepositConfirmed(paymentId, 5_000m, Now.AddMinutes(5));
         order.StartBaselineMapping(Now.AddHours(1));
         Assert.Equal(SurveyOrderStatus.BaselineInProgress, order.Status);
 
@@ -95,7 +95,7 @@ public sealed class BaselineDepositAndOrthophotoTests
         var priceId = Guid.NewGuid();
 
         order.MarkBaselineAppointmentConfirmed(Now.AddMinutes(1));
-        order.RecordBaselineDepositConfirmed(paymentId, 500_000m, Now.AddMinutes(5));
+        order.RecordBaselineDepositConfirmed(paymentId, 5_000m, Now.AddMinutes(5));
         order.StartBaselineMapping(Now.AddHours(1));
         order.MarkBaselineCandidatesReady(Now.AddHours(2));
         order.SetFarmBoundaryFromOrthophoto(boundaryId, managerId, Now.AddHours(3));
@@ -106,7 +106,7 @@ public sealed class BaselineDepositAndOrthophotoTests
         Assert.Equal(SurveyOrderStatus.AwaitingPricing, order.Status);
 
         // Price: 25,000 VND / pole => FinalPrice = 120 * 25,000 = 3,000,000 VND
-        // Deposit credit: 500,000 VND => RemainingAmount = 2,500,000 VND
+        // Deposit credit: 5,000 VND => RemainingAmount = 2,995,000 VND
         order.ConfirmPricing(
             priceId,
             PricePerPole.Create(25_000m),
@@ -116,7 +116,7 @@ public sealed class BaselineDepositAndOrthophotoTests
 
         Assert.Equal(SurveyOrderStatus.AwaitingPaidAppointment, order.Status);
         Assert.Equal(3_000_000m, order.FinalPrice);
-        Assert.Equal(2_500_000m, order.RemainingAmount);
+        Assert.Equal(2_995_000m, order.RemainingAmount);
     }
 
     [Fact]
@@ -126,15 +126,15 @@ public sealed class BaselineDepositAndOrthophotoTests
         var managerId = Guid.NewGuid();
 
         order.MarkBaselineAppointmentConfirmed(Now.AddMinutes(1));
-        order.RecordBaselineDepositConfirmed(Guid.NewGuid(), 500_000m, Now.AddMinutes(5));
+        order.RecordBaselineDepositConfirmed(Guid.NewGuid(), 5_000m, Now.AddMinutes(5));
         order.StartBaselineMapping(Now.AddHours(1));
         order.MarkBaselineCandidatesReady(Now.AddHours(2));
         order.SetFarmBoundaryFromOrthophoto(Guid.NewGuid(), managerId, Now.AddHours(3));
         order.RecordBaselinePublication(Guid.NewGuid(), ConfirmedSurveyPoleCount.Create(80), managerId, Now.AddHours(4));
 
-        // FinalPrice = 80 * 20,000 = 1,600,000 VND; RemainingAmount = 1,100,000 VND
+        // FinalPrice = 80 * 20,000 = 1,600,000 VND; RemainingAmount = 1,595,000 VND
         order.ConfirmPricing(Guid.NewGuid(), PricePerPole.Create(20_000m), CurrencyCode.Vnd, managerId, Now.AddHours(5));
-        Assert.Equal(1_100_000m, order.RemainingAmount);
+        Assert.Equal(1_595_000m, order.RemainingAmount);
 
         order.MarkPaidAppointmentConfirmed(Now.AddHours(6));
         Assert.Equal(SurveyOrderStatus.AwaitingPayment, order.Status);
@@ -168,14 +168,14 @@ public sealed class BaselineDepositAndOrthophotoTests
     {
         var depositPayment = SurveyPayment.Create(
             Guid.NewGuid(),
-            Money.Create(500_000m, CurrencyCode.Vnd),
+            Money.Create(5_000m, CurrencyCode.Vnd),
             "SANDBOX",
             Now,
             PaymentPurpose.BaselineDeposit);
 
         var finalPayment = SurveyPayment.Create(
             Guid.NewGuid(),
-            Money.Create(2_500_000m, CurrencyCode.Vnd),
+            Money.Create(2_995_000m, CurrencyCode.Vnd),
             "SANDBOX",
             Now,
             PaymentPurpose.FinalBalance);
@@ -209,8 +209,6 @@ public sealed class BaselineDepositAndOrthophotoTests
             HasPendingPriceAdjustment: false,
             IsPaymentAmountAndCurrencyMatched: true,
             SafetyChecksSatisfied: true,
-            HasValidWrittenDataUseConsent: true,
-            HasValidFlightPermission: true,
             HasPendingFinancialSettlement: false,
             HasUnapprovedExtraFlight: false,
             HasFinalizedBoundaryCapture: true,
@@ -234,7 +232,7 @@ public sealed class BaselineDepositAndOrthophotoTests
         var boundaryId = Guid.NewGuid();
 
         order.MarkBaselineAppointmentConfirmed(Now.AddMinutes(1));
-        order.RecordBaselineDepositConfirmed(paymentId, 500_000m, Now.AddMinutes(5));
+        order.RecordBaselineDepositConfirmed(paymentId, 5_000m, Now.AddMinutes(5));
         Assert.Equal(SurveyOrderStatus.BaselineReady, order.Status);
 
         // Cannot mark boundary in BaselineReady
@@ -277,7 +275,7 @@ public sealed class BaselineDepositAndOrthophotoTests
 
         // Initial appointment & deposit
         order.MarkBaselineAppointmentConfirmed(Now.AddMinutes(1));
-        order.RecordBaselineDepositConfirmed(paymentId, 500_000m, Now.AddMinutes(5));
+        order.RecordBaselineDepositConfirmed(paymentId, 5_000m, Now.AddMinutes(5));
         Assert.Equal(SurveyOrderStatus.BaselineReady, order.Status);
         Assert.Equal(SurveyPaymentStatus.Paid, order.DepositPaymentStatus);
 
@@ -298,7 +296,7 @@ public sealed class BaselineDepositAndOrthophotoTests
         var paymentId = Guid.NewGuid();
 
         order.MarkBaselineAppointmentConfirmed(Now.AddMinutes(1));
-        order.RecordBaselineDepositConfirmed(paymentId, 500_000m, Now.AddMinutes(5));
+        order.RecordBaselineDepositConfirmed(paymentId, 5_000m, Now.AddMinutes(5));
         Assert.Equal(SurveyOrderStatus.BaselineReady, order.Status);
 
         // Refund deposit before flight
@@ -318,15 +316,15 @@ public sealed class BaselineDepositAndOrthophotoTests
         var priceId = Guid.NewGuid();
 
         order.MarkBaselineAppointmentConfirmed(Now.AddMinutes(1));
-        order.RecordBaselineDepositConfirmed(paymentId, 500_000m, Now.AddMinutes(5));
+        order.RecordBaselineDepositConfirmed(paymentId, 5_000m, Now.AddMinutes(5));
         order.StartBaselineMapping(Now.AddHours(1));
         order.MarkBaselineCandidatesReady(Now.AddHours(2));
         order.SetFarmBoundaryFromOrthophoto(Guid.NewGuid(), managerId, Now.AddHours(3));
         order.RecordBaselinePublication(Guid.NewGuid(), ConfirmedSurveyPoleCount.Create(100), managerId, Now.AddHours(4));
 
-        // 100 poles * 20,000 = 2,000,000 VND; Deposit credit: 500,000 VND => Remaining: 1,500,000 VND
+        // 100 poles * 20,000 = 2,000,000 VND; Deposit credit: 5,000 VND => Remaining: 1,995,000 VND
         order.ConfirmPricing(priceId, PricePerPole.Create(20_000m), CurrencyCode.Vnd, managerId, Now.AddHours(5));
-        Assert.Equal(1_500_000m, order.RemainingAmount);
+        Assert.Equal(1_995_000m, order.RemainingAmount);
 
         // Post-flight chargeback/refund of deposit
         order.RevokeBaselineDeposit(Now.AddHours(6));

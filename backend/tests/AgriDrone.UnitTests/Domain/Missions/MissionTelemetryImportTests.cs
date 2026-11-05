@@ -91,8 +91,8 @@ public sealed class MissionTelemetryImportTests
         Assert.Equal(4, point.EnumerateObject().Count());
         Assert.Equal("2026-10-13 10:12:44", point
             .GetProperty("timestamp").GetString());
-        Assert.Equal(10.461453, point.GetProperty("lat").GetDouble());
-        Assert.Equal(106.493968, point.GetProperty("lon").GetDouble());
+        Assert.Equal(10.4614532, point.GetProperty("lat").GetDouble());
+        Assert.Equal(106.4939687, point.GetProperty("lon").GetDouble());
         Assert.Equal(3m, point.GetProperty("alt").GetDecimal());
     }
 

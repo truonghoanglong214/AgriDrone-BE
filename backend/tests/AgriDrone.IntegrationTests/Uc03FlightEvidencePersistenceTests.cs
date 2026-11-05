@@ -1,12 +1,17 @@
 using System.Text.Json;
+using AgriDrone.IntegrationContracts.Messaging;
+using AgriDrone.IntegrationContracts.Missions;
 using AgriDrone.Database;
 using AgriDrone.Modules.Missions;
 using AgriDrone.Modules.Missions.Application.Abstractions.MissionPlanning;
 using AgriDrone.Modules.Missions.Application.Features.Missions.TransitionMission;
+using AgriDrone.Modules.Missions.Domain.Drones;
 using AgriDrone.Modules.Missions.Domain.Missions;
 using AgriDrone.Modules.Missions.Infrastructure.Persistence;
 using AgriDrone.Modules.Missions.Infrastructure.Repositories;
 using AgriDrone.SharedInfrastructure.Auditing;
+using AgriDrone.SharedInfrastructure.Messaging;
+using AgriDrone.SharedInfrastructure.Messaging.Outbox;
 using AgriDrone.SharedKernel.Application.Abstractions.Authorization;
 using AgriDrone.SharedKernel.Application.Abstractions.Execution;
 using Microsoft.EntityFrameworkCore;
@@ -49,6 +54,8 @@ public sealed class Uc03FlightEvidencePersistenceTests
             var tenantId = Guid.NewGuid();
             var farmId = Guid.NewGuid();
             var droneId = Guid.NewGuid();
+            var requestId = Guid.NewGuid();
+            var orderId = Guid.NewGuid();
             await using (var seed = new NpgsqlConnection(connectionString))
             {
                 await seed.OpenAsync();
@@ -59,6 +66,24 @@ public sealed class Uc03FlightEvidencePersistenceTests
                     VALUES ('{tenantId}', 'UC03-{tenantId:N}', 'UC03 Tenant');
                     INSERT INTO farm.farms (id, tenant_id, code, name, created_by)
                     VALUES ('{farmId}', '{tenantId}', 'UC03-FARM', 'UC03 Farm', '{actorId}');
+                    INSERT INTO survey.survey_requests
+                        (id, request_number, kind, tenant_id, farm_id, requested_by_user_id,
+                         survey_service_id, caller_scope, idempotency_key, applicant_name,
+                         applicant_email, applicant_phone, farm_name, farm_address,
+                         approximate_area_ha, map_location, status)
+                    VALUES
+                        ('{requestId}', 'REQ-{requestId:N}', 'EXISTING_FARM_SURVEY', '{tenantId}', '{farmId}', '{actorId}',
+                         '10000000-0000-0000-0000-000000000001', 'tenant:{tenantId}', 'uc03-{requestId:N}', 'UC03 Applicant',
+                         'uc03@example.test', '0900000000', 'UC03 Farm', 'Test address',
+                         1.0000, ST_SetSRID(ST_MakePoint(106.5, 10.5), 4326), 'SUBMITTED');
+                    INSERT INTO survey.survey_orders
+                        (id, order_number, tenant_id, farm_id, survey_request_id,
+                         survey_service_id, requires_baseline_mapping, status,
+                         deposit_amount, deposit_payment_status)
+                    VALUES
+                        ('{orderId}', 'ORD-{orderId:N}', '{tenantId}', '{farmId}', '{requestId}',
+                         '10000000-0000-0000-0000-000000000001', TRUE, 'PENDING_BOUNDARY_VERIFICATION',
+                         5000, 'PENDING'::system.survey_payment_status);
                     INSERT INTO mission.drones
                         (id, code, name, specifications, registration_number,
                          registration_date, registration_expiry_date)
@@ -74,7 +99,7 @@ public sealed class Uc03FlightEvidencePersistenceTests
             using var parameters = JsonDocument.Parse("{}");
             using var items = JsonDocument.Parse("""[{"key":"battery","prompt":"Battery safe?"}]""");
             using var answers = JsonDocument.Parse("""{"battery":true}""");
-            var mission = DroneMission.CreateOrderBound(Guid.NewGuid(), tenantId,
+            var mission = DroneMission.CreateOrderBound(orderId, tenantId,
                 farmId, [], Guid.NewGuid(), droneId, actorId, "UC03-EVIDENCE",
                 MissionPurpose.BaselineMapping, Guid.NewGuid(), null, false,
                 parameters, actorId, now.AddHours(-2));
@@ -115,18 +140,34 @@ public sealed class Uc03FlightEvidencePersistenceTests
             await using (var scope = provider.CreateAsyncScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<MissionsDbContext>();
+                var clock = new FixedClock(now);
+                var serializer = new SystemTextJsonIntegrationMessageSerializer();
+                var missionStartedOutbox = new MissionStartedOutbox(
+                    db, new OutboxMessageFactory(serializer, clock));
                 var handler = new TransitionMissionCommandHandler(
                     new DroneMissionRepository(db), new DroneRepository(db),
                     new DroneMaintenanceRepository(db), new PreflightChecklistRepository(db),
                     new MissionFieldNoteRepository(db),
-                    new Access(tenantId, farmId, managerId), planning, db,
-                    new Audit(), new Actor(actorId), new FixedClock(now));
+                    new Access(tenantId, farmId, managerId), planning,
+                    missionStartedOutbox, db, new Audit(), new Actor(actorId), clock);
                 var storedMission = await db.DroneMissions.SingleAsync(value =>
                     value.Id == mission.Id);
                 var started = await handler.Handle(new TransitionMissionCommand(
                     farmId, mission.Id, MissionStatus.InFlight,
                     storedMission.Version, null), CancellationToken.None);
                 Assert.True(started.IsSuccess);
+                var queued = await db.OutboxMessages.SingleAsync(message =>
+                    message.EventType == IntegrationEventTypes.BaselineMissionStartedV1);
+                var envelope = serializer.Deserialize<BaselineMissionStartedV1>(queued.Body);
+                Assert.NotNull(envelope);
+                Assert.Equal(orderId, envelope!.Payload.SurveyOrderId);
+                Assert.Equal(mission.Id, envelope.Payload.MissionId);
+                Assert.Equal(tenantId, envelope.Payload.TenantId);
+                Assert.Equal(farmId, envelope.Payload.FarmId);
+                Assert.Equal(now, envelope.Payload.StartedAt);
+                var persistedDrone = await db.Drones.AsNoTracking()
+                    .SingleAsync(value => value.Id == droneId);
+                Assert.Equal(DroneStatus.InMission, persistedDrone.Status);
             }
             var note = MissionFieldNote.Create(tenantId, farmId, mission.Id,
                 Guid.NewGuid(), actorId, "Signal recovered", now.AddMinutes(1),

@@ -21,7 +21,13 @@ internal static class SurveyAppointmentResponseMapper
         };
 
     public static SurveyAppointmentApiResponse ToResponse(
-        ProposeSurveyAppointmentResponse response) => new(
+        ProposeSurveyAppointmentResponse response)
+    {
+        var (singleDate, startDate, endDate) = SurveyAppointmentWindow.ToLocalDates(
+            response.ProposedStartAt,
+            response.ProposedEndAt);
+
+        return new(
             response.SurveyOrderId,
             response.AppointmentId,
             MapPurpose(response.Purpose),
@@ -36,10 +42,20 @@ internal static class SurveyAppointmentResponseMapper
             null,
             null,
             null,
-            response.ProposedAt);
+            response.ProposedAt,
+            singleDate,
+            startDate,
+            endDate);
+    }
 
     public static SurveyAppointmentApiResponse ToResponse(
-        ConfirmSurveyAppointmentResponse response) => new(
+        ConfirmSurveyAppointmentResponse response)
+    {
+        var (singleDate, startDate, endDate) = SurveyAppointmentWindow.ToLocalDates(
+            response.ProposedStartAt,
+            response.ProposedEndAt);
+
+        return new(
             response.SurveyOrderId,
             response.AppointmentId,
             MapPurpose(response.Purpose),
@@ -55,10 +71,20 @@ internal static class SurveyAppointmentResponseMapper
             response.ConfirmedBy,
             response.ConfirmedAt,
             null,
-            response.ConfirmedAt);
+            response.ConfirmedAt,
+            singleDate,
+            startDate,
+            endDate);
+    }
 
     public static SurveyAppointmentApiResponse ToResponse(
-        RequestSurveyAppointmentRescheduleResponse response) => new(
+        RequestSurveyAppointmentRescheduleResponse response)
+    {
+        var (singleDate, startDate, endDate) = SurveyAppointmentWindow.ToLocalDates(
+            response.ProposedStartAt,
+            response.ProposedEndAt);
+
+        return new(
             response.SurveyOrderId,
             response.AppointmentId,
             MapPurpose(response.Purpose),
@@ -74,7 +100,11 @@ internal static class SurveyAppointmentResponseMapper
             null,
             null,
             response.Reason,
-            response.RequestedAt);
+            response.RequestedAt,
+            singleDate,
+            startDate,
+            endDate);
+    }
 
     public static SurveyOrderReadinessApiResponse ToResponse(
         SurveyOrderReadinessResponse response) => new(
