@@ -826,6 +826,24 @@ def get_map_picker_html(
       </div>
 
 
+
+      <!-- Flagged Observations Card (UC-29) -->
+      <div class="card" style="border-color: #a855f7; background: rgba(168, 85, 247, 0.05); margin-top: 10px;">
+        <div class="section-title" style="color: #a855f7; display: flex; justify-content: space-between; align-items: center;">
+          <span>🚩 Vết Lệch / Cần Xử Lý (Flagged)</span>
+          <span class="badge" id="badge-flagged-count" style="background: #a855f7; color: #fff; font-size: 10px;">0 Vết</span>
+        </div>
+        <div style="font-size: 11px; color: var(--text-muted); line-height: 1.4; margin-top: 4px;">
+          Các vết AI nhận diện lệch tọa độ > 2.5m hoặc chưa khớp vào trụ nào cần Manager xử lý.
+        </div>
+        <button class="btn" onclick="fetchFlaggedObservations()" style="margin-top: 8px; width: 100%; background: #a855f7; color: #fff; font-size: 12px; font-weight: 700; padding: 8px; border: none; border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;">
+          🚩 Tải Danh Sách Cây Lệch (GET API)
+        </button>
+        <div id="flagged-list-container" style="margin-top: 8px; display: flex; flex-direction: column; gap: 6px; max-height: 240px; overflow-y: auto;">
+          <div style="color: var(--text-muted); font-size: 11px;">Nhấn nút trên để nạp danh sách từ API.</div>
+        </div>
+      </div>
+
       <!-- Outbreak Zone Alerts Card -->
       <div class="card" style="border-color: #ef4444; background: rgba(239, 68, 68, 0.05); margin-top: 10px;">
         <div class="section-title" style="color: #ef4444; display: flex; justify-content: space-between; align-items: center;">
@@ -844,6 +862,9 @@ def get_map_picker_html(
             <input type="checkbox" id="chk-show-th2" checked onchange="toggleZoneVisibility()" /> 🟡 TH2: Cùng bệnh (Vàng)
           </label>
         </div>
+        <button type="button" onclick="window.mergeSelectedZones()" style="margin-top: 8px; width: 100%; background: #f59e0b; color: #000; font-size: 11px; font-weight: 800; padding: 6px; border: none; border-radius: 5px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px;">
+          🔗 Gộp các vùng đã chọn (POST Merge)
+        </button>
 
         <div id="zone-alerts-container" style="margin-top: 8px; display: flex; flex-direction: column; gap: 8px; max-height: 380px; overflow-y: auto;">
           <div style="color: var(--text-muted); font-size: 11px;">Chưa phát hiện ổ dịch.</div>
@@ -3764,6 +3785,8 @@ def get_map_picker_html(
 
             observations: (p.observations || []).map(o => ({{
 
+              id: o.id,
+
               class_name: o.className,
 
               class_name_vi: o.classNameVi || CLASS_TRANSLATIONS[o.className] || o.className,
@@ -4005,6 +4028,10 @@ def get_map_picker_html(
 
       zones.forEach((z, idx) => {{
         const isSameDisease = z.alertType === 'SAME_DISEASE_EPIDEMIC';
+        const isReviewed = z.status === 'REVIEWED';
+        const statusBadge = isReviewed
+          ? `<span style="font-size: 9px; font-weight: 800; background: rgba(16, 185, 129, 0.2); color: #10b981; padding: 2px 5px; border-radius: 3px; border: 1px solid #10b98144;">✓ ĐÃ DUYỆT</span>`
+          : `<span style="font-size: 9px; font-weight: 800; background: rgba(245, 158, 11, 0.2); color: #f59e0b; padding: 2px 5px; border-radius: 3px; border: 1px solid #f59e0b44;">⏱ CHỜ DUYỆT</span>`;
         // TH1: Cam Đỏ (#f97316), TH2: Vàng Chanh (#facc15)
         const color = isSameDisease ? '#facc15' : '#f97316';
         const badgeLabel = isSameDisease ? 'TH2 • CÙNG BỆNH' : 'TH1 • MẬT ĐỘ CAO';
@@ -4013,12 +4040,39 @@ def get_map_picker_html(
           ? `🟡 Ổ Dịch Lây Lan: ${{z.diseaseNameVi || z.diseaseName || 'Cháy Nắng'}}`
           : '🟠 Ổ Dịch Mật Độ Cao';
 
-        // Tạo độ chênh bán kính: TH1 (vòng ngoài +0.6m) lồng TH2 (vòng trong giữ nguyên)
-        // để khi 2 vòng trùng vị trí vẫn nhìn thấy rõ 2 lớp màu khác nhau!
+        if (z.geometryGeoJson) {{
+          try {{
+            const geoObj = typeof z.geometryGeoJson === 'string' ? JSON.parse(z.geometryGeoJson) : z.geometryGeoJson;
+            if (geoObj && geoObj.coordinates && geoObj.coordinates[0] && geoObj.coordinates[0].length > 0) {{
+              const pt = geoObj.coordinates[0][0];
+              const actualR = getHaversineDistanceMeters(z.centerLat, z.centerLon, pt[1], pt[0]);
+              if (actualR > 0.5) {{
+                z.radiusMeters = Number(actualR.toFixed(1));
+              }}
+            }}
+          }} catch(e) {{}}
+        }}
+
         const displayRadius = isSameDisease ? z.radiusMeters : (z.radiusMeters + 0.6);
 
         let layer = null;
-        if (z.centerLat && z.centerLon && z.radiusMeters) {{
+        if (z.geometryGeoJson) {{
+          try {{
+            const geoObj = typeof z.geometryGeoJson === 'string' ? JSON.parse(z.geometryGeoJson) : z.geometryGeoJson;
+            layer = L.geoJSON(geoObj, {{
+              style: {{
+                color: color,
+                weight: isSameDisease ? 2.5 : 3.0,
+                opacity: 0.95,
+                dashArray: isSameDisease ? '4, 4' : '10, 6',
+                fillColor: color,
+                fillOpacity: isSameDisease ? 0.22 : 0.12
+              }}
+            }}).addTo(map);
+          }} catch(e) {{}}
+        }}
+
+        if (!layer && z.centerLat && z.centerLon && z.radiusMeters) {{
           layer = L.circle([z.centerLat, z.centerLon], {{
             radius: displayRadius,
             color: color,
@@ -4055,6 +4109,14 @@ def get_map_picker_html(
                 <b>Phân bố vết bệnh (${{totalLesions}} vết):</b>
                 <ul style="margin: 2px 0 0 16px; padding: 0;">${{breakdownList}}</ul>
               </div>
+              <div style="margin-top: 8px; border-top: 1px solid #334155; padding-top: 6px; display: flex; gap: 4px;">
+                <button type="button" onclick="window.reshapeZoneBoundary('${{z.id}}', ${{idx}})" style="flex: 1; padding: 4px 6px; background: #0284c7; color: #fff; border: none; border-radius: 4px; font-size: 10px; font-weight: 700; cursor: pointer;">
+                  ✏️ Chỉnh viền
+                </button>
+                <button type="button" onclick="window.updateZoneMembershipsUI('${{z.id}}', ${{idx}})" style="flex: 1; padding: 4px 6px; background: #6366f1; color: #fff; border: none; border-radius: 4px; font-size: 10px; font-weight: 700; cursor: pointer;">
+                  👥 Thêm/Bớt cây
+                </button>
+              </div>
             </div>
           `);
           zoneLayers.push(layer);
@@ -4087,7 +4149,10 @@ def get_map_picker_html(
                onmouseout="this.style.background='rgba(15, 23, 42, 0.7)'; this.style.borderColor='${{color}}55'">
             <div style="display: flex; justify-content: space-between; align-items: center;">
               <div style="font-size: 12px; font-weight: 700; color: ${{color}};">${{title}}</div>
-              <span style="font-size: 9px; font-weight: 800; background: ${{badgeBg}}; color: ${{color}}; padding: 2px 6px; border-radius: 3px; border: 1px solid ${{color}}44;">${{badgeLabel}}</span>
+              <div style="display: flex; gap: 4px; align-items: center;">
+                ${{statusBadge}}
+                <span style="font-size: 9px; font-weight: 800; background: ${{badgeBg}}; color: ${{color}}; padding: 2px 6px; border-radius: 3px; border: 1px solid ${{color}}44;">${{badgeLabel}}</span>
+              </div>
             </div>
             <div style="font-size: 11px; color: #f8fafc; margin-top: 5px; display: flex; justify-content: space-between;">
               <span>🌳 Quy mô: <b style="color: #38bdf8;">${{z.totalTrees}} cây</b> <span style="font-size: 10px; color: #94a3b8;">(${{lesionsCount}} vết)</span></span>
@@ -4098,6 +4163,21 @@ def get_map_picker_html(
             </div>
             <div style="font-size: 10px; color: #38bdf8; margin-top: 5px; display: flex; align-items: center; gap: 3px;">
               <span>📍 Nhấp để zoom & highlight trên bản đồ</span>
+            </div>
+            <div style="display: flex; gap: 6px; margin-top: 6px; align-items: center; border-top: 1px dashed rgba(255,255,255,0.1); padding-top: 6px;">
+              <label style="display: flex; align-items: center; gap: 4px; font-size: 10px; color: #facc15; cursor: pointer;" onclick="event.stopPropagation();">
+                <input type="checkbox" class="chk-zone-merge" value="${{z.id}}" data-idx="${{idx}}" style="cursor: pointer; width: 13px; height: 13px;" /> Chọn gộp
+              </label>
+              <div style="flex: 1; display: flex; gap: 4px; justify-content: flex-end;">
+                <button type="button" onclick="event.stopPropagation(); window.reshapeZoneBoundary('${{z.id}}', ${{idx}})" 
+                  style="padding: 3px 6px; background: #0284c7; color: #fff; border: none; border-radius: 3px; font-size: 9px; font-weight: 700; cursor: pointer;">
+                  ✏️ Chỉnh viền
+                </button>
+                <button type="button" onclick="event.stopPropagation(); window.updateZoneMembershipsUI('${{z.id}}', ${{idx}})" 
+                  style="padding: 3px 6px; background: #6366f1; color: #fff; border: none; border-radius: 3px; font-size: 9px; font-weight: 700; cursor: pointer;">
+                  👥 Thêm/Bớt
+                </button>
+              </div>
             </div>
           </div>
         `;
@@ -4143,6 +4223,417 @@ def get_map_picker_html(
       }}
     }}
     window.focusOnZone = focusOnZone;
+    // Helper to generate GeoJSON Polygon circle
+    function createCirclePolygonGeoJson(centerLat, centerLon, radiusMeters, pointsCount = 16) {{
+      const coords = [];
+      const latOffset = radiusMeters / 111320;
+      const lonOffset = radiusMeters / (111320 * Math.cos(centerLat * Math.PI / 180));
+      for (let i = 0; i < pointsCount; i++) {{
+        const theta = (i / pointsCount) * 2 * Math.PI;
+        coords.push([
+          Number((centerLon + lonOffset * Math.cos(theta)).toFixed(7)),
+          Number((centerLat + latOffset * Math.sin(theta)).toFixed(7))
+        ]);
+      }}
+      coords.push([coords[0][0], coords[0][1]]);
+      return {{
+        type: 'Polygon',
+        coordinates: [coords]
+      }};
+    }}
+
+    // UC-30a: Merge Disease Zones
+    async function mergeSelectedZones() {{
+      const checkboxes = document.querySelectorAll('.chk-zone-merge:checked');
+      if (checkboxes.length < 2) {{
+        alert('⚠️ Vui lòng tích chọn ít nhất 2 vùng bệnh trong danh sách để gộp!');
+        return;
+      }}
+
+      const selectedIds = Array.from(checkboxes).map(cb => cb.value);
+      const selectedZones = currentDiseaseZones.filter(z => selectedIds.includes(z.id));
+
+      const reviewedZones = selectedZones.filter(z => z.status === 'REVIEWED');
+      if (reviewedZones.length > 0) {{
+        alert(`⚠️ Các vùng đã ĐÃ DUYỆT (REVIEWED) không thể gộp lại.\nVui lòng chỉ tích chọn các vùng CHỜ DUYỆT (PROPOSED)!`);
+        return;
+      }}
+
+      let sumLat = 0, sumLon = 0, maxR = 0;
+      selectedZones.forEach(z => {{
+        sumLat += (z.centerLat || 0);
+        sumLon += (z.centerLon || 0);
+      }});
+      const cLat = sumLat / selectedZones.length;
+      const cLon = sumLon / selectedZones.length;
+
+      selectedZones.forEach(z => {{
+        const d = getHaversineDistanceMeters(cLat, cLon, z.centerLat, z.centerLon) + (z.radiusMeters || 4);
+        if (d > maxR) maxR = d;
+      }});
+
+      const mergedGeo = createCirclePolygonGeoJson(cLat, cLon, Math.max(maxR, 6));
+
+      if (!confirm(`Bạn có chắc muốn GỘP ${{selectedIds.length}} vùng bệnh thành 1 vùng mới?`)) {{
+        return;
+      }}
+
+      const farmId = '{escaped_farm_id}';
+      const url = `http://localhost:5080/api/system-manager/farms/${{farmId}}/plant-health/disease-zones/merge`;
+
+      try {{
+        const resp = await fetch(url, {{
+          method: 'POST',
+          headers: {{ 'Content-Type': 'application/json' }},
+          body: JSON.stringify({{
+            zoneIds: selectedIds,
+            mergedGeometry: mergedGeo
+          }})
+        }});
+
+        if (!resp.ok) {{
+          const err = await resp.json().catch(() => ({{}}));
+          alert(`❌ Gộp vùng thất bại: ${{err.detail || err.title || resp.status}}`);
+          return;
+        }}
+
+        const res = await resp.json();
+        alert(`✅ Đã GỘP thành công ${{res.mergedZoneCount}} vùng bệnh thành vùng mới!
+Tổng cây trong vùng mới: ${{res.totalTrees}} cây.`);
+        await loadFarmHealthMap();
+      }} catch (err) {{
+        console.error('Lỗi gọi API merge:', err);
+        alert(`❌ Lỗi kết nối: ${{err.message}}`);
+      }}
+    }}
+    window.mergeSelectedZones = mergeSelectedZones;
+
+    // UC-30b: Reshape Zone Boundary
+    async function reshapeZoneBoundary(zoneId, zoneIdx) {{
+      const z = currentDiseaseZones.find(x => x.id === zoneId) || currentDiseaseZones[zoneIdx];
+      if (!z) return;
+      if (z.status === 'REVIEWED') {{
+        alert(`⚠️ Vùng này đã ở trạng thái ĐÃ DUYỆT (REVIEWED).\nTheo quy định cơ sở dữ liệu, quyết định vùng đã duyệt là bất biến để bảo toàn tính lịch sử.\nVui lòng chọn vùng CHỜ DUYỆT (PROPOSED) để chỉnh sửa.`);
+        return;
+      }}
+
+      const inputRadius = prompt(`Nhập bán kính mới (mét) cho vùng bệnh này (Hiện tại: ${{z.radiusMeters}}m):`, `${{Number(z.radiusMeters + 1.5).toFixed(1)}}`);
+      if (!inputRadius) return;
+      const newRadius = parseFloat(inputRadius);
+      if (isNaN(newRadius) || newRadius <= 0) {{
+        alert('Bán kính không hợp lệ!');
+        return;
+      }}
+
+      const newGeo = createCirclePolygonGeoJson(z.centerLat, z.centerLon, newRadius);
+      const farmId = '{escaped_farm_id}';
+      const url = `http://localhost:5080/api/system-manager/farms/${{farmId}}/plant-health/disease-zones/${{zoneId}}/boundary`;
+
+      try {{
+        const resp = await fetch(url, {{
+          method: 'PUT',
+          headers: {{ 'Content-Type': 'application/json' }},
+          body: JSON.stringify({{
+            newGeometry: newGeo
+          }})
+        }});
+
+        if (!resp.ok) {{
+          const err = await resp.json().catch(() => ({{}}));
+          alert(`❌ Chỉnh viền thất bại: ${{err.detail || err.title || resp.status}}`);
+          return;
+        }}
+
+        const res = await resp.json();
+        alert(`✅ Đã cập nhật viền vùng bệnh thành công!
+Tổng số cây nằm trong viền mới: ${{res.totalEnclosedTrees}} cây.`);
+        map.closePopup();
+        await loadFarmHealthMap();
+      }} catch (err) {{
+        console.error('Lỗi gọi API boundary:', err);
+        alert(`❌ Lỗi kết nối: ${{err.message}}`);
+      }}
+    }}
+    window.reshapeZoneBoundary = reshapeZoneBoundary;
+
+    // UC-30c: Update Zone Memberships
+    async function updateZoneMembershipsUI(zoneId, zoneIdx) {{
+      const z = currentDiseaseZones.find(x => x.id === zoneId) || currentDiseaseZones[zoneIdx];
+      if (!z) return;
+      if (z.status === 'REVIEWED') {{
+        alert(`⚠️ Vùng này đã ở trạng thái ĐÃ DUYỆT (REVIEWED).\nTheo quy định cơ sở dữ liệu, thành viên vùng đã duyệt là bất biến.\nVui lòng chọn vùng CHỜ DUYỆT (PROPOSED) để chỉnh sửa.`);
+        return;
+      }}
+
+      const choice = prompt(`Chọn thao tác cho vùng bệnh (${{z.totalTrees}} cây):
+1. Thêm cây vào vùng (ADD)
+2. Xóa cây khỏi vùng (REMOVE)
+Nhập 1 hoặc 2:`, '1');
+      if (!choice) return;
+
+      const farmId = '{escaped_farm_id}';
+      const url = `http://localhost:5080/api/system-manager/farms/${{farmId}}/plant-health/disease-zones/${{zoneId}}/memberships`;
+      let body = {{ addPlantIds: [], removePlantIds: [] }};
+
+      if (choice.trim() === '1') {{
+        const pId = prompt('Nhập ID cây (Plant ID) cần thêm vào vùng:');
+        if (!pId) return;
+        body.addPlantIds = [pId.trim()];
+      }} else if (choice.trim() === '2') {{
+        if (!z.trees || z.trees.length === 0) {{
+          alert('Vùng này hiện chưa có cây nào trong danh sách để xóa!');
+          return;
+        }}
+        const listStr = z.trees.map((t, i) => `${{i + 1}}. ${{t.plantCode}} (${{t.plantId}})`).join(`\n`);
+        const pick = prompt(`Chọn số thứ tự cây cần xóa khỏi vùng:\n${{listStr}}`, '1');
+        if (!pick) return;
+        const pIdx = parseInt(pick, 10) - 1;
+        if (isNaN(pIdx) || pIdx < 0 || pIdx >= z.trees.length) {{
+          alert('Số thứ tự không hợp lệ!');
+          return;
+        }}
+        body.removePlantIds = [z.trees[pIdx].plantId];
+      }} else {{
+        return;
+      }}
+
+      try {{
+        const resp = await fetch(url, {{
+          method: 'PATCH',
+          headers: {{ 'Content-Type': 'application/json' }},
+          body: JSON.stringify(body)
+        }});
+
+        if (!resp.ok) {{
+          const err = await resp.json().catch(() => ({{}}));
+          alert(`❌ Cập nhật thành viên thất bại: ${{err.detail || err.title || resp.status}}`);
+          return;
+        }}
+
+        const res = await resp.json();
+        alert(`✅ Cập nhật thành viên thành công!
+Tổng cây trong vùng: ${{res.totalEnclosedTrees}} (Thêm: ${{res.addedCount}}, Bớt: ${{res.removedCount}})`);
+        map.closePopup();
+        await loadFarmHealthMap();
+      }} catch (err) {{
+        console.error('Lỗi gọi API memberships:', err);
+        alert(`❌ Lỗi kết nối: ${{err.message}}`);
+      }}
+    }}
+    window.updateZoneMembershipsUI = updateZoneMembershipsUI;
+
+
+    async function submitReviewObservation(obsId, decision, plantCode, viName) {{
+      const isConfirm = decision === 'CONFIRMED';
+      const promptText = isConfirm
+        ? `Bạn có chắc muốn XÁC NHẬN (Confirm) vết "${{viName}}" trên ${{plantCode}}?\n- Thao tác này sẽ cập nhật trạng thái CONFIRMED vào hệ thống.`
+        : `Bạn có chắc muốn BÁC BỎ (Reject) vết "${{viName}}" trên ${{plantCode}}?\n- Vết nhận diện này sẽ bị loại bỏ khỏi bản đồ.\n- Trụ cây sẽ tự động cập nhật lại trạng thái sức khỏe (về Khỏe/Bình thường nếu không còn bệnh).`;
+
+      if (!confirm(promptText)) return;
+
+      const farmId = '{escaped_farm_id}';
+      const url = `http://localhost:5080/api/system-manager/farms/${{farmId}}/plant-health/observations/${{obsId}}/review`;
+
+      try {{
+        const resp = await fetch(url, {{
+          method: 'PUT',
+          headers: {{
+            'Content-Type': 'application/json'
+          }},
+          body: JSON.stringify({{
+            decision: decision,
+            reason: `Đánh giá từ Map UI (${{decision}})`
+          }})
+        }});
+
+        if (!resp.ok) {{
+          const errData = await resp.json().catch(() => ({{}}));
+          const errMsg = errData.detail || errData.description || errData.title || `Lỗi HTTP ${{resp.status}}`;
+          alert(`❌ Thao tác thất bại: ${{errMsg}}`);
+          return;
+        }}
+
+        alert(`✅ Đã ${{isConfirm ? 'XÁC NHẬN (Confirm)' : 'BÁC BỎ (Reject)'}} thành công vết bệnh "${{viName}}"!`);
+        map.closePopup();
+        await loadFarmHealthMap();
+      }} catch (err) {{
+        console.error('Lỗi khi gọi API review:', err);
+        alert(`❌ Lỗi kết nối đến Backend: ${{err.message}}`);
+      }}
+    }}
+    window.submitReviewObservation = submitReviewObservation;
+    let flaggedMarkers = [];
+    async function fetchFlaggedObservations() {{
+      const farmId = '{escaped_farm_id}';
+      const url = `http://localhost:5080/api/system-manager/farms/${{farmId}}/plant-health/flagged-observations`;
+
+      try {{
+        const resp = await fetch(url);
+        if (!resp.ok) {{
+          const err = await resp.json().catch(() => ({{}}));
+          alert(`❌ Lỗi tải Flagged Observations: ${{err.detail || err.title || resp.status}}`);
+          return;
+        }}
+
+        const data = await resp.json();
+        const items = data.items || [];
+        const badge = document.getElementById('badge-flagged-count');
+        if (badge) badge.innerText = `${{items.length}} Vết`;
+
+        const container = document.getElementById('flagged-list-container');
+        if (!container) return;
+
+        if (items.length === 0) {{
+          container.innerHTML = '<div style="color: #10b981; font-size: 11px; padding: 6px;">🎉 Không có vết nào bị lệch (PENDING). Tất cả đều đã khớp!</div>';
+          return;
+        }}
+
+        flaggedMarkers.forEach(m => map.removeLayer(m));
+        flaggedMarkers = [];
+
+        let listHtml = '';
+        items.forEach((item, idx) => {{
+          let meta = {{}};
+          try {{
+            if (item.matchingParametersJson) meta = JSON.parse(item.matchingParametersJson);
+          }} catch(e) {{}}
+
+          const clsName = meta.class_name || 'Không rõ';
+          const viCls = CLASS_TRANSLATIONS[clsName] || clsName;
+          const conf = ((item.detectionConfidence || 0) * 100).toFixed(1);
+          const dist = item.gpsDistanceMeters !== undefined ? `${{Number(item.gpsDistanceMeters).toFixed(2)}}m` : 'N/A';
+          const lat = item.detectedLat;
+          const lon = item.detectedLon;
+
+          if (lat && lon) {{
+            const fMarker = L.circleMarker([lat, lon], {{
+              radius: 9,
+              color: '#a855f7',
+              fillColor: '#c084fc',
+              fillOpacity: 0.9,
+              weight: 3,
+              dashArray: '3, 3'
+            }}).addTo(map);
+
+            fMarker.bindTooltip(`🚩 Vết lệch #${{idx + 1}}: ${{viCls}} (lệch ${{dist}})`, {{ direction: 'top' }});
+            fMarker.bindPopup(`
+              <div style="font-family: sans-serif; font-size: 12px; min-width: 240px;">
+                <div style="font-weight: 700; color: #c084fc; border-bottom: 1px solid #334155; padding-bottom: 4px;">
+                  🚩 Vết lệch tọa độ #${{idx + 1}} (PENDING)
+                </div>
+                <div style="margin-top: 6px;">Loại: <b style="color: #fff;">${{viCls}}</b> (${{conf}}%)</div>
+                <div>Lệch tâm: <b style="color: #f43f5e;">${{dist}}</b></div>
+                <div style="font-size: 10px; color: #94a3b8; margin-top: 4px;">Tọa độ: ${{lat.toFixed(6)}}, ${{lon.toFixed(6)}}</div>
+                ${{meta.crop_image_url ? `<img src="${{meta.crop_image_url}}" style="width: 100%; height: 75px; object-fit: cover; margin-top: 6px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.2);" />` : ''}}
+                <div style="margin-top: 8px; border-top: 1px solid #334155; padding-top: 6px; display: flex; flex-direction: column; gap: 4px;">
+                  <button type="button" 
+                    onclick="window.resolveFlaggedObs('${{item.observationId}}', 'SNAP', '${{item.suggestedPlantId || ''}}')" 
+                    style="width: 100%; padding: 5px 6px; background: #3b82f6; color: #fff; border: none; border-radius: 4px; font-size: 10px; font-weight: 700; cursor: pointer;">
+                    🎯 Gắn vào trụ gần nhất (SNAP)
+                  </button>
+                  <button type="button" 
+                    onclick="window.resolveFlaggedObs('${{item.observationId}}', 'CREATE_NEW_PLANT')" 
+                    style="width: 100%; padding: 5px 6px; background: #10b981; color: #fff; border: none; border-radius: 4px; font-size: 10px; font-weight: 700; cursor: pointer;">
+                    ➕ Tạo cây mới tại điểm này
+                  </button>
+                  <button type="button" 
+                    onclick="window.resolveFlaggedObs('${{item.observationId}}', 'DISMISS')" 
+                    style="width: 100%; padding: 5px 6px; background: #64748b; color: #fff; border: none; border-radius: 4px; font-size: 10px; font-weight: 700; cursor: pointer;">
+                    🗑️ Bác bỏ (DISMISS - Nhiễu)
+                  </button>
+                </div>
+              </div>
+            `);
+            flaggedMarkers.push(fMarker);
+          }}
+
+          listHtml += `
+            <div style="background: rgba(168, 85, 247, 0.12); border: 1px solid rgba(168, 85, 247, 0.3); border-left: 4px solid #a855f7; padding: 7px 9px; border-radius: 5px; font-size: 11px; transition: all 0.2s;">
+              <div style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;" onclick="window.focusOnFlagged(${{lat}}, ${{lon}})">
+                <span style="font-weight: 700; color: #c084fc;">#${{idx + 1}} • ${{viCls}}</span>
+                <span style="background: #a855f7; color: #fff; font-size: 9px; padding: 1px 5px; border-radius: 3px; font-weight: 700;">${{dist}}</span>
+              </div>
+              <div style="font-size: 10px; color: #cbd5e1; margin-top: 3px; display: flex; justify-content: space-between; cursor: pointer;" onclick="window.focusOnFlagged(${{lat}}, ${{lon}})">
+                <span>Tin cậy: <b>${{conf}}%</b></span>
+                <span style="color: #38bdf8; font-weight: 600;">📍 Bấm để xem</span>
+              </div>
+              <div style="display: flex; gap: 4px; margin-top: 6px;">
+                <button type="button" onclick="event.stopPropagation(); window.resolveFlaggedObs('${{item.observationId}}', 'SNAP', '${{item.suggestedPlantId || ''}}')"
+                  style="flex: 1; padding: 3px 4px; background: #3b82f6; color: #fff; border: none; border-radius: 3px; font-size: 9px; font-weight: 700; cursor: pointer;">
+                  🎯 SNAP
+                </button>
+                <button type="button" onclick="event.stopPropagation(); window.resolveFlaggedObs('${{item.observationId}}', 'CREATE_NEW_PLANT')"
+                  style="flex: 1; padding: 3px 4px; background: #10b981; color: #fff; border: none; border-radius: 3px; font-size: 9px; font-weight: 700; cursor: pointer;">
+                  ➕ Mới
+                </button>
+                <button type="button" onclick="event.stopPropagation(); window.resolveFlaggedObs('${{item.observationId}}', 'DISMISS')"
+                  style="flex: 1; padding: 3px 4px; background: #64748b; color: #fff; border: none; border-radius: 3px; font-size: 9px; font-weight: 700; cursor: pointer;">
+                  🗑️ Bỏ
+                </button>
+              </div>
+            </div>
+          `;
+        }});
+
+        container.innerHTML = listHtml;
+        alert(`✅ Đã tải thành công ${{items.length}} vết lệch (PENDING) từ Backend API! Các marker màu tím đã hiển thị trên bản đồ.`);
+      }} catch (err) {{
+        console.error('Lỗi khi fetch flagged:', err);
+        alert(`❌ Lỗi kết nối: ${{err.message}}`);
+      }}
+    }}
+    async function resolveFlaggedObs(obsId, action, defaultTargetPlantId) {{
+      const farmId = '{escaped_farm_id}';
+      const url = `http://localhost:5080/api/system-manager/farms/${{farmId}}/plant-health/observations/${{obsId}}/resolve-flag`;
+
+      let body = {{ action: action, reason: `Xử lý từ Map UI (${{action}})` }};
+
+      if (action === 'SNAP') {{
+        const targetId = prompt('Nhập ID hoặc xác nhận TargetPlantId cần gắn vào:', defaultTargetPlantId || '');
+        if (!targetId) return;
+        body.targetPlantId = targetId.trim();
+      }} else if (action === 'CREATE_NEW_PLANT') {{
+        const defaultCode = `P-NEW-${{new Date().toISOString().slice(5,10).replace('-','')}}-${{Math.floor(1000 + Math.random()*9000)}}`;
+        const code = prompt('Nhập mã cây mới (Plant Code):', defaultCode);
+        if (!code) return;
+        body.newPlantCode = code.trim();
+      }} else if (action === 'DISMISS') {{
+        if (!confirm('Bạn có chắc muốn BÁC BỎ vết này (coi là nhiễu / False Positive)?')) return;
+      }}
+
+      try {{
+        const resp = await fetch(url, {{
+          method: 'POST',
+          headers: {{ 'Content-Type': 'application/json' }},
+          body: JSON.stringify(body)
+        }});
+
+        if (!resp.ok) {{
+          const errData = await resp.json().catch(() => ({{}}));
+          const errMsg = errData.detail || errData.description || errData.title || `Lỗi HTTP ${{resp.status}}`;
+          alert(`❌ Xử lý thất bại:\n${{errMsg}}`);
+          return;
+        }}
+
+        const resData = await resp.json();
+        alert(`✅ Xử lý thành công [${{action}}]!\nTrạng thái mới: ${{resData.newStatus}}${{resData.newPlantCode ? ` (Cây: ${{resData.newPlantCode}})` : ''}}`);
+        map.closePopup();
+        await fetchFlaggedObservations();
+        await loadFarmHealthMap();
+      }} catch (err) {{
+        console.error('Lỗi gọi API resolve-flag:', err);
+        alert(`❌ Lỗi kết nối đến Backend: ${{err.message}}`);
+      }}
+    }}
+    window.resolveFlaggedObs = resolveFlaggedObs;
+
+    window.fetchFlaggedObservations = fetchFlaggedObservations;
+
+    window.focusOnFlagged = function(lat, lon) {{
+      if (!lat || !lon) return;
+      map.flyTo([lat, lon], 21, {{ duration: 0.8 }});
+    }};
+
 
     function renderFarmPlants(plants) {{
 
@@ -4314,6 +4805,30 @@ def get_map_picker_html(
 
               : '';
 
+            let actionButtons = '';
+            if (d.id) {{
+              const confirmBtnText = isH ? '✓ Xác nhận (Confirm Trái)' : '✓ Xác nhận (Confirm Bệnh)';
+              const rejectBtnText = isH ? '✗ Bác bỏ (Reject Trái)' : '✗ Bác bỏ (Reject Bệnh)';
+              actionButtons = `
+                <div style="display: flex; gap: 6px; margin-top: 6px;">
+                  <button type="button" 
+                    onclick="window.submitReviewObservation('${{d.id}}', 'CONFIRMED', '${{t.plant_code}}', '${{viName}}')" 
+                    style="flex: 1; padding: 4px 6px; background: #10b981; color: #fff; border: 1px solid #059669; border-radius: 4px; font-size: 10px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 3px;"
+                    onmouseover="this.style.background='#059669'"
+                    onmouseout="this.style.background='#10b981'">
+                    ${{confirmBtnText}}
+                  </button>
+                  <button type="button" 
+                    onclick="window.submitReviewObservation('${{d.id}}', 'REJECTED', '${{t.plant_code}}', '${{viName}}')" 
+                    style="flex: 1; padding: 4px 6px; background: #ef4444; color: #fff; border: 1px solid #dc2626; border-radius: 4px; font-size: 10px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 3px;"
+                    onmouseover="this.style.background='#dc2626'"
+                    onmouseout="this.style.background='#ef4444'">
+                    ${{rejectBtnText}}
+                  </button>
+                </div>
+              `;
+            }}
+
 
 
             obsHtml += `
@@ -4339,6 +4854,8 @@ def get_map_picker_html(
                 ${{cropThumb}}
 
                 ${{annotatedLink}}
+
+                ${{actionButtons}}
 
               </div>
 
