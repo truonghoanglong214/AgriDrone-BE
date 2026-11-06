@@ -720,6 +720,25 @@ public sealed class DroneMission : AggregateRoot
         UpdatedAt = changedAt;
     }
 
+    public void ResetUpload(DateTimeOffset changedAt)
+    {
+        DomainGuard.Utc(changedAt);
+
+        if (Status is not (
+            MissionStatus.Uploading or
+            MissionStatus.UploadFailed or
+            MissionStatus.ReadyForProcessing or
+            MissionStatus.ProcessingFailed))
+        {
+            throw new InvalidOperationException(
+                $"Mission in status '{Status}' cannot reset upload.");
+        }
+
+        Status = MissionStatus.Uploading;
+        ProcessingStatus = ProcessingStatus.NotUploaded;
+        UpdatedAt = changedAt;
+    }
+
     public void MarkAwaitingReview(DateTimeOffset changedAt)
     {
         DomainGuard.Utc(changedAt);
@@ -1019,6 +1038,14 @@ public sealed class DroneMission : AggregateRoot
         FlightRoute.SRID = 4326;
         UpdatedAt = changedAt;
     }
+
+    public void ClearFlightRoute(DateTimeOffset changedAt)
+    {
+        DomainGuard.Utc(changedAt);
+        FlightRoute = null;
+        UpdatedAt = changedAt;
+    }
+
     private void EnsureStatus(MissionStatus expectedStatus)
     {
         if (Status != expectedStatus)

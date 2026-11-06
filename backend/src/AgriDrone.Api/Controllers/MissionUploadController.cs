@@ -1,7 +1,8 @@
-﻿using AgriDrone.Api.Contracts.Missions;
+using AgriDrone.Api.Contracts.Missions;
 using AgriDrone.Modules.Missions.Application
     .Features.Media.FinalizeMissionUpload;
 using AgriDrone.Modules.Missions.Application.Features.Media.GetMissionUploadReadiness;
+using AgriDrone.Modules.Missions.Application.Features.Media.ResetMissionUpload;
 using AgriDrone.SharedInfrastructure.Authorization;
 using AgriDrone.SharedInfrastructure.Http;
 using AgriDrone.SharedKernel.Application
@@ -19,6 +20,48 @@ public sealed class MissionUploadController(
     ISystemManagerAccessService managerAccessService)
     : ControllerBase
 {
+    /// <summary>Reset toàn bộ ảnh đã upload của Mission để nạp lại từ đầu.</summary>
+    /// <remarks>
+    /// Áp dụng khi Mission ở trạng thái Uploading, UploadFailed, ReadyForProcessing hoặc ProcessingFailed (ví dụ up nhầm ảnh không khớp Blackbox dẫn đến Geotag thất bại).
+    /// Endpoint sẽ xóa file ảnh trên MinIO, xóa dữ liệu Media trong DB và đưa Mission trở về trạng thái Uploading.
+    /// Tùy chọn ResetTelemetry = true để xóa luôn Blackbox nếu muốn nhập lại cả log bay.
+    /// </remarks>
+    [HttpPost("api/missions/{missionId:guid}/farms/{farmId:guid}/upload/reset")]
+    [Authorize(Policy = AccessAuthorizationPolicies.SystemManager)]
+    [ProducesResponseType(typeof(ResetMissionUploadResponse), StatusCodes.Status200OK)]
+    public async Task<IResult> ResetMissionUpload(
+        [FromRoute] Guid farmId,
+        [FromRoute] Guid missionId,
+        [FromBody] ResetMissionUploadRequest? request,
+        CancellationToken cancellationToken)
+    {
+        var access = await managerAccessService.ResolveFarmAccessAsync(farmId, cancellationToken);
+        if (!access.IsAllowed || access.TenantId is not Guid tenantId || access.FarmId != farmId)
+        {
+            return Results.Forbid();
+        }
+
+        var req = request ?? new ResetMissionUploadRequest();
+        var command = new ResetMissionUploadCommand(
+            tenantId,
+            farmId,
+            missionId,
+            req.ExpectedMissionVersion,
+            req.ResetTelemetry);
+
+        var result = await sender.Send(command, cancellationToken);
+
+        return result.ToHttpResult(
+            HttpContext,
+            value => Results.Ok(
+                new ResetMissionUploadResponse(
+                    value.MissionId,
+                    value.Status.ToString(),
+                    value.DeletedMediaCount,
+                    value.TelemetryReset,
+                    value.MissionVersion)));
+    }
+
     /// <summary>Hoàn tất giai đoạn upload của Mission.</summary>
     /// <remarks>
     /// Chỉ thành công khi Mission đang Uploading, không còn upload session hoạt

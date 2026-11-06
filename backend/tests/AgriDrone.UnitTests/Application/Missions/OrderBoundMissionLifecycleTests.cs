@@ -112,6 +112,38 @@ public sealed class OrderBoundMissionLifecycleTests
             Now.AddHours(1), Now.AddHours(2), mission.DroneId, Now));
     }
 
+    [Fact]
+    public void ResetUploadWhenInProcessingFailedTransitionsBackToUploading()
+    {
+        var mission = CreateScheduledMission();
+        using var answers = JsonDocument.Parse("""{"battery":true}""");
+        mission.CompletePreflight(Guid.NewGuid(), "v1", answers, true, null, Guid.NewGuid(), Now.AddMinutes(-5));
+        mission.StartFlight(Guid.NewGuid(), Now);
+        mission.CompleteFlight(Now.AddMinutes(30));
+        mission.StartUploading(Now.AddMinutes(31));
+        mission.MarkReadyForProcessing(Now.AddMinutes(35));
+        mission.StartProcessing(Now.AddMinutes(36));
+        mission.FailProcessing(Now.AddMinutes(40));
+
+        Assert.Equal(MissionStatus.ProcessingFailed, mission.Status);
+
+        mission.ResetUpload(Now.AddMinutes(45));
+
+        Assert.Equal(MissionStatus.Uploading, mission.Status);
+        Assert.Equal(ProcessingStatus.NotUploaded, mission.ProcessingStatus);
+    }
+
+    [Fact]
+    public void ResetUploadWhenScheduledThrowsInvalidOperationException()
+    {
+        var mission = CreateScheduledMission();
+
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            mission.ResetUpload(Now));
+
+        Assert.Contains("cannot reset upload", ex.Message);
+    }
+
     private static DroneMission CreateScheduledMission()
     {
         using var parameters = JsonDocument.Parse("{}");
