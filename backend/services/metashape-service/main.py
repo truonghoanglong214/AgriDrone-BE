@@ -458,10 +458,6 @@ def execute_metashape_job(task_id: str, request: ProcessMetashapeRequest):
         tif_url = minio_storage.get_presigned_url(tif_key)
         preview_url = minio_storage.get_presigned_url(jpg_key)
 
-        task.status = "COMPLETED"
-        task.progress = 100
-        task.stage = "Completed"
-        task.processing_time_ms = int((time.time() - start_time) * 1000)
         task.tif_storage_key = tif_key
         task.jpg_storage_key = jpg_key
         task.tif_url = tif_url
@@ -474,6 +470,12 @@ def execute_metashape_job(task_id: str, request: ProcessMetashapeRequest):
         task.original_height = orig_h
         task.bounds = MapBounds(**bounds_dict)
         task.corners = MapCorners(**corners_dict)
+        task.processing_time_ms = int((time.time() - start_time) * 1000)
+        task.stage = "Completed"
+        task.progress = 100
+        # Set COMPLETED last to prevent race condition where BE1 polls status
+        # and reads bounds/corners as null before they are assigned
+        task.status = "COMPLETED"
 
         # Optional: Delete source raw images from MinIO to save disk space
         if getattr(request, "delete_source_images", False):
@@ -603,10 +605,6 @@ def execute_odm_job(task_id: str, request: ProcessMetashapeRequest):
         tif_url = minio_storage.get_presigned_url(tif_key)
         preview_url = minio_storage.get_presigned_url(jpg_key)
 
-        task.status = "COMPLETED"
-        task.progress = 100
-        task.stage = "Completed"
-        task.processing_time_ms = int((time.time() - start_time) * 1000)
         task.tif_storage_key = tif_key
         task.jpg_storage_key = jpg_key
         task.tif_url = tif_url
@@ -619,6 +617,12 @@ def execute_odm_job(task_id: str, request: ProcessMetashapeRequest):
         task.original_height = orig_h
         task.bounds = MapBounds(**bounds_dict)
         task.corners = MapCorners(**corners_dict)
+        task.processing_time_ms = int((time.time() - start_time) * 1000)
+        task.stage = "Completed"
+        task.progress = 100
+        # Set COMPLETED last to prevent race condition where BE1 polls status
+        # and reads bounds/corners as null before they are assigned
+        task.status = "COMPLETED"
 
         # Optional: Delete source raw images from MinIO to save disk space
         if getattr(request, "delete_source_images", False):
