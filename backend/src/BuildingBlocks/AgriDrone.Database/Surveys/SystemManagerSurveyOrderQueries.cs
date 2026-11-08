@@ -223,6 +223,8 @@ internal sealed class SystemManagerSurveyOrderQueries(
         join farm in context.Set<Farm>().AsNoTracking()
             on new { order.TenantId, order.FarmId }
             equals new { farm.TenantId, FarmId = farm.Id }
+        join service in context.Set<SurveyService>().AsNoTracking()
+            on order.SurveyServiceId equals service.Id
         where order.TenantId == tenantId && farm.DeletedAt == null
             && (!surveyOrderId.HasValue || order.Id == surveyOrderId.Value)
             && (!status.HasValue || order.Status == status.Value)
@@ -250,7 +252,8 @@ internal sealed class SystemManagerSurveyOrderQueries(
                     item.ProposedEndAt,
                     item.Status,
                     item.Version))
-                .FirstOrDefault());
+                .FirstOrDefault(),
+            service.ServiceType);
 
     private static void EnsureValidPage(PagedRequest page)
     {

@@ -284,6 +284,7 @@ internal sealed class SurveyApprovalReferenceQueries(
               AND survey_order.survey_service_id = @service_id
               AND survey_order.status = 'COMPLETED'::system.survey_order_status
               AND survey_result.status = 'PUBLISHED'::system.survey_result_status
+              AND survey_result.invalidated_at IS NULL
             ORDER BY survey_result.published_at DESC, survey_order.id DESC
             LIMIT 1
             FOR SHARE OF survey_order, survey_result
@@ -312,7 +313,8 @@ internal sealed class SurveyApprovalReferenceQueries(
                       order.FarmId == farmId &&
                       order.SurveyServiceId == surveyServiceId &&
                       order.Status == SurveyOrderStatus.Completed &&
-                      result.Status == SurveyResultStatus.Published
+                      result.Status == SurveyResultStatus.Published &&
+                      result.InvalidatedAt == null
                 orderby result.PublishedAt descending, order.Id descending
                 select new
                 {

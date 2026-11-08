@@ -6767,6 +6767,168 @@ namespace AgriDrone.Database.Migrations
                         });
                 });
 
+            modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.QualityRefundCase", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<decimal?>("ApprovedAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("approved_amount");
+
+                    b.Property<string>("BankTransferReference")
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)")
+                        .HasColumnName("bank_transfer_reference");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTimeOffset?>("DecidedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("decided_at");
+
+                    b.Property<Guid?>("DecidedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("decided_by");
+
+                    b.Property<string>("DecisionReason")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("decision_reason");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("description");
+
+                    b.Property<string>("EvidenceReference")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("evidence_reference");
+
+                    b.Property<Guid>("FarmId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("farm_id");
+
+                    b.Property<JsonDocument>("ManagerFindings")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("manager_findings");
+
+                    b.Property<string>("ManagerVerificationReason")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("manager_verification_reason");
+
+                    b.Property<DateTimeOffset?>("ManagerVerifiedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("manager_verified_at");
+
+                    b.Property<Guid?>("ManagerVerifiedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("manager_verified_by");
+
+                    b.Property<string>("RecipientAccountName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)")
+                        .HasColumnName("recipient_account_name");
+
+                    b.Property<string>("RecipientAccountNumber")
+                        .IsRequired()
+                        .HasMaxLength(34)
+                        .HasColumnType("character varying(34)")
+                        .HasColumnName("recipient_account_number");
+
+                    b.Property<string>("RecipientBankName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)")
+                        .HasColumnName("recipient_bank_name");
+
+                    b.Property<DateTimeOffset?>("RecordedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("recorded_at");
+
+                    b.Property<Guid?>("RecordedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("recorded_by");
+
+                    b.Property<Guid>("ReportedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("reported_by");
+
+                    b.Property<JsonDocument>("ReportedIssues")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("reported_issues");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<Guid>("SurveyOrderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("survey_order_id");
+
+                    b.Property<Guid>("SurveyResultId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("survey_result_id");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<string>("TransferEvidenceReference")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("transfer_evidence_reference");
+
+                    b.Property<DateTimeOffset?>("TransferredAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("transferred_at");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BankTransferReference")
+                        .IsUnique()
+                        .HasDatabaseName("uq_quality_refund_bank_reference")
+                        .HasFilter("bank_transfer_reference IS NOT NULL");
+
+                    b.HasIndex("SurveyOrderId")
+                        .IsUnique()
+                        .HasDatabaseName("uq_quality_refund_active_order")
+                        .HasFilter("status IN ('Submitted', 'Approved', 'Refunded')");
+
+                    b.HasIndex("SurveyResultId");
+
+                    b.HasIndex("TenantId", "CreatedAt");
+
+                    b.ToTable("quality_refund_cases", "survey", t =>
+                        {
+                            t.HasCheckConstraint("ck_quality_refund_approved_amount", "approved_amount IS NULL OR approved_amount > 0");
+
+                            t.HasCheckConstraint("ck_quality_refund_transfer", "(status = 'Refunded' AND bank_transfer_reference IS NOT NULL AND transferred_at IS NOT NULL AND recorded_by IS NOT NULL AND recorded_at IS NOT NULL) OR (status <> 'Refunded' AND bank_transfer_reference IS NULL AND transferred_at IS NULL)");
+                        });
+                });
+
             modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.ScopeAdjustment", b =>
                 {
                     b.Property<Guid>("Id")
@@ -7709,6 +7871,18 @@ namespace AgriDrone.Database.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("farm_id");
 
+                    b.Property<DateTimeOffset?>("InvalidatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("invalidated_at");
+
+                    b.Property<Guid?>("InvalidatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("invalidated_by");
+
+                    b.Property<Guid?>("InvalidatedByQualityRefundCaseId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("invalidated_by_quality_refund_case_id");
+
                     b.Property<JsonDocument>("Provenance")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -7770,6 +7944,10 @@ namespace AgriDrone.Database.Migrations
 
                     b.HasAlternateKey("Id", "SurveyOrderId", "FarmId")
                         .HasName("uq_survey_results_id_order_farm");
+
+                    b.HasIndex("InvalidatedByQualityRefundCaseId")
+                        .IsUnique()
+                        .HasFilter("invalidated_by_quality_refund_case_id IS NOT NULL");
 
                     b.HasIndex("PublishedBy");
 
@@ -9890,6 +10068,25 @@ namespace AgriDrone.Database.Migrations
                         .HasConstraintName("fk_price_adjustments_orders_order_id");
 
                     b.Navigation("SurveyOrder");
+                });
+
+            modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.QualityRefundCase", b =>
+                {
+                    b.HasOne("AgriDrone.Modules.Surveys.Domain.SurveyOrder", "SurveyOrder")
+                        .WithMany()
+                        .HasForeignKey("SurveyOrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("AgriDrone.Modules.Surveys.Domain.SurveyResult", "SurveyResult")
+                        .WithMany()
+                        .HasForeignKey("SurveyResultId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("SurveyOrder");
+
+                    b.Navigation("SurveyResult");
                 });
 
             modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.ScopeAdjustment", b =>

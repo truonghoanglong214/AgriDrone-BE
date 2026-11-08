@@ -138,6 +138,7 @@ public static class DependencyInjection
         services.AddSingleton<IValidateOptions<SurveyPaymentProviderOptions>,
             SurveyPaymentProviderOptionsValidator>();
         services.AddScoped<ISurveyPaymentGateway, SurveyPaymentGateway>();
+        services.AddScoped<IQualityRefundWorkflow, QualityRefundWorkflow>();
         services.AddScoped<ISurveyPaymentCallbackVerifier,
             SurveyPaymentCallbackVerifier>();
         services.AddScoped<ISurveyOrderReadinessService,

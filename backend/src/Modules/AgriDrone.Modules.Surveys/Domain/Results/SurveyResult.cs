@@ -30,6 +30,9 @@ public sealed class SurveyResult : AggregateRoot
     public DateTimeOffset? ReviewedAt { get; private set; }
     public Guid? PublishedBy { get; private set; }
     public DateTimeOffset? PublishedAt { get; private set; }
+    public Guid? InvalidatedByQualityRefundCaseId { get; private set; }
+    public Guid? InvalidatedBy { get; private set; }
+    public DateTimeOffset? InvalidatedAt { get; private set; }
     public uint Version { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
     public DateTimeOffset UpdatedAt { get; private set; }
@@ -92,6 +95,29 @@ public sealed class SurveyResult : AggregateRoot
         TransitionTo(SurveyResultStatus.Published, publishedAt);
         PublishedBy = publishedBy;
         PublishedAt = publishedAt;
+    }
+
+    public void InvalidateForQualityRefund(
+        Guid refundCaseId,
+        Guid adminId,
+        DateTimeOffset invalidatedAt,
+        uint expectedVersion)
+    {
+        EnsureVersion(expectedVersion);
+        DomainGuard.NotEmpty(refundCaseId);
+        DomainGuard.NotEmpty(adminId);
+        DomainGuard.Utc(invalidatedAt);
+        SurveyTransitionGuard.EnsureTimestamp(invalidatedAt, UpdatedAt);
+        if (Status != SurveyResultStatus.Published || InvalidatedAt.HasValue)
+        {
+            throw new InvalidOperationException("Only a current published result can be invalidated.");
+        }
+
+        InvalidatedByQualityRefundCaseId = refundCaseId;
+        InvalidatedBy = adminId;
+        InvalidatedAt = invalidatedAt;
+        UpdatedAt = invalidatedAt;
+        Version++;
     }
 
     private void TransitionTo(SurveyResultStatus target, DateTimeOffset occurredAt)

@@ -37,6 +37,7 @@ internal sealed class SurveysDbContext(DbContextOptions<SurveysDbContext> option
     public DbSet<ExtraFlightRequest> ExtraFlightRequests =>
         Set<ExtraFlightRequest>();
     public DbSet<SurveyResult> SurveyResults => Set<SurveyResult>();
+    public DbSet<QualityRefundCase> QualityRefundCases => Set<QualityRefundCase>();
     public DbSet<HarvestReadinessAssessment> HarvestReadinessAssessments => Set<HarvestReadinessAssessment>();
     public DbSet<HarvestReadinessCriterion> HarvestReadinessCriteria => Set<HarvestReadinessCriterion>();
 

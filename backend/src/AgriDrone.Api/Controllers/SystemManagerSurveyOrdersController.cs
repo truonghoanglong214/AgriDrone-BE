@@ -16,6 +16,7 @@ using AgriDrone.Modules.Surveys.Application.Features.Adjustments.ScopeAdjustment
 using AgriDrone.Modules.Surveys.Application.Features.Adjustments.ExtraFlights.RequestExtraFlight;
 using AgriDrone.Modules.Surveys.Application.Features.Adjustments.ExtraFlights.ConsumeExtraFlight;
 using AgriDrone.Modules.Surveys.Domain;
+using AgriDrone.Modules.Surveys.Application.Abstractions.Payments;
 using AgriDrone.SharedInfrastructure.Authorization;
 using AgriDrone.SharedInfrastructure.Http;
 using AgriDrone.SharedKernel.Application.Pagination;
@@ -30,9 +31,38 @@ namespace AgriDrone.Api.Controllers;
 [Authorize(Policy = AccessAuthorizationPolicies.SystemManager)]
 public sealed class SystemManagerSurveyOrdersController(
     ISender sender,
+    IQualityRefundWorkflow qualityRefunds,
     TimeProvider timeProvider)
     : ControllerBase
 {
+    /// <summary>Manager đang phụ trách Farm xem các báo cáo sai kết quả.</summary>
+    [HttpGet("{orderId:guid}/quality-refunds")]
+    public async Task<IResult> GetQualityRefunds(
+        [FromRoute] Guid orderId,
+        CancellationToken cancellationToken)
+    {
+        var result = await qualityRefunds.GetManagerCasesAsync(orderId, cancellationToken);
+        return result.ToHttpResult(HttpContext, Results.Ok);
+    }
+
+    /// <summary>Manager xác minh từng trụ; chỉ Admin được quyết định hoàn tiền.</summary>
+    [HttpPost("{orderId:guid}/quality-refunds/{caseId:guid}/verify")]
+    public async Task<IResult> VerifyQualityRefund(
+        [FromRoute] Guid orderId,
+        [FromRoute] Guid caseId,
+        [FromBody] VerifyQualityRefundRequest request,
+        CancellationToken cancellationToken)
+    {
+        var findings = request.Findings?.Select(item => item is null
+            ? null!
+            : new VerifiedPoleIssue(item.PoleCode, item.ConfirmedError, item.Reason))
+            .ToArray() ?? [];
+        var result = await qualityRefunds.VerifyByManagerAsync(
+            orderId, caseId, findings, request.Reason,
+            request.ExpectedVersion, cancellationToken);
+        return result.ToHttpResult(HttpContext, Results.Ok);
+    }
+
     /// <summary>Lấy danh sách SurveyOrder thuộc các farm đang được phân công.</summary>
     /// <remarks>
     /// Backend tự xác định SystemManager từ access token. Có thể lọc theo status;
