@@ -233,11 +233,23 @@ internal sealed partial class GetMissionOrthophotoStatusQueryHandler(
                 actorId,
                 now);
 
-            // Ghi metadata 4 góc và bounds vào jpgAsset
+            // Ghi metadata 4 góc và bounds vào jpgAsset theo đúng chuẩn snake_case và mảng tọa độ
             var metadataJson = JsonSerializer.Serialize(new
             {
-                bounds = output.Bounds,
-                corners = output.Corners,
+                bounds = output.Bounds is not null ? new
+                {
+                    min_lat = output.Bounds.MinLat,
+                    max_lat = output.Bounds.MaxLat,
+                    min_lon = output.Bounds.MinLon,
+                    max_lon = output.Bounds.MaxLon
+                } : null,
+                corners = output.Corners is not null ? new
+                {
+                    north_west = new[] { output.Corners.NorthWest.Latitude, output.Corners.NorthWest.Longitude },
+                    north_east = new[] { output.Corners.NorthEast.Latitude, output.Corners.NorthEast.Longitude },
+                    south_east = new[] { output.Corners.SouthEast.Latitude, output.Corners.SouthEast.Longitude },
+                    south_west = new[] { output.Corners.SouthWest.Latitude, output.Corners.SouthWest.Longitude }
+                } : null,
                 preview_width = output.OriginalWidth,
                 preview_height = output.OriginalHeight,
                 original_width = output.OriginalWidth,
@@ -299,27 +311,30 @@ internal sealed partial class GetMissionOrthophotoStatusQueryHandler(
         try
         {
             var root = previewMedia.Media.Metadata.RootElement;
-            if (root.TryGetProperty("bounds", out var bElem))
+            if (root.TryGetProperty("bounds", out var bElem) && bElem.ValueKind == JsonValueKind.Object)
             {
-                bounds = new MapBounds(
-                    bElem.GetProperty("min_lat").GetDouble(),
-                    bElem.GetProperty("max_lat").GetDouble(),
-                    bElem.GetProperty("min_lon").GetDouble(),
-                    bElem.GetProperty("max_lon").GetDouble());
+                var minLat = GetDoubleProperty(bElem, "min_lat", "MinLat");
+                var maxLat = GetDoubleProperty(bElem, "max_lat", "MaxLat");
+                var minLon = GetDoubleProperty(bElem, "min_lon", "MinLon");
+                var maxLon = GetDoubleProperty(bElem, "max_lon", "MaxLon");
+
+                if (minLat.HasValue && maxLat.HasValue && minLon.HasValue && maxLon.HasValue)
+                {
+                    bounds = new MapBounds(minLat.Value, maxLat.Value, minLon.Value, maxLon.Value);
+                }
             }
 
-            if (root.TryGetProperty("corners", out var cElem))
+            if (root.TryGetProperty("corners", out var cElem) && cElem.ValueKind == JsonValueKind.Object)
             {
-                var nw = cElem.GetProperty("north_west");
-                var ne = cElem.GetProperty("north_east");
-                var se = cElem.GetProperty("south_east");
-                var sw = cElem.GetProperty("south_west");
+                var nw = ParseCoordinate(cElem, "north_west", "NorthWest");
+                var ne = ParseCoordinate(cElem, "north_east", "NorthEast");
+                var se = ParseCoordinate(cElem, "south_east", "SouthEast");
+                var sw = ParseCoordinate(cElem, "south_west", "SouthWest");
 
-                corners = new MapCorners(
-                    new MapCoordinate(nw[0].GetDouble(), nw[1].GetDouble()),
-                    new MapCoordinate(ne[0].GetDouble(), ne[1].GetDouble()),
-                    new MapCoordinate(se[0].GetDouble(), se[1].GetDouble()),
-                    new MapCoordinate(sw[0].GetDouble(), sw[1].GetDouble()));
+                if (nw != null && ne != null && se != null && sw != null)
+                {
+                    corners = new MapCorners(nw, ne, se, sw);
+                }
             }
         }
         catch (Exception ex)
@@ -352,6 +367,39 @@ internal sealed partial class GetMissionOrthophotoStatusQueryHandler(
             bounds,
             corners,
             null));
+    }
+
+    private static double? GetDoubleProperty(JsonElement element, params string[] propertyNames)
+    {
+        foreach (var prop in propertyNames)
+        {
+            if (element.TryGetProperty(prop, out var val) && val.ValueKind == JsonValueKind.Number)
+            {
+                return val.GetDouble();
+            }
+        }
+        return null;
+    }
+
+    private static MapCoordinate? ParseCoordinate(JsonElement element, string snakeName, string pascalName)
+    {
+        if (element.TryGetProperty(snakeName, out var elem) || element.TryGetProperty(pascalName, out elem))
+        {
+            if (elem.ValueKind == JsonValueKind.Array && elem.GetArrayLength() >= 2)
+            {
+                return new MapCoordinate(elem[0].GetDouble(), elem[1].GetDouble());
+            }
+            if (elem.ValueKind == JsonValueKind.Object)
+            {
+                var lat = GetDoubleProperty(elem, "Latitude", "latitude", "lat");
+                var lon = GetDoubleProperty(elem, "Longitude", "longitude", "lon");
+                if (lat.HasValue && lon.HasValue)
+                {
+                    return new MapCoordinate(lat.Value, lon.Value);
+                }
+            }
+        }
+        return null;
     }
 
     private static string? ExtractTaskId(string? notes)
