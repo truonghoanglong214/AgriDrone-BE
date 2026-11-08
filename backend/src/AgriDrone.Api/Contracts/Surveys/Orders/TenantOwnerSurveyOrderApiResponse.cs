@@ -11,7 +11,8 @@ public sealed record TenantOwnerSurveyOrderApiResponse(
     decimal? TotalAmount,
     decimal? RemainingAmount,
     string Currency,
-    TenantOwnerAppointmentApiResponse? CurrentAppointment);
+    TenantOwnerAppointmentApiResponse? CurrentAppointment,
+    string ServiceType);
 
 public sealed record TenantOwnerAppointmentApiResponse(
     Guid AppointmentId,

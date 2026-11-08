@@ -26,6 +26,7 @@ using AgriDrone.Modules.Farms.Application.Features.GetArchivedFarmById;
 using AgriDrone.Modules.Farms.Application.Features.GetArchivedFarms;
 using AgriDrone.Modules.Farms.Application.Features.UpdateZonePlantMemberships;
 using AgriDrone.Modules.Farms.Application.Abstractions.Zones;
+using AgriDrone.Modules.Plants.Application.Features.GetFarmPlants;
 
 namespace AgriDrone.Api.Controllers
 {
@@ -145,6 +146,24 @@ namespace AgriDrone.Api.Controllers
             return result.ToHttpResult(
                 HttpContext,
                 farm => Results.Ok(FarmResponseMapper.ToResponse(farm)));
+        }
+
+        /// <summary>Lấy mã và vị trí các cây thuộc farm của Owner hiện tại.</summary>
+        [HttpGet("{farmId:guid}/plants")]
+        [Authorize(Policy = AccessAuthorizationPolicies.TenantOwner)]
+        [ProducesResponseType<IReadOnlyList<FarmPlantItem>>(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IResult> GetPlantsByFarm(
+            [FromRoute] Guid farmId,
+            CancellationToken cancellationToken)
+        {
+            var result = await sender.Send(
+                new GetFarmPlantsQuery(farmId),
+                cancellationToken);
+
+            return result.ToHttpResult(
+                HttpContext,
+                plants => Results.Ok(plants));
         }
 
         /// <summary>Tạo zone trong farm.</summary>

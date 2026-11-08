@@ -69,7 +69,8 @@ public sealed record TenantOwnerSurveyOrderItem(
     decimal? TotalAmount,
     decimal? RemainingAmount,
     string Currency,
-    TenantOwnerCurrentAppointmentItem? CurrentAppointment);
+    TenantOwnerCurrentAppointmentItem? CurrentAppointment,
+    SurveyServiceType ServiceType);
 
 public sealed record TenantOwnerCurrentAppointmentItem(
     Guid AppointmentId,
