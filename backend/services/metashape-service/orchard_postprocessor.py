@@ -58,14 +58,22 @@ def is_inside_polygon(lat: float, lon: float, polygon_geojson: Optional[Dict[str
 
 def deduplicate_trees(
     raw_trees: List[Dict[str, Any]],
-    min_distance_meters: float = 1.2
+    min_distance_meters: float = 1.2,
+    row_spacing: Optional[float] = None,
+    col_spacing: Optional[float] = None
 ) -> List[Dict[str, Any]]:
     """
     Loc bo cac diem nhan dien bi trung lap hoac qua gan nhau (Spatial NMS):
     - Doi sang he toa do met.
     - Sap xep theo do tin cay (confidence) giam dan.
-    - Neu 2 diem cach nhau < min_distance_meters (mac dinh 1.2m), giu lai diem co confidence cao hon.
+    - Neu row_spacing va col_spacing duoc cung cap, tu dong tinh min_distance = min(row, col) * 0.55.
+    - Neu 2 diem cach nhau < min_distance_meters, giu lai diem co confidence cao hon.
     """
+    # Tu dong tinh nguong NMS dong dua tren khoang cach hang/cot thuc te
+    if row_spacing is not None and col_spacing is not None:
+        min_distance_meters = min(row_spacing, col_spacing) * 0.55
+        logger.info(f"NMS dynamic threshold: min_distance={min_distance_meters:.2f}m (row={row_spacing}m, col={col_spacing}m)")
+
     if not raw_trees:
         return []
 
@@ -140,8 +148,9 @@ def estimate_spacings_from_trees(pts: np.ndarray, v_col: np.ndarray, v_row: np.n
 def find_dominant_row_angle(pts: np.ndarray, custom_angle_deg: Optional[float] = None) -> Tuple[np.ndarray, np.ndarray, float]:
     """
     Xác định chính xác hướng của hàng cây thực tế trong vườn (v_along) và trục vuông góc (v_across):
-    Sử dụng thuật toán bỏ phiếu góc giữa các cặp cây láng giềng kề nhau (1.8m <= d <= 3.8m).
-    Tránh sai số 10-15 độ của PCA khi ranh giới thửa đất là đa giác méo.
+    - Tính trục chính PCA định hướng chiều dài thửa đất để loại bỏ các góc đường chéo giả (diagonal angles).
+    - Lọc bỏ phiếu góc giữa các cây láng giềng kề nhau (1.8m <= d <= 3.8m) quanh trục PCA hoặc trục vuông góc.
+    - Đánh giá khả năng phân cụm luống để chọn hướng phân tách hàng/cột rõ ràng nhất.
     """
     if custom_angle_deg is not None:
         theta = math.radians(custom_angle_deg)
@@ -152,6 +161,15 @@ def find_dominant_row_angle(pts: np.ndarray, custom_angle_deg: Optional[float] =
     n = len(pts)
     if n < 4:
         return np.array([1.0, 0.0]), np.array([0.0, 1.0]), 0.0
+
+    # Trục chính PCA của đám mây điểm cây (chiều dài của thửa đất)
+    centered = pts - np.mean(pts, axis=0)
+    cov = np.cov(centered, rowvar=False)
+    evals, evecs = np.linalg.eigh(cov)
+    sort_idx = np.argsort(evals)[::-1]
+    v_major = evecs[:, sort_idx[0]]
+    pca_deg = math.degrees(math.atan2(v_major[1], v_major[0])) % 180
+    pca_perp = (pca_deg + 90.0) % 180
 
     neighbor_angles = []
     for i in range(n):
@@ -165,14 +183,42 @@ def find_dominant_row_angle(pts: np.ndarray, custom_angle_deg: Optional[float] =
     if neighbor_angles:
         hist, bin_edges = np.histogram(neighbor_angles, bins=180, range=(0, 180))
         smoothed = np.convolve(hist, [1, 2, 4, 2, 1], mode="same")
-        best_angle_deg = float(bin_edges[np.argmax(smoothed)])
+
+        def angle_diff(a1: float, a2: float) -> float:
+            d = abs(a1 - a2) % 180
+            return min(d, 180.0 - d)
+
+        # Chỉ chấp nhận các góc nằm gần hướng song song hoặc vuông góc với PCA (loại bỏ góc chéo 45 độ)
+        valid_indices = [
+            i for i in range(180)
+            if angle_diff(float(bin_edges[i]), pca_deg) <= 25.0 or angle_diff(float(bin_edges[i]), pca_perp) <= 25.0
+        ]
+
+        if valid_indices:
+            # Tìm đỉnh mạnh nhất ở hướng song song và hướng vuông góc
+            par_indices = [i for i in valid_indices if angle_diff(float(bin_edges[i]), pca_deg) <= 25.0]
+            perp_indices = [i for i in valid_indices if angle_diff(float(bin_edges[i]), pca_perp) <= 25.0]
+
+            deg_p = float(bin_edges[max(par_indices, key=lambda i: smoothed[i])]) if par_indices else pca_deg
+            deg_q = float(bin_edges[max(perp_indices, key=lambda i: smoothed[i])]) if perp_indices else pca_perp
+
+            # Đánh giá xem góc nào khi chiếu lên trục vuông góc thì tách cụm luống/hàng rõ nét hơn
+            def eval_clustering(deg_cand: float) -> float:
+                rad = math.radians(deg_cand)
+                v_ac = np.array([-math.sin(rad), math.cos(rad)])
+                proj = np.sort(pts @ v_ac)
+                diffs = np.diff(proj)
+                top_diffs = np.sort(diffs)[-min(5, len(diffs)):]
+                return float(np.mean(top_diffs))
+
+            score_p = eval_clustering(deg_p)
+            score_q = eval_clustering(deg_q)
+            best_angle_deg = deg_p if score_p >= score_q else deg_q
+            logger.info(f"Row angle selection: PCA={pca_deg:.1f}°, Parallel={deg_p:.1f}° (score={score_p:.2f}m), Perp={deg_q:.1f}° (score={score_q:.2f}m) -> Chosen={best_angle_deg:.1f}°")
+        else:
+            best_angle_deg = pca_deg
     else:
-        centered = pts - np.mean(pts, axis=0)
-        cov = np.cov(centered, rowvar=False)
-        evals, evecs = np.linalg.eigh(cov)
-        sort_idx = np.argsort(evals)[::-1]
-        v_major = evecs[:, sort_idx[0]]
-        best_angle_deg = math.degrees(math.atan2(v_major[1], v_major[0])) % 180
+        best_angle_deg = pca_deg
 
     theta = math.radians(best_angle_deg)
     v_along = np.array([math.cos(theta), math.sin(theta)])
@@ -194,6 +240,11 @@ def assign_grid_and_detect_missing(
     3. Định vị Cây Neo Mốc (Anchor Tree) thành Hàng 1 - Cột 1 (is_anchor = True).
     4. Sắp xếp thứ tự cột trong từng hàng và phát hiện cây khuyết (Missing Trees) theo khoảng cách thực tế giữa các cây kề nhau.
     """
+    if not trees:
+        return [], [], 2.5, 2.5
+
+    # Tự động lọc trùng (Spatial NMS) với ngưỡng động theo khoảng cách thực tế
+    trees = deduplicate_trees(trees, row_spacing=row_spacing, col_spacing=col_spacing)
     if not trees:
         return [], [], 2.5, 2.5
 
@@ -273,16 +324,41 @@ def assign_grid_and_detect_missing(
 
     anchor_pt = pts[anchor_tree_idx]
 
-    # Gán Row Index và Col Index cho active_trees
+    # Gán Row Index và Col Index cho active_trees theo khoảng cách bước thực tế dọc luống
     active_trees = []
     occupied_cells = set()
+    prev_first_s = None
+
     for r_num, cl in enumerate(ordered_row_clusters, 1):
         cl_sorted = sorted(cl, key=lambda i: float((pts[i] - anchor_pt) @ v_along))
-        for idx in cl_sorted:
-            s = float((pts[idx] - anchor_pt) @ v_along)
-            c_idx = max(1, int(round(s / col_spacing)) + 1)
-            while (r_num, c_idx) in occupied_cells:
-                c_idx += 1
+        if not cl_sorted:
+            continue
+
+        # Xác định cột bắt đầu của hàng: theo vết luống (Ridge Tracking) để chống trôi cột do sai số góc
+        s_first = float((pts[cl_sorted[0]] - anchor_pt) @ v_along)
+        if prev_first_s is None:
+            c_curr = 1 if s_first < col_spacing * 0.6 else max(1, int(round(s_first / col_spacing)) + 1)
+            prev_first_s = s_first
+        else:
+            shift = s_first - prev_first_s
+            step_shift = int(round(shift / col_spacing))
+            if abs(step_shift) == 0:
+                c_curr = 1  # Giữ cùng luống ngoài cùng với hàng trước
+                prev_first_s = s_first  # Cập nhật nhẹ vết luống
+            else:
+                c_curr = max(1, 1 + step_shift)
+
+        for i_pos, idx in enumerate(cl_sorted):
+            if i_pos == 0:
+                c_idx = c_curr
+            else:
+                prev_idx = cl_sorted[i_pos - 1]
+                delta_s = float((pts[idx] - pts[prev_idx]) @ v_along)
+                # Tính số bước nhảy cột theo khoảng cách thực tế giữa 2 cây liên tiếp trên luống
+                step = max(1, int(round(delta_s / col_spacing)))
+                c_curr += step
+                c_idx = c_curr
+
             occupied_cells.add((r_num, c_idx))
             is_anchor = (idx == anchor_tree_idx)
 
@@ -298,13 +374,21 @@ def assign_grid_and_detect_missing(
                 "is_anchor": is_anchor
             })
 
-    # 4. Tìm các vị trí khuyết (Missing Trees - giữ nguyên thuật toán gốc ban đầu theo yêu cầu)
+    # 4. Tìm các vị trí khuyết (Missing Trees - cải tiến kiểm tra khoảng cách thực tế + va chạm không gian)
     max_row = max(t["row"] for t in active_trees)
     max_col = max(t["col"] for t in active_trees)
     missing_trees = []
 
     cell_map = {(t["row"], t["col"]): (t["lat"], t["lon"]) for t in active_trees}
     origin_pt = anchor_pt
+
+    # Pre-compute toa do met cua cay da phat hien de kiem tra va cham khong gian
+    active_positions_m = []
+    for t in active_trees:
+        ax, ay = latlon_to_meters(t["lat"], t["lon"], ref_lat, ref_lon)
+        active_positions_m.append((ax, ay))
+    min_safe_dist = min(row_spacing, col_spacing) * 0.7  # Khoang cach an toan toi thieu
+    missing_positions_m = []  # Luu toa do met cua cac cay khuyet da them
 
     for r in range(1, max_row + 1):
         for c in range(1, max_col + 1):
@@ -319,25 +403,38 @@ def assign_grid_and_detect_missing(
                 if left_c is not None and right_c is not None:
                     lat_l, lon_l = cell_map[(r, left_c)]
                     lat_r, lon_r = cell_map[(r, right_c)]
-                    w = (c - left_c) / (right_c - left_c)
-                    exp_lat = lat_l + w * (lat_r - lat_l)
-                    exp_lon = lon_l + w * (lon_r - lon_l)
                     xl, yl = latlon_to_meters(lat_l, lon_l, ref_lat, ref_lon)
                     xr, yr = latlon_to_meters(lat_r, lon_r, ref_lat, ref_lon)
                     gap_dist = math.hypot(xr - xl, yr - yl)
+                    # Kiem tra khoang trong thuc te co du cho cho cay khuyet khong
+                    expected_gap = (right_c - left_c) * col_spacing
+                    if gap_dist < expected_gap * 0.6:
+                        logger.info(f"[BO QUA] Hang {r}: Khoang cach thuc te giua Col {left_c} va Col {right_c} chi {gap_dist:.2f}m (can >= {expected_gap * 0.6:.2f}m). Khong du cho cho cay khuyet tai Col {c}.")
+                        continue
+                    w = (c - left_c) / (right_c - left_c)
+                    exp_lat = lat_l + w * (lat_r - lat_l)
+                    exp_lon = lon_l + w * (lon_r - lon_l)
                     logger.info(f"[KHOẢNG TRỐNG THỰC TẾ] Hàng {r}: Khoảng cách giữa Cột {left_c} và Cột {right_c} là {gap_dist:.2f}m. -> Xác nhận KHUYẾT CÂY tại Hàng {r} - Cột {c}")
                 elif (r - 1, c) in cell_map and (r + 1, c) in cell_map:
                     # B. Ưu tiên 2: Nội suy giữa hàng trên và hàng dưới cùng cột
                     lat_t, lon_t = cell_map[(r - 1, c)]
                     lat_b, lon_b = cell_map[(r + 1, c)]
-                    exp_lat = (lat_t + lat_b) / 2.0
-                    exp_lon = (lon_t + lon_b) / 2.0
                     xt, yt = latlon_to_meters(lat_t, lon_t, ref_lat, ref_lon)
                     xb, yb = latlon_to_meters(lat_b, lon_b, ref_lat, ref_lon)
                     gap_dist = math.hypot(xb - xt, yb - yt)
+                    # Kiem tra khoang cach giua 2 hang co du cho cho 1 hang khuyet khong
+                    if gap_dist < row_spacing * 1.4:
+                        logger.info(f"[BO QUA] Col {c}: Khoang cach giua Hang {r-1} va Hang {r+1} chi {gap_dist:.2f}m (can >= {row_spacing * 1.4:.2f}m). Khong du cho cho cay khuyet tai Hang {r}.")
+                        continue
+                    exp_lat = (lat_t + lat_b) / 2.0
+                    exp_lon = (lon_t + lon_b) / 2.0
                     logger.info(f"[KHOẢNG TRỐNG THỰC TẾ] Cột {c}: Khoảng cách giữa Hàng {r-1} và Hàng {r+1} là {gap_dist:.2f}m. -> Xác nhận KHUYẾT CÂY tại Hàng {r} - Cột {c}")
                 elif right_c is not None:
                     # C. Ngoại suy từ phía bên phải (cây ở đầu hàng, ví dụ c = 1)
+                    # Gioi han: chi ngoai suy toi da 2 cay ve phia dau hang
+                    if (right_c - c) > 2:
+                        logger.info(f"[BO QUA] Hang {r}: Col {c} cach cay dau tien (Col {right_c}) qua xa ({right_c - c} buoc) -> Bo qua ngoai suy dau hang.")
+                        continue
                     r1 = right_c
                     r2 = min([cc for cc in range(r1 + 1, max_col + 1) if (r, cc) in cell_map], default=None)
                     if r2 is not None:
@@ -353,6 +450,10 @@ def assign_grid_and_detect_missing(
                         logger.info(f"[KHUYẾT ĐẦU HÀNG] Hàng {r}: Cột {c} bị thiếu. Cây đầu tiên là Cột {r1} (bước nhảy ~{step_dist:.2f}m). -> Ngoại suy KHUYẾT CÂY tại Hàng {r} - Cột {c}")
                 elif left_c is not None:
                     # D. Ngoại suy từ phía bên trái (cây ở cuối hàng)
+                    # Gioi han: chi ngoai suy toi da 2 cay ve phia cuoi hang
+                    if (c - left_c) > 2:
+                        logger.info(f"[BO QUA] Hang {r}: Col {c} cach cay cuoi cung (Col {left_c}) qua xa ({c - left_c} buoc) -> Bo qua ngoai suy cuoi hang.")
+                        continue
                     l1 = left_c
                     l2 = max([cc for cc in range(1, l1) if (r, cc) in cell_map], default=None)
                     if l2 is not None:
@@ -364,16 +465,42 @@ def assign_grid_and_detect_missing(
                         exp_lon = lon_1 + (c - l1) * step_lon
                         logger.info(f"[KHUYẾT CUỐI HÀNG] Hàng {r}: Cột {c} bị thiếu. -> Ngoại suy KHUYẾT CÂY tại Hàng {r} - Cột {c}")
 
-                # Fallback: dùng phép chiếu ma trận lưới
+                # Fallback: chiếu theo luống của chính hàng r từ cây gần nhất
                 if exp_lat is None or exp_lon is None:
-                    exp_pt = origin_pt + (c - 1) * col_spacing * v_along + (r - 1) * row_spacing * v_across
-                    exp_lat, exp_lon = meters_to_latlon(float(exp_pt[0]), float(exp_pt[1]), ref_lat, ref_lon)
+                    row_existing_cols = [cc for cc in range(1, max_col + 1) if (r, cc) in cell_map]
+                    if row_existing_cols:
+                        nearest_c = min(row_existing_cols, key=lambda cc: abs(cc - c))
+                        lat_ref, lon_ref = cell_map[(r, nearest_c)]
+                        xref, yref = latlon_to_meters(lat_ref, lon_ref, ref_lat, ref_lon)
+                        exp_x = xref + (c - nearest_c) * col_spacing * v_along[0]
+                        exp_y = yref + (c - nearest_c) * col_spacing * v_along[1]
+                        exp_lat, exp_lon = meters_to_latlon(exp_x, exp_y, ref_lat, ref_lon)
+                    else:
+                        exp_pt = origin_pt + (c - 1) * col_spacing * v_along + (r - 1) * row_spacing * v_across
+                        exp_lat, exp_lon = meters_to_latlon(float(exp_pt[0]), float(exp_pt[1]), ref_lat, ref_lon)
 
                 # Kiểm tra ranh giới
                 if polygon_geojson and not is_inside_polygon(exp_lat, exp_lon, polygon_geojson):
                     logger.info(f"Ô khuyết Hàng {r} - Cột {c} nằm ngoài polygon ranh giới -> Bỏ qua.")
                     continue
 
+                # Spatial Collision Check: kiem tra khoang cach voi cay xanh va cay khuyet khac
+                exp_x, exp_y = latlon_to_meters(exp_lat, exp_lon, ref_lat, ref_lon)
+                too_close = False
+                for ax, ay in active_positions_m:
+                    if math.hypot(exp_x - ax, exp_y - ay) < min_safe_dist:
+                        too_close = True
+                        break
+                if not too_close:
+                    for mx, my in missing_positions_m:
+                        if math.hypot(exp_x - mx, exp_y - my) < min_safe_dist:
+                            too_close = True
+                            break
+                if too_close:
+                    logger.info(f"[BO QUA] O khuyet Hang {r} - Col {c} qua gan cay hien huu (< {min_safe_dist:.2f}m) -> Bo qua.")
+                    continue
+
+                missing_positions_m.append((exp_x, exp_y))
                 missing_trees.append({
                     "id": f"missing_r{r}_c{c}",
                     "row": r,
