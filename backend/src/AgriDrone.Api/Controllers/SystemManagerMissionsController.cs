@@ -31,6 +31,7 @@ public sealed class SystemManagerMissionsController(
     ISystemManagerAccessService managerAccessService,
     IMissionPlantGpsStore plantGpsStore,
     IMissionPlantGpsPublisher plantGpsPublisher,
+    IMissionPlantHealthPublisher plantHealthPublisher,
     IExecutionContext executionContext) : ControllerBase
 {
     /// <summary>Lấy danh sách cây CSV đã lưu cho mission.</summary>
@@ -583,6 +584,68 @@ public sealed class SystemManagerMissionsController(
                     ["payload"] = result.Errors?.ToArray() ?? ["Payload is invalid."]
                 }),
             _ => Results.Problem("Unable to queue the plant GPS message.")
+        };
+    }
+
+    /// <summary>Đóng gói kết quả nhận diện bệnh của mission và xếp message PlantHealthAnalysisReadyV4 vào Outbox.</summary>
+    /// <remarks>
+    /// Sau khi hoàn thành phân tích AI cho mission, SystemManager gọi endpoint này để phát event
+    /// PlantHealthAnalysisReadyV4 sang RabbitMQ cho BE1 tiếp nhận và lưu vào 5 bảng nháp.
+    /// Dùng Idempotency-Key trong header để đảm bảo an toàn, không bắn trùng.
+    /// </remarks>
+    [HttpPost("plant-health/publish")]
+    public async Task<IResult> PublishPlantHealth(
+        [FromRoute] Guid farmId,
+        [FromRoute] Guid missionId,
+        [FromHeader(Name = "Idempotency-Key")] Guid? idempotencyKey,
+        CancellationToken cancellationToken)
+    {
+        if (idempotencyKey is not Guid messageId || messageId == Guid.Empty)
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["Idempotency-Key"] = ["A non-empty GUID Idempotency-Key is required."]
+            });
+        }
+
+        var access = await managerAccessService.ResolveFarmAccessAsync(
+            farmId, cancellationToken);
+        if (!access.IsAllowed || access.TenantId is not Guid tenantId ||
+            access.FarmId != farmId)
+            return Results.Forbid();
+
+        if (executionContext.ActorId is not Guid actorId ||
+            executionContext.CorrelationId == Guid.Empty)
+            return Results.Unauthorized();
+
+        var result = await plantHealthPublisher.PublishAsync(
+            tenantId,
+            farmId,
+            missionId,
+            actorId,
+            executionContext.CorrelationId,
+            messageId,
+            cancellationToken);
+
+        return result.Status switch
+        {
+            MissionPlantHealthPublishStatus.Queued => Results.Ok(new
+            {
+                missionId,
+                messageId = result.MessageId,
+                status = "QUEUED"
+            }),
+            MissionPlantHealthPublishStatus.NotFound => Results.NotFound(),
+            MissionPlantHealthPublishStatus.Conflict => Results.Conflict(new
+            {
+                errors = result.Errors
+            }),
+            MissionPlantHealthPublishStatus.Invalid => Results.ValidationProblem(
+                new Dictionary<string, string[]>
+                {
+                    ["payload"] = result.Errors?.ToArray() ?? ["Payload is invalid."]
+                }),
+            _ => Results.Problem("Unable to queue the plant health message.")
         };
     }
 

@@ -85,6 +85,7 @@ public static class DependencyInjection
                     serviceProvider.GetRequiredService<MissionsDbContext>());
         services.AddScoped<IMissionPlantGpsStore, MissionPlantGpsStore>();
         services.AddScoped<IMissionPlantGpsPublisher, MissionPlantGpsPublisher>();
+        services.AddScoped<IMissionPlantHealthPublisher, MissionPlantHealthPublisher>();
         services.AddScoped<IMissionStartedOutbox, MissionStartedOutbox>();
 
         services.AddScoped<

@@ -110,6 +110,13 @@ public static class IntegrationEventDescriptors
             IntegrationSchemaVersions.V3,
             RequiresActorId: false);
 
+    public static IntegrationEventDescriptor<PlantHealthAnalysisReadyV4>
+        PlantHealthAnalysisReadyV4 { get; } =
+        new(
+            IntegrationEventTypes.PlantHealthAnalysisReadyV4,
+            IntegrationSchemaVersions.V4,
+            RequiresActorId: false);
+
     public static IntegrationEventDescriptor<SurveyRequestApprovedV1>
         SurveyRequestApprovedV1 { get; } =
         new(

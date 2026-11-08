@@ -1,0 +1,94 @@
+{
+  "messageId": "c2b22222-3333-4444-5555-666666666666",
+  "correlationId": "b1a11111-2222-3333-4444-555555555555",
+  "tenantId": "e041d8e1-5e82-45a7-96a1-94d3a04c1070",
+  "actorId": "11111111-2222-3333-4444-555555555555",
+  "occurredAt": "2026-11-08T11:00:00Z",
+  "schemaVersion": 4,
+  "eventType": "health.analysis-ready.v4",
+  "payload": {
+    "causationId": "b1a11111-2222-3333-4444-555555555555",
+    "handoffId": "c2b22222-3333-4444-5555-666666666666",
+    "surveyOrderId": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+    "missionId": "4a3d8212-3f14-419b-a01f-0a0684f09191",
+    "farmId": "f041d8e1-5e82-45a7-96a1-94d3a04c1071",
+    "farmBoundaryVersionId": "d1e2f3a4-b5c6-7d8e-9f0a-1b2c3d4e5f6a",
+    "farmBaseMapVersionId": "e2f3a4b5-c6d7-8e9f-0a1b-2c3d4e5f6a7b",
+    "jobId": "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
+    "producedAt": "2026-11-08T11:00:00Z",
+    "resultNature": "PRELIMINARY_SUSPECTED",
+    "teamLabelLimitation": "SUNBURN, BROWN_SPOT, ANTHRACNOSE",
+    "provenance": {
+      "datasetId": "dragonfruit_health_v1",
+      "datasetVersion": "v1.0",
+      "annotationRuleVersion": "v1.0",
+      "modelVersionId": "9b1c2d3e-4f5a-6b7c-8d9e-0f1a2b3c4d5e",
+      "modelVersion": "best_disease_v1",
+      "thresholdProfileVersion": "default_0.25",
+      "boundaryPolicyVersion": "strict_v1"
+    },
+    "findings": [
+      {
+        "findingId": "8f3e2d1c-4b5a-6978-bcde-f0123456789a",
+        "findingVersion": 1,
+        "plantId": "e93f7cb1-7440-42cf-9c60-8449c25ff8f0",
+        "mappingCandidateId": null,
+        "position": {
+          "type": "Point",
+          "coordinates": [106.123456, 10.123456]
+        },
+        "observedAt": "2026-11-08T10:55:00Z",
+        "suspectedClassCode": "ANTHRACNOSE",
+        "classificationNature": "SUSPECTED",
+        "confidence": 0.8750,
+        "uncertainty": "NONE",
+        "limitations": [
+          "DRONE_AERIAL_VIEW_ONLY"
+        ],
+        "evidenceMedia": [
+          {
+            "mediaAssetId": "11111111-2222-3333-4444-555555555555",
+            "role": "crop_thumbnail"
+          }
+        ]
+      }
+    ],
+    "boundaryExceptions": [],
+    "diseaseZones": [
+      {
+        "sourceProposalId": "mission_4a3d82123f14419ba01f0a0684f09191_high_density_1",
+        "geometry": {
+          "type": "Polygon",
+          "coordinates": [
+            [
+              [106.1234, 10.1234],
+              [106.1235, 10.1234],
+              [106.1235, 10.1235],
+              [106.1234, 10.1235],
+              [106.1234, 10.1234]
+            ]
+          ]
+        },
+        "suspectedClassCode": "ANTHRACNOSE",
+        "membershipVersion": 1,
+        "memberships": [
+          {
+            "mappingCandidateId": null,
+            "plantId": "e93f7cb1-7440-42cf-9c60-8449c25ff8f0",
+            "confidence": 1.0
+          }
+        ],
+        "guidanceCandidates": [
+          {
+            "guidanceId": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+            "code": "ISOLATION_AND_SPRAY",
+            "versionNumber": 1,
+            "sourceReference": "Quy trình xử lý Thán thư diện rộng"
+          }
+        ],
+        "evidenceMedia": []
+      }
+    ]
+  }
+}
+
