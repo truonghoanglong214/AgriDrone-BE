@@ -1,4 +1,6 @@
 using System.Text.Json;
+using AgriDrone.IntegrationContracts.Health;
+using AgriDrone.Modules.Plants.Domain.Health;
 using AgriDrone.Modules.Plants.Domain.Recommendations;
 using AgriDrone.SharedKernel.Domain;
 using NetTopologySuite.Geometries;
@@ -20,7 +22,17 @@ public sealed class DiseaseZone : AggregateRoot
     public Guid FarmBoundaryVersionId { get; private set; }
     public Guid FarmBaseMapVersionId { get; private set; }
     public Guid PlantConditionId { get; private set; }
-    public Guid HealthLevelId { get; private set; }
+    public Guid? HealthLevelId { get; private set; }
+    public int SourceSchemaVersion { get; private set; } = 3;
+    public Guid? ImportBatchId { get; private set; }
+    public string? SuspectedClassCode { get; private set; }
+    public Guid? SelectedSourcedGuidanceId { get; private set; }
+    public JsonDocument? GuidanceSuggestions { get; private set; }
+    public bool HasBlockingItems { get; private set; }
+    public Guid? CurrentHealthReviewId { get; private set; }
+    public string? ReviewedSuspectedClassCode { get; private set; }
+    public Guid? ReviewedPlantConditionId { get; private set; }
+    public string? GuidanceDecision { get; private set; }
     public Guid SourceHandoffId { get; private set; }
     public Guid? SourceJobId { get; private set; }
     public string SourceProposalId { get; private set; } = null!;
@@ -45,6 +57,67 @@ public sealed class DiseaseZone : AggregateRoot
     public DateTimeOffset CreatedAt { get; private set; }
     public DateTimeOffset UpdatedAt { get; private set; }
     public IReadOnlyCollection<DiseaseZonePlantMembership> Memberships => _memberships;
+
+    public void ProjectHealthReview(PlantHealthReviewEntry review, PlantHealthReviewEntry? guidance,
+        bool valid, DateTimeOffset changedAt)
+    {
+        ArgumentNullException.ThrowIfNull(review);
+        if (SourceSchemaVersion != 4 || review.Kind != HealthReviewKind.Zone || review.SubjectId != Id ||
+            review.BatchId != ImportBatchId || review.TenantId != TenantId || review.FarmId != FarmId ||
+            Status is DiseaseZoneStatus.Published or DiseaseZoneStatus.Superseded)
+            throw new InvalidOperationException("Only matching pending V4 zone reviews can be projected.");
+        var snapshot = review.ReadSnapshot();
+        var guidanceSnapshot = guidance?.ReadSnapshot();
+        if (guidance is not null && (guidance.Kind != HealthReviewKind.Guidance || guidance.SubjectId != Id ||
+            guidance.BatchId != ImportBatchId || guidanceSnapshot!.BoundReviewId != review.Id))
+            throw new InvalidOperationException("Guidance review does not belong to this zone revision.");
+        DomainGuard.Utc(changedAt);
+        CurrentHealthReviewId = review.Id; ReviewedSuspectedClassCode = snapshot.ClassCode;
+        ReviewedPlantConditionId = snapshot.ConditionId; GuidanceDecision = guidance?.Decision.ToString();
+        SelectedSourcedGuidanceId = guidanceSnapshot?.Guidance?.Id;
+        ReviewedGeometry = null; HasBlockingItems = !valid;
+        ReviewedBy = review.ReviewedBy; ReviewedAt = review.ReviewedAt; ReviewReason = review.Reason;
+        ReviewEvidence = JsonDocument.Parse(review.Snapshot.RootElement.GetRawText());
+        Status = review.Decision == HealthReviewDecision.Reject ? DiseaseZoneStatus.Rejected : DiseaseZoneStatus.Proposed;
+        if (valid && review.Decision is HealthReviewDecision.Approve or HealthReviewDecision.Correct)
+        {
+            if (snapshot.Geometry is null || snapshot.Members is not { Count: > 0 } ||
+                guidance?.Decision is not (HealthReviewDecision.Select or HealthReviewDecision.RejectAll))
+                throw new InvalidOperationException("Reviewed V4 zones require geometry, memberships and a final guidance decision.");
+            var rings = snapshot.Geometry.Select(r => new LinearRing(r.Select(p => new Coordinate(p[0], p[1])).ToArray()) { SRID = 4326 }).ToArray();
+            ReviewedGeometry = DiseaseZoneGeometryGuard.ValidPolygon(new Polygon(rings[0], rings.Skip(1).ToArray()) { SRID = 4326 }, nameof(review));
+            CurrentMembershipVersion = checked(Math.Max(CurrentMembershipVersion, _memberships.Select(m => m.MembershipVersion).DefaultIfEmpty(1).Max()) + 1);
+            AddMembershipSnapshot(snapshot.Members.Select(m => new DiseaseZoneMembershipCandidate(m.PlantId, null)).ToArray(),
+                CurrentMembershipVersion, DiseaseZoneMembershipKind.Reviewed, changedAt);
+            Status = DiseaseZoneStatus.Reviewed;
+        }
+        UpdatedAt = changedAt;
+    }
+
+    public static DiseaseZone CreatePendingHealthProposal(Guid tenantId, Guid farmId, Guid orderId,
+        Guid resultId, Guid batchId, Guid boundaryId, Guid baseMapId, Guid handoffId, Guid jobId,
+        Guid conditionId, ProposedDiseaseZoneV4 source, Polygon geometry, bool hasBlockingItems, DateTimeOffset createdAt)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        DomainGuard.Utc(createdAt);
+        var zone = new DiseaseZone
+        {
+            Id = Guid.CreateVersion7(), ZoneKey = Guid.CreateVersion7(), VersionNumber = 1,
+            TenantId = tenantId, FarmId = farmId, SurveyOrderId = orderId, SurveyResultId = resultId,
+            FarmBoundaryVersionId = boundaryId, FarmBaseMapVersionId = baseMapId,
+            PlantConditionId = conditionId, SourceSchemaVersion = 4, ImportBatchId = batchId,
+            SuspectedClassCode = source.SuspectedClassCode, SourceHandoffId = handoffId, SourceJobId = jobId,
+            SourceProposalId = source.SourceProposalId, ProposedGeometry = DiseaseZoneGeometryGuard.ValidPolygon(geometry, nameof(geometry)),
+            RecommendationCandidates = JsonDocument.Parse("[]"),
+            GuidanceSuggestions = JsonSerializer.SerializeToDocument(source.GuidanceCandidates),
+            ProposalEvidence = JsonSerializer.SerializeToDocument(source), HasBlockingItems = hasBlockingItems,
+            CurrentMembershipVersion = source.MembershipVersion, Status = DiseaseZoneStatus.Proposed,
+            CreatedAt = createdAt, UpdatedAt = createdAt
+        };
+        foreach (var member in source.Memberships)
+            zone._memberships.Add(DiseaseZonePlantMembership.CreatePending(zone.Id, farmId, member, source.MembershipVersion, createdAt));
+        return zone;
+    }
 
     public static DiseaseZone CreateProposal(DiseaseZoneProposal proposal)
     {
@@ -124,6 +197,7 @@ public sealed class DiseaseZone : AggregateRoot
         string reason,
         JsonDocument evidence)
     {
+        if (SourceSchemaVersion == 4) throw new InvalidOperationException("V4 zones require sourced-guidance review, not legacy severity review.");
         EnsureStatus(DiseaseZoneStatus.Proposed);
         ValidateDecisionActor(reviewedBy, reviewedAt, reason, evidence);
 
@@ -135,7 +209,7 @@ public sealed class DiseaseZone : AggregateRoot
         }
 
         if (selectedRecommendation is not null &&
-            !selectedRecommendation.IsApplicable(PlantConditionId, HealthLevelId, reviewedAt))
+            !selectedRecommendation.IsApplicable(PlantConditionId, HealthLevelId!.Value, reviewedAt))
         {
             throw new DiseaseZoneDomainException(
                 DiseaseZoneDomainErrorCodes.RecommendationNotApplicable,
@@ -168,6 +242,7 @@ public sealed class DiseaseZone : AggregateRoot
         string reason,
         JsonDocument evidence)
     {
+        if (SourceSchemaVersion == 4) throw new InvalidOperationException("V4 zones use the human review workflow.");
         EnsureStatus(DiseaseZoneStatus.Proposed);
         ValidateDecisionActor(reviewedBy, reviewedAt, reason, evidence);
 

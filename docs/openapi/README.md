@@ -1,5 +1,11 @@
 # OpenAPI compatibility snapshots
 
+Step 7 runtime snapshot (2026-11-09):
+[`plant-health-step7-manager.json`](plant-health-step7-manager.json) contains the
+15 live Manager Plant Health paths and 29 referenced schemas/security definition,
+exported from the running local Swagger document after migrations 7A–7E.
+Runtime/Final Test scope: [Step 7 closure](../operations/be1-step7-implementation-closure-report.md).
+
 `be-plan-phase0.openapi.json` lÃ  snapshot cá»§a API legacy trÆ°á»›c khi Phase 1 Ä‘Ã³ng cÃ¡c entry point sai nghiá»‡p vá»¥. Snapshot Ä‘Æ°á»£c láº¥y tá»« `GET /swagger/v1/swagger.json` sau khi toÃ n bá»™ migration hiá»‡n táº¡i Ã¡p dá»¥ng thÃ nh cÃ´ng trÃªn PostgreSQL test.
 
 `be-plan-phase1.openapi.json` lÃ  contract sau cutover Phase 1. CÃ¡c route legacy váº«n hiá»‡n diá»‡n Ä‘á»ƒ client nháº­n há»£p Ä‘á»“ng chuyá»ƒn tiáº¿p á»•n Ä‘á»‹nh, Ä‘Æ°á»£c Ä‘Ã¡nh dáº¥u `deprecated: true` vÃ  khai bÃ¡o response `410`. Khi `LegacyFeatures:EnableDeprecatedEndpoints=false` (máº·c Ä‘á»‹nh), middleware tráº£ `LegacyFlow.Disabled` trÆ°á»›c khi handler cháº¡y.

@@ -2360,6 +2360,17 @@ Chưa viết/chạy trong Step 6. Toàn bộ backlog kiểm thử của Step 6 �
 
 ## 15. Step 7 — UC09 Plant Health review và published preliminary result (Phase 12)
 
+**Closure 2026-11-09:** toàn bộ implementation BE1 7A–7E và rollout local đã hoàn tất:
+`CodeComplete — LocalRuntimeReady — AwaitingFinalTest`.
+Migration 7A–7E đã apply trên database AgriDrone local `localhost:5434/agridrone`;
+API `http://127.0.0.1:5080` live/ready Healthy, ba consumer Step 7 đang hoạt động.
+Evidence, backup/restart và phạm vi còn deferred tại
+[`Step 7 closure report`](../docs/operations/be1-step7-implementation-closure-report.md).
+Các ghi chú "chưa apply/chưa chạy runtime" theo từng phase bên dưới là lịch sử tại
+implementation checkpoint; bản closure này là trạng thái hiện tại. Không viết/chạy
+test hoặc business E2E theo yêu cầu; Final Test và owner portal BE2 Step 9/12 vẫn là
+acceptance gates, chưa đổi cross-system Step 7 thành Done.
+
 ### 15.0. Chia phase và cách triển khai Step 7
 
 > **Phân công trách nhiệm:**
@@ -2477,6 +2488,23 @@ Thứ tự trong một transaction:
 
 #### Phase 7A — Import health observations (Chuyển giao BE2 triển khai)
 
+Kế hoạch triển khai chi tiết theo source audit 2026-11-09:
+[`docs/plans/be1-be2-phase7a-implementation-plan.md`](../docs/plans/be1-be2-phase7a-implementation-plan.md).
+Thực hiện theo PR 7A.0–7A.5 để đạt `CodeComplete — AwaitingFinalTest`; chỉ ghi
+`Done` sau PR 7A.6 trong Final Test Phase. Foundation dùng chung PR 7.0–7.1,
+không tạo thêm bộ target finding/schema trùng lặp.
+
+**Implementation status 2026-11-09:** Phase 7A `CodeComplete — AwaitingFinalTest`.
+Consumer/typed import/source snapshots/expand migration đã có; evidence và runtime
+prerequisites tại [`completion report`](../docs/operations/be1-be2-phase7a-completion-report.md).
+Chưa apply database, chưa chạy acceptance tests và chưa đổi toàn Step 7 sang Done.
+
+BE2 sở hữu transport/Inbox coordination; BE1 cung cấp typed pending-import port
+và target domain/schema. Import lần đầu phải tạo result `PendingReview` và gọi
+`SurveyOrder.MarkAnalysisReady` (`InProgress → PendingReview`) trong cùng transaction
+với Inbox/pending/audit. Reprocess lưu batch/finding revision, giữ một result/Order
+theo unique hiện tại; không complete Order/Mission hoặc phát publication outcome.
+
 Tạo V4 consumer và application feature riêng; V2/V3 chỉ compatibility/drain. Handler phải:
 
 1. Validate event/service là Plant Health.
@@ -2491,6 +2519,15 @@ Tạo V4 consumer và application feature riêng; V2/V3 chỉ compatibility/drai
 Nếu reprocess cùng source với model/output version mới, tạo version mới và liên kết supersedes; không overwrite AI output cũ.
 
 #### Phase 7B — Human review
+
+Kế hoạch chi tiết theo source audit 2026-11-09:
+[`docs/plans/be1-phase7b-implementation-plan.md`](../docs/plans/be1-phase7b-implementation-plan.md).
+**Implementation status 2026-11-09:** `CodeComplete — AwaitingFinalTest` cho 7B.0–7B.6;
+evidence tại [`7B completion report`](../docs/operations/be1-phase7b-completion-report.md).
+Theo yêu cầu người dùng, không viết hoặc chạy test trong 7B; toàn bộ ở 7B.7/Final Test.
+Review history/current heads gắn active batch + source revision; không sửa AI original
+hoặc dùng ingestion `BlockingCount` làm live approval gate. 7B kết thúc ở reviewed
+candidate/summary, Order và SurveyResult vẫn `PendingReview` cho 7C xử lý riêng.
 
 Tách use case đọc queue, review một finding và review batch. Phân quyền luôn kiểm tra current primary assignment (active + available).
 
@@ -2507,9 +2544,24 @@ Domain validation phải giới hạn class theo configured team-labelled set v�
 
 #### Phase 7C — Approve result candidate
 
+**Implementation status 2026-11-09:** `CodeComplete — AwaitingFinalTest`.
+Evidence tại [`7C completion report`](../docs/operations/be1-phase7c-completion-report.md),
+[`ADR 0015`](../docs/adr/0015-plant-health-result-approval.md) và
+[`approval API contract`](../docs/contracts/plant-health-result-approval.md).
+Approval khóa exact review set/provenance trong snapshot bất biến và audit/receipt
+cùng transaction; Order vẫn PendingReview. Không viết/chạy test trong 7C, giữ ở phase cuối.
+
 Feature `ApprovePlantHealthSurveyResult` kiểm tra mọi required finding, Disease Zone, boundary exception và guidance selection đã có final review decision, không còn unresolved blocking item và order đúng state. Handler tạo/transition `SurveyResult` sang Approved với `ResultNature = Preliminary` nhưng vẫn chưa lộ cho TenantOwner và chưa cập nhật latest-reviewed state.
 
 #### Phase 7D — Atomic publication
+
+**Implementation status 2026-11-09:** `CodeComplete — AwaitingFinalTest`.
+Evidence tại [`7D completion report`](../docs/operations/be1-phase7d-completion-report.md),
+[`ADR 0016`](../docs/adr/0016-plant-health-atomic-publication.md) và
+[`publication API/event contract`](../docs/contracts/plant-health-result-publication.md).
+Publication UoW lưu immutable payload/latest/zone/result/Completed Order/audit/receipt
+và hai Outbox intent cùng commit. Mission completion, notification delivery và owner
+read-model consumer còn ở 7E/BE2. Không viết/chạy test; chưa apply migration.
 
 Implement `ISurveyResultPublicationUnitOfWork` cho Plant Health. Một commit bao gồm:
 
@@ -2524,6 +2576,15 @@ Implement `ISurveyResultPublicationUnitOfWork` cho Plant Health. Một commit ba
 Khi áp dụng latest-reviewed state, so sánh observed/effective time và publication/version; result cũ đến muộn không được ghi đè state mới. Tạo failure seam cho rollback scenario giữa quá trình cập nhật nhiều Plant; test được viết ở Final Test Phase.
 
 #### Phase 7E — API và output cần viết
+
+**Implementation status 2026-11-09:** `CodeComplete — AwaitingFinalTest` cho phần BE1 Step 7.
+Evidence tại [`7E completion report`](../docs/operations/be1-phase7e-completion-report.md),
+[`ADR 0017`](../docs/adr/0017-plant-health-completion-output-comparison.md) và
+[`API/consumer handoff`](../docs/contracts/plant-health-phase7e-output-handoff.md).
+Đã nối outcome consumer complete Mission sau verified publication, in-app owner
+notification consumer, published Manager read và frozen comparison resolver theo
+actual provenance. Owner portal/projection/UI vẫn thuộc BE2 Step 9/12. Không viết/
+chạy test, chưa apply migration hoặc chạy broker/HTTP flow; Step 7 chưa ghi Done.
 
 - SystemManager pending findings/Disease Zones query, review/correction actions, sourced-guidance selection, approve result và publish result.
 - BE2 dựng TenantOwner result query chỉ đọc Published từ publication event/read model; BE1 không tạo owner portal query trùng lặp.
@@ -3257,6 +3318,33 @@ Không viết lại test lịch sử 0R; bổ sung R2 tests chứng minh target 
 
 #### Step 7 — Plant Health result
 
+- [ ] 7C chỉ approve current batch/review revision sau khi re-check assignment/availability, source job/input media/provenance, all final decisions, zone/guidance bindings và PostGIS geometry; missing/stale dependency bị chặn.
+- [ ] 7C result Approved + frozen review snapshot/fingerprint + actor/time/reason/audit/receipt atomic; replay không double approve, concurrent review/reprocess/revoke/approve không bypass; chưa publish/complete hoặc owner-visible.
+- [ ] 7C zero-finding/all-rejected result có actual processed images và source evidence, không suy ra HEALTHY; approval snapshot/context bất biến và migration Down có guard.
+- [ ] 7D publish chỉ đúng frozen approval/head set và current authorization/source/evidence/maps/geometry/catalogue/guidance; expired/stale dependency và generic V4 Publish bypass bị chặn.
+- [ ] 7D history/latest/zones/result Published/Order Completed/audit/receipt/hai Outbox atomic; failure tại Plant N/cancellation/DB conflict rollback toàn bộ; concurrent same/different Order, revocation, lost-response replay và reused OperationId được kiểm chứng.
+- [ ] 7D latest ordering theo per-Plant ObservedAt → Farm publication version → result ID; older arrival giữ history nhưng không đè newer, multi-finding cùng Plant giữ đủ classes; empty/all-rejected không xóa latest hoặc suy ra HEALTHY.
+- [ ] 7D migration fresh/upgrade/preflight/Down guards, immutable published snapshots/memberships và latest value/order checks; event chỉ published preliminary data, duplicated/out-of-order delivery và 4 MiB rollback có acceptance evidence.
+- [ ] 7E Manager published read che Pending/Approved và wrong assignment; comparison frozen trong Order/payload, cùng Tenant/Farm/service, Completed/Published V4, capture/provenance tương thích và strictly earlier observations; tìm tiếp older compatible, null + reason khi không thể so sánh.
+- [ ] 7E optional comparison omitted-null giữ hash 7D history; strict malformed/unknown-field outcome rejection, persisted full-payload proof + source/Mission context mới cho complete; legacy review-state không bypass V4.
+- [ ] 7E Inbox + Mission completion/audit atomic; duplicate/different MessageId, conflicting publication, retention/replay, missing source/publication, cancellation/concurrency và DLQ/redrive không double-complete.
+- [ ] 7E current active owner resolution/revocation/transfer và notification Inbox/audit atomic; một in-app notice/publication kể cả Inbox cleanup/different MessageId; unavailable owner retry, wrong context reject, read-state update không xóa/retarget dedup evidence; không gửi pending/diagnosis/HEALTHY.
+- [ ] 7E schema fresh/upgrade/FK/context/immutability/Down guards, queue/DI/OpenAPI startup và producer → outcome → Mission complete + notification E2E; owner portal chỉ claim release khi BE2 có acceptance riêng.
+
+Backlog chi tiết Phase 7A nằm tại
+[`docs/plans/be1-be2-phase7a-implementation-plan.md`, mục 7](../docs/plans/be1-be2-phase7a-implementation-plan.md#7-backlog-final-test-và-điều-kiện-hoàn-thành).
+
+Backlog chi tiết Phase 7B nằm tại
+[`docs/plans/be1-phase7b-implementation-plan.md`, mục 8](../docs/plans/be1-phase7b-implementation-plan.md#8-final-test-backlog-và-definition-of-done).
+
+- [ ] 7B current primary Manager/revocation guard, single/batch atomic review, append-only history và operation replay đúng policy; không dùng original finding xmin làm review token duy nhất.
+- [ ] Review/reprocess race không gắn decisions sang batch mới; source original và ingestion diagnostics không bị sửa.
+- [ ] Boundary resolution, V4 zone/guidance review và dependency invalidation đúng; summary consistent theo active batch/review revision, chưa approve/publish result.
+- [ ] V4 golden envelopes và JSON boundary reject severity/diagnosis; producer dùng source identity/version/provenance thật.
+- [ ] 7A atomic Inbox/pending/audit/Order `InProgress → PendingReview`; failure giữa batch không commit dữ liệu dở, crash sau commit trước ACK replay an toàn.
+- [ ] Business dedup theo handoff/source revision; identity reused khác payload conflict; reprocess giữ history/Supersedes và một result/Order; older output không thay active revision mới hơn.
+- [ ] Unmatched/candidate-only/ambiguous/boundary exception/guidance unresolved được giữ pending/blocking; sai context/service/map snapshot bị từ chối.
+- [ ] Retry hữu hạn/DLQ/replay và migration fresh/upgrade có evidence; chỉ một consumer V4 được đăng ký, không ghi target severity từ V1–V3.
 - [ ] Pending/rejected raw finding không đổi latest-reviewed state và không lọt owner query.
 - [ ] Pending/rejected Disease Zone/sourced guidance không lọt owner query.
 - [ ] Disease Zone correction giữ original geometry/membership; outside-boundary zone không publish.

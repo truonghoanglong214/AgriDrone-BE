@@ -6,6 +6,8 @@ namespace AgriDrone.IntegrationContracts.Messaging
 {
     public static class IntegrationEventTypes
     {
+        public const string PlantHealthPreliminaryResultPublishedV1 = "health.preliminary-result-published.v1";
+        public const string PlantHealthPublicationNotificationRequestedV1 = "health.publication-notification-requested.v1";
         public const string MappingCandidatesApprovedV1 =
         "mapping.candidates-approved.v1";
 

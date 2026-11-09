@@ -9,6 +9,10 @@ namespace AgriDrone.IntegrationContracts.Messaging;
 
 public static class IntegrationEventDescriptors
 {
+    public static IntegrationEventDescriptor<PlantHealthPreliminaryResultPublishedV1> PlantHealthPreliminaryResultPublishedV1 { get; } =
+        new(IntegrationEventTypes.PlantHealthPreliminaryResultPublishedV1, IntegrationSchemaVersions.V1, RequiresActorId: true);
+    public static IntegrationEventDescriptor<PlantHealthPublicationNotificationRequestedV1> PlantHealthPublicationNotificationRequestedV1 { get; } =
+        new(IntegrationEventTypes.PlantHealthPublicationNotificationRequestedV1, IntegrationSchemaVersions.V1, RequiresActorId: true);
     public static IntegrationEventDescriptor<MappingCandidatesApprovedV1>
         MappingCandidatesApprovedV1 { get; } =
         new(

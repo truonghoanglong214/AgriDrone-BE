@@ -75,6 +75,10 @@ internal sealed class ResolveFlaggedObservationCommandHandler(
                     $"Observation {request.ObservationId} not found."));
         }
 
+        if (await PlantHealthLegacyWriteGuard.IsV4Async(dbContext, request.ObservationId, request.FarmId, cancellationToken))
+            return Result.Failure<ResolveFlaggedObservationResult>(AppError.Conflict("PlantHealth.V4ReviewRequired",
+                "Resolve this observation through its pending Plant Health result."));
+
         if (obs.ReviewStatus?.ToUpperInvariant() is not "PENDING")
         {
             return Result.Failure<ResolveFlaggedObservationResult>(
