@@ -32,13 +32,16 @@ namespace AgriDrone.Modules.Farms.Infrastructure.Repositories
         }
 
         public Task<Farm?> GetByIdAsync(Guid tenantId, Guid farmId, CancellationToken cancellationToken)
+            // Tracked on purpose: callers mutate the returned Farm (Version++ in domain methods) and
+            // later call Update(farm). With AsNoTracking, EF has no original "version" snapshot from the
+            // DB, so the concurrency-token WHERE clause ends up comparing against the already-incremented
+            // value and never matches — every write fails with a false "concurrent modification" error.
             => context.Farms
-            .AsNoTracking()
             .SingleOrDefaultAsync(farm => farm.TenantId == tenantId && farm.Id == farmId && farm.DeletedAt == null, cancellationToken);
 
         public Task<Farm?> GetByIdIncludingArchivedAsync(Guid tenantId, Guid farmId, CancellationToken cancellationToken = default)
+            // Tracked for the same reason as GetByIdAsync above (used by RestoreFarmHandler, which mutates then Updates).
             => context.Farms
-            .AsNoTracking()
             .SingleOrDefaultAsync(farm => farm.TenantId == tenantId && farm.Id == farmId && farm.IsArchived, cancellationToken);
 
         public void Update(Farm farm)
