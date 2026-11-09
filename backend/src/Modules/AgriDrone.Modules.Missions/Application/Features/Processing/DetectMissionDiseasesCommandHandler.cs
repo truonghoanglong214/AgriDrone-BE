@@ -1,5 +1,10 @@
 using System.IO;
 using System.Text.Json;
+using System.Security.Cryptography;
+using System.Text;
+using System.Globalization;
+using AgriDrone.IntegrationContracts.Health;
+using AgriDrone.Modules.Missions.Domain.Processing;
 using AgriDrone.Modules.Missions.Application.Abstractions.Missions;
 using AgriDrone.Modules.Missions.Application.Abstractions.Processing;
 using AgriDrone.Modules.Missions.Domain.Media;
@@ -22,6 +27,7 @@ internal sealed class DetectMissionDiseasesCommandHandler(
     IMetashapeService metashapeService,
     ISystemManagerAccessService managerAccessService,
     IExecutionContext executionContext,
+    TimeProvider timeProvider,
     ILogger<DetectMissionDiseasesCommandHandler> logger)
     : IRequestHandler<DetectMissionDiseasesCommand, Result<DetectMissionDiseasesResult>>
 {
@@ -32,6 +38,7 @@ internal sealed class DetectMissionDiseasesCommandHandler(
         double Longitude,
         int? RowIndex,
         int? ColumnIndex);
+    private sealed record CaptureMap(Guid BoundaryId, Guid BaseMapId);
 
     public async Task<Result<DetectMissionDiseasesResult>> Handle(
         DetectMissionDiseasesCommand request,
@@ -62,6 +69,20 @@ internal sealed class DetectMissionDiseasesCommandHandler(
                 MissionError.NotFound(request.MissionId));
         }
 
+        if (mission.Purpose != MissionPurpose.PlantHealth || mission.SurveyOrderId is null)
+            return Result.Failure<DetectMissionDiseasesResult>(AppError.Conflict("DetectDiseases.InvalidPurpose", "An Order-bound Plant Health Mission is required."));
+        var captureMap = await dbContext.Database.SqlQuery<CaptureMap>($"""
+            SELECT bm.farm_boundary_version_id AS "BoundaryId", bm.id AS "BaseMapId"
+            FROM farm.farm_base_map_versions bm
+            WHERE bm.farm_id = {request.FarmId} AND bm.tenant_id = {request.TenantId}
+              AND bm.farm_boundary_version_id = {mission.FarmBoundaryVersionId}
+              AND bm.published_at IS NOT NULL
+              AND (bm.id = {mission.SourceMapVersionId} OR EXISTS
+                (SELECT 1 FROM farm.zone_map_versions zm WHERE zm.id = {mission.SourceMapVersionId} AND zm.farm_base_map_version_id = bm.id))
+            """).SingleOrDefaultAsync(cancellationToken);
+        if (captureMap is null)
+            return Result.Failure<DetectMissionDiseasesResult>(AppError.Conflict("DetectDiseases.CaptureMapRequired", "The Mission must reference its published capture base map and approved boundary."));
+
         // Truy vấn danh sách ảnh thô đã gắn GPS của Mission
         var mediaList = await dbContext.MissionMedia
             .Include(mm => mm.Media)
@@ -88,6 +109,7 @@ internal sealed class DetectMissionDiseasesCommandHandler(
             request.MissionId,
             imageItems?.Count ?? 0);
 
+        var startedAt = timeProvider.GetUtcNow();
         var result = await metashapeService.DetectMissionDiseasesAsync(
             request.MissionId,
             request.TenantId,
@@ -103,7 +125,14 @@ internal sealed class DetectMissionDiseasesCommandHandler(
         }
 
         // Lưu kết quả nhận diện bệnh vào cơ sở dữ liệu PostgreSQL
-        await SaveDiseaseDetectionsToDatabaseAsync(request, result, mediaList, cancellationToken);
+        try
+        {
+            await SaveDiseaseDetectionsToDatabaseAsync(request, result, mediaList, captureMap, mission.EndedAt ?? mission.StartedAt, startedAt, cancellationToken);
+        }
+        catch (InvalidOperationException error)
+        {
+            return Result.Failure<DetectMissionDiseasesResult>(AppError.Conflict("DetectDiseases.ProvenanceRequired", error.Message));
+        }
 
         return Result.Success(result);
     }
@@ -112,15 +141,38 @@ internal sealed class DetectMissionDiseasesCommandHandler(
         DetectMissionDiseasesCommand request,
         DetectMissionDiseasesResult result,
         List<MissionMedia> mediaList,
+        CaptureMap captureMap,
+        DateTimeOffset? missionObservedAt,
+        DateTimeOffset startedAt,
         CancellationToken cancellationToken)
     {
-        if (result.Detections.Count == 0)
-        {
-            return;
-        }
-
         try
         {
+            if (result.Detections.Any(d => string.IsNullOrWhiteSpace(d.Id) || string.IsNullOrWhiteSpace(d.ClassName) ||
+                !double.IsFinite(d.Lat) || !double.IsFinite(d.Lon) || d.Lat is < -90 or > 90 || d.Lon is < -180 or > 180 ||
+                !double.IsFinite(d.Confidence) || d.Confidence is < 0 or > 1) ||
+                result.Detections.Select(d => (d.ImageName, d.Id)).Distinct().Count() != result.Detections.Count)
+                throw new InvalidOperationException("Detection output needs unique source IDs, valid coordinates, classes and confidence.");
+            var model = await dbContext.AiModelVersions.AsNoTracking().SingleOrDefaultAsync(m =>
+                m.IsActive && m.ModelType == AiModelType.DiseaseDetection && m.ModelName == result.ModelName, cancellationToken)
+                ?? throw new InvalidOperationException("Register the exact model name returned by the detector before publishing Plant Health output.");
+            var metrics = model.Metrics.RootElement;
+            string RequiredMetadata(string name) => metrics.TryGetProperty(name, out var field) && field.ValueKind == JsonValueKind.String &&
+                !string.IsNullOrWhiteSpace(field.GetString()) ? field.GetString()! :
+                throw new InvalidOperationException($"The model registry is missing provenance metadata '{name}'.");
+            var provenance = new PlantHealthProvenanceV4(RequiredMetadata("datasetId"), RequiredMetadata("datasetVersion"),
+                RequiredMetadata("annotationRuleVersion"), model.Id, model.Version,
+                "confidence:" + request.ConfidenceThreshold.ToString("R", CultureInfo.InvariantCulture), RequiredMetadata("boundaryPolicyVersion"));
+            await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+            _ = await dbContext.DroneMissions.FromSqlInterpolated($"SELECT * FROM mission.drone_missions WHERE id = {request.MissionId} FOR UPDATE")
+                .SingleAsync(cancellationToken);
+            var version = (await dbContext.AiProcessingJobs.Where(j => j.MissionId == request.MissionId && j.JobType == AiJobType.DiseaseDetection)
+                .Select(j => (int?)j.AttemptNumber).MaxAsync(cancellationToken) ?? 0) + 1;
+            var snapshot = new PlantHealthProcessingSnapshot(version, captureMap.BoundaryId, captureMap.BaseMapId, provenance, RequiredMetadata("teamLabelLimitation"));
+            var job = AiProcessingJob.RecordCompletedHealthRun(request.MissionId, model.Id, snapshot,
+                JsonSerializer.SerializeToDocument(new { request.ConfidenceThreshold, captureMap, MediaIds = mediaList.Select(m => m.MediaId).ToArray() }),
+                JsonSerializer.SerializeToDocument(result), startedAt, timeProvider.GetUtcNow());
+            dbContext.AiProcessingJobs.Add(job);
             // 1. Tạo bản đồ tra cứu ảnh gốc để lấy evidence_media_id
             var mediaMap = mediaList
                 .Where(mm => !string.IsNullOrEmpty(mm.Media?.StorageKey))
@@ -138,10 +190,7 @@ internal sealed class DetectMissionDiseasesCommandHandler(
                 request.FarmId)
                 .ToListAsync(cancellationToken);
 
-            // 3. Xóa các quan sát bệnh cũ của mission này để tránh trùng lặp
-            await dbContext.Database.ExecuteSqlInterpolatedAsync(
-                $"DELETE FROM mission.mission_plant_observations WHERE mission_id = {request.MissionId} AND farm_id = {request.FarmId}",
-                cancellationToken);
+            // Retain every processing run and its observations; reprocess never overwrites history.
 
             var observationsToInsert = new List<MissionPlantObservation>();
             var infectedPlantIds = new HashSet<Guid>();
@@ -193,6 +242,11 @@ internal sealed class DetectMissionDiseasesCommandHandler(
                 // Tạo metadata JSON cho vết bệnh
                 var metadataDoc = JsonDocument.Parse(JsonSerializer.Serialize(new
                 {
+                    source_finding_id = new Guid(SHA256.HashData(Encoding.UTF8.GetBytes(
+                        $"{request.MissionId:D}/{detection.ImageName}/{detection.Id}" )).AsSpan(0, 16)),
+                    observed_at = mediaList.FirstOrDefault(m => Path.GetFileName(m.Media.StorageKey) == detection.ImageName)?.CapturedAt ?? missionObservedAt
+                        ?? throw new InvalidOperationException("Capture time or Mission flight time is required for observed-time provenance."),
+                    suggested_plant_id = matchedPlantId,
                     detection_id = detection.Id,
                     class_id = detection.ClassId,
                     class_name = detection.ClassName,
@@ -211,22 +265,25 @@ internal sealed class DetectMissionDiseasesCommandHandler(
                     detectedLocation: new Point(detection.Lon, detection.Lat) { SRID = 4326 },
                     detectionConfidence: (decimal)Math.Clamp(detection.Confidence, 0.0, 1.0),
                     suggestedPlantId: matchedPlantId,
-                    resolvedPlantId: matchedPlantId,
-                    gpsDistanceM: (decimal)Math.Round(minDistance, 3),
+                    resolvedPlantId: null,
+                    gpsDistanceM: nearestPlant is null ? null : (decimal)Math.Round(minDistance, 3),
                     matchingParameters: metadataDoc,
                     evidenceMediaId: evidenceMediaId,
-                    reviewStatus: matchedPlantId.HasValue ? ObservationReviewStatus.Matched : ObservationReviewStatus.Pending,
+                    reviewStatus: ObservationReviewStatus.Pending,
+                    aiJobId: job.Id,
+                    modelVersionId: model.Id,
                     matchConfidence: matchConf,
                     selectedMatchStrategy: MatchStrategy.GpsOnly,
-                    matchingAlgorithmVersion: "best_disease_v1");
+                    matchingAlgorithmVersion: model.Version);
 
                 observationsToInsert.Add(observation);
             }
 
+            await dbContext.MissionPlantObservations.AddRangeAsync(observationsToInsert, cancellationToken);
+            await dbContext.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
             if (observationsToInsert.Count > 0)
             {
-                await dbContext.MissionPlantObservations.AddRangeAsync(observationsToInsert, cancellationToken);
-                await dbContext.SaveChangesAsync(cancellationToken);
                 logger.LogInformation(
                     "Successfully saved {Count} disease observations to database for Mission {MissionId} ({Infected} plants infected). Ready for publishing via plant-health/publish.",
                     observationsToInsert.Count, request.MissionId, infectedPlantIds.Count);
@@ -236,6 +293,7 @@ internal sealed class DetectMissionDiseasesCommandHandler(
         {
             logger.LogError(ex, "Failed to save disease detections to database for Mission {MissionId}: {Message}",
                 request.MissionId, ex.Message);
+            throw;
         }
     }
 

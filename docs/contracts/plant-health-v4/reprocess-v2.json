@@ -1,0 +1,111 @@
+{
+  "messageId": "a0000000-0000-4000-8000-000000000005",
+  "correlationId": "b0000000-0000-4000-8000-000000000001",
+  "tenantId": "10000000-0000-4000-8000-000000000001",
+  "actorId": null,
+  "occurredAt": "2026-11-09T07:30:00Z",
+  "schemaVersion": 4,
+  "eventType": "health.analysis-ready.v4",
+  "payload": {
+    "causationId": "b0000000-0000-4000-8000-000000000001",
+    "handoffId": "a0000000-0000-4000-8000-000000000005",
+    "surveyOrderId": "30000000-0000-4000-8000-000000000001",
+    "missionId": "40000000-0000-4000-8000-000000000001",
+    "farmId": "20000000-0000-4000-8000-000000000001",
+    "farmBoundaryVersionId": "50000000-0000-4000-8000-000000000001",
+    "farmBaseMapVersionId": "60000000-0000-4000-8000-000000000001",
+    "jobId": "70000000-0000-4000-8000-000000000002",
+    "producedAt": "2026-11-09T07:30:00Z",
+    "resultNature": "PRELIMINARY_SUSPECTED",
+    "teamLabelLimitation": "Team-labelled pilot observations; not an expert-confirmed diagnosis.",
+    "provenance": {
+      "datasetId": "dragonfruit_pilot",
+      "datasetVersion": "AGRIDRONE_PILOT_DATASET_V1",
+      "annotationRuleVersion": "AGRIDRONE_ANNOTATION_RULES_V1",
+      "modelVersionId": "c0000000-0000-4000-8000-000000000001",
+      "modelVersion": "pilot-v1",
+      "thresholdProfileVersion": "confidence:0.25",
+      "boundaryPolicyVersion": "TEAM_BOUNDARY_V1"
+    },
+    "findings": [
+      {
+        "findingId": "80000000-0000-4000-8000-000000000001",
+        "findingVersion": 2,
+        "plantId": "90000000-0000-4000-8000-000000000001",
+        "mappingCandidateId": null,
+        "position": {
+          "type": "Point",
+          "coordinates": [
+            106.12345,
+            10.12345
+          ]
+        },
+        "observedAt": "2026-11-09T07:00:00Z",
+        "suspectedClassCode": "ANTHRACNOSE",
+        "classificationNature": "SUSPECTED",
+        "confidence": 0.91,
+        "uncertainty": "NONE",
+        "limitations": [
+          "DRONE_AERIAL_VIEW_ONLY"
+        ],
+        "evidenceMedia": [
+          {
+            "mediaAssetId": "d0000000-0000-4000-8000-000000000001",
+            "role": "source_image"
+          }
+        ]
+      }
+    ],
+    "boundaryExceptions": [],
+    "diseaseZones": [
+      {
+        "sourceProposalId": "zone-1",
+        "geometry": {
+          "type": "Polygon",
+          "coordinates": [
+            [
+              [
+                106.1234,
+                10.1234
+              ],
+              [
+                106.1235,
+                10.1234
+              ],
+              [
+                106.1235,
+                10.1235
+              ],
+              [
+                106.1234,
+                10.1235
+              ],
+              [
+                106.1234,
+                10.1234
+              ]
+            ]
+          ]
+        },
+        "suspectedClassCode": "ANTHRACNOSE",
+        "membershipVersion": 2,
+        "memberships": [
+          {
+            "mappingCandidateId": null,
+            "plantId": "90000000-0000-4000-8000-000000000001",
+            "confidence": 0.9
+          }
+        ],
+        "guidanceCandidates": [
+          {
+            "guidanceId": "e0000000-0000-4000-8000-000000000001",
+            "code": "ANTHRACNOSE_FIELD_GUIDANCE",
+            "versionNumber": 1,
+            "sourceReference": "fixture://guidance/anthracnose/v1"
+          }
+        ],
+        "evidenceMedia": []
+      }
+    ]
+  }
+}
