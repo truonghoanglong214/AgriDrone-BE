@@ -76,6 +76,23 @@ internal sealed class GetFarmPlantHealthMapQueryHandler(
     {
         try
         {
+            var latestResultWithdrawn = await dbContext.Database.SqlQueryRaw<bool>(
+                @"SELECT (invalidated_at IS NOT NULL) AS ""Value""
+                  FROM survey.survey_results
+                  WHERE farm_id = {0}
+                    AND service_type = 'PLANT_HEALTH'::system.survey_service_type
+                    AND status = 'PUBLISHED'::system.survey_result_status
+                  ORDER BY published_at DESC
+                  LIMIT 1",
+                request.FarmId)
+                .FirstOrDefaultAsync(cancellationToken);
+            if (latestResultWithdrawn)
+            {
+                return Result.Failure<FarmPlantHealthMapResult>(AppError.Conflict(
+                    "FarmPlantHealthMap.ResultWithdrawn",
+                    "The published Plant Health result was withdrawn after a verified owner report."));
+            }
+
             // 1. Lấy thông tin bản đồ nền đã công bố của Farm
             var baseMapRow = await dbContext.Database.SqlQueryRaw<BaseMapRow>(
                 @"SELECT id AS ""Id"", tenant_id AS ""TenantId"", source_mission_id AS ""SourceMissionId"",
@@ -322,6 +339,9 @@ internal sealed class GetFarmPlantHealthMapQueryHandler(
                       FROM plant.disease_zones z
                       LEFT JOIN plant.plant_conditions pc ON pc.id = z.plant_condition_id
                       WHERE z.farm_id = {0} AND z.status != 'REJECTED' AND z.status != 'SUPERSEDED'
+                        AND NOT EXISTS (
+                          SELECT 1 FROM survey.survey_results sr
+                          WHERE sr.id = z.survey_result_id AND sr.invalidated_at IS NOT NULL)
                       ORDER BY z.created_at DESC",
                     request.FarmId)
                     .ToListAsync(cancellationToken);

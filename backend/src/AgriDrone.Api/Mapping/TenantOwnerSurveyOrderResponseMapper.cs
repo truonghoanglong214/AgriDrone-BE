@@ -21,7 +21,8 @@ internal static class TenantOwnerSurveyOrderResponseMapper
         item.Currency,
         item.CurrentAppointment is null
             ? null
-            : MapCurrentAppointment(item.CurrentAppointment));
+            : MapCurrentAppointment(item.CurrentAppointment),
+        ToSnakeCaseUpper(item.ServiceType.ToString()));
 
     public static PagedResult<TenantOwnerSurveyOrderApiResponse> ToResponse(
         PagedResult<TenantOwnerSurveyOrderItem> page) => new(

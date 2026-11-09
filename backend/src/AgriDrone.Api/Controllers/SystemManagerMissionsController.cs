@@ -590,7 +590,7 @@ public sealed class SystemManagerMissionsController(
     /// <summary>Đóng gói kết quả nhận diện bệnh của mission và xếp message PlantHealthAnalysisReadyV4 vào Outbox.</summary>
     /// <remarks>
     /// Sau khi hoàn thành phân tích AI cho mission, SystemManager gọi endpoint này để phát event
-    /// PlantHealthAnalysisReadyV4 sang RabbitMQ cho BE1 tiếp nhận và lưu vào 5 bảng nháp.
+    /// PlantHealthAnalysisReadyV4 sang RabbitMQ để lưu dữ liệu pending cho Manager review.
     /// Dùng Idempotency-Key trong header để đảm bảo an toàn, không bắn trùng.
     /// </remarks>
     [HttpPost("plant-health/publish")]
