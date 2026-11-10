@@ -10,7 +10,8 @@ public sealed record BaseMapVersionMetricDto(
     double? DensityPolesPerHa,
     double PlantSpacingM,
     double RowSpacingM,
-    double GridBearingDeg);
+    double GridBearingDeg,
+    int ManualChangesCount = 0);
 
 public sealed record FarmBaseMapAnalyticsResponse(
     Guid FarmId,

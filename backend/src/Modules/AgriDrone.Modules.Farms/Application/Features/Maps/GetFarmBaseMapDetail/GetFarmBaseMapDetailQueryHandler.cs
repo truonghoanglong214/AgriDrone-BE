@@ -33,6 +33,24 @@ internal sealed class GetFarmBaseMapDetailQueryHandler(
         DateTimeOffset? StartedAt,
         DateTimeOffset? ScheduledAt);
 
+    private sealed record ManualChangeEventRow(
+        Guid Id,
+        Guid? PlantId,
+        string ChangeType,
+        string Source,
+        int? OldRow,
+        int? NewRow,
+        int? OldCol,
+        int? NewCol,
+        double? OldLat,
+        double? OldLon,
+        double? NewLat,
+        double? NewLon,
+        string? OldLifecycleStatus,
+        string? NewLifecycleStatus,
+        string? Notes,
+        DateTimeOffset CreatedAt);
+
     public async Task<Result<FarmBaseMapDetailResponse>> Handle(
         GetFarmBaseMapDetailQuery request,
         CancellationToken cancellationToken)
@@ -177,9 +195,46 @@ internal sealed class GetFarmBaseMapDetailQueryHandler(
                 .FirstOrDefaultAsync(cancellationToken);
         }
 
+        // 5. Lấy các sự kiện biến động thủ công từ bảng phụ plant_change_events
+        var manualChangeRows = await dbContext.Database.SqlQueryRaw<ManualChangeEventRow>(
+            @"SELECT id AS ""Id"", plant_id AS ""PlantId"",
+                     change_type::text AS ""ChangeType"", source::text AS ""Source"",
+                     old_row_index AS ""OldRow"", new_row_index AS ""NewRow"",
+                     old_column_index AS ""OldCol"", new_column_index AS ""NewCol"",
+                     ST_Y(old_location::geometry) AS ""OldLat"", ST_X(old_location::geometry) AS ""OldLon"",
+                     ST_Y(new_location::geometry) AS ""NewLat"", ST_X(new_location::geometry) AS ""NewLon"",
+                     old_lifecycle_status::text AS ""OldLifecycleStatus"",
+                     new_lifecycle_status::text AS ""NewLifecycleStatus"",
+                     notes AS ""Notes"", created_at AS ""CreatedAt""
+              FROM plant.plant_change_events
+              WHERE farm_id = {0} AND farm_base_map_version_id = {1}
+              ORDER BY created_at DESC",
+            request.FarmId, version.Id)
+            .ToListAsync(cancellationToken);
+
+        var manualChanges = manualChangeRows.Select(m => new BaseMapManualChangeDto(
+            EventId: m.Id,
+            PlantId: m.PlantId,
+            ChangeType: m.ChangeType,
+            Source: m.Source,
+            OldRow: m.OldRow,
+            NewRow: m.NewRow,
+            OldCol: m.OldCol,
+            NewCol: m.NewCol,
+            OldLat: m.OldLat,
+            OldLon: m.OldLon,
+            NewLat: m.NewLat,
+            NewLon: m.NewLon,
+            OldLifecycleStatus: m.OldLifecycleStatus,
+            NewLifecycleStatus: m.NewLifecycleStatus,
+            Notes: m.Notes,
+            CreatedAt: m.CreatedAt)).ToList();
+
         var previewUrl = version.SourceMissionId.HasValue
             ? $"http://localhost:9000/agridrone-media/tenants/{version.TenantId:D}/media/{version.SourceMissionId.Value:D}/map_preview.jpg"
             : null;
+
+        var activePoles = plantItems.Count(p => p.LifecycleStatus != "REMOVED");
 
         var response = new FarmBaseMapDetailResponse(
             VersionId: version.Id,
@@ -197,11 +252,12 @@ internal sealed class GetFarmBaseMapDetailQueryHandler(
             GridBearingDeg: version.GridBearingDeg,
             RowSpacingM: version.RowSpacingM,
             PlantSpacingM: version.PlantSpacingM,
-            TotalPoles: plantItems.Count,
+            TotalPoles: activePoles > 0 ? activePoles : plantItems.Count,
             PublishedAt: version.PublishedAt,
             PublishedBy: version.PublishedBy,
             CreatedAt: version.CreatedAt,
-            Plants: plantItems);
+            Plants: plantItems,
+            ManualChanges: manualChanges);
 
         return Result.Success(response);
     }

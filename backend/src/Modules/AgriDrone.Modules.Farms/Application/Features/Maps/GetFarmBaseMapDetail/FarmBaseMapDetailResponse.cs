@@ -15,6 +15,24 @@ public sealed record BaseMapPlantItemDto(
     double Lon,
     string LifecycleStatus);
 
+public sealed record BaseMapManualChangeDto(
+    Guid EventId,
+    Guid? PlantId,
+    string ChangeType,
+    string Source,
+    int? OldRow,
+    int? NewRow,
+    int? OldCol,
+    int? NewCol,
+    double? OldLat,
+    double? OldLon,
+    double? NewLat,
+    double? NewLon,
+    string? OldLifecycleStatus,
+    string? NewLifecycleStatus,
+    string? Notes,
+    DateTimeOffset CreatedAt);
+
 public sealed record FarmBaseMapDetailResponse(
     Guid VersionId,
     Guid FarmId,
@@ -35,5 +53,6 @@ public sealed record FarmBaseMapDetailResponse(
     DateTimeOffset? PublishedAt,
     Guid? PublishedBy,
     DateTimeOffset CreatedAt,
-    IReadOnlyList<BaseMapPlantItemDto> Plants);
+    IReadOnlyList<BaseMapPlantItemDto> Plants,
+    IReadOnlyList<BaseMapManualChangeDto>? ManualChanges = null);
 

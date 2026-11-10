@@ -81,9 +81,22 @@ public sealed class SystemManagerMissionsController(
         if (!access.IsAllowed || access.TenantId is null || access.FarmId != farmId)
             return Results.Forbid();
 
-        var trees = request.Trees;
-        var boundaryPoints = request.Boundary;
-        if (trees is null || trees.Count is < 1 or > 10000 ||
+        var rawTrees = request.Trees ?? [];
+        var boundaryPoints = request.Boundary?.ToList() ?? [];
+
+        // Trích xuất các dòng BOUNDARY nếu FE gửi chung trong mảng trees
+        var boundaryRows = rawTrees.Where(t => string.Equals(t.Status, "BOUNDARY", StringComparison.OrdinalIgnoreCase)).ToList();
+        if (boundaryPoints.Count == 0 && boundaryRows.Count > 0)
+        {
+            boundaryPoints = boundaryRows
+                .Where(b => b.Longitude.HasValue && b.Latitude.HasValue)
+                .Select(b => new MissionPlantGpsBoundaryPoint(b.Longitude!.Value, b.Latitude!.Value))
+                .ToList();
+        }
+
+        var trees = rawTrees.Where(t => !string.Equals(t.Status, "BOUNDARY", StringComparison.OrdinalIgnoreCase)).ToList();
+
+        if (trees.Count is < 1 or > 10000 ||
             trees.Any(tree => string.IsNullOrWhiteSpace(tree.TreeId) || tree.TreeId.Length > 100 ||
                 tree.Row < 1 || tree.Col < 1 ||
                 tree.Latitude is null or < -90 or > 90 ||
@@ -186,8 +199,7 @@ public sealed class SystemManagerMissionsController(
 
             var operationalContext = contextResult.Value;
             var currentBoundary = operationalContext.ApprovedBoundary;
-            if (currentBoundary is not null &&
-                currentBoundary.Geometry.EqualsTopologically(boundary))
+            if (currentBoundary is not null)
             {
                 boundaryId = currentBoundary.Id;
                 boundaryVersionNumber = currentBoundary.VersionNumber;
@@ -442,8 +454,7 @@ public sealed class SystemManagerMissionsController(
 
             var operationalContext = contextResult.Value;
             var currentBoundary = operationalContext.ApprovedBoundary;
-            if (currentBoundary is not null &&
-                currentBoundary.Geometry.EqualsTopologically(csvBoundary))
+            if (currentBoundary is not null)
             {
                 boundaryId = currentBoundary.Id;
                 boundaryVersionNumber = currentBoundary.VersionNumber;

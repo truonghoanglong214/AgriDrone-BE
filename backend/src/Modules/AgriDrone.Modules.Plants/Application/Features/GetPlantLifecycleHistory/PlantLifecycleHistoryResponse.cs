@@ -17,7 +17,8 @@ public sealed record PlantLifecycleEventItemDto(
     Guid? MissionId,
     string? MissionCode,
     Guid? CreatedBy,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    Guid? FarmBaseMapVersionId = null);
 
 public sealed record PlantLifecycleHistoryResponse(
     Guid PlantId,

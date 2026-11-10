@@ -38,7 +38,8 @@ internal sealed class GetPlantLifecycleHistoryQueryHandler(
         Guid? MissionId,
         string? MissionCode,
         Guid? CreatedBy,
-        DateTimeOffset CreatedAt);
+        DateTimeOffset CreatedAt,
+        Guid? FarmBaseMapVersionId);
 
     public async Task<Result<PlantLifecycleHistoryResponse>> Handle(
         GetPlantLifecycleHistoryQuery request,
@@ -63,7 +64,7 @@ internal sealed class GetPlantLifecycleHistoryQueryHandler(
                 AppError.NotFound("Plant.NotFound", $"Plant {request.PlantId} not found in farm {request.FarmId}."));
         }
 
-        // 2. Lấy toàn bộ sự kiện biến động (events) của cây này
+        // 2. Lấy toàn bộ sự kiện biến động (events) của cây này (bao gồm cả biến động từ bảng phụ farm_base_map_version_id)
         var events = await dbContext.Database.SqlQueryRaw<ChangeEventRow>(
             @"SELECT e.id AS ""Id"", e.change_type::text AS ""ChangeType"", e.source::text AS ""Source"",
                      ST_Y(e.old_location::geometry) AS ""OldLat"", ST_X(e.old_location::geometry) AS ""OldLon"",
@@ -72,7 +73,8 @@ internal sealed class GetPlantLifecycleHistoryQueryHandler(
                      e.old_column_index AS ""OldCol"", e.new_column_index AS ""NewCol"",
                      e.notes AS ""Notes"", e.mission_id AS ""MissionId"",
                      m.mission_code AS ""MissionCode"",
-                     e.created_by AS ""CreatedBy"", e.created_at AS ""CreatedAt""
+                     e.created_by AS ""CreatedBy"", e.created_at AS ""CreatedAt"",
+                     e.farm_base_map_version_id AS ""FarmBaseMapVersionId""
               FROM plant.plant_change_events e
               LEFT JOIN mission.drone_missions m ON m.id = e.mission_id
               WHERE e.plant_id = {0} AND e.farm_id = {1}
@@ -104,7 +106,8 @@ internal sealed class GetPlantLifecycleHistoryQueryHandler(
                 MissionId: e.MissionId,
                 MissionCode: e.MissionCode,
                 CreatedBy: e.CreatedBy,
-                CreatedAt: e.CreatedAt));
+                CreatedAt: e.CreatedAt,
+                FarmBaseMapVersionId: e.FarmBaseMapVersionId));
         }
 
         // Nếu chưa có event nào trong bảng plant_change_events, tạo 1 event ban đầu từ ngày trồng/khởi tạo
@@ -125,7 +128,8 @@ internal sealed class GetPlantLifecycleHistoryQueryHandler(
                 MissionId: null,
                 MissionCode: null,
                 CreatedBy: null,
-                CreatedAt: plant.MappedAt ?? plant.CreatedAt));
+                CreatedAt: plant.MappedAt ?? plant.CreatedAt,
+                FarmBaseMapVersionId: plant.CurrentMapVersionId));
         }
 
         var response = new PlantLifecycleHistoryResponse(
@@ -146,14 +150,15 @@ internal sealed class GetPlantLifecycleHistoryQueryHandler(
 
     private static string GenerateHumanReadableSummary(ChangeEventRow e)
     {
-        return e.ChangeType switch
+        var type = e.ChangeType?.ToUpperInvariant() ?? string.Empty;
+        return type switch
         {
-            "NewPlant" => $"Trụ cây mới được thêm vào bản đồ tại Hàng {e.NewRow ?? 0}, Cột {e.NewCol ?? 0}",
-            "MappingDifference" when e.OldLat.HasValue && e.NewLat.HasValue =>
+            "NEW_PLANT" or "NEWPLANT" => $"Trụ cây mới được thêm vào bản đồ tại Hàng {e.NewRow ?? 0}, Cột {e.NewCol ?? 0}",
+            "MAPPING_DIFFERENCE" or "MAPPINGDIFFERENCE" when e.OldLat.HasValue && e.NewLat.HasValue =>
                 $"Nắn chỉnh tọa độ trụ từ (Lat: {e.OldLat:F6}, Lon: {e.OldLon:F6}) sang (Lat: {e.NewLat:F6}, Lon: {e.NewLon:F6})",
-            "RemovedPlant" => "Trụ cây đã bị nhổ bỏ hoặc phá hủy khỏi quy hoạch vườn",
-            "DeadPlant" => "Trụ cây được ghi nhận đã chết",
-            "MissingPlant" => "Trụ cây không còn xuất hiện trong đợt quét khảo sát mới",
+            "REMOVED_PLANT" or "REMOVEDPLANT" => "Trụ cây đã bị nhổ bỏ hoặc phá hủy khỏi quy hoạch vườn",
+            "DEAD_PLANT" or "DEADPLANT" => "Trụ cây được ghi nhận đã chết",
+            "MISSING_PLANT" or "MISSINGPLANT" => "Trụ cây không còn xuất hiện trong đợt quét khảo sát mới",
             _ => !string.IsNullOrWhiteSpace(e.Notes) ? e.Notes : $"Cập nhật trạng thái cây: {e.ChangeType}"
         };
     }

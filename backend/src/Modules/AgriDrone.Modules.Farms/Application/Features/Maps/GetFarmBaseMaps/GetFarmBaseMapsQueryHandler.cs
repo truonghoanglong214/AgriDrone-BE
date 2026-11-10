@@ -43,21 +43,34 @@ internal sealed class GetFarmBaseMapsQueryHandler(
             return Result.Success<IReadOnlyList<FarmBaseMapSummaryResponse>>([]);
         }
 
-        // 1. Thống kê số lượng cây đã publish/assign cho từng version
+        // 1. Thống kê số lượng cây đang hoạt động (không tính cây đã xóa) cho từng version
         var publishedPoleCounts = await dbContext.Database.SqlQueryRaw<PoleCountRow>(
             @"SELECT farm_base_map_version_id AS ""VersionId"", COUNT(*)::int AS ""Count""
               FROM plant.plants
               WHERE farm_id = {0} AND farm_base_map_version_id IS NOT NULL
+                AND lifecycle_status != 'REMOVED'
               GROUP BY farm_base_map_version_id",
             request.FarmId)
             .ToListAsync(cancellationToken);
 
         var countByVersion = publishedPoleCounts.ToDictionary(r => r.VersionId, r => r.Count);
 
-        // 2. Với các bản nháp (Draft), lấy số lượng candidate đã map trong batch
+        // 2. Thống kê số lượng biến động thủ công từ bảng phụ plant_change_events cho từng version
+        var manualChangeCounts = await dbContext.Database.SqlQueryRaw<PoleCountRow>(
+            @"SELECT farm_base_map_version_id AS ""VersionId"", COUNT(*)::int AS ""Count""
+              FROM plant.plant_change_events
+              WHERE farm_id = {0} AND farm_base_map_version_id IS NOT NULL
+              GROUP BY farm_base_map_version_id",
+            request.FarmId)
+            .ToListAsync(cancellationToken);
+
+        var manualChangesByVersion = manualChangeCounts.ToDictionary(r => r.VersionId, r => r.Count);
+
+        // 3. Với các bản nháp (Draft), lấy số lượng candidate đã map trong batch
         var draftPoleCounts = await dbContext.Database.SqlQueryRaw<PoleCountRow>(
             @"SELECT b.farm_base_map_version_id AS ""VersionId"", COUNT(c.candidate_id)::int AS ""Count""
               FROM farm.mapping_candidate_batches b
+              JOIN farm.mapping_candidate_batches b2 ON b2.id = b.id
               JOIN farm.mapping_candidates c ON c.batch_id = b.id
               WHERE b.farm_id = {0} AND b.farm_base_map_version_id IS NOT NULL
                 AND c.review_decision != 'Reject'
@@ -107,6 +120,7 @@ internal sealed class GetFarmBaseMapsQueryHandler(
                 : null;
 
             var totalPoles = countByVersion.GetValueOrDefault(v.Id, 0);
+            var manualChangesCount = manualChangesByVersion.GetValueOrDefault(v.Id, 0);
 
             results.Add(new FarmBaseMapSummaryResponse(
                 VersionId: v.Id,
@@ -125,7 +139,8 @@ internal sealed class GetFarmBaseMapsQueryHandler(
                 PreviewUrl: previewUrl,
                 PublishedAt: v.PublishedAt,
                 PublishedBy: v.PublishedBy,
-                CreatedAt: v.CreatedAt));
+                CreatedAt: v.CreatedAt,
+                ManualChangesCount: manualChangesCount));
         }
 
         return Result.Success<IReadOnlyList<FarmBaseMapSummaryResponse>>(results);

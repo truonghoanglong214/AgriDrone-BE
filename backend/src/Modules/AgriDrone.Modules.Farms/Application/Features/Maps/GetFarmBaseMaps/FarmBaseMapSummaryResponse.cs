@@ -17,5 +17,6 @@ public sealed record FarmBaseMapSummaryResponse(
     string? PreviewUrl,
     DateTimeOffset? PublishedAt,
     Guid? PublishedBy,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    int ManualChangesCount = 0);
 

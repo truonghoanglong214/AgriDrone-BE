@@ -62,22 +62,31 @@ internal sealed class GetFarmBaseMapAnalyticsQueryHandler(
 
         var countByVersion = poleCounts.ToDictionary(r => r.VersionId, r => r.Count);
 
-        // Fallback đếm từ plant.plants nếu có
+        // Lấy số lượng cây hoạt động từ plant.plants (không tính cây đã xóa)
         var plantCounts = await dbContext.Database.SqlQueryRaw<PoleCountRow>(
             @"SELECT farm_base_map_version_id AS ""VersionId"", COUNT(*)::int AS ""Count""
               FROM plant.plants
               WHERE farm_id = {0} AND farm_base_map_version_id IS NOT NULL
+                AND lifecycle_status != 'REMOVED'
               GROUP BY farm_base_map_version_id",
             request.FarmId)
             .ToListAsync(cancellationToken);
 
         foreach (var p in plantCounts)
         {
-            if (!countByVersion.TryGetValue(p.VersionId, out var existingCount) || existingCount == 0)
-            {
-                countByVersion[p.VersionId] = p.Count;
-            }
+            countByVersion[p.VersionId] = p.Count;
         }
+
+        // Lấy số lượng biến động thủ công từ bảng phụ plant_change_events
+        var manualChangeCounts = await dbContext.Database.SqlQueryRaw<PoleCountRow>(
+            @"SELECT farm_base_map_version_id AS ""VersionId"", COUNT(*)::int AS ""Count""
+              FROM plant.plant_change_events
+              WHERE farm_id = {0} AND farm_base_map_version_id IS NOT NULL
+              GROUP BY farm_base_map_version_id",
+            request.FarmId)
+            .ToListAsync(cancellationToken);
+
+        var manualChangesByVersion = manualChangeCounts.ToDictionary(r => r.VersionId, r => r.Count);
 
         // 3. Xây dựng timeline biến động
         var timeline = new List<BaseMapVersionMetricDto>();
@@ -96,6 +105,8 @@ internal sealed class GetFarmBaseMapAnalyticsQueryHandler(
                 density = Math.Round(poles / areaHa.Value, 1);
             }
 
+            var manualChanges = manualChangesByVersion.GetValueOrDefault(v.Id, 0);
+
             timeline.Add(new BaseMapVersionMetricDto(
                 VersionId: v.Id,
                 VersionNumber: v.VersionNumber,
@@ -106,7 +117,8 @@ internal sealed class GetFarmBaseMapAnalyticsQueryHandler(
                 DensityPolesPerHa: density,
                 PlantSpacingM: v.PlantSpacingM,
                 RowSpacingM: v.RowSpacingM,
-                GridBearingDeg: v.GridBearingDeg));
+                GridBearingDeg: v.GridBearingDeg,
+                ManualChangesCount: manualChanges));
         }
 
         var firstVersion = versions[0];
