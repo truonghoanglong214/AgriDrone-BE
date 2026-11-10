@@ -57,11 +57,11 @@ internal sealed partial class PlantHealthReviewService : IPlantHealthReviewServi
     {
         var actor = Actor();
         var order = mutation
-            ? await _db.SurveyOrders.FromSqlInterpolated($"SELECT * FROM survey.survey_orders WHERE id = {orderId} FOR UPDATE").SingleOrDefaultAsync(token)
+            ? await _db.SurveyOrders.FromSqlInterpolated($"SELECT *, xmin FROM survey.survey_orders WHERE id = {orderId} FOR UPDATE").SingleOrDefaultAsync(token)
             : await _db.SurveyOrders.AsNoTracking().SingleOrDefaultAsync(o => o.Id == orderId, token);
         if (order is null || !await _authorization.AuthorizeAsync(order.TenantId, order.FarmId, actor, token)) NotFound();
         var result = mutation
-            ? await _db.SurveyResults.FromSqlInterpolated($"SELECT * FROM survey.survey_results WHERE survey_order_id = {orderId} FOR UPDATE").SingleOrDefaultAsync(token)
+            ? await _db.SurveyResults.FromSqlInterpolated($"SELECT *, xmin FROM survey.survey_results WHERE survey_order_id = {orderId} FOR UPDATE").SingleOrDefaultAsync(token)
             : await _db.SurveyResults.AsNoTracking().SingleOrDefaultAsync(r => r.SurveyOrderId == orderId, token);
         if (result is null || result!.ServiceType != SurveyServiceType.PlantHealth) NotFound();
         return (order!, result!);
@@ -77,24 +77,24 @@ internal sealed partial class PlantHealthReviewService : IPlantHealthReviewServi
         var findings = await _db.HealthFindings.AsNoTracking().Where(f => ids.Contains(f.Id)).ToDictionaryAsync(f => f.Id, token);
         var exceptions = await _db.HealthBoundaryExceptions.AsNoTracking().Where(e => e.BatchId == batchId).ToDictionaryAsync(e => e.Id, token);
         var zonesQuery = lockReviewSources
-            ? _db.DiseaseZones.FromSqlInterpolated($"SELECT * FROM plant.disease_zones WHERE import_batch_id = {batchId} AND source_schema_version = 4 ORDER BY id FOR SHARE")
+            ? _db.DiseaseZones.FromSqlInterpolated($"SELECT *, xmin FROM plant.disease_zones WHERE import_batch_id = {batchId} AND source_schema_version = 4 ORDER BY id FOR SHARE")
             : _db.DiseaseZones.Where(z => z.ImportBatchId == batchId && z.SourceSchemaVersion == 4);
         var zones = await zonesQuery.Include(z => z.Memberships).ToDictionaryAsync(z => z.Id, token);
         var heads = lockReviewSources
-            ? await _db.HealthReviewStates.FromSqlInterpolated($"SELECT * FROM plant.plant_health_review_states WHERE batch_id = {batchId} ORDER BY kind, subject_id FOR SHARE").ToListAsync(token)
+            ? await _db.HealthReviewStates.FromSqlInterpolated($"SELECT *, xmin FROM plant.plant_health_review_states WHERE batch_id = {batchId} ORDER BY kind, subject_id FOR SHARE").ToListAsync(token)
             : await _db.HealthReviewStates.Where(h => h.BatchId == batchId).ToListAsync(token);
         var reviewIds = heads.Select(h => h.CurrentReviewId).ToArray();
         var reviews = await _db.HealthReviews.AsNoTracking().Where(r => reviewIds.Contains(r.Id)).ToDictionaryAsync(r => r.Id, token);
         var conditions = mutation
-            ? await _db.PlantConditions.FromSqlRaw("SELECT * FROM plant.plant_conditions WHERE plant_health_label_kind IS NOT NULL FOR SHARE").ToDictionaryAsync(c => c.Id, token)
+            ? await _db.PlantConditions.FromSqlRaw("SELECT *, xmin FROM plant.plant_conditions WHERE plant_health_label_kind IS NOT NULL FOR SHARE").ToDictionaryAsync(c => c.Id, token)
             : await _db.PlantConditions.AsNoTracking().Where(c => c.PlantHealthLabelKind != null).ToDictionaryAsync(c => c.Id, token);
         var guidance = mutation
-            ? await _db.SourcedGuidance.FromSqlRaw("SELECT * FROM plant.sourced_guidance FOR SHARE").ToDictionaryAsync(g => g.Id, token)
+            ? await _db.SourcedGuidance.FromSqlRaw("SELECT *, xmin FROM plant.sourced_guidance FOR SHARE").ToDictionaryAsync(g => g.Id, token)
             : await _db.SourcedGuidance.AsNoTracking().ToDictionaryAsync(g => g.Id, token);
         var source = batch!.OriginalPayload.Deserialize<PlantHealthAnalysisReadyV4>() ?? throw new InvalidOperationException("Import source snapshot is missing.");
         var media = await _source.GetAsync(batch.MissionId, batch.JobId, token);
         var plants = lockReviewSources
-            ? await _db.Plants.FromSqlInterpolated($"SELECT * FROM plant.plants WHERE farm_id = {order.FarmId} ORDER BY id FOR SHARE").ToDictionaryAsync(p => p.Id, token)
+            ? await _db.Plants.FromSqlInterpolated($"SELECT *, xmin FROM plant.plants WHERE farm_id = {order.FarmId} ORDER BY id FOR SHARE").ToDictionaryAsync(p => p.Id, token)
             : await _db.Plants.AsNoTracking().Where(p => p.FarmId == order.FarmId).ToDictionaryAsync(p => p.Id, token);
         return new(order, result, batch, findings, exceptions, zones,
             heads.ToDictionary(h => (h.Kind, h.SubjectId)), reviews, conditions, guidance, plants,

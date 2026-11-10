@@ -164,7 +164,7 @@ internal sealed class DetectMissionDiseasesCommandHandler(
                 RequiredMetadata("annotationRuleVersion"), model.Id, model.Version,
                 "confidence:" + request.ConfidenceThreshold.ToString("R", CultureInfo.InvariantCulture), RequiredMetadata("boundaryPolicyVersion"));
             await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
-            _ = await dbContext.DroneMissions.FromSqlInterpolated($"SELECT * FROM mission.drone_missions WHERE id = {request.MissionId} FOR UPDATE")
+            _ = await dbContext.DroneMissions.FromSqlInterpolated($"SELECT *, xmin FROM mission.drone_missions WHERE id = {request.MissionId} FOR UPDATE")
                 .SingleAsync(cancellationToken);
             var version = (await dbContext.AiProcessingJobs.Where(j => j.MissionId == request.MissionId && j.JobType == AiJobType.DiseaseDetection)
                 .Select(j => (int?)j.AttemptNumber).MaxAsync(cancellationToken) ?? 0) + 1;

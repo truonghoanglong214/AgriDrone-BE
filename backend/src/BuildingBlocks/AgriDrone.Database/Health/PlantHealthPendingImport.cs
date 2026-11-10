@@ -36,7 +36,7 @@ internal sealed class PlantHealthPendingImport(
             return Reject("ContextMismatch", "Tenant context is required.");
 
         // Serialize deliveries for the same Order before checking business dedup/state.
-        var order = await db.SurveyOrders.FromSqlInterpolated($"SELECT * FROM survey.survey_orders WHERE id = {p.SurveyOrderId} FOR UPDATE")
+        var order = await db.SurveyOrders.FromSqlInterpolated($"SELECT *, xmin FROM survey.survey_orders WHERE id = {p.SurveyOrderId} FOR UPDATE")
             .SingleOrDefaultAsync(cancellationToken);
         if (order is null) return Retry("Survey order is not available yet.");
         if (order.TenantId != tenantId || order.FarmId != p.FarmId)
@@ -58,7 +58,7 @@ internal sealed class PlantHealthPendingImport(
             return Reject("UnsupportedService", "Only Plant Health output is accepted.");
         if (order.Status is not (SurveyOrderStatus.InProgress or SurveyOrderStatus.PendingReview))
             return Reject("ResultLocked", "Order is not accepting pending analysis.");
-        var result = await db.SurveyResults.FromSqlInterpolated($"SELECT * FROM survey.survey_results WHERE survey_order_id = {order.Id} FOR UPDATE")
+        var result = await db.SurveyResults.FromSqlInterpolated($"SELECT *, xmin FROM survey.survey_results WHERE survey_order_id = {order.Id} FOR UPDATE")
             .SingleOrDefaultAsync(cancellationToken);
         if (result is not null && result.Status != SurveyResultStatus.PendingReview)
             return Reject("ResultLocked", "Approved/published results cannot be reprocessed by ingestion.");

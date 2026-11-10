@@ -20,7 +20,7 @@ internal sealed class MissionPlantHealthPublisher(
         Guid actorId, Guid correlationId, Guid idempotencyKey, CancellationToken cancellationToken)
     {
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
-        var mission = await db.DroneMissions.FromSqlInterpolated($"SELECT * FROM mission.drone_missions WHERE id = {missionId} FOR UPDATE").SingleOrDefaultAsync(
+        var mission = await db.DroneMissions.FromSqlInterpolated($"SELECT *, xmin FROM mission.drone_missions WHERE id = {missionId} FOR UPDATE").SingleOrDefaultAsync(
             m => m.Id == missionId && m.FarmId == farmId && m.TenantId == tenantId, cancellationToken);
         if (mission is null) return new(MissionPlantHealthPublishStatus.NotFound);
         if (mission.Purpose != MissionPurpose.PlantHealth || mission.SurveyOrderId is not Guid orderId)
