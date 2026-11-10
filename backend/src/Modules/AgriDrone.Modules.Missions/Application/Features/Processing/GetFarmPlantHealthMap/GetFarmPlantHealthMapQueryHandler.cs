@@ -93,6 +93,50 @@ internal sealed class GetFarmPlantHealthMapQueryHandler(
                     "The published Plant Health result was withdrawn after a verified owner report."));
             }
 
+            var orderPaymentPending = await dbContext.Database.SqlQueryRaw<bool>(
+                @"SELECT EXISTS (
+                    SELECT 1
+                    FROM survey.survey_orders o
+                    WHERE o.farm_id = {0}
+                      AND UPPER(o.status::text) <> 'CANCELLED'
+                      AND (
+                        (o.requires_baseline_mapping AND UPPER(o.deposit_payment_status::text) <> 'PAID')
+                        OR UPPER(o.status::text) IN (
+                            'PENDING_BOUNDARY_VERIFICATION',
+                            'AWAITING_BASELINE_APPOINTMENT',
+                            'AWAITING_BASELINE_DEPOSIT',
+                            'AWAITING_BOUNDARY_CAPTURE',
+                            'BASELINE_READY',
+                            'BASELINE_IN_PROGRESS',
+                            'AWAITING_BASELINE_REVIEW',
+                            'AWAITING_PRICING',
+                            'AWAITING_PAID_APPOINTMENT',
+                            'AWAITING_PAYMENT'
+                        )
+                        OR (
+                            o.final_price IS NOT NULL
+                            AND COALESCE(o.remaining_amount, o.final_price) > 0
+                            AND NOT EXISTS (
+                                SELECT 1
+                                FROM survey.survey_payments p
+                                WHERE p.survey_order_id = o.id
+                                  AND (p.purpose IN ('FinalBalance', 'FINAL_BALANCE') OR UPPER(REPLACE(p.purpose::text, '_', '')) = 'FINALBALANCE')
+                                  AND UPPER(p.status::text) = 'PAID'
+                            )
+                            AND UPPER(o.status::text) <> 'COMPLETED'
+                        )
+                      )
+                  ) AS ""Value""",
+                request.FarmId)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (orderPaymentPending)
+            {
+                return Result.Failure<FarmPlantHealthMapResult>(AppError.Conflict(
+                    "FarmPlantHealthMap.PaymentRequired",
+                    "The farm survey results are locked. Please complete the remaining payment to unlock results."));
+            }
+
             // 1. Lấy thông tin bản đồ nền đã công bố của Farm
             var baseMapRow = await dbContext.Database.SqlQueryRaw<BaseMapRow>(
                 @"SELECT id AS ""Id"", tenant_id AS ""TenantId"", source_mission_id AS ""SourceMissionId"",

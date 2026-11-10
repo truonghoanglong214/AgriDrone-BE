@@ -10,7 +10,9 @@ internal sealed record SurveyApprovalPrerequisites(
     SurveyApprovalPrimaryAssignmentReference? CurrentPrimaryAssignment,
     SurveyApprovalFarmBaselineReference? FarmBaseline,
     bool RequiresBaselineMapping,
-    SurveyApprovalOrderCompatibilityDecision OrderCompatibility);
+    SurveyApprovalOrderCompatibilityDecision OrderCompatibility,
+    decimal ApplicableDepositAmount,
+    decimal ApplicableComboDiscountPercentage);
 
 internal sealed record SurveyApprovalOrderCompatibilityDecision(
     Guid? PreviousCompatibleOrderId,

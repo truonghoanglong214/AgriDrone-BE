@@ -13,6 +13,8 @@ internal sealed class SurveysDbContext(DbContextOptions<SurveysDbContext> option
 {
     public DbSet<SurveyService> SurveyServices => Set<SurveyService>();
     public DbSet<SurveyServicePrice> SurveyServicePrices => Set<SurveyServicePrice>();
+    public DbSet<SurveyDepositPolicy> SurveyDepositPolicies => Set<SurveyDepositPolicy>();
+    public DbSet<SurveyComboDiscountPolicy> SurveyComboDiscountPolicies => Set<SurveyComboDiscountPolicy>();
     public DbSet<SurveyRequest> SurveyRequests => Set<SurveyRequest>();
     public DbSet<SurveyRequestReview> SurveyRequestReviews => Set<SurveyRequestReview>();
     public DbSet<SurveyApprovalIdempotencyRecord>

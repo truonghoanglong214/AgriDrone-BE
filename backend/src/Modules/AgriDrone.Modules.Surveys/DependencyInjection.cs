@@ -123,6 +123,8 @@ public static class DependencyInjection
         services.AddScoped<ISurveysUnitOfWork>(serviceProvider =>
             serviceProvider.GetRequiredService<SurveysDbContext>());
         services.AddScoped<ISurveyServiceRepository, SurveyServiceRepository>();
+        services.AddScoped<ISurveyDepositPolicyRepository, SurveyDepositPolicyRepository>();
+        services.AddScoped<ISurveyComboDiscountPolicyRepository, SurveyComboDiscountPolicyRepository>();
         services.AddScoped<IScopeAdjustmentRepository, ScopeAdjustmentRepository>();
         services.AddScoped<IAdjustmentSettlementRepository, AdjustmentSettlementRepository>();
         services.AddScoped<IExtraFlightRequestRepository, ExtraFlightRequestRepository>();

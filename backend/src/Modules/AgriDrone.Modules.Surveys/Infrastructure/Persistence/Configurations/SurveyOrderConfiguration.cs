@@ -143,6 +143,10 @@ public sealed class SurveyOrderConfiguration : IEntityTypeConfiguration<SurveyOr
             .HasPrecision(18, 2)
             .HasSentinel(-1m)
             .IsRequired();
+        builder.Property(order => order.ComboDiscountPercentage)
+            .HasColumnName("combo_discount_percentage")
+            .HasColumnType("numeric(5,2)")
+            .HasPrecision(5, 2);
         builder.Property(order => order.RemainingAmount)
             .HasColumnName("remaining_amount")
             .HasColumnType("numeric(18,2)")

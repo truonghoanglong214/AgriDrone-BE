@@ -5,6 +5,7 @@ namespace AgriDrone.Modules.Surveys.Domain;
 public sealed class SurveyOrder : AggregateRoot
 {
     public const decimal DefaultBaselineDepositAmountVnd = 5_000m;
+    public const decimal DefaultComboDiscountPercentage = 20.00m;
 
     private static readonly Dictionary<SurveyOrderStatus, IReadOnlySet<SurveyOrderStatus>>
         AllowedTransitions = new Dictionary<SurveyOrderStatus, IReadOnlySet<SurveyOrderStatus>>
@@ -114,6 +115,7 @@ public sealed class SurveyOrder : AggregateRoot
     public decimal? FinalPrice { get; private set; }
     public SurveyPaymentStatus DepositPaymentStatus { get; private set; } = SurveyPaymentStatus.Pending;
     public decimal DepositAmount { get; private set; } = DefaultBaselineDepositAmountVnd;
+    public decimal? ComboDiscountPercentage { get; private set; }
     public decimal? RemainingAmount { get; private set; }
     public Guid? DepositPaymentId { get; private set; }
     public DateTimeOffset? DepositConfirmedAt { get; private set; }
@@ -146,7 +148,9 @@ public sealed class SurveyOrder : AggregateRoot
         Guid? previousCompatibleOrderId,
         string previousOrderCompatibilityPolicyVersion,
         string previousOrderCompatibilityReason,
-        DateTimeOffset createdAt)
+        DateTimeOffset createdAt,
+        decimal? customDepositAmount = null,
+        decimal? customComboDiscountPercentage = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(orderNumber);
         DomainGuard.NotEmpty(tenantId);
@@ -154,6 +158,28 @@ public sealed class SurveyOrder : AggregateRoot
         DomainGuard.NotEmpty(surveyRequestId);
         DomainGuard.NotEmpty(surveyServiceId);
         DomainGuard.Utc(createdAt);
+
+        var resolvedDepositAmount = requiresBaselineMapping
+            ? (customDepositAmount ?? DefaultBaselineDepositAmountVnd)
+            : 0m;
+
+        if (resolvedDepositAmount < 0m || resolvedDepositAmount != decimal.Truncate(resolvedDepositAmount))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(customDepositAmount),
+                "Deposit amount must be a non-negative whole VND amount.");
+        }
+
+        var resolvedDiscountPercentage = requiresBaselineMapping
+            ? (customComboDiscountPercentage ?? DefaultComboDiscountPercentage)
+            : (decimal?)null;
+
+        if (resolvedDiscountPercentage.HasValue && (resolvedDiscountPercentage.Value < 0m || resolvedDiscountPercentage.Value > 100m))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(customComboDiscountPercentage),
+                "Combo discount percentage must be between 0 and 100.");
+        }
 
         if (orderNumber.Trim().Length > 40)
         {
@@ -197,7 +223,8 @@ public sealed class SurveyOrder : AggregateRoot
             DepositPaymentStatus = requiresBaselineMapping
                 ? SurveyPaymentStatus.Pending
                 : SurveyPaymentStatus.Paid,
-            DepositAmount = requiresBaselineMapping ? DefaultBaselineDepositAmountVnd : 0m,
+            DepositAmount = resolvedDepositAmount,
+            ComboDiscountPercentage = resolvedDiscountPercentage,
             CreatedAt = createdAt,
             UpdatedAt = createdAt
         };
@@ -640,10 +667,21 @@ public sealed class SurveyOrder : AggregateRoot
                 .Create(confirmedPoleCount.Value);
         var validatedPrice = global::AgriDrone.Modules.Surveys.Domain.PricePerPole
             .Create(pricePerPole.Amount);
-        var finalPrice = Money.CalculateSurveyPrice(
+        var originalPrice = Money.CalculateSurveyPrice(
             validatedPoleCount,
             validatedPrice,
             currency);
+
+        var effectivePricePerPole = validatedPrice;
+        var finalPriceAmount = originalPrice.Amount;
+
+        if (RequiresBaselineMapping && ComboDiscountPercentage.HasValue && ComboDiscountPercentage.Value > 0m)
+        {
+            var discountFactor = 1m - (ComboDiscountPercentage.Value / 100m);
+            var discountedUnitAmount = decimal.Round(validatedPrice.Amount * discountFactor, 2, MidpointRounding.AwayFromZero);
+            effectivePricePerPole = global::AgriDrone.Modules.Surveys.Domain.PricePerPole.Create(discountedUnitAmount);
+            finalPriceAmount = decimal.Round(validatedPoleCount.Value * discountedUnitAmount, 2, MidpointRounding.AwayFromZero);
+        }
 
         FarmBaseMapVersionId = farmBaseMapVersionId;
         ConfirmedSurveyPoleCount = validatedPoleCount;
@@ -652,18 +690,18 @@ public sealed class SurveyOrder : AggregateRoot
         PoleCountConfirmedBy = confirmedBy;
         PoleCountConfirmedAt = confirmedAt;
         SurveyServicePriceId = surveyServicePriceId;
-        PricePerPoleSnapshot = validatedPrice;
+        PricePerPoleSnapshot = effectivePricePerPole;
         Currency = currency.Value;
-        FinalPrice = finalPrice.Amount;
+        FinalPrice = finalPriceAmount;
         var depositCredit = (RequiresBaselineMapping && DepositPaymentStatus == SurveyPaymentStatus.Paid)
             ? DepositAmount
             : 0m;
-        RemainingAmount = Math.Max(0m, finalPrice.Amount - depositCredit);
+        RemainingAmount = Math.Max(0m, finalPriceAmount - depositCredit);
         CaptureOriginalCommercialSnapshot(
             surveyServicePriceId,
             validatedPoleCount,
             validatedPrice,
-            finalPrice.Amount);
+            originalPrice.Amount);
         PricingConfirmedBy = confirmedBy;
         PricingConfirmedAt = confirmedAt;
         ApplyTransition(SurveyOrderStatus.AwaitingPaidAppointment, confirmedAt);

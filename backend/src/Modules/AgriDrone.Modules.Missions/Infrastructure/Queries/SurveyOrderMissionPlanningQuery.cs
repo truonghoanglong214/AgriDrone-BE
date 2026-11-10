@@ -81,7 +81,7 @@ internal sealed class SurveyOrderMissionPlanningQuery(
                                    source.AppointmentEndAt.HasValue &&
                                    source.AppointmentEndAt.Value >
                                    source.AppointmentStartAt.Value;
-        var isPaid = isBaselinePlanning
+        var isPaid = isBaselinePlanning || source.RequiresBaselineMapping
             ? source.DepositPaymentStatus is "Confirmed" or "Paid"
             : source.PaymentStatus is "Confirmed" or "Paid";
         var canPlan = purposeMatches && appointmentConfirmed && isPaid;

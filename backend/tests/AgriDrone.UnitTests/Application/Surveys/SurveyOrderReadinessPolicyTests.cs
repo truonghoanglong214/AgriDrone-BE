@@ -157,6 +157,40 @@ public sealed class SurveyOrderReadinessPolicyTests
         Assert.Contains(SurveyOrderReadinessFailure.PaymentAmountOrCurrencyMismatch, decision.Failures);
     }
 
+    [Fact]
+    public void EvaluateReturnsSuccessForComboPlantHealthWhenDepositPaidAndBaseMapPublished()
+    {
+        var snapshot = CreateValidSnapshot(SurveyOperationPurpose.PlantHealth) with
+        {
+            RequiresBaselineMapping = true,
+            OrderStatus = SurveyOrderStatus.AwaitingPricing,
+            DepositPaymentStatus = SurveyPaymentStatus.Paid,
+            PaymentStatus = null
+        };
+
+        var decision = SurveyOrderReadinessPolicy.Evaluate(snapshot);
+
+        Assert.True(decision.IsReady);
+        Assert.Empty(decision.Failures);
+    }
+
+    [Fact]
+    public void EvaluateReturnsFailureForComboPlantHealthWhenDepositNotPaid()
+    {
+        var snapshot = CreateValidSnapshot(SurveyOperationPurpose.PlantHealth) with
+        {
+            RequiresBaselineMapping = true,
+            OrderStatus = SurveyOrderStatus.AwaitingPricing,
+            DepositPaymentStatus = SurveyPaymentStatus.Pending,
+            PaymentStatus = null
+        };
+
+        var decision = SurveyOrderReadinessPolicy.Evaluate(snapshot);
+
+        Assert.False(decision.IsReady);
+        Assert.Contains(SurveyOrderReadinessFailure.PaymentNotConfirmed, decision.Failures);
+    }
+
     private static SurveyOrderReadinessSnapshot CreateValidSnapshot(SurveyOperationPurpose purpose)
     {
         var isBaseline = purpose == SurveyOperationPurpose.BaselineMapping;
