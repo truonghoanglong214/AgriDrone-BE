@@ -109,4 +109,129 @@ public sealed class SurveyDepositPolicyTests
 
         Assert.Equal(SurveyOrder.DefaultBaselineDepositAmountVnd, order.DepositAmount);
     }
+
+    [Fact]
+    public void SurveyOrderCreateAllowsFollowUpOrderWithDynamicDeposit()
+    {
+        const decimal dynamicDeposit = 300_000m;
+
+        var order = SurveyOrder.Create(
+            orderNumber: "ORD-2026-FOLLOWUP-DEP",
+            tenantId: Guid.NewGuid(),
+            farmId: Guid.NewGuid(),
+            surveyRequestId: Guid.NewGuid(),
+            surveyServiceId: Guid.NewGuid(),
+            requiresBaselineMapping: false,
+            previousCompatibleOrderId: null,
+            previousOrderCompatibilityPolicyVersion: "v1",
+            previousOrderCompatibilityReason: "EXISTING_BASEMAP",
+            createdAt: Now,
+            customDepositAmount: dynamicDeposit);
+
+        Assert.Equal(dynamicDeposit, order.DepositAmount);
+        Assert.Equal(SurveyOrderStatus.PendingBoundaryVerification, order.Status);
+        Assert.Equal(SurveyPaymentStatus.Pending, order.DepositPaymentStatus);
+    }
+
+    [Fact]
+    public void FollowUpOrderRecordsDepositConfirmedAndAppliesCreditToPricing()
+    {
+        const decimal depositAmount = 500_000m;
+        var paymentId = Guid.NewGuid();
+        var managerId = Guid.NewGuid();
+        var priceId = Guid.NewGuid();
+        var boundaryId = Guid.NewGuid();
+        var baseMapId = Guid.NewGuid();
+
+        var order = SurveyOrder.Create(
+            orderNumber: "ORD-2026-FOLLOWUP-PAID-DEP",
+            tenantId: Guid.NewGuid(),
+            farmId: Guid.NewGuid(),
+            surveyRequestId: Guid.NewGuid(),
+            surveyServiceId: Guid.NewGuid(),
+            requiresBaselineMapping: false,
+            previousCompatibleOrderId: null,
+            previousOrderCompatibilityPolicyVersion: "v1",
+            previousOrderCompatibilityReason: "EXISTING_BASEMAP",
+            createdAt: Now,
+            customDepositAmount: depositAmount);
+
+        // Khách hàng nộp cọc trước
+        order.RecordFollowUpDepositConfirmed(paymentId, depositAmount, Now.AddHours(1));
+        Assert.Equal(SurveyPaymentStatus.Paid, order.DepositPaymentStatus);
+        Assert.Equal(paymentId, order.DepositPaymentId);
+        Assert.Equal(SurveyOrderStatus.PendingBoundaryVerification, order.Status);
+
+        // Staff xác minh boundary và inventory hiện có
+        order.VerifyBoundaryScopeAndCurrentInventory(
+            boundaryId,
+            baseMapId,
+            ConfirmedSurveyPoleCount.Create(1000),
+            managerId,
+            Now.AddHours(2));
+        Assert.Equal(SurveyOrderStatus.AwaitingPricing, order.Status);
+
+        // Staff chốt giá: 1.000 trụ * 2.000 đ = 2.000.000 đ
+        order.ConfirmPricing(
+            priceId,
+            PricePerPole.Create(2_000m),
+            CurrencyCode.Vnd,
+            managerId,
+            Now.AddHours(3));
+
+        Assert.Equal(2_000_000m, order.FinalPrice);
+        // Đã cấn trừ 500.000 đ tiền cọc
+        Assert.Equal(1_500_000m, order.RemainingAmount);
+        Assert.Equal(SurveyOrderStatus.AwaitingPaidAppointment, order.Status);
+    }
+
+    [Fact]
+    public void FollowUpOrderPricingConfirmedFirstThenDepositPaidRecalculatesRemainingAmount()
+    {
+        const decimal depositAmount = 500_000m;
+        var paymentId = Guid.NewGuid();
+        var managerId = Guid.NewGuid();
+        var priceId = Guid.NewGuid();
+        var boundaryId = Guid.NewGuid();
+        var baseMapId = Guid.NewGuid();
+
+        var order = SurveyOrder.Create(
+            orderNumber: "ORD-2026-FOLLOWUP-DEP-LATE",
+            tenantId: Guid.NewGuid(),
+            farmId: Guid.NewGuid(),
+            surveyRequestId: Guid.NewGuid(),
+            surveyServiceId: Guid.NewGuid(),
+            requiresBaselineMapping: false,
+            previousCompatibleOrderId: null,
+            previousOrderCompatibilityPolicyVersion: "v1",
+            previousOrderCompatibilityReason: "EXISTING_BASEMAP",
+            createdAt: Now,
+            customDepositAmount: depositAmount);
+
+        order.VerifyBoundaryScopeAndCurrentInventory(
+            boundaryId,
+            baseMapId,
+            ConfirmedSurveyPoleCount.Create(1000),
+            managerId,
+            Now.AddHours(1));
+
+        // Chốt giá trước khi nộp cọc: 1.000 trụ * 2.000 đ = 2.000.000 đ
+        order.ConfirmPricing(
+            priceId,
+            PricePerPole.Create(2_000m),
+            CurrencyCode.Vnd,
+            managerId,
+            Now.AddHours(2));
+
+        Assert.Equal(2_000_000m, order.FinalPrice);
+        // Vì cọc chưa nộp nên RemainingAmount ban đầu là full 2.000.000 đ
+        Assert.Equal(2_000_000m, order.RemainingAmount);
+
+        // Khách hàng nộp cọc sau khi chốt giá
+        order.RecordFollowUpDepositConfirmed(paymentId, depositAmount, Now.AddHours(3));
+
+        Assert.Equal(SurveyPaymentStatus.Paid, order.DepositPaymentStatus);
+        // RemainingAmount tự động trừ đi 500.000 đ cọc còn 1.500.000 đ
+        Assert.Equal(1_500_000m, order.RemainingAmount);
+    }
 }

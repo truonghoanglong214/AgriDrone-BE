@@ -99,7 +99,16 @@ internal sealed class InitiateSurveyPaymentCommandHandler(
         Money amount;
         if (command.Purpose == PaymentPurpose.BaselineDeposit)
         {
-            if (order.Status != SurveyOrderStatus.AwaitingBaselineDeposit ||
+            var isEligibleForBaselineDeposit = order.RequiresBaselineMapping &&
+                order.Status == SurveyOrderStatus.AwaitingBaselineDeposit;
+
+            var isEligibleForFollowUpDeposit = !order.RequiresBaselineMapping &&
+                order.Status is SurveyOrderStatus.PendingBoundaryVerification
+                    or SurveyOrderStatus.AwaitingPricing
+                    or SurveyOrderStatus.AwaitingPaidAppointment
+                    or SurveyOrderStatus.AwaitingPayment;
+
+            if ((!isEligibleForBaselineDeposit && !isEligibleForFollowUpDeposit) ||
                 order.DepositPaymentStatus == SurveyPaymentStatus.Paid ||
                 order.DepositAmount <= 0)
             {

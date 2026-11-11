@@ -203,14 +203,12 @@ public static class SurveyOrderReadinessPolicy
             failures.Add(SurveyOrderReadinessFailure.PriceNotConfirmed);
         }
 
-        if (snapshot.RequiresBaselineMapping)
+        if (snapshot.DepositPaymentStatus != SurveyPaymentStatus.Paid)
         {
-            if (snapshot.DepositPaymentStatus != SurveyPaymentStatus.Paid)
-            {
-                failures.Add(SurveyOrderReadinessFailure.PaymentNotConfirmed);
-            }
+            failures.Add(SurveyOrderReadinessFailure.PaymentNotConfirmed);
         }
-        else
+
+        if (!snapshot.RequiresBaselineMapping)
         {
             if (snapshot.PaymentStatus == SurveyPaymentStatus.Refunded)
             {

@@ -115,4 +115,70 @@ public sealed class SurveyComboDiscountPolicyTests
         // RemainingAmount: 2,000,000 - 500,000 (deposit credit) = 1,500,000 VND
         Assert.Equal(1_500_000m, order.RemainingAmount);
     }
+
+    [Fact]
+    public void SurveyOrderCalculatesComboDiscountCorrectlyForFollowUpComboOrder()
+    {
+        // Arrange: Đơn Follow-up trên nông trại đã có map (requiresBaselineMapping: false)
+        var tenantId = Guid.NewGuid();
+        var farmId = Guid.NewGuid();
+        var boundaryVersionId = Guid.NewGuid();
+        var baseMapVersionId = Guid.NewGuid();
+        var priceVersionId = Guid.NewGuid();
+
+        var order = SurveyOrder.Create(
+            "ORD-FOLLOWUP-COMBO",
+            tenantId,
+            farmId,
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            requiresBaselineMapping: false,
+            previousCompatibleOrderId: Guid.NewGuid(),
+            previousOrderCompatibilityPolicyVersion: "v1",
+            previousOrderCompatibilityReason: "Follow-up survey",
+            createdAt: Now,
+            customDepositAmount: 0m,
+            customComboDiscountPercentage: 20.00m);
+
+        Assert.Equal(20.00m, order.ComboDiscountPercentage);
+        Assert.Equal(0m, order.DepositAmount);
+        Assert.Equal(SurveyPaymentStatus.Paid, order.DepositPaymentStatus);
+
+        // Chuyển trạng thái xác minh ranh giới & kiểm kê sang AwaitingPricing
+        order.VerifyBoundaryScopeAndCurrentInventory(
+            farmBoundaryVersionId: boundaryVersionId,
+            farmBaseMapVersionId: baseMapVersionId,
+            confirmedPoleCount: ConfirmedSurveyPoleCount.Create(1050),
+            verifiedBy: AdminId,
+            verifiedAt: Now.AddHours(1));
+
+        Assert.Equal(SurveyOrderStatus.AwaitingPricing, order.Status);
+
+        // Act: Chốt giá cho 1.050 trụ (sau biến động) với đơn giá 2.500 VND
+        order.ConfirmPoleCountAndPricing(
+            farmBaseMapVersionId: baseMapVersionId,
+            confirmedPoleCount: ConfirmedSurveyPoleCount.Create(1050),
+            poleCountSource: SurveyPoleCountSource.CurrentPublishedInventory,
+            evidenceReference: "Follow-up inventory verification",
+            surveyServicePriceId: priceVersionId,
+            pricePerPole: PricePerPole.Create(2_500m),
+            currency: CurrencyCode.Vnd,
+            confirmedBy: AdminId,
+            confirmedAt: Now.AddHours(2));
+
+        // Assert:
+        // Giá gốc danh mục: 1.050 * 2.500 = 2.625.000 VND
+        Assert.Equal(2_500m, order.OriginalPricePerPoleSnapshot?.Amount);
+        Assert.Equal(2_625_000m, order.OriginalFinalPrice);
+
+        // Đơn giá sau chiết khấu 20%: 2.500 * (1 - 0.20) = 2.000 VND
+        Assert.Equal(2_000m, order.PricePerPoleSnapshot?.Amount);
+
+        // Tổng tiền cuối cùng: 1.050 * 2.000 = 2.100.000 VND
+        Assert.Equal(2_100_000m, order.FinalPrice);
+
+        // Số tiền còn lại phải thanh toán: 2.100.000 VND (vì cọc = 0)
+        Assert.Equal(2_100_000m, order.RemainingAmount);
+        Assert.Equal(SurveyOrderStatus.AwaitingPaidAppointment, order.Status);
+    }
 }

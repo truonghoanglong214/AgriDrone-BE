@@ -301,14 +301,23 @@ internal sealed class ProcessSurveyPaymentEventCommandHandler(
                 return (true, "AMOUNT_OR_CURRENCY_MISMATCH");
             }
 
-            if (order.Status != SurveyOrderStatus.AwaitingBaselineDeposit)
+            if (order.RequiresBaselineMapping)
             {
-                return (false, "ORDER_NOT_AWAITING_BASELINE_DEPOSIT");
-            }
+                if (order.Status != SurveyOrderStatus.AwaitingBaselineDeposit)
+                {
+                    return (false, "ORDER_NOT_AWAITING_BASELINE_DEPOSIT");
+                }
 
-            payment.Confirm(command.ProviderReference, command.OccurredAt);
-            order.RecordBaselineDepositConfirmed(payment.Id, payment.Amount, command.OccurredAt);
-            return (true, "APPLIED");
+                payment.Confirm(command.ProviderReference, command.OccurredAt);
+                order.RecordBaselineDepositConfirmed(payment.Id, payment.Amount, command.OccurredAt);
+                return (true, "APPLIED");
+            }
+            else
+            {
+                payment.Confirm(command.ProviderReference, command.OccurredAt);
+                order.RecordFollowUpDepositConfirmed(payment.Id, payment.Amount, command.OccurredAt);
+                return (true, "APPLIED");
+            }
         }
         else
         {

@@ -159,9 +159,9 @@ public sealed class SurveyOrder : AggregateRoot
         DomainGuard.NotEmpty(surveyServiceId);
         DomainGuard.Utc(createdAt);
 
-        var resolvedDepositAmount = requiresBaselineMapping
-            ? (customDepositAmount ?? DefaultBaselineDepositAmountVnd)
-            : 0m;
+        var resolvedDepositAmount = customDepositAmount ?? (requiresBaselineMapping
+            ? DefaultBaselineDepositAmountVnd
+            : 0m);
 
         if (resolvedDepositAmount < 0m || resolvedDepositAmount != decimal.Truncate(resolvedDepositAmount))
         {
@@ -170,9 +170,9 @@ public sealed class SurveyOrder : AggregateRoot
                 "Deposit amount must be a non-negative whole VND amount.");
         }
 
-        var resolvedDiscountPercentage = requiresBaselineMapping
-            ? (customComboDiscountPercentage ?? DefaultComboDiscountPercentage)
-            : (decimal?)null;
+        var resolvedDiscountPercentage = customComboDiscountPercentage ?? (requiresBaselineMapping
+            ? DefaultComboDiscountPercentage
+            : (decimal?)null);
 
         if (resolvedDiscountPercentage.HasValue && (resolvedDiscountPercentage.Value < 0m || resolvedDiscountPercentage.Value > 100m))
         {
@@ -220,7 +220,7 @@ public sealed class SurveyOrder : AggregateRoot
             Status = requiresBaselineMapping
                 ? SurveyOrderStatus.AwaitingBaselineAppointment
                 : SurveyOrderStatus.PendingBoundaryVerification,
-            DepositPaymentStatus = requiresBaselineMapping
+            DepositPaymentStatus = resolvedDepositAmount > 0m
                 ? SurveyPaymentStatus.Pending
                 : SurveyPaymentStatus.Paid,
             DepositAmount = resolvedDepositAmount,
@@ -456,6 +456,49 @@ public sealed class SurveyOrder : AggregateRoot
         TransitionTo(SurveyOrderStatus.BaselineReady, confirmedAt);
     }
 
+    public void RecordFollowUpDepositConfirmed(
+        Guid paymentId,
+        decimal amount,
+        DateTimeOffset confirmedAt)
+    {
+        DomainGuard.NotEmpty(paymentId);
+        DomainGuard.Utc(confirmedAt);
+        SurveyTransitionGuard.EnsureTimestamp(confirmedAt, UpdatedAt);
+
+        if (RequiresBaselineMapping)
+        {
+            throw new SurveyDomainException(
+                SurveyOrderDomainErrorCodes.InvalidTransition,
+                "Order requires baseline mapping. Use RecordBaselineDepositConfirmed instead.");
+        }
+
+        if (DepositPaymentStatus == SurveyPaymentStatus.Paid)
+        {
+            throw new SurveyDomainException(
+                SurveyOrderDomainErrorCodes.InvalidTransition,
+                "Deposit is already paid.");
+        }
+
+        if (amount != DepositAmount)
+        {
+            throw new SurveyDomainException(
+                SurveyOrderDomainErrorCodes.InvalidTransition,
+                $"Deposit amount must be {DepositAmount} VND.");
+        }
+
+        DepositPaymentId = paymentId;
+        DepositPaymentStatus = SurveyPaymentStatus.Paid;
+        DepositConfirmedAt = confirmedAt;
+
+        if (FinalPrice.HasValue)
+        {
+            RemainingAmount = Math.Max(0m, FinalPrice.Value - DepositAmount);
+        }
+
+        UpdatedAt = confirmedAt;
+        Version++;
+    }
+
     public void MarkBaselineReady(DateTimeOffset occurredAt) =>
         TransitionTo(SurveyOrderStatus.BaselineReady, occurredAt);
 
@@ -602,7 +645,7 @@ public sealed class SurveyOrder : AggregateRoot
         PricePerPoleSnapshot = validatedPrice;
         Currency = currency.Value;
         FinalPrice = finalPrice.Amount;
-        var depositCredit = (RequiresBaselineMapping && DepositPaymentStatus == SurveyPaymentStatus.Paid)
+        var depositCredit = DepositPaymentStatus == SurveyPaymentStatus.Paid
             ? DepositAmount
             : 0m;
         RemainingAmount = Math.Max(0m, finalPrice.Amount - depositCredit);
@@ -675,7 +718,7 @@ public sealed class SurveyOrder : AggregateRoot
         var effectivePricePerPole = validatedPrice;
         var finalPriceAmount = originalPrice.Amount;
 
-        if (RequiresBaselineMapping && ComboDiscountPercentage.HasValue && ComboDiscountPercentage.Value > 0m)
+        if (ComboDiscountPercentage.HasValue && ComboDiscountPercentage.Value > 0m)
         {
             var discountFactor = 1m - (ComboDiscountPercentage.Value / 100m);
             var discountedUnitAmount = decimal.Round(validatedPrice.Amount * discountFactor, 2, MidpointRounding.AwayFromZero);
@@ -693,7 +736,7 @@ public sealed class SurveyOrder : AggregateRoot
         PricePerPoleSnapshot = effectivePricePerPole;
         Currency = currency.Value;
         FinalPrice = finalPriceAmount;
-        var depositCredit = (RequiresBaselineMapping && DepositPaymentStatus == SurveyPaymentStatus.Paid)
+        var depositCredit = DepositPaymentStatus == SurveyPaymentStatus.Paid
             ? DepositAmount
             : 0m;
         RemainingAmount = Math.Max(0m, finalPriceAmount - depositCredit);
@@ -785,7 +828,7 @@ public sealed class SurveyOrder : AggregateRoot
         PricePerPoleSnapshot = pricePerPole;
         Currency = currency.Value;
         FinalPrice = finalPrice.Amount;
-        var depositCredit = (RequiresBaselineMapping && DepositPaymentStatus == SurveyPaymentStatus.Paid)
+        var depositCredit = DepositPaymentStatus == SurveyPaymentStatus.Paid
             ? DepositAmount
             : 0m;
         RemainingAmount = Math.Max(0m, finalPrice.Amount - depositCredit);
