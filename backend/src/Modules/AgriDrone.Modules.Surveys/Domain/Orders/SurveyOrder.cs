@@ -829,6 +829,19 @@ public sealed class SurveyOrder : AggregateRoot
     public void Complete(DateTimeOffset occurredAt) =>
         TransitionTo(SurveyOrderStatus.Completed, occurredAt);
 
+    public void RecordPublishedPlantHealthComparison(Guid? previousOrderId, string policyVersion, string reason)
+    {
+        if (Status != SurveyOrderStatus.PendingReview || previousOrderId == Guid.Empty || previousOrderId == Id)
+            throw new InvalidOperationException("Comparison must be resolved for the current pending publication.");
+        var policy = NormalizeCompatibilityValue(policyVersion, 100, nameof(policyVersion));
+        var decision = NormalizeCompatibilityValue(reason, 100, nameof(reason));
+        if ((previousOrderId.HasValue && decision != "COMPATIBLE") || (!previousOrderId.HasValue && decision == "COMPATIBLE"))
+            throw new InvalidOperationException("Comparison identity and compatibility reason must agree.");
+        PreviousCompatibleOrderId = previousOrderId;
+        PreviousOrderCompatibilityPolicyVersion = policy;
+        PreviousOrderCompatibilityReason = decision;
+    }
+
     public void Cancel(DateTimeOffset occurredAt) =>
         TransitionTo(SurveyOrderStatus.Cancelled, occurredAt);
 

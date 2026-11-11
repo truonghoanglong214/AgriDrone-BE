@@ -8,3 +8,17 @@ pillow>=11.0.0
 shapely>=2.0.0
 python-multipart>=0.0.12
 pyodm>=1.5.0
+
+# YOLO tree/disease detection (main.py: get_yolo_model, detect_mission_trees, detect_mission_diseases)
+# needs torch + torchvision + ultralytics. They are NOT on this list because the CUDA builds
+# must come from PyTorch's own index, not plain PyPI (plain `pip install -r requirements.txt`
+# would otherwise silently pull a CPU-only torch and break GPU inference). Install explicitly,
+# in this order (ultralytics first, torch/torchvision pinned+--no-deps LAST):
+#   pip install ultralytics
+#   pip install --index-url https://download.pytorch.org/whl/cu128 torch==2.11.0 torchvision==0.26 --force-reinstall --no-deps
+# (pick the cuXXX index matching your installed NVIDIA driver; CPU-only is fine too, just slower —
+# omit --index-url and use plain `pip install torch torchvision` instead, no --no-deps needed then.)
+# Verified 2026-11-08: torch 2.11.0+cu128 / torchvision 0.26.0+cu128 together on an RTX 3050 Ti.
+# Installing ultralytics AFTER a pinned CUDA torch will silently downgrade it to a newer CPU-only
+# build from PyPI (its own torch dependency isn't pinned) — hence the install order above.
+ultralytics

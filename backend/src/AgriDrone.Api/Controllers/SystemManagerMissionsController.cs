@@ -31,6 +31,7 @@ public sealed class SystemManagerMissionsController(
     ISystemManagerAccessService managerAccessService,
     IMissionPlantGpsStore plantGpsStore,
     IMissionPlantGpsPublisher plantGpsPublisher,
+    IMissionPlantHealthPublisher plantHealthPublisher,
     IExecutionContext executionContext) : ControllerBase
 {
     /// <summary>Lấy danh sách cây CSV đã lưu cho mission.</summary>
@@ -80,9 +81,22 @@ public sealed class SystemManagerMissionsController(
         if (!access.IsAllowed || access.TenantId is null || access.FarmId != farmId)
             return Results.Forbid();
 
-        var trees = request.Trees;
-        var boundaryPoints = request.Boundary;
-        if (trees is null || trees.Count is < 1 or > 10000 ||
+        var rawTrees = request.Trees ?? [];
+        var boundaryPoints = request.Boundary?.ToList() ?? [];
+
+        // Trích xuất các dòng BOUNDARY nếu FE gửi chung trong mảng trees
+        var boundaryRows = rawTrees.Where(t => string.Equals(t.Status, "BOUNDARY", StringComparison.OrdinalIgnoreCase)).ToList();
+        if (boundaryPoints.Count == 0 && boundaryRows.Count > 0)
+        {
+            boundaryPoints = boundaryRows
+                .Where(b => b.Longitude.HasValue && b.Latitude.HasValue)
+                .Select(b => new MissionPlantGpsBoundaryPoint(b.Longitude!.Value, b.Latitude!.Value))
+                .ToList();
+        }
+
+        var trees = rawTrees.Where(t => !string.Equals(t.Status, "BOUNDARY", StringComparison.OrdinalIgnoreCase)).ToList();
+
+        if (trees.Count is < 1 or > 10000 ||
             trees.Any(tree => string.IsNullOrWhiteSpace(tree.TreeId) || tree.TreeId.Length > 100 ||
                 tree.Row < 1 || tree.Col < 1 ||
                 tree.Latitude is null or < -90 or > 90 ||
@@ -185,8 +199,7 @@ public sealed class SystemManagerMissionsController(
 
             var operationalContext = contextResult.Value;
             var currentBoundary = operationalContext.ApprovedBoundary;
-            if (currentBoundary is not null &&
-                currentBoundary.Geometry.EqualsTopologically(boundary))
+            if (currentBoundary is not null)
             {
                 boundaryId = currentBoundary.Id;
                 boundaryVersionNumber = currentBoundary.VersionNumber;
@@ -441,8 +454,7 @@ public sealed class SystemManagerMissionsController(
 
             var operationalContext = contextResult.Value;
             var currentBoundary = operationalContext.ApprovedBoundary;
-            if (currentBoundary is not null &&
-                currentBoundary.Geometry.EqualsTopologically(csvBoundary))
+            if (currentBoundary is not null)
             {
                 boundaryId = currentBoundary.Id;
                 boundaryVersionNumber = currentBoundary.VersionNumber;
@@ -583,6 +595,68 @@ public sealed class SystemManagerMissionsController(
                     ["payload"] = result.Errors?.ToArray() ?? ["Payload is invalid."]
                 }),
             _ => Results.Problem("Unable to queue the plant GPS message.")
+        };
+    }
+
+    /// <summary>Đóng gói kết quả nhận diện bệnh của mission và xếp message PlantHealthAnalysisReadyV4 vào Outbox.</summary>
+    /// <remarks>
+    /// Sau khi hoàn thành phân tích AI cho mission, SystemManager gọi endpoint này để phát event
+    /// PlantHealthAnalysisReadyV4 sang RabbitMQ để lưu dữ liệu pending cho Manager review.
+    /// Dùng Idempotency-Key trong header để đảm bảo an toàn, không bắn trùng.
+    /// </remarks>
+    [HttpPost("plant-health/publish")]
+    public async Task<IResult> PublishPlantHealth(
+        [FromRoute] Guid farmId,
+        [FromRoute] Guid missionId,
+        [FromHeader(Name = "Idempotency-Key")] Guid? idempotencyKey,
+        CancellationToken cancellationToken)
+    {
+        if (idempotencyKey is not Guid messageId || messageId == Guid.Empty)
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["Idempotency-Key"] = ["A non-empty GUID Idempotency-Key is required."]
+            });
+        }
+
+        var access = await managerAccessService.ResolveFarmAccessAsync(
+            farmId, cancellationToken);
+        if (!access.IsAllowed || access.TenantId is not Guid tenantId ||
+            access.FarmId != farmId)
+            return Results.Forbid();
+
+        if (executionContext.ActorId is not Guid actorId ||
+            executionContext.CorrelationId == Guid.Empty)
+            return Results.Unauthorized();
+
+        var result = await plantHealthPublisher.PublishAsync(
+            tenantId,
+            farmId,
+            missionId,
+            actorId,
+            executionContext.CorrelationId,
+            messageId,
+            cancellationToken);
+
+        return result.Status switch
+        {
+            MissionPlantHealthPublishStatus.Queued => Results.Ok(new
+            {
+                missionId,
+                messageId = result.MessageId,
+                status = "QUEUED"
+            }),
+            MissionPlantHealthPublishStatus.NotFound => Results.NotFound(),
+            MissionPlantHealthPublishStatus.Conflict => Results.Conflict(new
+            {
+                errors = result.Errors
+            }),
+            MissionPlantHealthPublishStatus.Invalid => Results.ValidationProblem(
+                new Dictionary<string, string[]>
+                {
+                    ["payload"] = result.Errors?.ToArray() ?? ["Payload is invalid."]
+                }),
+            _ => Results.Problem("Unable to queue the plant health message.")
         };
     }
 

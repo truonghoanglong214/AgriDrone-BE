@@ -1,4 +1,16 @@
 import os
+
+# Đảm bảo PROJ luôn trỏ đúng vào thư mục proj_data của rasterio trong virtualenv,
+# tránh xung đột với PROJ của PostgreSQL/PostGIS cài trên Windows
+try:
+    import rasterio
+    _proj_dir = os.path.join(os.path.dirname(rasterio.__file__), "proj_data")
+    if os.path.isdir(_proj_dir):
+        os.environ["PROJ_DATA"] = _proj_dir
+        os.environ["PROJ_LIB"] = _proj_dir
+except Exception:
+    pass
+
 from pydantic import BaseModel
 
 class Settings(BaseModel):

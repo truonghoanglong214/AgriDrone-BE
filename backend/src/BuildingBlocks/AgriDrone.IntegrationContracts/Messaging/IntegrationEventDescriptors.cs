@@ -9,6 +9,10 @@ namespace AgriDrone.IntegrationContracts.Messaging;
 
 public static class IntegrationEventDescriptors
 {
+    public static IntegrationEventDescriptor<PlantHealthPreliminaryResultPublishedV1> PlantHealthPreliminaryResultPublishedV1 { get; } =
+        new(IntegrationEventTypes.PlantHealthPreliminaryResultPublishedV1, IntegrationSchemaVersions.V1, RequiresActorId: true);
+    public static IntegrationEventDescriptor<PlantHealthPublicationNotificationRequestedV1> PlantHealthPublicationNotificationRequestedV1 { get; } =
+        new(IntegrationEventTypes.PlantHealthPublicationNotificationRequestedV1, IntegrationSchemaVersions.V1, RequiresActorId: true);
     public static IntegrationEventDescriptor<MappingCandidatesApprovedV1>
         MappingCandidatesApprovedV1 { get; } =
         new(
@@ -108,6 +112,13 @@ public static class IntegrationEventDescriptors
         new(
             IntegrationEventTypes.PlantHealthAnalysisReadyV3,
             IntegrationSchemaVersions.V3,
+            RequiresActorId: false);
+
+    public static IntegrationEventDescriptor<PlantHealthAnalysisReadyV4>
+        PlantHealthAnalysisReadyV4 { get; } =
+        new(
+            IntegrationEventTypes.PlantHealthAnalysisReadyV4,
+            IntegrationSchemaVersions.V4,
             RequiresActorId: false);
 
     public static IntegrationEventDescriptor<SurveyRequestApprovedV1>

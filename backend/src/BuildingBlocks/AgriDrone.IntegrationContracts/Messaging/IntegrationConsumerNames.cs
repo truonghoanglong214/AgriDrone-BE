@@ -2,6 +2,8 @@ namespace AgriDrone.IntegrationContracts.Messaging;
 
 public static class IntegrationConsumerNames
 {
+    public const string Be2PlantHealthPreliminaryResultPublishedV1 = "be2-plant-health-preliminary-result-published-v1";
+    public const string PlantHealthPublicationNotificationV1 = "plant-health-publication-notification-v1";
     public const string Be1MappingCandidatesApprovedV1 =
         "be1-mapping-candidates-approved-v1";
 
@@ -43,6 +45,9 @@ public static class IntegrationConsumerNames
 
     public const string Be1PlantHealthAnalysisReadyV3 =
         "be1-plant-health-analysis-ready-v3";
+
+    public const string Be1PlantHealthAnalysisReadyV4 =
+        "be1-plant-health-analysis-ready-v4";
 
     public const string Be1BaselineMissionStartedV1 =
         "be1-baseline-mission-started-v1";

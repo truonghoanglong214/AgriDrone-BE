@@ -85,6 +85,8 @@ public static class DependencyInjection
                     serviceProvider.GetRequiredService<MissionsDbContext>());
         services.AddScoped<IMissionPlantGpsStore, MissionPlantGpsStore>();
         services.AddScoped<IMissionPlantGpsPublisher, MissionPlantGpsPublisher>();
+        services.AddScoped<IMissionPlantHealthPublisher, MissionPlantHealthPublisher>();
+        services.AddScoped<IPlantHealthSourceContextQuery, PlantHealthSourceContextQuery>();
         services.AddScoped<IMissionStartedOutbox, MissionStartedOutbox>();
 
         services.AddScoped<
@@ -137,6 +139,8 @@ public static class DependencyInjection
             FarmBaseMapPublishedV3Handler>();
         services.AddIntegrationConsumer<FarmBaseMapPublishedV3Processor>(
             IntegrationConsumerNames.Be2FarmBaseMapPublishedV3);
+        services.AddScoped<IIntegrationMessageHandler<PlantHealthPreliminaryResultPublishedV1>, PlantHealthPreliminaryResultPublishedHandler>();
+        services.AddIntegrationConsumer<PlantHealthPreliminaryResultPublishedProcessor>(IntegrationConsumerNames.Be2PlantHealthPreliminaryResultPublishedV1);
 
         services.AddScoped<
             IIntegrationMessageHandler<HealthReviewStateChangedV1>,

@@ -1,0 +1,203 @@
+<?xml version='1.0' encoding='utf-8'?>
+<mxfile host="app.diagrams.net" version="24.0.0">
+  <diagram id="sd_03" name="SD-03 Approve &amp; Publish (UC-32,33,34)">
+    <mxGraphModel dx="1422" dy="850" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1450" pageHeight="1150" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="t3" parent="1" value="&lt;b&gt;SD-03 (Sub-system level) — Approve, Publish &amp; Deliver Survey Results&lt;/b&gt;&lt;br/&gt;&lt;font style='font-size:11px; font-weight:normal; color:#444444;'&gt;Use Cases: UC-32 (Approve Preliminary Results), UC-33 (Publish Preliminary Results), UC-34 (View Published Survey Results)&lt;/font&gt;" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=1;fillColor=#F5F5F5;strokeColor=#CCCCCC;fontSize=13;fontColor=#111111;" vertex="1">
+          <mxGeometry x="50" y="20" width="1340" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="ll_sm3" parent="1" value="SystemManager" style="shape=umlLifeline;participant=umlActor;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=1;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;newEdgeStyle={&quot;edgeStyle&quot;:&quot;orthogonalEdgeStyle&quot;,&quot;curved&quot;:0,&quot;rounded&quot;:0};size=60;fillColor=#FFFFFF;strokeColor=#000000;fontColor=#000000;fontSize=11;" vertex="1">
+          <mxGeometry x="50" y="80" width="90" height="950" as="geometry" />
+        </mxCell>
+        <mxCell id="ll_ui3" parent="1" value="[Interface]&lt;br/&gt;&lt;b&gt;Manager UI&lt;/b&gt;" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=1;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;newEdgeStyle={&quot;edgeStyle&quot;:&quot;orthogonalEdgeStyle&quot;,&quot;curved&quot;:0,&quot;rounded&quot;:0};size=45;rounded=0;fillColor=#FFFFFF;strokeColor=#000000;fontColor=#000000;fontSize=11;" vertex="1">
+          <mxGeometry x="220" y="80" width="110" height="950" as="geometry" />
+        </mxCell>
+        <mxCell id="ll_api3" parent="1" value="[Service]&lt;br/&gt;&lt;b&gt;SurveyResultService&lt;/b&gt;" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=1;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;newEdgeStyle={&quot;edgeStyle&quot;:&quot;orthogonalEdgeStyle&quot;,&quot;curved&quot;:0,&quot;rounded&quot;:0};size=45;rounded=0;fillColor=#FFFFFF;strokeColor=#000000;fontColor=#000000;fontSize=11;" vertex="1">
+          <mxGeometry x="440" y="80" width="130" height="950" as="geometry" />
+        </mxCell>
+        <mxCell id="ll_bus3" parent="1" value="[EventBus]&lt;br/&gt;&lt;b&gt;RabbitMQ&lt;/b&gt;" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=1;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;newEdgeStyle={&quot;edgeStyle&quot;:&quot;orthogonalEdgeStyle&quot;,&quot;curved&quot;:0,&quot;rounded&quot;:0};size=45;rounded=0;fillColor=#FFFFFF;strokeColor=#000000;fontColor=#000000;fontSize=11;" vertex="1">
+          <mxGeometry x="680" y="80" width="120" height="950" as="geometry" />
+        </mxCell>
+        <mxCell id="ll_db3" parent="1" value="&lt;b&gt;Database&lt;/b&gt;" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=1;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;newEdgeStyle={&quot;edgeStyle&quot;:&quot;orthogonalEdgeStyle&quot;,&quot;curved&quot;:0,&quot;rounded&quot;:0};size=45;rounded=0;fillColor=#FFFFFF;strokeColor=#000000;fontColor=#000000;fontSize=11;" vertex="1">
+          <mxGeometry x="900" y="80" width="120" height="950" as="geometry" />
+        </mxCell>
+        <mxCell id="ll_toui" parent="1" value="[Interface]&lt;br/&gt;&lt;b&gt;Tenant Web UI&lt;/b&gt;" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=1;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;newEdgeStyle={&quot;edgeStyle&quot;:&quot;orthogonalEdgeStyle&quot;,&quot;curved&quot;:0,&quot;rounded&quot;:0};size=45;rounded=0;fillColor=#FFFFFF;strokeColor=#000000;fontColor=#000000;fontSize=11;" vertex="1">
+          <mxGeometry x="1120" y="80" width="110" height="950" as="geometry" />
+        </mxCell>
+        <mxCell id="ll_to" parent="1" value="TenantOwner" style="shape=umlLifeline;participant=umlActor;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=1;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;newEdgeStyle={&quot;edgeStyle&quot;:&quot;orthogonalEdgeStyle&quot;,&quot;curved&quot;:0,&quot;rounded&quot;:0};size=60;fillColor=#FFFFFF;strokeColor=#000000;fontColor=#000000;fontSize=11;" vertex="1">
+          <mxGeometry x="1310" y="80" width="80" height="950" as="geometry" />
+        </mxCell>
+        <mxCell id="d3_1" parent="1" value="-- Approve Preliminary Results (UC-34) --" style="html=1;dashed=1;strokeColor=#666666;endArrow=none;strokeWidth=1;fontSize=11;fontStyle=2;align=center;verticalAlign=middle;labelBackgroundColor=#FFFFFF;" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="50" y="150" as="sourcePoint" />
+            <mxPoint x="1340" y="150" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="act3_ui1" parent="1" value="" style="html=1;points=[];perimeter=orthogonalPerimeter;outlineConnect=0;targetShapes=umlLifeline;portConstraint=eastwest;rounded=0;fillColor=#FFFFFF;strokeColor=#000000;" vertex="1">
+          <mxGeometry x="270" y="175" width="10" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="m3_1" parent="1" value="Submit survey approval" style="html=1;verticalAlign=bottom;endArrow=block;curved=0;rounded=0;endFill=1;strokeColor=#000000;fontSize=11;labelBackgroundColor=#FFFFFF;strokeWidth=1;edgeStyle=orthogonalEdgeStyle;" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="95" y="175" as="sourcePoint" />
+            <mxPoint x="270" y="175" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="act3_api1" parent="1" value="" style="html=1;points=[];perimeter=orthogonalPerimeter;outlineConnect=0;targetShapes=umlLifeline;portConstraint=eastwest;rounded=0;fillColor=#FFFFFF;strokeColor=#000000;" vertex="1">
+          <mxGeometry x="500" y="190" width="10" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="m3_2" parent="1" value="send survey approval" style="html=1;verticalAlign=bottom;endArrow=block;curved=0;rounded=0;endFill=1;strokeColor=#000000;fontSize=11;labelBackgroundColor=#FFFFFF;strokeWidth=1;edgeStyle=orthogonalEdgeStyle;" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="280" y="190" as="sourcePoint" />
+            <mxPoint x="500" y="190" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="act3_db1" parent="1" value="" style="html=1;points=[];perimeter=orthogonalPerimeter;outlineConnect=0;targetShapes=umlLifeline;portConstraint=eastwest;rounded=0;fillColor=#FFFFFF;strokeColor=#000000;" vertex="1">
+          <mxGeometry x="955" y="205" width="10" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="m3_3" parent="1" value="Update survey status = 'APPROVED'" style="html=1;verticalAlign=bottom;endArrow=block;curved=0;rounded=0;endFill=1;strokeColor=#000000;fontSize=11;labelBackgroundColor=#FFFFFF;strokeWidth=1;edgeStyle=orthogonalEdgeStyle;" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="510" y="205" as="sourcePoint" />
+            <mxPoint x="955" y="205" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="m3_4" parent="1" value="OK" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;endSize=8;curved=0;rounded=0;strokeColor=#000000;fontSize=11;labelBackgroundColor=#FFFFFF;strokeWidth=1;edgeStyle=orthogonalEdgeStyle;" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="955" y="230" as="sourcePoint" />
+            <mxPoint x="510" y="230" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="m3_5" parent="1" value="200 OK" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;endSize=8;curved=0;rounded=0;strokeColor=#000000;fontSize=11;labelBackgroundColor=#FFFFFF;strokeWidth=1;edgeStyle=orthogonalEdgeStyle;" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="500" y="240" as="sourcePoint" />
+            <mxPoint x="280" y="240" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="m3_6" parent="1" value="Display 'Approved - Ready for Publication' badge" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;endSize=8;curved=0;rounded=0;strokeColor=#000000;fontSize=11;labelBackgroundColor=#FFFFFF;strokeWidth=1;edgeStyle=orthogonalEdgeStyle;" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="270" y="250" as="sourcePoint" />
+            <mxPoint x="95" y="250" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="d3_2" parent="1" value="-- Publish Preliminary Results (UC-34) --" style="html=1;dashed=1;strokeColor=#666666;endArrow=none;strokeWidth=1;fontSize=11;fontStyle=2;align=center;verticalAlign=middle;labelBackgroundColor=#FFFFFF;" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="50" y="280" as="sourcePoint" />
+            <mxPoint x="1340" y="280" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="act3_ui2" parent="1" value="" style="html=1;points=[];perimeter=orthogonalPerimeter;outlineConnect=0;targetShapes=umlLifeline;portConstraint=eastwest;rounded=0;fillColor=#FFFFFF;strokeColor=#000000;" vertex="1">
+          <mxGeometry x="270" y="305" width="10" height="170" as="geometry" />
+        </mxCell>
+        <mxCell id="m3_7" parent="1" value="Confirm publish survey" style="html=1;verticalAlign=bottom;endArrow=block;curved=0;rounded=0;endFill=1;strokeColor=#000000;fontSize=11;labelBackgroundColor=#FFFFFF;strokeWidth=1;edgeStyle=orthogonalEdgeStyle;" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="95" y="305" as="sourcePoint" />
+            <mxPoint x="270" y="305" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="act3_api2" parent="1" value="" style="html=1;points=[];perimeter=orthogonalPerimeter;outlineConnect=0;targetShapes=umlLifeline;portConstraint=eastwest;rounded=0;fillColor=#FFFFFF;strokeColor=#000000;" vertex="1">
+          <mxGeometry x="500" y="320" width="10" height="140" as="geometry" />
+        </mxCell>
+        <mxCell id="m3_8" parent="1" value="send publish request" style="html=1;verticalAlign=bottom;endArrow=block;curved=0;rounded=0;endFill=1;strokeColor=#000000;fontSize=11;labelBackgroundColor=#FFFFFF;strokeWidth=1;edgeStyle=orthogonalEdgeStyle;" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="280" y="320" as="sourcePoint" />
+            <mxPoint x="500" y="320" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="act3_db2" parent="1" value="" style="html=1;points=[];perimeter=orthogonalPerimeter;outlineConnect=0;targetShapes=umlLifeline;portConstraint=eastwest;rounded=0;fillColor=#FFFFFF;strokeColor=#000000;" vertex="1">
+          <mxGeometry x="955" y="335" width="10" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="m3_9" parent="1" value="Update status = 'PUBLISHED' &amp; persist Outbox event" style="html=1;verticalAlign=bottom;endArrow=block;curved=0;rounded=0;endFill=1;strokeColor=#000000;fontSize=11;labelBackgroundColor=#FFFFFF;strokeWidth=1;edgeStyle=orthogonalEdgeStyle;" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="510" y="335" as="sourcePoint" />
+            <mxPoint x="955" y="335" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="m3_10" parent="1" value="OK" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;endSize=8;curved=0;rounded=0;strokeColor=#000000;fontSize=11;labelBackgroundColor=#FFFFFF;strokeWidth=1;edgeStyle=orthogonalEdgeStyle;" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="955" y="380" as="sourcePoint" />
+            <mxPoint x="510" y="380" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="act3_bus1" parent="1" value="" style="html=1;points=[];perimeter=orthogonalPerimeter;outlineConnect=0;targetShapes=umlLifeline;portConstraint=eastwest;rounded=0;fillColor=#FFFFFF;strokeColor=#000000;" vertex="1">
+          <mxGeometry x="735" y="395" width="10" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="m3_11" parent="1" value="publishDomainEvent(SurveyResultPublished)" style="html=1;verticalAlign=bottom;endArrow=open;curved=0;rounded=0;endFill=0;strokeColor=#000000;fontSize=11;labelBackgroundColor=#FFFFFF;strokeWidth=1;edgeStyle=orthogonalEdgeStyle;" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="510" y="395" as="sourcePoint" />
+            <mxPoint x="735" y="395" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="m3_12" parent="1" value="dispatchNotification(TenantOwner)" style="html=1;verticalAlign=bottom;endArrow=open;curved=0;rounded=0;endFill=0;strokeColor=#000000;fontSize=11;labelBackgroundColor=#FFFFFF;strokeWidth=1;edgeStyle=orthogonalEdgeStyle;" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="735" y="415" as="sourcePoint" />
+            <mxPoint x="1170" y="415" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="m3_13" parent="1" value="200 OK" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;endSize=8;curved=0;rounded=0;strokeColor=#000000;fontSize=11;labelBackgroundColor=#FFFFFF;strokeWidth=1;edgeStyle=orthogonalEdgeStyle;" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="500" y="445" as="sourcePoint" />
+            <mxPoint x="280" y="445" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="m3_14" parent="1" value="Display publication confirmation modal" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;endSize=8;curved=0;rounded=0;strokeColor=#000000;fontSize=11;labelBackgroundColor=#FFFFFF;strokeWidth=1;edgeStyle=orthogonalEdgeStyle;" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="270" y="465" as="sourcePoint" />
+            <mxPoint x="95" y="465" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="d3_3" parent="1" value="-- View Published Survey Results (UC-34) --" style="html=1;dashed=1;strokeColor=#666666;endArrow=none;strokeWidth=1;fontSize=11;fontStyle=2;align=center;verticalAlign=middle;labelBackgroundColor=#FFFFFF;" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="50" y="500" as="sourcePoint" />
+            <mxPoint x="1340" y="500" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="act3_toui1" parent="1" value="" style="html=1;points=[];perimeter=orthogonalPerimeter;outlineConnect=0;targetShapes=umlLifeline;portConstraint=eastwest;rounded=0;fillColor=#FFFFFF;strokeColor=#000000;" vertex="1">
+          <mxGeometry x="1170" y="525" width="10" height="160" as="geometry" />
+        </mxCell>
+        <mxCell id="m3_15" parent="1" value="Open published survey report" style="html=1;verticalAlign=bottom;endArrow=block;curved=0;rounded=0;endFill=1;strokeColor=#000000;fontSize=11;labelBackgroundColor=#FFFFFF;strokeWidth=1;edgeStyle=orthogonalEdgeStyle;" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1350" y="525" as="sourcePoint" />
+            <mxPoint x="1180" y="525" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="act3_api3" parent="1" value="" style="html=1;points=[];perimeter=orthogonalPerimeter;outlineConnect=0;targetShapes=umlLifeline;portConstraint=eastwest;rounded=0;fillColor=#FFFFFF;strokeColor=#000000;" vertex="1">
+          <mxGeometry x="500" y="540" width="10" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="m3_16" parent="1" value="get published survey report" style="html=1;verticalAlign=bottom;endArrow=block;curved=0;rounded=0;endFill=1;strokeColor=#000000;fontSize=11;labelBackgroundColor=#FFFFFF;strokeWidth=1;edgeStyle=orthogonalEdgeStyle;" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1170" y="540" as="sourcePoint" />
+            <mxPoint x="510" y="540" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="act3_db3" parent="1" value="" style="html=1;points=[];perimeter=orthogonalPerimeter;outlineConnect=0;targetShapes=umlLifeline;portConstraint=eastwest;rounded=0;fillColor=#FFFFFF;strokeColor=#000000;" vertex="1">
+          <mxGeometry x="955" y="555" width="10" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="m3_17" parent="1" value="Fetch published survey report &amp; disease zones" style="html=1;verticalAlign=bottom;endArrow=block;curved=0;rounded=0;endFill=1;strokeColor=#000000;fontSize=11;labelBackgroundColor=#FFFFFF;strokeWidth=1;edgeStyle=orthogonalEdgeStyle;" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="510" y="555" as="sourcePoint" />
+            <mxPoint x="955" y="555" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="m3_18" parent="1" value="return published report payload" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;endSize=8;curved=0;rounded=0;strokeColor=#000000;fontSize=11;labelBackgroundColor=#FFFFFF;strokeWidth=1;edgeStyle=orthogonalEdgeStyle;" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="955" y="595" as="sourcePoint" />
+            <mxPoint x="510" y="595" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="m3_19" parent="1" value="200 OK (overview, zones, guidance)" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;endSize=8;curved=0;rounded=0;strokeColor=#000000;fontSize=11;labelBackgroundColor=#FFFFFF;strokeWidth=1;edgeStyle=orthogonalEdgeStyle;" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="500" y="605" as="sourcePoint" />
+            <mxPoint x="1170" y="605" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="m3_20" parent="1" value="Display responsive Farm Health Dashboard &amp; PDF download" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;endSize=8;curved=0;rounded=0;strokeColor=#000000;fontSize=11;labelBackgroundColor=#FFFFFF;strokeWidth=1;edgeStyle=orthogonalEdgeStyle;" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1170" y="675" as="sourcePoint" />
+            <mxPoint x="1350" y="675" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

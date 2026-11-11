@@ -187,7 +187,7 @@ internal sealed class GetFarmPlantHealthMapQueryHandler(
             // 3. Lấy toàn bộ quan sát bệnh & quả thuộc Farm
             var obsRows = await dbContext.Database.SqlQueryRaw<ObservationRow>(
                 @"SELECT id AS ""Id"", mission_id AS ""MissionId"",
-                         suggested_plant_id AS ""SuggestedPlantId"",
+                         COALESCE(resolved_plant_id, suggested_plant_id) AS ""SuggestedPlantId"",
                          detection_confidence AS ""DetectionConfidence"",
                          gps_distance_m AS ""GpsDistanceM"",
                          matching_parameters::text AS ""MatchingParametersJson""
@@ -397,6 +397,7 @@ internal sealed class GetFarmPlantHealthMapQueryHandler(
                                  p.plant_code AS ""PlantCode"", p.row_index AS ""RowIndex"", p.column_index AS ""ColumnIndex"",
                                  ST_Y(p.location::geometry) AS ""Latitude"", ST_X(p.location::geometry) AS ""Longitude""
                           FROM plant.disease_zone_memberships m
+                          JOIN plant.disease_zones dz ON dz.id = m.disease_zone_id AND dz.current_membership_version = m.membership_version
                           JOIN plant.plants p ON p.id = m.plant_id
                           WHERE m.farm_id = {0}",
                         request.FarmId)
@@ -450,7 +451,7 @@ internal sealed class GetFarmPlantHealthMapQueryHandler(
                             ? mList.Select(m => new DiseaseZoneTreeItemResult(m.PlantId, m.PlantCode, m.RowIndex ?? 0, m.ColumnIndex ?? 0, m.Latitude, m.Longitude)).ToList()
                             : new List<DiseaseZoneTreeItemResult>();
 
-                        if (totalTrees == 0) totalTrees = treeItems.Count;
+                        totalTrees = treeItems.Count > 0 ? treeItems.Count : totalTrees;
                         if (centerLat == 0.0 && treeItems.Count > 0)
                         {
                             centerLat = treeItems.Average(t => t.Lat);

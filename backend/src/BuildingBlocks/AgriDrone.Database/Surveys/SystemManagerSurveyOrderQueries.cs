@@ -241,6 +241,11 @@ internal sealed class SystemManagerSurveyOrderQueries(
             order.RemainingAmount,
             order.Currency ?? "VND",
             order.Appointments
+                // Revisions are scoped to each purpose. After pricing, only the paid-service
+                // appointment is current; a higher baseline revision must not hide it.
+                .Where(item => item.Purpose == (order.PricingConfirmedAt.HasValue
+                    ? SurveyAppointmentPurpose.PaidService
+                    : SurveyAppointmentPurpose.BaselineMapping))
                 .Where(item => item.Status == SurveyAppointmentStatus.Proposed ||
                                item.Status == SurveyAppointmentStatus.Confirmed ||
                                item.Status == SurveyAppointmentStatus.RescheduleRequested)

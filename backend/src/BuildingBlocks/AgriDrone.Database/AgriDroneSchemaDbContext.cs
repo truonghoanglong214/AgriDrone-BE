@@ -30,5 +30,10 @@ public sealed class AgriDroneSchemaDbContext(DbContextOptions<AgriDroneSchemaDbC
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AuditLog).Assembly);
 
         CrossModuleRelationshipConfiguration.Configure(modelBuilder);
+        Health.PlantHealthRelationships.Configure(modelBuilder);
+        modelBuilder.Entity<Notification>().HasOne<AgriDrone.Modules.Surveys.Domain.PlantHealthPublication>().WithMany()
+            .HasForeignKey(n => n.SourcePublicationId).OnDelete(DeleteBehavior.Restrict).HasConstraintName("fk_notification_health_publication");
+        modelBuilder.Entity<DroneMission>().HasOne<AgriDrone.Modules.Surveys.Domain.PlantHealthPublication>().WithMany()
+            .HasForeignKey(m => m.HealthPublicationId).OnDelete(DeleteBehavior.Restrict).HasConstraintName("fk_mission_health_publication");
     }
 }

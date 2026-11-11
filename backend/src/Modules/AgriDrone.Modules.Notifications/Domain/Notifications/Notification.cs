@@ -29,4 +29,20 @@ public sealed class Notification : Entity
     public DateTimeOffset CreatedAt { get; private set; }
 
     public DateTimeOffset? ReadAt { get; private set; }
+
+    public Guid? SourcePublicationId { get; private set; }
+
+    public static Notification ForPublishedPlantHealth(Guid ownerId, Guid tenantId, Guid farmId, Guid publicationId,
+        string teamLabelLimitation, DateTimeOffset createdAt)
+    {
+        DomainGuard.NotEmpty(ownerId); DomainGuard.NotEmpty(tenantId); DomainGuard.NotEmpty(farmId); DomainGuard.NotEmpty(publicationId);
+        DomainGuard.Utc(createdAt); ArgumentException.ThrowIfNullOrWhiteSpace(teamLabelLimitation);
+        return new()
+        {
+            Id = Guid.CreateVersion7(), UserId = ownerId, TenantId = tenantId, FarmId = farmId,
+            NotificationType = "PLANT_HEALTH_PUBLISHED", Title = "Đã công bố kết quả khảo sát sơ bộ",
+            Message = $"Kết quả sức khỏe cây trồng đã được duyệt và công bố. Đây là kết quả nghi ngờ sơ bộ, không phải chẩn đoán. {teamLabelLimitation}",
+            EntityType = "PlantHealthPublication", EntityId = publicationId, SourcePublicationId = publicationId, CreatedAt = createdAt
+        };
+    }
 }

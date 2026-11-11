@@ -1,0 +1,58 @@
+@startuml
+skinparam style strictuml
+hide footbox
+skinparam defaultFontName Arial
+skinparam defaultFontSize 11
+skinparam ArrowColor black
+skinparam ArrowThickness 1
+skinparam sequence {
+    LifeLineBorderColor black
+    LifeLineBackgroundColor white
+    ParticipantBackgroundColor white
+    ParticipantBorderColor black
+    ActorBackgroundColor white
+    ActorBorderColor black
+    GroupBorderColor black
+    GroupBackgroundColor white
+}
+
+title SD-03 (Sub-system level) — Approve, Publish & Deliver Survey Results
+
+actor "<u.:SystemManager./u>" as SM
+participant "«container»\n<u.:ManagerUI./u>\n[Interface]" as UI
+participant "«container»\n<u.:SurveyResultService./u>\n[Service]" as API
+participant "«container»\n<u.:RabbitMQ./u>\n[EventBus]" as BUS
+participant "«container»\n<u.:Database./u>\nDatabase" as DB
+participant "«container»\n<u.:TenantWebUI./u>\n[Interface]" as TO_UI
+actor "<u.:TenantOwner./u>" as TO
+
+== Approve Preliminary Results (UC-31) ==
+
+SM -> UI ++ : Submit survey approval
+UI -> API ++ : send survey approval
+API -> DB ++ : Update survey status = 'APPROVED'
+DB --> API -- : OK
+API --> UI -- : 200 OK
+UI --> SM -- : Display 'Approved - Ready for Publication' badge
+
+== Publish Preliminary Results (UC-32) ==
+
+SM -> UI ++ : Confirm publish survey
+UI -> API ++ : send publish request
+API -> DB ++ : Update status = 'PUBLISHED' & persist Outbox event
+DB --> API -- : OK
+API -> BUS : publishDomainEvent(SurveyResultPublished)
+BUS -> TO_UI : dispatchNotification(TenantOwner)
+API --> UI -- : 200 OK
+UI --> SM -- : Display publication confirmation modal
+
+== View Published Survey Results (UC-33) ==
+
+TO -> TO_UI ++ : Open published survey report
+TO_UI -> API ++ : get published survey report
+API -> DB ++ : Fetch published survey report & disease zones
+DB --> API -- : return published report payload
+API --> TO_UI -- : 200 OK (overview, zones, guidance)
+TO_UI --> TO -- : Display responsive Farm Health Dashboard & PDF download
+
+@enduml

@@ -56,6 +56,14 @@ internal sealed class HealthReviewStateChangedHandler(
                 "Health review state does not belong to the Mission tenant/Farm/Zone.");
         }
 
+        var isV4 = mission.HealthPublicationId.HasValue || await context.Database.SqlQuery<bool>($"""
+            SELECT EXISTS (SELECT 1 FROM mission.ai_processing_jobs j
+                WHERE j.mission_id = {mission.Id} AND j.job_type = 'DISEASE_DETECTION' AND j.parameters ? 'SourceVersion') AS "Value"
+            """).SingleAsync(cancellationToken);
+        if (isV4)
+            return InboxHandlerResult.PermanentFailure("HealthReviewStateChangedV1.V4PublicationRequired",
+                "V4 Plant Health Mission completion requires the verified preliminary publication outcome.");
+
         try
         {
             mission.ApplyHealthReviewState(

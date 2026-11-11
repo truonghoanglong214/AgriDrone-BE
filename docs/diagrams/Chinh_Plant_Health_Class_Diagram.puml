@@ -1,0 +1,175 @@
+@startuml Chinh_Plant_Health_Class_Diagram
+skinparam style strictuml
+skinparam defaultFontName Arial
+skinparam defaultFontSize 11
+skinparam classAttributeIconSize 0
+skinparam classFontStyle bold
+skinparam linetype ortho
+
+' Monochrome styling
+skinparam class {
+    BackgroundColor white
+    BorderColor black
+    ArrowColor black
+}
+skinparam interface {
+    BackgroundColor white
+    BorderColor black
+}
+skinparam enum {
+    BackgroundColor white
+    BorderColor black
+}
+
+package "AgriDrone.Api.Controllers" {
+    class MissionOrthophotoController {
+        - sender: ISender
+        - managerAccessService: ISystemManagerAccessService
+        + DetectDiseases(farmId: Guid, missionId: Guid, req: DetectMissionDiseasesRequest?, ct: CancellationToken): Task<IResult>
+    }
+
+    class FarmPlantHealthController {
+        - sender: ISender
+        + GetPlantHealthMap(farmId: Guid, tenantId: Guid?, ct: CancellationToken): Task<IResult>
+        + ReviewSuspectedDisease(farmId: Guid, detectionId: Guid, req: ReviewRequest, ct: CancellationToken): Task<IResult>
+        + ResolveFlaggedLocation(farmId: Guid, detectionId: Guid, req: ResolveFlagRequest, ct: CancellationToken): Task<IResult>
+        + GetPublishedSurveyResult(farmId: Guid, surveyResultId: Guid, ct: CancellationToken): Task<IResult>
+    }
+
+    class SystemPlantHealthGuidanceController {
+        - sender: ISender
+        + GetHistory(ct: CancellationToken): Task<IResult>
+        + Create(req: CreateSourcedGuidanceRequest, ct: CancellationToken): Task<IResult>
+        + Activate(guidanceId: Guid, req: ChangeSourcedGuidanceStatusRequest, ct: CancellationToken): Task<IResult>
+    }
+}
+
+package "AgriDrone.Modules.Missions.Application.Features.Processing" {
+    class DetectMissionDiseasesCommandHandler {
+        - missionRepository: IDroneMissionRepository
+        - dbContext: MissionsDbContext
+        - metashapeService: IMetashapeService
+        - managerAccessService: ISystemManagerAccessService
+        - executionContext: IExecutionContext
+        + Handle(request: DetectMissionDiseasesCommand, ct: CancellationToken): Task<Result<DetectMissionDiseasesResult>>
+        - CalculateHaversineDistance(lat1: double, lon1: double, lat2: double, lon2: double): double
+        - FindConnectedComponents(trees: List<DiseasedTree>, radiusMeters: double, minTrees: int): List<OutbreakCluster>
+    }
+
+    class GetFarmPlantHealthMapQueryHandler {
+        - missionsDbContext: MissionsDbContext
+        - objectStorage: IObjectStorage
+        + Handle(query: GetFarmPlantHealthMapQuery, ct: CancellationToken): Task<Result<FarmPlantHealthMapResult>>
+    }
+}
+
+package "AgriDrone.Modules.Plants.Domain.DiseaseZones" {
+    class DiseaseZonePublicationService <<Domain Service>> {
+        + Publish(reviewedZone: DiseaseZone, currentPublished: DiseaseZone?, publishedBy: Guid, publishedAt: DateTimeOffset): void
+    }
+
+    class DiseaseZoneGeometryGuard {
+        + EnsureValidPolygon(geometry: Geometry): void
+        + EnsureWithinBoundary(zoneGeometry: Geometry, farmBoundary: Geometry): void
+    }
+
+    interface IDiseaseZoneRepository {
+        + GetByIdAsync(id: Guid, ct: CancellationToken): Task<DiseaseZone?>
+        + AddAsync(zone: DiseaseZone, ct: CancellationToken): Task
+        + UpdateAsync(zone: DiseaseZone, ct: CancellationToken): Task
+    }
+
+    class DiseaseZoneRepository {
+        - _dbContext: PlantsDbContext
+        + GetByIdAsync(id: Guid, ct: CancellationToken): Task<DiseaseZone?>
+        + AddAsync(zone: DiseaseZone, ct: CancellationToken): Task
+        + UpdateAsync(zone: DiseaseZone, ct: CancellationToken): Task
+    }
+
+    class DiseaseZone <<Aggregate Root>> {
+        + Id: Guid
+        + SurveyOrderId: Guid
+        + SurveyResultId: Guid
+        + FarmId: Guid
+        + Boundary: Polygon
+        + Status: DiseaseZoneStatus
+        + SeverityLevel: string
+        + TotalEnclosedTrees: int
+        + CreateProposal(proposal: DiseaseZoneProposal): DiseaseZone
+        + Review(reviewedGeometry: Polygon, ...): void
+        + Reject(reviewedBy: Guid, reason: string): void
+        + Publish(publishedBy: Guid, publishedAt: DateTimeOffset): void
+        + Supersede(supersededByZoneId: Guid, at: DateTimeOffset): void
+    }
+
+    class DiseaseZonePlantMembership <<Entity>> {
+        + DiseaseZoneId: Guid
+        + PlantId: Guid
+        + MembershipKind: DiseaseZoneMembershipKind
+    }
+
+    enum DiseaseZoneStatus <<Enum>> {
+        Proposed
+        Reviewed
+        Published
+        Rejected
+        Superseded
+    }
+
+    enum DiseaseZoneMembershipKind <<Enum>> {
+        CoreOutbreak
+        BufferZone
+    }
+}
+
+package "AgriDrone.Modules.Surveys.Domain.Results" {
+    class SurveyResult <<Entity>> {
+        + Id: Guid
+        + SurveyOrderId: Guid
+        + Status: SurveyResultStatus
+        + ApprovedAt: DateTimeOffset?
+        + ApprovedBy: Guid?
+        + PublishedAt: DateTimeOffset?
+        + PublishedBy: Guid?
+        + TotalPlantsAnalyzed: int
+        + InfectedPlantsCount: int
+        + Approve(managerId: Guid): void
+        + Publish(managerId: Guid): void
+    }
+
+    enum SurveyResultStatus <<Enum>> {
+        ReadyForProcessing
+        AnalyzingPlantHealth
+        PendingReview
+        Approved
+        Published
+        Completed
+    }
+}
+
+package "AgriDrone.SharedInfrastructure" {
+    interface IRabbitMqPublisher {
+        + PublishAsync<T>(exchange: string, routingKey: string, message: T, ct: CancellationToken): Task
+    }
+
+    interface IObjectStorage {
+        + GetPresignedUrlAsync(bucket: string, objectKey: string, expiry: TimeSpan): Task<string>
+        + PutObjectAsync(bucket: string, objectKey: string, data: Stream, contentType: string): Task
+    }
+}
+
+' Relationships
+MissionOrthophotoController ..> DetectMissionDiseasesCommandHandler : sends command
+FarmPlantHealthController ..> GetFarmPlantHealthMapQueryHandler : sends query
+GetFarmPlantHealthMapQueryHandler ..> IObjectStorage : uses
+
+DiseaseZoneRepository ..|> IDiseaseZoneRepository : implements
+DiseaseZonePublicationService ..> DiseaseZone : publishes
+DiseaseZone "1" *-- "0..*" DiseaseZonePlantMembership : contains
+SurveyResult "1" *-- "0..*" DiseaseZone : aggregates
+
+DiseaseZone --> DiseaseZoneStatus : has
+DiseaseZonePlantMembership --> DiseaseZoneMembershipKind : has
+SurveyResult --> SurveyResultStatus : has
+
+@enduml

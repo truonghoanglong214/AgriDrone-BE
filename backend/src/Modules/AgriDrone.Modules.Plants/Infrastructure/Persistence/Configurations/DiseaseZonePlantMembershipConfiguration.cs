@@ -17,6 +17,7 @@ public sealed class DiseaseZonePlantMembershipConfiguration
             {
                 table.HasCheckConstraint("ck_disease_zone_memberships_version_positive", "membership_version >= 1");
                 table.HasCheckConstraint("ck_disease_zone_memberships_confidence", "confidence IS NULL OR (confidence >= 0 AND confidence <= 1)");
+                table.HasCheckConstraint("ck_disease_zone_memberships_reference", "plant_id IS NOT NULL OR mapping_candidate_id IS NOT NULL");
             });
 
         builder.HasKey(membership => membership.Id).HasName("pk_disease_zone_memberships");
@@ -24,6 +25,9 @@ public sealed class DiseaseZonePlantMembershipConfiguration
         builder.Property(membership => membership.DiseaseZoneId).HasColumnName("disease_zone_id").HasColumnType("uuid");
         builder.Property(membership => membership.FarmId).HasColumnName("farm_id").HasColumnType("uuid");
         builder.Property(membership => membership.PlantId).HasColumnName("plant_id").HasColumnType("uuid");
+        builder.Property(membership => membership.MappingCandidateId).HasColumnName("mapping_candidate_id");
+        builder.HasIndex(membership => new { membership.DiseaseZoneId, membership.MembershipVersion, membership.MappingCandidateId })
+            .HasDatabaseName("uq_disease_zone_memberships_candidate").IsUnique();
         builder.Property(membership => membership.MembershipVersion).HasColumnName("membership_version").HasColumnType("integer");
         builder.Property(membership => membership.Kind).HasColumnName("kind").HasColumnType("system.disease_zone_membership_kind").IsRequired();
         builder.Property(membership => membership.Confidence).HasColumnName("confidence").HasColumnType("numeric(5,4)").HasPrecision(5, 4);

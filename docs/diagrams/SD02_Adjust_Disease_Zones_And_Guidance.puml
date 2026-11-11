@@ -1,0 +1,69 @@
+@startuml
+skinparam style strictuml
+hide footbox
+skinparam defaultFontName Arial
+skinparam defaultFontSize 11
+skinparam ArrowColor black
+skinparam ArrowThickness 1
+skinparam sequence {
+    LifeLineBorderColor black
+    LifeLineBackgroundColor white
+    ParticipantBackgroundColor white
+    ParticipantBorderColor black
+    ActorBackgroundColor white
+    ActorBorderColor black
+    GroupBorderColor black
+    GroupBackgroundColor white
+}
+
+title SD-02 (Sub-system level) — Adjust Disease Zones & Review Treatment Guidance
+
+actor "<u.:SystemManager./u>" as SM
+participant "«container»\n<u.:ManagerUI./u>\n[Interface]" as UI
+participant "«container»\n<u.:PlantHealthService./u>\n[Service]" as API
+participant "«container»\n<u.:ObjectStorage./u>\n[container]" as ST
+participant "«container»\n<u.:Database./u>\nDatabase" as DB
+
+== Adjust Disease Zones (UC-29) ==
+
+SM -> UI ++ : Activate zone edit mode
+UI --> SM -- : Enable Leaflet Draw toolbar
+
+alt action = Merge multiple outbreak clusters
+    SM -> UI ++ : Merge disease zones
+    UI -> API ++ : send merge zones request
+    API -> DB ++ : Merge disease zones & reassign member plants
+    DB --> API -- : OK
+    API --> UI -- : 200 OK (mergedZoneId)
+else action = Reshape boundary / Add buffer zone
+    SM -> UI : Save reshaped boundary
+    UI -> API ++ : update zone boundary
+    API -> DB ++ : Update zone polygon boundary
+    DB --> API -- : OK
+    API --> UI -- : 200 OK
+else action = Assign / Remove tree membership
+    SM -> UI : Update zone plant membership
+    UI -> API ++ : update plant memberships
+    API -> DB ++ : Update zone plant memberships
+    DB --> API -- : OK
+    API --> UI -- : 200 OK (totalEnclosedTrees)
+end
+UI --> SM -- : Re-render adjusted polygon & tree count
+
+== Review Treatment Guidance (UC-30) ==
+
+SM -> UI ++ : Open zone treatment guidance
+UI -> API ++ : get treatment guidance
+API -> DB ++ : Fetch treatment guidance & citations
+DB --> API -- : return guidance content & disclaimer
+API --> UI -- : 200 OK (guidance & protocol)
+UI --> SM -- : Display treatment guidance modal
+
+SM -> UI ++ : Attach custom guidance notes
+UI -> API ++ : save custom guidance notes
+API -> DB ++ : Attach custom guidance notes to zone
+DB --> API -- : OK
+API --> UI -- : 200 OK
+UI --> SM -- : Display 'Guidance attached' badge
+
+@enduml

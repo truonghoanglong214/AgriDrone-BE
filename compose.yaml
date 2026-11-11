@@ -90,6 +90,12 @@ services:
       retries: 10
       start_period: 10s
 
+  nodeodm:
+    image: opendronemap/nodeodm:latest
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+
   metashape-service:
     build:
       context: ./backend/services/metashape-service
@@ -101,11 +107,15 @@ services:
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-agridrone-dragon}
       MINIO_BUCKET: agridrone-media
       MINIO_SECURE: "false"
+      NODEODM_HOST: nodeodm
+      NODEODM_PORT: 3000
     ports:
       - "127.0.0.1:8000:8000"
     depends_on:
       minio:
         condition: service_healthy
+      nodeodm:
+        condition: service_started
 
 volumes:
   postgres_data:
