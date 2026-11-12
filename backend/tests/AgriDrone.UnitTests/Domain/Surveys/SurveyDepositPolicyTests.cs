@@ -29,13 +29,26 @@ public sealed class SurveyDepositPolicyTests
     }
 
     [Theory]
-    [InlineData(0)]
     [InlineData(-100)]
     [InlineData(5000.50)]
     public void CreateWithInvalidAmountThrowsArgumentOutOfRangeException(decimal invalidAmount)
     {
         Assert.Throws<ArgumentOutOfRangeException>(() =>
             SurveyDepositPolicy.Create(1, invalidAmount, AdminId, Now));
+    }
+
+    [Fact]
+    public void ZeroDepositPolicyCreatesFollowUpOrderWithoutDepositPayment()
+    {
+        var policy = SurveyDepositPolicy.Create(1, 0m, AdminId, Now);
+        var order = SurveyOrder.Create(
+            "ORD-ZERO-DEPOSIT", Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
+            Guid.NewGuid(), false, null, "v1", "EXISTING_BASEMAP", Now,
+            customDepositAmount: policy.AmountVnd);
+
+        Assert.Equal(0m, order.DepositAmount);
+        Assert.Equal(SurveyPaymentStatus.Paid, order.DepositPaymentStatus);
+        Assert.Null(order.DepositPaymentId);
     }
 
     [Fact]

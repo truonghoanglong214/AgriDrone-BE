@@ -285,6 +285,8 @@ internal sealed class ProcessSurveyPaymentEventCommandHandler(
 
         if (payment.Purpose == PaymentPurpose.BaselineDeposit)
         {
+            if (!order.CanAcceptDepositPayment())
+                return (false, "ORDER_NOT_AWAITING_DEPOSIT");
             var amountMatches = payment.Amount == Money.Round(command.Amount) &&
                                 order.DepositAmount == payment.Amount;
             var currencyMatches = string.Equals(
@@ -303,11 +305,6 @@ internal sealed class ProcessSurveyPaymentEventCommandHandler(
 
             if (order.RequiresBaselineMapping)
             {
-                if (order.Status != SurveyOrderStatus.AwaitingBaselineDeposit)
-                {
-                    return (false, "ORDER_NOT_AWAITING_BASELINE_DEPOSIT");
-                }
-
                 payment.Confirm(command.ProviderReference, command.OccurredAt);
                 order.RecordBaselineDepositConfirmed(payment.Id, payment.Amount, command.OccurredAt);
                 return (true, "APPLIED");
@@ -321,6 +318,11 @@ internal sealed class ProcessSurveyPaymentEventCommandHandler(
         }
         else
         {
+            if (order.DepositAmount > 0m && order.DepositPaymentStatus != SurveyPaymentStatus.Paid)
+            {
+                payment.RequireAdjustment(command.OccurredAt);
+                return (true, "DEPOSIT_NOT_PAID");
+            }
             var expectedBalance = order.RemainingAmount ?? order.FinalPrice;
             var amountMatches = payment.Amount == Money.Round(command.Amount) &&
                                 expectedBalance == payment.Amount;

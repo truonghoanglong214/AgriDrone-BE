@@ -42,9 +42,14 @@ internal sealed class GetFarmPlantsQueryHandler(
                 SELECT 1
                 FROM survey.survey_orders o
                 WHERE o.farm_id = {0}
+                  AND o.id = (
+                    SELECT m.source_survey_order_id FROM farm.farm_base_map_versions m
+                    WHERE m.farm_id = o.farm_id AND m.status::text = 'PUBLISHED'
+                    ORDER BY m.version_number DESC LIMIT 1
+                  )
                   AND UPPER(o.status::text) <> 'CANCELLED'
                   AND (
-                    (o.requires_baseline_mapping AND UPPER(o.deposit_payment_status::text) <> 'PAID')
+                    (o.deposit_amount > 0 AND UPPER(o.deposit_payment_status::text) <> 'PAID')
                     OR UPPER(o.status::text) IN (
                         'PENDING_BOUNDARY_VERIFICATION',
                         'AWAITING_BASELINE_APPOINTMENT',
@@ -66,8 +71,9 @@ internal sealed class GetFarmPlantsQueryHandler(
                             WHERE p.survey_order_id = o.id
                               AND (p.purpose IN ('FinalBalance', 'FINAL_BALANCE') OR UPPER(REPLACE(p.purpose::text, '_', '')) = 'FINALBALANCE')
                               AND UPPER(p.status::text) = 'PAID'
+                              AND p.amount = COALESCE(o.remaining_amount, o.final_price)
+                              AND p.currency = o.currency
                         )
-                        AND UPPER(o.status::text) <> 'COMPLETED'
                     )
                   )
               ) AS ""Value""",

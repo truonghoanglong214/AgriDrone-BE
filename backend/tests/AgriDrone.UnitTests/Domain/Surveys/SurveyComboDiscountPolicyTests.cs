@@ -9,6 +9,125 @@ public sealed class SurveyComboDiscountPolicyTests
         new(2026, 11, 10, 8, 0, 0, TimeSpan.Zero);
     private static readonly Guid AdminId = Guid.NewGuid();
 
+    [Theory]
+    [InlineData(true, 0, 1500, 1000, 1500000, 1000000)]
+    [InlineData(true, 20, 2500, 1000, 2000000, 1500000)]
+    [InlineData(false, 0, 1500, 1050, 1575000, 1075000)]
+    [InlineData(false, 20, 2500, 1050, 2100000, 1600000)]
+    public void PricingCreditsDepositForAllFourPaymentScenarios(
+        bool baseline, decimal discount, decimal unitPrice, int poles,
+        decimal total, decimal balance)
+    {
+        var order = CreatePricedOrder(baseline, discount, unitPrice, poles, 500000m);
+        Assert.Equal(total, order.FinalPrice);
+        Assert.Equal(balance, order.RemainingAmount);
+        Assert.Equal(discount, order.ComboDiscountPercentage);
+    }
+
+    [Fact]
+    public void DepositCoveredOrderOnlySettlesAfterExplicitSettlementAndRefundRevokesIt()
+    {
+        var order = CreatePricedOrder(false, 20m, 2500m, 2, 5000m);
+        Assert.Equal(0m, order.RemainingAmount);
+        Assert.False(order.IsZeroBalanceSettled());
+        order.MarkPaidAppointmentConfirmed(Now.AddHours(8));
+        order.MarkPaymentConfirmed(Now.AddHours(9));
+        Assert.True(order.IsZeroBalanceSettled());
+        order.RevokeBaselineDeposit(Now.AddHours(10));
+        Assert.False(order.IsZeroBalanceSettled());
+        Assert.Equal(SurveyOrderStatus.AwaitingPayment, order.Status);
+        Assert.Equal(order.FinalPrice, order.RemainingAmount);
+        Assert.True(order.CanAcceptDepositPayment());
+        order.RecordFollowUpDepositConfirmed(Guid.NewGuid(), 5000m, Now.AddHours(11));
+        Assert.Equal(0m, order.RemainingAmount);
+        Assert.False(order.IsZeroBalanceSettled());
+    }
+
+    [Fact]
+    public void ComboPriceUsesWholeVndAndPreservesDiscountWhenInventoryChanges()
+    {
+        var order = CreatePricedOrder(false, 20m, 2501m, 1000, 0m);
+        Assert.Equal(2001m, order.PricePerPoleSnapshot?.Amount);
+        var adjustedPrice = order.GetEffectivePricePerPole(PricePerPole.Create(2501m));
+        order.ApplyPriceAdjustment(Guid.NewGuid(), ConfirmedSurveyPoleCount.Create(1100),
+            adjustedPrice, CurrencyCode.Vnd, AdminId, Now.AddHours(8));
+        Assert.Equal(2201100m, order.FinalPrice);
+        Assert.Equal(20m, order.ComboDiscountPercentage);
+        Assert.Equal(decimal.Truncate(order.FinalPrice!.Value), order.FinalPrice);
+    }
+
+    [Fact]
+    public void RefundedBaselineDepositCanBeRepaidWithoutRepeatingMapping()
+    {
+        var order = CreatePricedOrder(true, 20m, 2500m, 1000, 500000m);
+        order.MarkPaidAppointmentConfirmed(Now.AddHours(8));
+        order.MarkPaymentConfirmed(Now.AddHours(9));
+        order.RevokeBaselineDeposit(Now.AddHours(10));
+        Assert.True(order.CanAcceptDepositPayment());
+        order.RecordBaselineDepositConfirmed(Guid.NewGuid(), 500000m, Now.AddHours(11));
+        Assert.Equal(SurveyOrderStatus.AwaitingPayment, order.Status);
+        Assert.Equal(1500000m, order.RemainingAmount);
+    }
+
+    private static SurveyOrder CreatePricedOrder(
+        bool baseline, decimal discount, decimal unitPrice, int poles, decimal deposit)
+    {
+        var order = SurveyOrder.Create("ORD-REGRESSION", Guid.NewGuid(), Guid.NewGuid(),
+            Guid.NewGuid(), Guid.NewGuid(), baseline, null, "v1", "Regression", Now,
+            customDepositAmount: deposit, customComboDiscountPercentage: discount);
+        var mapId = Guid.NewGuid();
+        var boundaryId = Guid.NewGuid();
+        var count = ConfirmedSurveyPoleCount.Create(poles);
+        if (baseline)
+        {
+            order.MarkBaselineAppointmentConfirmed(Now.AddHours(1));
+            if (deposit > 0m)
+                order.RecordBaselineDepositConfirmed(Guid.NewGuid(), deposit, Now.AddHours(2));
+            order.StartBaselineMapping(Now.AddHours(3));
+            order.MarkBaselineCandidatesReady(Now.AddHours(4));
+            order.RecordBaselinePublication(mapId, count, AdminId, Now.AddHours(5), boundaryId);
+        }
+        else
+        {
+            if (deposit > 0m)
+                order.RecordFollowUpDepositConfirmed(Guid.NewGuid(), deposit, Now.AddHours(1));
+            order.VerifyBoundaryScopeAndCurrentInventory(boundaryId, mapId, count,
+                AdminId, Now.AddHours(5));
+        }
+        order.ConfirmPoleCountAndPricing(mapId, count,
+            baseline ? SurveyPoleCountSource.BaselinePublication : SurveyPoleCountSource.CurrentPublishedInventory,
+            "Verified inventory", Guid.NewGuid(), PricePerPole.Create(unitPrice),
+            CurrencyCode.Vnd, AdminId, Now.AddHours(7));
+        return order;
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(0.0)]
+    public void SurveyWithoutComboKeepsCatalogPriceAndFullBalance(double? discountRaw)
+    {
+        decimal? discount = discountRaw.HasValue ? (decimal)discountRaw.Value : null;
+        var order = SurveyOrder.Create(
+            "ORD-NO-COMBO", Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
+            Guid.NewGuid(), false, null, "v1", "Existing farm", Now,
+            customDepositAmount: 0m, customComboDiscountPercentage: discount);
+        var mapId = Guid.NewGuid();
+        order.VerifyBoundaryScopeAndCurrentInventory(
+            Guid.NewGuid(), mapId, ConfirmedSurveyPoleCount.Create(1000),
+            AdminId, Now.AddHours(1));
+        order.ConfirmPoleCountAndPricing(
+            mapId, ConfirmedSurveyPoleCount.Create(1000),
+            SurveyPoleCountSource.CurrentPublishedInventory, "Verified inventory",
+            Guid.NewGuid(), PricePerPole.Create(2500m), CurrencyCode.Vnd,
+            AdminId, Now.AddHours(2));
+
+        Assert.Equal(discount, order.ComboDiscountPercentage);
+        Assert.Equal(2500m, order.PricePerPoleSnapshot?.Amount);
+        Assert.Equal(2500000m, order.FinalPrice);
+        Assert.Equal(2500000m, order.RemainingAmount);
+        Assert.Equal(order.OriginalFinalPrice, order.FinalPrice);
+    }
+
     [Fact]
     public void CreateWithValidParametersSetsPropertiesCorrectly()
     {
@@ -30,6 +149,8 @@ public sealed class SurveyComboDiscountPolicyTests
 
     [Theory]
     [InlineData(-1)]
+    [InlineData(100)]
+    [InlineData(99.999)]
     [InlineData(101)]
     public void CreateWithInvalidPercentageThrowsArgumentOutOfRangeException(decimal invalidPercentage)
     {

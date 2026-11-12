@@ -262,6 +262,17 @@ internal sealed class SurveyOrderReadinessStateQueries(NpgsqlDataSource dataSour
 
         var depositPaymentStatus = ParsePaymentStatus(
             ReadNullableString(reader, "deposit_payment_status"));
+        var zeroBalanceSettled = expectedAmount == 0m &&
+            ReadNullableDecimal(reader, "final_price") is > 0 &&
+            depositPaymentStatus == SurveyPaymentStatus.Paid &&
+            ParseOrderStatus(reader.GetString(reader.GetOrdinal("status"))) is
+                SurveyOrderStatus.ReadyForPaidService or SurveyOrderStatus.InProgress
+                or SurveyOrderStatus.PendingReview or SurveyOrderStatus.Completed;
+        if (zeroBalanceSettled)
+        {
+            paymentStatus = SurveyPaymentStatus.Paid;
+            paymentMatches = true;
+        }
 
         var snapshot = new SurveyOrderReadinessSnapshot(
             ParseOrderStatus(reader.GetString(reader.GetOrdinal("status"))),

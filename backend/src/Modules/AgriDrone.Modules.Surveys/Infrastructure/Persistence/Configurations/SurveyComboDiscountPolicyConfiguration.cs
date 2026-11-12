@@ -12,7 +12,7 @@ public sealed class SurveyComboDiscountPolicyConfiguration
         builder.ToTable("survey_combo_discount_policies", "survey", table =>
             table.HasCheckConstraint(
                 "ck_survey_combo_discount_policies_percentage_valid",
-                "discount_percentage >= 0 AND discount_percentage <= 100"));
+                "discount_percentage >= 0 AND discount_percentage <= 100 AND (effective_to IS NOT NULL OR discount_percentage < 100)"));
         builder.HasKey(policy => policy.Id)
             .HasName("pk_survey_combo_discount_policies");
         builder.Property(policy => policy.Id)
@@ -34,7 +34,7 @@ public sealed class SurveyComboDiscountPolicyConfiguration
             .HasDatabaseName("uq_survey_combo_discount_policies_version").IsUnique();
         builder.HasIndex(policy => policy.EffectiveTo)
             .HasDatabaseName("uq_survey_combo_discount_policies_current")
-            .HasFilter("effective_to IS NULL").IsUnique();
+            .HasFilter("effective_to IS NULL").IsUnique().AreNullsDistinct(false);
     }
 }
 

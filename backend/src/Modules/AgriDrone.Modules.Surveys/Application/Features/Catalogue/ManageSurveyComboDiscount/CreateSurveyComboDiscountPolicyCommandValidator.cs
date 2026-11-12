@@ -8,8 +8,9 @@ public sealed class CreateSurveyComboDiscountPolicyCommandValidator
     public CreateSurveyComboDiscountPolicyCommandValidator()
     {
         RuleFor(command => command.DiscountPercentage)
-            .InclusiveBetween(0m, 100m)
-            .WithMessage("Discount percentage must be between 0 and 100.");
+            .GreaterThanOrEqualTo(0m).LessThan(100m)
+            .PrecisionScale(5, 2, ignoreTrailingZeros: true)
+            .WithMessage("Discount percentage must be at least 0 and less than 100, with at most two decimal places.");
         RuleFor(command => command.ExpectedVersion)
             .GreaterThanOrEqualTo(0)
             .WithMessage("Expected version cannot be negative.");

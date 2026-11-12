@@ -8,7 +8,7 @@ internal sealed class CreateSurveyDepositPolicyCommandValidator
     public CreateSurveyDepositPolicyCommandValidator()
     {
         RuleFor(command => command.AmountVnd)
-            .GreaterThan(0m)
+            .GreaterThanOrEqualTo(0m)
             .Must(amount => amount == decimal.Truncate(amount));
         RuleFor(command => command.ExpectedVersion).GreaterThanOrEqualTo(0);
     }

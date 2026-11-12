@@ -173,12 +173,17 @@ public sealed class SurveyOrder : AggregateRoot
         var resolvedDiscountPercentage = customComboDiscountPercentage ?? (requiresBaselineMapping
             ? DefaultComboDiscountPercentage
             : (decimal?)null);
+        if (resolvedDiscountPercentage.HasValue)
+        {
+            ArgumentOutOfRangeException.ThrowIfNegative(resolvedDiscountPercentage.Value);
+            resolvedDiscountPercentage = decimal.Round(resolvedDiscountPercentage.Value, 2, MidpointRounding.AwayFromZero);
+        }
 
-        if (resolvedDiscountPercentage.HasValue && (resolvedDiscountPercentage.Value < 0m || resolvedDiscountPercentage.Value > 100m))
+        if (resolvedDiscountPercentage.HasValue && (resolvedDiscountPercentage.Value < 0m || resolvedDiscountPercentage.Value >= 100m))
         {
             throw new ArgumentOutOfRangeException(
                 nameof(customComboDiscountPercentage),
-                "Combo discount percentage must be between 0 and 100.");
+                "Combo discount percentage must be at least 0 and less than 100.");
         }
 
         if (orderNumber.Trim().Length > 40)
@@ -436,7 +441,7 @@ public sealed class SurveyOrder : AggregateRoot
         DomainGuard.Utc(confirmedAt);
         SurveyTransitionGuard.EnsureTimestamp(confirmedAt, UpdatedAt);
 
-        if (Status != SurveyOrderStatus.AwaitingBaselineDeposit)
+        if (!RequiresBaselineMapping || !CanAcceptDepositPayment())
         {
             throw new SurveyDomainException(
                 SurveyOrderDomainErrorCodes.InvalidTransition,
@@ -453,7 +458,17 @@ public sealed class SurveyOrder : AggregateRoot
         DepositPaymentId = paymentId;
         DepositPaymentStatus = SurveyPaymentStatus.Paid;
         DepositConfirmedAt = confirmedAt;
-        TransitionTo(SurveyOrderStatus.BaselineReady, confirmedAt);
+        if (Status == SurveyOrderStatus.AwaitingBaselineDeposit)
+        {
+            TransitionTo(SurveyOrderStatus.BaselineReady, confirmedAt);
+        }
+        else
+        {
+            if (FinalPrice.HasValue)
+                RemainingAmount = Math.Max(0m, FinalPrice.Value - DepositAmount);
+            UpdatedAt = confirmedAt;
+            Version++;
+        }
     }
 
     public void RecordFollowUpDepositConfirmed(
@@ -472,7 +487,7 @@ public sealed class SurveyOrder : AggregateRoot
                 "Order requires baseline mapping. Use RecordBaselineDepositConfirmed instead.");
         }
 
-        if (DepositPaymentStatus == SurveyPaymentStatus.Paid)
+        if (!CanAcceptDepositPayment())
         {
             throw new SurveyDomainException(
                 SurveyOrderDomainErrorCodes.InvalidTransition,
@@ -715,16 +730,9 @@ public sealed class SurveyOrder : AggregateRoot
             validatedPrice,
             currency);
 
-        var effectivePricePerPole = validatedPrice;
-        var finalPriceAmount = originalPrice.Amount;
-
-        if (ComboDiscountPercentage.HasValue && ComboDiscountPercentage.Value > 0m)
-        {
-            var discountFactor = 1m - (ComboDiscountPercentage.Value / 100m);
-            var discountedUnitAmount = decimal.Round(validatedPrice.Amount * discountFactor, 2, MidpointRounding.AwayFromZero);
-            effectivePricePerPole = global::AgriDrone.Modules.Surveys.Domain.PricePerPole.Create(discountedUnitAmount);
-            finalPriceAmount = decimal.Round(validatedPoleCount.Value * discountedUnitAmount, 2, MidpointRounding.AwayFromZero);
-        }
+        var effectivePricePerPole = GetEffectivePricePerPole(validatedPrice);
+        var finalPriceAmount = Money.CalculateSurveyPrice(
+            validatedPoleCount, effectivePricePerPole, currency).Amount;
 
         FarmBaseMapVersionId = farmBaseMapVersionId;
         ConfirmedSurveyPoleCount = validatedPoleCount;
@@ -759,6 +767,34 @@ public sealed class SurveyOrder : AggregateRoot
     public void MarkPaymentConfirmed(DateTimeOffset occurredAt) =>
         TransitionTo(SurveyOrderStatus.ReadyForPaidService, occurredAt);
 
+    public bool CanAcceptDepositPayment() => DepositAmount > 0m &&
+        DepositPaymentStatus != SurveyPaymentStatus.Paid &&
+        (RequiresBaselineMapping
+            ? Status == SurveyOrderStatus.AwaitingBaselineDeposit ||
+              (DepositPaymentStatus == SurveyPaymentStatus.Refunded &&
+               Status is SurveyOrderStatus.AwaitingPricing or SurveyOrderStatus.AwaitingPaidAppointment
+                   or SurveyOrderStatus.AwaitingPayment)
+            : Status is SurveyOrderStatus.PendingBoundaryVerification or SurveyOrderStatus.AwaitingPricing
+                or SurveyOrderStatus.AwaitingPaidAppointment or SurveyOrderStatus.AwaitingPayment);
+
+    public bool IsZeroBalanceSettled() =>
+        FinalPrice is > 0 && RemainingAmount == 0m &&
+        DepositPaymentStatus == SurveyPaymentStatus.Paid &&
+        Status is SurveyOrderStatus.ReadyForPaidService or SurveyOrderStatus.InProgress
+            or SurveyOrderStatus.PendingReview or SurveyOrderStatus.Completed;
+
+    public PricePerPole GetEffectivePricePerPole(PricePerPole cataloguePrice)
+    {
+        var percentage = ComboDiscountPercentage ?? 0m;
+        if (percentage < 0m || percentage >= 100m)
+            throw new SurveyDomainException(SurveyOrderDomainErrorCodes.PricingSnapshotIncomplete,
+                "The saved Combo discount must be at least 0 and less than 100.");
+        // Checkout accepts whole VND; preserve the positive per-pole invariant.
+        var amount = decimal.Round(cataloguePrice.Amount * (1m - percentage / 100m),
+            0, MidpointRounding.AwayFromZero);
+        return PricePerPole.Create(Math.Max(1m, amount));
+    }
+
     public void RevokePaidServiceReadiness(DateTimeOffset occurredAt)
     {
         if (Status == SurveyOrderStatus.ReadyForPaidService)
@@ -783,6 +819,10 @@ public sealed class SurveyOrder : AggregateRoot
             if (FinalPrice.HasValue)
             {
                 RemainingAmount = FinalPrice.Value;
+            }
+            if (Status == SurveyOrderStatus.ReadyForPaidService)
+            {
+                Status = SurveyOrderStatus.AwaitingPayment;
             }
             UpdatedAt = occurredAt;
             Version++;

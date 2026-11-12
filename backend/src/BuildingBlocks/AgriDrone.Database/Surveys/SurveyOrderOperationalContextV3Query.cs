@@ -177,7 +177,10 @@ internal sealed class SurveyOrderOperationalContextV3Query(
                 version != scope.ZoneVersion);
 
         var expectedPayableAmount = order.RemainingAmount ?? order.FinalPrice;
+        var zeroBalanceSettled = order.IsZeroBalanceSettled();
+        var effectivePaymentStatus = zeroBalanceSettled ? SurveyPaymentStatus.Paid : payment?.Status;
         var isPaymentAmountAndCurrencyMatched = purpose == SurveyOperationPurpose.BaselineMapping
+            || zeroBalanceSettled
             || (payment is not null
                 && expectedPayableAmount.HasValue
                 && payment.Amount == expectedPayableAmount.Value
@@ -196,7 +199,7 @@ internal sealed class SurveyOrderOperationalContextV3Query(
             HasPriceSnapshot: order.PricePerPoleSnapshot.HasValue && order.SurveyServicePriceId.HasValue,
             AppointmentPurpose: appointment?.Purpose,
             AppointmentStatus: appointment?.Status,
-            PaymentStatus: payment?.Status,
+            PaymentStatus: effectivePaymentStatus,
             HasActiveQualifiedPrimaryManager: managerReady,
             IsPrimaryManagerAvailable: managerReady,
             IsAppointmentCurrent: appointment?.Status == SurveyAppointmentStatus.Confirmed,
@@ -234,7 +237,7 @@ internal sealed class SurveyOrderOperationalContextV3Query(
             order.PricePerPoleSnapshot?.Amount, order.Currency, order.FinalPrice,
             appointment?.Id, appointment?.Purpose.ToString(),
             appointment?.ProposedStartAt, appointment?.ProposedEndAt,
-            appointment?.Status.ToString(), payment?.Id, payment?.Status.ToString(),
+            appointment?.Status.ToString(), payment?.Id, effectivePaymentStatus?.ToString(),
             managerReady ? access.ManagerProfileId : null,
             order.PreviousCompatibleOrderId,
             decision.IsReady && !scopeStale, readinessFailures,
