@@ -8,6 +8,10 @@ public sealed class SurveyOrderConfiguration : IEntityTypeConfiguration<SurveyOr
 {
     public void Configure(EntityTypeBuilder<SurveyOrder> builder)
     {
+        // 03A-2 is domain-only. Map this in 03B with its expand migration;
+        // convention mapping would otherwise break reads against Step8 schemas.
+        builder.Ignore(order => order.DepositObligationId);
+
         builder.ToTable(
             "survey_orders",
             "survey",

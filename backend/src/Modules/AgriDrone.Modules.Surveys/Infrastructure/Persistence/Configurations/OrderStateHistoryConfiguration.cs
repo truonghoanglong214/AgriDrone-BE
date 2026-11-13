@@ -8,6 +8,9 @@ public sealed class OrderStateHistoryConfiguration : IEntityTypeConfiguration<Or
 {
     public void Configure(EntityTypeBuilder<OrderStateHistory> builder)
     {
+        // Keep Step8 history queries compatible until 03B adds this column.
+        builder.Ignore(history => history.TransitionSequence);
+
         builder.ToTable("order_state_history", "survey");
 
         builder.HasKey(h => h.Id).HasName("pk_order_state_history");

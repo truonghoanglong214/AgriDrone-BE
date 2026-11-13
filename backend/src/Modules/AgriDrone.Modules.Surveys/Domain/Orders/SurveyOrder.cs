@@ -79,6 +79,66 @@ public sealed class SurveyOrder : AggregateRoot
             [SurveyOrderStatus.PendingReview] = new HashSet<SurveyOrderStatus>
             {
                 SurveyOrderStatus.Completed
+            },
+            [SurveyOrderStatus.AwaitingAppointment] = new HashSet<SurveyOrderStatus>
+            {
+                SurveyOrderStatus.AwaitingDeposit,
+                SurveyOrderStatus.ReadyForCapture,
+                SurveyOrderStatus.Cancelled
+            },
+            [SurveyOrderStatus.AwaitingDeposit] = new HashSet<SurveyOrderStatus>
+            {
+                SurveyOrderStatus.ReadyForCapture,
+                SurveyOrderStatus.AwaitingAppointment,
+                SurveyOrderStatus.Cancelled
+            },
+            [SurveyOrderStatus.ReadyForCapture] = new HashSet<SurveyOrderStatus>
+            {
+                SurveyOrderStatus.Capturing,
+                SurveyOrderStatus.AwaitingAppointment,
+                SurveyOrderStatus.AwaitingDeposit,
+                SurveyOrderStatus.Cancelled
+            },
+            [SurveyOrderStatus.Capturing] = new HashSet<SurveyOrderStatus>
+            {
+                SurveyOrderStatus.AwaitingCaptureUpload,
+                SurveyOrderStatus.AwaitingReflightDecision
+            },
+            [SurveyOrderStatus.AwaitingCaptureUpload] = new HashSet<SurveyOrderStatus>
+            {
+                SurveyOrderStatus.AwaitingInputReview,
+                SurveyOrderStatus.AwaitingReflightDecision,
+                SurveyOrderStatus.Cancelled
+            },
+            [SurveyOrderStatus.AwaitingInputReview] = new HashSet<SurveyOrderStatus>
+            {
+                SurveyOrderStatus.AwaitingProcessing,
+                SurveyOrderStatus.AwaitingReflightDecision,
+                SurveyOrderStatus.Cancelled
+            },
+            [SurveyOrderStatus.AwaitingProcessing] = new HashSet<SurveyOrderStatus>
+            {
+                SurveyOrderStatus.Processing,
+                SurveyOrderStatus.AwaitingReflightDecision,
+                SurveyOrderStatus.Cancelled
+            },
+            [SurveyOrderStatus.Processing] = new HashSet<SurveyOrderStatus>
+            {
+                SurveyOrderStatus.AwaitingSettlement,
+                SurveyOrderStatus.AwaitingReflightDecision,
+                SurveyOrderStatus.Cancelled
+            },
+            [SurveyOrderStatus.AwaitingReflightDecision] = new HashSet<SurveyOrderStatus>
+            {
+                SurveyOrderStatus.AwaitingAppointment,
+                SurveyOrderStatus.AwaitingDeposit,
+                SurveyOrderStatus.ReadyForCapture,
+                SurveyOrderStatus.Cancelled
+            },
+            [SurveyOrderStatus.AwaitingSettlement] = new HashSet<SurveyOrderStatus>
+            {
+                SurveyOrderStatus.Completed,
+                SurveyOrderStatus.Cancelled
             }
         };
 
@@ -119,6 +179,7 @@ public sealed class SurveyOrder : AggregateRoot
     public decimal DepositAmount { get; private set; } = DefaultBaselineDepositAmountVnd;
     public decimal? RemainingAmount { get; private set; }
     public Guid? DepositPaymentId { get; private set; }
+    public Guid? DepositObligationId { get; private set; }
     public DateTimeOffset? DepositConfirmedAt { get; private set; }
     public Guid? ScopeConfirmedBy { get; private set; }
     public DateTimeOffset? ScopeConfirmedAt { get; private set; }
@@ -218,7 +279,8 @@ public sealed class SurveyOrder : AggregateRoot
         Guid? previousCompatibleOrderId = null,
         string? previousOrderCompatibilityPolicyVersion = null,
         string? previousOrderCompatibilityReason = null,
-        DateTimeOffset createdAt = default)
+        DateTimeOffset createdAt = default,
+        SurveyOrderStatus initialStatus = SurveyOrderStatus.AwaitingBaselineAppointment)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(orderNumber);
         DomainGuard.NotEmpty(tenantId);
@@ -302,7 +364,7 @@ public sealed class SurveyOrder : AggregateRoot
             PreviousCompatibleOrderId = previousCompatibleOrderId,
             PreviousOrderCompatibilityPolicyVersion = compatibilityPolicyVersion,
             PreviousOrderCompatibilityReason = compatibilityReason,
-            Status = SurveyOrderStatus.AwaitingBaselineAppointment,
+            Status = initialStatus,
             ScopeType = SurveyScopeType.FarmWide,
             CreatedAt = createdAt,
             UpdatedAt = createdAt
@@ -311,6 +373,141 @@ public sealed class SurveyOrder : AggregateRoot
 
     public static bool CanTransition(SurveyOrderStatus from, SurveyOrderStatus to) =>
         AllowedTransitions.TryGetValue(from, out var allowed) && allowed.Contains(to);
+
+    public static bool CanTransition(SurveyOrderStatus from, SurveyOrderStatus to, ContractScope scope)
+    {
+        if (scope == ContractScope.Legacy)
+        {
+            return IsLegacyStatus(from) && IsLegacyStatus(to) && CanTransition(from, to);
+        }
+
+        return IsV3Status(from) && IsV3Status(to) && CanTransition(from, to);
+    }
+
+    public static bool IsV3Status(SurveyOrderStatus status) =>
+        status is SurveyOrderStatus.AwaitingAppointment
+            or SurveyOrderStatus.AwaitingDeposit
+            or SurveyOrderStatus.ReadyForCapture
+            or SurveyOrderStatus.Capturing
+            or SurveyOrderStatus.AwaitingCaptureUpload
+            or SurveyOrderStatus.AwaitingInputReview
+            or SurveyOrderStatus.AwaitingProcessing
+            or SurveyOrderStatus.Processing
+            or SurveyOrderStatus.AwaitingReflightDecision
+            or SurveyOrderStatus.AwaitingSettlement
+            or SurveyOrderStatus.Completed
+            or SurveyOrderStatus.Cancelled;
+
+    public static bool IsLegacyStatus(SurveyOrderStatus status) =>
+        status is SurveyOrderStatus.PendingBoundaryVerification
+            or SurveyOrderStatus.AwaitingBaselineAppointment
+            or SurveyOrderStatus.AwaitingBaselineDeposit
+            or SurveyOrderStatus.AwaitingBoundaryCapture
+            or SurveyOrderStatus.BaselineReady
+            or SurveyOrderStatus.BaselineInProgress
+            or SurveyOrderStatus.AwaitingBaselineReview
+            or SurveyOrderStatus.AwaitingPricing
+            or SurveyOrderStatus.AwaitingPaidAppointment
+            or SurveyOrderStatus.AwaitingPayment
+            or SurveyOrderStatus.ReadyForPaidService
+            or SurveyOrderStatus.InProgress
+            or SurveyOrderStatus.PendingReview
+            or SurveyOrderStatus.Completed
+            or SurveyOrderStatus.Cancelled;
+
+    public static SurveyOrder CreateV3CaptureOrder(
+        string orderNumber,
+        Guid tenantId,
+        Guid farmId,
+        Guid surveyRequestId,
+        Guid surveyServiceId,
+        ResolvedSurveyCommercialSnapshot snapshot,
+        bool requiresBaselineMapping,
+        Guid? farmBaseMapVersionId = null,
+        Guid? previousCompatibleOrderId = null,
+        string? previousOrderCompatibilityPolicyVersion = null,
+        string? previousOrderCompatibilityReason = null,
+        DateTimeOffset createdAt = default)
+    {
+        return CreateV3(
+            orderNumber,
+            tenantId,
+            farmId,
+            surveyRequestId,
+            surveyServiceId,
+            snapshot,
+            requiresBaselineMapping,
+            farmBaseMapVersionId,
+            previousCompatibleOrderId,
+            previousOrderCompatibilityPolicyVersion,
+            previousOrderCompatibilityReason,
+            createdAt,
+            initialStatus: SurveyOrderStatus.AwaitingAppointment);
+    }
+
+    public void BindDepositObligation(Guid depositObligationId)
+    {
+        EnsureV3Scope();
+        DomainGuard.NotEmpty(depositObligationId, nameof(depositObligationId));
+        if (DepositObligationId.HasValue && DepositObligationId.Value != depositObligationId)
+        {
+            throw new InvalidOperationException($"Deposit obligation is already bound to {DepositObligationId.Value}.");
+        }
+        DepositObligationId = depositObligationId;
+    }
+
+    public void ApplyV3Transition(SurveyOrderStatus target, DateTimeOffset occurredAt)
+    {
+        EnsureV3Scope();
+        EnsureTransitionTo(target, occurredAt);
+        ApplyTransition(target, occurredAt);
+    }
+
+    public void TransitionToAwaitingAppointmentV3(DateTimeOffset occurredAt) =>
+        ApplyV3Transition(SurveyOrderStatus.AwaitingAppointment, occurredAt);
+
+    public void TransitionToAwaitingDepositV3(DateTimeOffset occurredAt) =>
+        ApplyV3Transition(SurveyOrderStatus.AwaitingDeposit, occurredAt);
+
+    public void TransitionToReadyForCaptureV3(DateTimeOffset occurredAt) =>
+        ApplyV3Transition(SurveyOrderStatus.ReadyForCapture, occurredAt);
+
+    public void TransitionToCapturingV3(DateTimeOffset occurredAt) =>
+        ApplyV3Transition(SurveyOrderStatus.Capturing, occurredAt);
+
+    public void TransitionToAwaitingCaptureUploadV3(DateTimeOffset occurredAt) =>
+        ApplyV3Transition(SurveyOrderStatus.AwaitingCaptureUpload, occurredAt);
+
+    public void TransitionToAwaitingInputReviewV3(DateTimeOffset occurredAt) =>
+        ApplyV3Transition(SurveyOrderStatus.AwaitingInputReview, occurredAt);
+
+    public void TransitionToAwaitingProcessingV3(DateTimeOffset occurredAt) =>
+        ApplyV3Transition(SurveyOrderStatus.AwaitingProcessing, occurredAt);
+
+    public void TransitionToProcessingV3(DateTimeOffset occurredAt) =>
+        ApplyV3Transition(SurveyOrderStatus.Processing, occurredAt);
+
+    public void TransitionToAwaitingReflightDecisionV3(DateTimeOffset occurredAt) =>
+        ApplyV3Transition(SurveyOrderStatus.AwaitingReflightDecision, occurredAt);
+
+    public void TransitionToAwaitingSettlementV3(DateTimeOffset occurredAt) =>
+        ApplyV3Transition(SurveyOrderStatus.AwaitingSettlement, occurredAt);
+
+    public void TransitionToCompletedV3(DateTimeOffset occurredAt) =>
+        ApplyV3Transition(SurveyOrderStatus.Completed, occurredAt);
+
+    public void TransitionToCancelledV3(DateTimeOffset occurredAt) =>
+        ApplyV3Transition(SurveyOrderStatus.Cancelled, occurredAt);
+
+    private void EnsureV3Scope()
+    {
+        if (Scope != ContractScope.V3)
+        {
+            throw new SurveyDomainException(
+                SurveyOrderDomainErrorCodes.InvalidTransition,
+                $"Order {Id} is not in V3 scope.");
+        }
+    }
 
     public void ConfirmFlightScope(
         SurveyScopeType scopeType,

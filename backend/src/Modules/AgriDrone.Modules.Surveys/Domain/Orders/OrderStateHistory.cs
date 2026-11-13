@@ -8,6 +8,7 @@ public sealed class OrderStateHistory : Entity
 
     public Guid SurveyOrderId { get; private set; }
     public uint OrderVersion { get; private set; }
+    public uint? TransitionSequence { get; private set; }
     public SurveyOrderStatus? FromStatus { get; private set; }
     public SurveyOrderStatus ToStatus { get; private set; }
     public Guid? ActorId { get; private set; }
@@ -27,12 +28,21 @@ public sealed class OrderStateHistory : Entity
         string source,
         string reason,
         Guid correlationId,
-        DateTimeOffset createdAt)
+        DateTimeOffset createdAt,
+        uint? transitionSequence = null)
     {
         DomainGuard.NotEmpty(id, nameof(id));
         DomainGuard.NotEmpty(surveyOrderId, nameof(surveyOrderId));
         DomainGuard.NotEmpty(correlationId, nameof(correlationId));
         DomainGuard.Utc(createdAt, nameof(createdAt));
+
+        if (transitionSequence.HasValue && transitionSequence.Value != 1)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(transitionSequence),
+                transitionSequence.Value,
+                "Initial transition sequence must be 1 when specified.");
+        }
 
         var normalizedSource = PolicyValidationGuard.NormalizeRequired(source, 64, nameof(source));
         var normalizedReason = PolicyValidationGuard.NormalizeRequired(reason, 500, nameof(reason));
@@ -42,6 +52,7 @@ public sealed class OrderStateHistory : Entity
             Id = id,
             SurveyOrderId = surveyOrderId,
             OrderVersion = orderVersion,
+            TransitionSequence = transitionSequence,
             FromStatus = null,
             ToStatus = initialStatus,
             ActorId = actorId,
@@ -66,13 +77,22 @@ public sealed class OrderStateHistory : Entity
         string? evidenceReference,
         Guid correlationId,
         Guid predecessorHistoryId,
-        DateTimeOffset createdAt)
+        DateTimeOffset createdAt,
+        uint? transitionSequence = null)
     {
         DomainGuard.NotEmpty(id, nameof(id));
         DomainGuard.NotEmpty(surveyOrderId, nameof(surveyOrderId));
         DomainGuard.NotEmpty(correlationId, nameof(correlationId));
         DomainGuard.NotEmpty(predecessorHistoryId, nameof(predecessorHistoryId));
         DomainGuard.Utc(createdAt, nameof(createdAt));
+
+        if (transitionSequence.HasValue && transitionSequence.Value < 2)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(transitionSequence),
+                transitionSequence.Value,
+                "Subsequent transition sequence must be at least 2 when specified.");
+        }
 
         var normalizedSource = PolicyValidationGuard.NormalizeRequired(source, 64, nameof(source));
         var normalizedReason = PolicyValidationGuard.NormalizeRequired(reason, 500, nameof(reason));
@@ -83,6 +103,7 @@ public sealed class OrderStateHistory : Entity
             Id = id,
             SurveyOrderId = surveyOrderId,
             OrderVersion = orderVersion,
+            TransitionSequence = transitionSequence,
             FromStatus = fromStatus,
             ToStatus = toStatus,
             ActorId = actorId,
