@@ -31,12 +31,12 @@ internal sealed class CreateSurveyComboDiscountPolicyCommandHandler(
         }
 
         if (command.DiscountPercentage < 0m ||
-            command.DiscountPercentage > 100m ||
+            decimal.Round(command.DiscountPercentage, 2, MidpointRounding.AwayFromZero) >= 100m ||
             command.ExpectedVersion < 0)
         {
             return Result.Failure<SurveyComboDiscountPolicyResponse>(
                 AppError.Validation("SurveyComboDiscount.InvalidPercentage",
-                    "Discount percentage must be between 0 and 100."));
+                    "Discount percentage must be at least 0 and less than 100."));
         }
 
         try
@@ -57,7 +57,12 @@ internal sealed class CreateSurveyComboDiscountPolicyCommandHandler(
                     effectiveAt = current.EffectiveFrom.AddMilliseconds(1);
                 }
 
-                current?.CloseAt(effectiveAt);
+                if (current is not null)
+                {
+                    current.CloseAt(effectiveAt);
+                    // Release the unique current-policy slot inside this transaction.
+                    await unitOfWork.SaveChangesAsync(token);
+                }
                 var policy = SurveyComboDiscountPolicy.Create(
                     command.ExpectedVersion + 1,
                     command.DiscountPercentage,

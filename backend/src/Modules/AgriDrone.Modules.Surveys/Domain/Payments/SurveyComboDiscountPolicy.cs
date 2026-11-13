@@ -20,11 +20,13 @@ public sealed class SurveyComboDiscountPolicy : Entity
     {
         DomainGuard.NotEmpty(createdBy);
         DomainGuard.Utc(effectiveFrom);
-        if (versionNumber < 1 || discountPercentage < 0m || discountPercentage > 100m)
+        ArgumentOutOfRangeException.ThrowIfNegative(discountPercentage);
+        discountPercentage = decimal.Round(discountPercentage, 2, MidpointRounding.AwayFromZero);
+        if (versionNumber < 1 || discountPercentage < 0m || discountPercentage >= 100m)
         {
             throw new ArgumentOutOfRangeException(
                 nameof(discountPercentage),
-                "The combo discount percentage must be between 0 and 100.");
+                "The combo discount percentage must be at least 0 and less than 100.");
         }
 
         return new SurveyComboDiscountPolicy

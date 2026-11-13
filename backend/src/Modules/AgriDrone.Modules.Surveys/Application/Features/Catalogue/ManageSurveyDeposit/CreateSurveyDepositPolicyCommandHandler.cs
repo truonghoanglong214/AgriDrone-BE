@@ -30,13 +30,13 @@ internal sealed class CreateSurveyDepositPolicyCommandHandler(
                 AppError.Forbidden("SurveyDeposit.Forbidden", "SystemAdmin is required."));
         }
 
-        if (command.AmountVnd <= 0m ||
+        if (command.AmountVnd < 0m ||
             command.AmountVnd != decimal.Truncate(command.AmountVnd) ||
             command.ExpectedVersion < 0)
         {
             return Result.Failure<SurveyDepositPolicyResponse>(
                 AppError.Validation("SurveyDeposit.InvalidAmount",
-                    "Deposit must be a positive whole VND amount."));
+                    "Deposit must be a non-negative whole VND amount."));
         }
 
         try
@@ -57,7 +57,12 @@ internal sealed class CreateSurveyDepositPolicyCommandHandler(
                     effectiveAt = current.EffectiveFrom.AddMilliseconds(1);
                 }
 
-                current?.CloseAt(effectiveAt);
+                if (current is not null)
+                {
+                    current.CloseAt(effectiveAt);
+                    // Release the unique current-policy slot inside this transaction.
+                    await unitOfWork.SaveChangesAsync(token);
+                }
                 var policy = SurveyDepositPolicy.Create(
                     command.ExpectedVersion + 1,
                     command.AmountVnd,

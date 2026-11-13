@@ -224,6 +224,6 @@ public sealed class SurveyOrderReadinessPolicyTests
             HasApprovedBaselineRoute: false,
             IsBaselineRouteCurrent: false,
             IsBaselineRouteWithinSafetyInset: false,
-            DepositPaymentStatus: isBaseline ? SurveyPaymentStatus.Paid : null);
+            DepositPaymentStatus: SurveyPaymentStatus.Paid);
     }
 }

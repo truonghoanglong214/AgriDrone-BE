@@ -20,12 +20,12 @@ public sealed class SurveyDepositPolicy : Entity
     {
         DomainGuard.NotEmpty(createdBy);
         DomainGuard.Utc(effectiveFrom);
-        if (versionNumber < 1 || amountVnd <= 0m ||
+        if (versionNumber < 1 || amountVnd < 0m ||
             amountVnd != decimal.Truncate(amountVnd))
         {
             throw new ArgumentOutOfRangeException(
                 nameof(amountVnd),
-                "The shared VND deposit must be a positive whole amount.");
+                "The shared VND deposit must be a non-negative whole amount.");
         }
 
         return new SurveyDepositPolicy

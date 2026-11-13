@@ -12,7 +12,7 @@ public sealed class SurveyDepositPolicyConfiguration
         builder.ToTable("survey_deposit_policies", "survey", table =>
             table.HasCheckConstraint(
                 "ck_survey_deposit_policies_amount_positive",
-                "amount_vnd > 0 AND amount_vnd = trunc(amount_vnd)"));
+                "amount_vnd >= 0 AND amount_vnd = trunc(amount_vnd)"));
         builder.HasKey(policy => policy.Id)
             .HasName("pk_survey_deposit_policies");
         builder.Property(policy => policy.Id)
@@ -34,6 +34,6 @@ public sealed class SurveyDepositPolicyConfiguration
             .HasDatabaseName("uq_survey_deposit_policies_version").IsUnique();
         builder.HasIndex(policy => policy.EffectiveTo)
             .HasDatabaseName("uq_survey_deposit_policies_current")
-            .HasFilter("effective_to IS NULL").IsUnique();
+            .HasFilter("effective_to IS NULL").IsUnique().AreNullsDistinct(false);
     }
 }
