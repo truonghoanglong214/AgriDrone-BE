@@ -1,0 +1,41 @@
+@startuml
+title AgriDrone v3 - Settlement-gated atomic release (target)
+actor SystemManager as M
+actor TenantOwner as O
+participant "Review / payment handlers (.NET)" as H
+participant "Release coordinator (.NET)" as R
+database "PostgreSQL business / audit / Outbox" as DB
+participant "Gateway webhook" as G
+participant "Async delivery / projections" as C
+M -> H: Approve exact reviewed revision
+H -> DB: Store frozen approval / ApprovedAt
+H -> R: Evaluate release
+R -> DB: Check current approval, finalized invoice and receipts
+alt RemainingDue > 0
+  R --> H: ApprovedAwaitingSettlement
+  O -> G: Pay server-issued balance obligation
+  G -> H: Authenticated / deduplicated confirmation
+  H -> DB: Persist receipt / allocations
+  H -> R: Evaluate release again
+else RemainingDue = 0
+  note over R: Overpayment obligation does not block release
+end
+group One transaction - locking and idempotent receipt
+  R -> DB: Lock and recheck result / invoice / payment / authorization
+  alt Exact revision valid and no remaining amount
+    R -> DB: Immutable publication / visibility unlock
+    R -> DB: Durable in-app notice + revision claim deadline
+    R -> DB: Original service value once / completion / audit / Outbox
+    R -> DB: Commit; PublishedAt = UnlockedAt = NoticeCreatedAt
+  else Stale / invalid / failed write
+    R -> DB: Roll back entire release
+  end
+end
+DB --> C: Outbox delivery after commit
+C -> DB: Idempotent projection / delivery receipt
+note over C: Email retries do not create or reset claim window
+O -> H: Read released result / history
+H -> DB: Ownership + released source + not withdrawn
+H --> O: Exact allowed version and calendar deadline
+note over R,DB: Concurrent approval/payment triggers produce one release receipt
+@enduml

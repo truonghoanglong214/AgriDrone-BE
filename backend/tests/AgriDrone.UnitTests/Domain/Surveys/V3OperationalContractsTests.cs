@@ -1,4 +1,3 @@
-using AgriDrone.IntegrationContracts.Surveys;
 using AgriDrone.Modules.Surveys.Application.Abstractions.Pricing;
 using AgriDrone.Modules.Surveys.Domain;
 using AgriDrone.SharedKernel.Domain;
@@ -602,46 +601,4 @@ public sealed class V3OperationalContractsTests
         Assert.Equal(fingerprint, approval.ManifestFingerprint);
     }
 
-    [Fact]
-    public void SurveyOrderCaptureContextV5CanBeConstructed()
-    {
-        var orderId = Guid.NewGuid();
-        var context = new SurveyOrderCaptureContextV5(
-            SurveyOrderId: orderId,
-            OrderNumber: "ORD-V3-100",
-            OrderStatus: SurveyOrderStatus.ReadyForCapture.ToString(),
-            OrderVersion: 3,
-            TenantId: TenantId,
-            FarmId: FarmId,
-            ServiceCode: "MAP",
-            ServiceType: "OrthophotoMapping",
-            RequiresBaselineMapping: true,
-            FarmBoundaryVersionId: Guid.NewGuid(),
-            FarmBaseMapVersionId: null,
-            PreviousCompatibleOrderId: null,
-            ActiveCaptureAttemptId: Guid.NewGuid(),
-            ActiveAttemptIndex: 1,
-            ActiveAttemptStatus: CaptureAttemptStatus.PreflightReady.ToString(),
-            ActiveAttemptVersion: 2,
-            ExecutionMissionId: Guid.NewGuid(),
-            AppointmentId: Guid.NewGuid(),
-            AppointmentPurpose: SurveyAppointmentPurpose.Capture.ToString(),
-            AppointmentStatus: "Confirmed",
-            AppointmentStartAt: Now.AddHours(1),
-            AppointmentEndAt: Now.AddHours(3),
-            AppointmentVersion: 1,
-            DepositObligationId: Guid.NewGuid(),
-            DepositAmount: 5_000m,
-            DepositCurrency: "VND",
-            ConfirmedFundingAmount: 5_000m,
-            IsDepositSatisfied: true,
-            IsCommercialReady: true,
-            CommercialBlockers: Array.Empty<string>(),
-            EvaluatedAt: Now);
-
-        Assert.Equal(orderId, context.SurveyOrderId);
-        Assert.True(context.IsDepositSatisfied);
-        Assert.True(context.IsCommercialReady);
-        Assert.Empty(context.CommercialBlockers);
-    }
 }

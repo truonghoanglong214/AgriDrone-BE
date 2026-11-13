@@ -234,7 +234,12 @@ public sealed class SurveyStateMachineTests
             result.Publish(Guid.NewGuid(), Now.AddMinutes(1)));
         Assert.Equal(SurveyResultDomainErrorCodes.InvalidTransition, exception.Code);
 
-        result.Approve(Guid.NewGuid(), Now.AddMinutes(1));
+        var reviewerId = Guid.NewGuid();
+        result.Approve(reviewerId, Now.AddMinutes(1));
+        Assert.Equal(SurveyResultStatus.Approved, result.Status);
+        Assert.Equal(reviewerId, result.ReviewedBy);
+        Assert.Equal(1u, result.Version);
+
         result.Publish(Guid.NewGuid(), Now.AddMinutes(2));
         Assert.Equal(SurveyResultStatus.Published, result.Status);
         Assert.Equal(2u, result.Version);

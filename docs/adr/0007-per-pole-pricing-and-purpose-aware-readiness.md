@@ -1,5 +1,9 @@
 # ADR-0007: Per-pole pricing và purpose-aware SurveyOrder readiness
 
+> **V3 scope notice — 2026-11-10.**
+> Historical ADR: accepted/superseded status below records its original checkpoint. ADR 0018 partially supersedes service, funding, publication, comparison and architecture semantics; unchanged isolation, history and immutable wire guarantees remain applicable.
+> Current: [Business Rules v3](../../Codex-Plan/Business-Rules-v3.md), [ADR 0018](0018-v3-paid-map-combo-business-policy.md), [target contracts](../contracts/survey-business-v3.md). Documentation-only update; no runtime change.
+
 - Status: Accepted
 - Date: 2026-10-07
 - Amended: 2026-10-17 — Baseline appointment precedes same-visit boundary capture and automatic route generation
