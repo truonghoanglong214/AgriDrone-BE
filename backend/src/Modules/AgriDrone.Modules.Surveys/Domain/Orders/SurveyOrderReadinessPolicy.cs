@@ -85,7 +85,16 @@ public static class SurveyOrderReadinessPolicy
         {
             SurveyOperationPurpose.BaselineMapping => SurveyOrderStatus.BaselineReady,
             SurveyOperationPurpose.PlantHealth =>
-                SurveyOrderStatus.ReadyForPaidService,
+                snapshot.RequiresBaselineMapping
+                    ? (snapshot.OrderStatus is SurveyOrderStatus.BaselineReady
+                                           or SurveyOrderStatus.AwaitingBaselineReview
+                                           or SurveyOrderStatus.AwaitingPricing
+                                           or SurveyOrderStatus.AwaitingPaidAppointment
+                                           or SurveyOrderStatus.AwaitingPayment
+                                           or SurveyOrderStatus.ReadyForPaidService)
+                        ? snapshot.OrderStatus
+                        : SurveyOrderStatus.ReadyForPaidService
+                    : SurveyOrderStatus.ReadyForPaidService,
             _ => throw new ArgumentOutOfRangeException(
                 nameof(snapshot),
                 snapshot.Purpose,
@@ -194,24 +203,39 @@ public static class SurveyOrderReadinessPolicy
             failures.Add(SurveyOrderReadinessFailure.PriceNotConfirmed);
         }
 
-        if (snapshot.PaymentStatus == SurveyPaymentStatus.Refunded)
+        if (snapshot.RequiresBaselineMapping)
         {
-            failures.Add(SurveyOrderReadinessFailure.PaymentRevoked);
+            if (snapshot.DepositPaymentStatus != SurveyPaymentStatus.Paid)
+            {
+                failures.Add(SurveyOrderReadinessFailure.PaymentNotConfirmed);
+            }
         }
-        else if (snapshot.PaymentStatus != SurveyPaymentStatus.Paid)
+        else
         {
-            failures.Add(SurveyOrderReadinessFailure.PaymentNotConfirmed);
-        }
+            if (snapshot.DepositPaymentStatus != SurveyPaymentStatus.Paid)
+            {
+                failures.Add(SurveyOrderReadinessFailure.PaymentNotConfirmed);
+            }
 
-        if (!snapshot.IsPaymentAmountAndCurrencyMatched)
-        {
-            failures.Add(
-                SurveyOrderReadinessFailure.PaymentAmountOrCurrencyMismatch);
-        }
+            if (snapshot.PaymentStatus == SurveyPaymentStatus.Refunded)
+            {
+                failures.Add(SurveyOrderReadinessFailure.PaymentRevoked);
+            }
+            else if (snapshot.PaymentStatus != SurveyPaymentStatus.Paid)
+            {
+                failures.Add(SurveyOrderReadinessFailure.PaymentNotConfirmed);
+            }
 
-        if (snapshot.HasPendingPriceAdjustment)
-        {
-            failures.Add(SurveyOrderReadinessFailure.PriceAdjustmentPending);
+            if (!snapshot.IsPaymentAmountAndCurrencyMatched)
+            {
+                failures.Add(
+                    SurveyOrderReadinessFailure.PaymentAmountOrCurrencyMismatch);
+            }
+
+            if (snapshot.HasPendingPriceAdjustment)
+            {
+                failures.Add(SurveyOrderReadinessFailure.PriceAdjustmentPending);
+            }
         }
     }
 }

@@ -58,6 +58,7 @@ public static class DependencyInjection
         services.AddScoped<V3FollowUpBaselineEligibilityReader>();
         services.TryAddScoped<IV3BaselineDeliveryProofReader,
             UnavailableV3BaselineDeliveryProofReader>();
+        services.AddScoped<IFarmBaseMapPreviewReader, FarmBaseMapPreviewReader>();
 
         return services;
     }

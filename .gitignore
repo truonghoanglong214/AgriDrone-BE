@@ -94,3 +94,10 @@ Desktop.ini
 /Codex-Plan/
 /.github/instructions/codacy.instructions.md
 backend/services/metashape-service/temp/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/

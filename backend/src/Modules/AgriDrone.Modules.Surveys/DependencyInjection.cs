@@ -128,6 +128,8 @@ public static class DependencyInjection
             serviceProvider.GetRequiredService<SurveysDbContext>());
         services.AddScoped<ISurveyServiceRepository, SurveyServiceRepository>();
         services.AddScoped<IBusinessPolicyRepository, BusinessPolicyRepository>();
+        services.AddScoped<ISurveyDepositPolicyRepository, SurveyDepositPolicyRepository>();
+        services.AddScoped<ISurveyComboDiscountPolicyRepository, SurveyComboDiscountPolicyRepository>();
         services.AddScoped<IScopeAdjustmentRepository, ScopeAdjustmentRepository>();
         services.AddScoped<IAdjustmentSettlementRepository, AdjustmentSettlementRepository>();
         services.AddScoped<IExtraFlightRequestRepository, ExtraFlightRequestRepository>();
@@ -143,6 +145,7 @@ public static class DependencyInjection
         services.AddSingleton<IValidateOptions<SurveyPaymentProviderOptions>,
             SurveyPaymentProviderOptionsValidator>();
         services.AddScoped<ISurveyPaymentGateway, SurveyPaymentGateway>();
+        services.AddScoped<IQualityRefundWorkflow, QualityRefundWorkflow>();
         services.AddScoped<ISurveyPaymentCallbackVerifier,
             SurveyPaymentCallbackVerifier>();
         services.AddScoped<ISurveyOrderReadinessService,

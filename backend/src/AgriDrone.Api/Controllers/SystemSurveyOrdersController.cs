@@ -1,5 +1,6 @@
 using AgriDrone.Api.Contracts.Surveys.Orders;
 using AgriDrone.Api.Contracts.Surveys.Payments;
+using AgriDrone.Modules.Surveys.Application.Abstractions.Payments;
 using AgriDrone.Api.Mapping;
 using AgriDrone.Modules.Surveys.Application.Features.Payments.ApplyPriceAdjustment;
 using AgriDrone.Modules.Surveys.Application.Features.Payments.GetSystemAdminSurveyPaymentHistory;
@@ -27,9 +28,61 @@ namespace AgriDrone.Api.Controllers;
 [ApiController]
 [Route("api/system-admin/survey-orders")]
 [Authorize(Policy = AccessAuthorizationPolicies.SystemAdmin)]
-public sealed class SystemSurveyOrdersController(ISender sender)
+public sealed class SystemSurveyOrdersController(
+    ISender sender,
+    IQualityRefundWorkflow qualityRefunds)
     : ControllerBase
 {
+    /// <summary>Admin xem danh sách báo sai kết quả, ưu tiên hồ sơ cần xử lý.</summary>
+    [HttpGet("quality-refunds")]
+    public async Task<IResult> GetQualityRefundQueue(
+        [FromQuery] QualityRefundStatus? status,
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 20,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await qualityRefunds.GetAdminQueueAsync(
+            status, pageNumber, pageSize, cancellationToken);
+        return result.ToHttpResult(HttpContext, Results.Ok);
+    }
+
+    /// <summary>Admin xem hồ sơ báo sai kết quả và số tiền thực thu của đơn.</summary>
+    [HttpGet("{orderId:guid}/quality-refunds")]
+    public async Task<IResult> GetQualityRefunds(
+        [FromRoute] Guid orderId,
+        CancellationToken cancellationToken)
+    {
+        var result = await qualityRefunds.GetAdminCasesAsync(orderId, cancellationToken);
+        return result.ToHttpResult(HttpContext, Results.Ok);
+    }
+
+    /// <summary>Chỉ Admin kết luận báo lỗi và duyệt hoàn tiền.</summary>
+    [HttpPost("{orderId:guid}/quality-refunds/{caseId:guid}/decision")]
+    public async Task<IResult> DecideQualityRefund(
+        [FromRoute] Guid orderId,
+        [FromRoute] Guid caseId,
+        [FromBody] DecideQualityRefundRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await qualityRefunds.DecideAsync(orderId, caseId,
+            request.Approve, request.Reason, request.ExpectedVersion,
+            cancellationToken);
+        return result.ToHttpResult(HttpContext, Results.Ok);
+    }
+
+    /// <summary>Chỉ Admin ghi nhận khoản đã chuyển qua ứng dụng ngân hàng.</summary>
+    [HttpPost("{orderId:guid}/quality-refunds/{caseId:guid}/record-transfer")]
+    public async Task<IResult> RecordQualityRefundTransfer(
+        [FromRoute] Guid orderId,
+        [FromRoute] Guid caseId,
+        [FromBody] RecordQualityRefundTransferRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await qualityRefunds.RecordTransferAsync(orderId, caseId,
+            request.BankTransferReference, request.ExpectedVersion, cancellationToken);
+        return result.ToHttpResult(HttpContext, Results.Ok);
+    }
+
     /// <summary>Lấy danh sách tất cả SurveyOrder trong toàn hệ thống (dành cho SystemAdmin).</summary>
     /// <remarks>
     /// Hỗ trợ phân trang và lọc theo Status, TenantId, FarmId.

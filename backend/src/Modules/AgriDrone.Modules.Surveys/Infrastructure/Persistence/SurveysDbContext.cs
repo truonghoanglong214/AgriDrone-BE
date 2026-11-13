@@ -13,6 +13,8 @@ internal sealed class SurveysDbContext(DbContextOptions<SurveysDbContext> option
 {
     public DbSet<SurveyService> SurveyServices => Set<SurveyService>();
     public DbSet<SurveyServicePrice> SurveyServicePrices => Set<SurveyServicePrice>();
+    public DbSet<LegacySurveyDepositPolicy> LegacySurveyDepositPolicies => Set<LegacySurveyDepositPolicy>();
+    public DbSet<SurveyComboDiscountPolicy> SurveyComboDiscountPolicies => Set<SurveyComboDiscountPolicy>();
     public DbSet<SurveyRequest> SurveyRequests => Set<SurveyRequest>();
     public DbSet<SurveyRequestReview> SurveyRequestReviews => Set<SurveyRequestReview>();
     public DbSet<SurveyApprovalIdempotencyRecord>
@@ -37,6 +39,7 @@ internal sealed class SurveysDbContext(DbContextOptions<SurveysDbContext> option
     public DbSet<ExtraFlightRequest> ExtraFlightRequests =>
         Set<ExtraFlightRequest>();
     public DbSet<SurveyResult> SurveyResults => Set<SurveyResult>();
+    public DbSet<QualityRefundCase> QualityRefundCases => Set<QualityRefundCase>();
     public DbSet<HarvestReadinessAssessment> HarvestReadinessAssessments => Set<HarvestReadinessAssessment>();
     public DbSet<HarvestReadinessCriterion> HarvestReadinessCriteria => Set<HarvestReadinessCriterion>();
     public DbSet<SurveyServiceRevision> SurveyServiceRevisions => Set<SurveyServiceRevision>();

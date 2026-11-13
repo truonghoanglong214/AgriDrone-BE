@@ -9,7 +9,7 @@ public sealed class SurveyDepositPolicyConfiguration : IEntityTypeConfiguration<
     public void Configure(EntityTypeBuilder<SurveyDepositPolicy> builder)
     {
         builder.ToTable(
-            "survey_deposit_policies",
+            "v3_survey_deposit_policies",
             "survey",
             table =>
             {
@@ -27,7 +27,7 @@ public sealed class SurveyDepositPolicyConfiguration : IEntityTypeConfiguration<
                     "version_number >= 1");
             });
 
-        builder.HasKey(policy => policy.Id).HasName("pk_survey_deposit_policies");
+        builder.HasKey(policy => policy.Id).HasName("pk_v3_survey_deposit_policies");
         builder.Property(policy => policy.Id).HasColumnName("id").HasColumnType("uuid");
         builder.Property(policy => policy.VersionNumber).HasColumnName("version_number").HasColumnType("integer").IsRequired();
         builder.Property(policy => policy.PredecessorVersionId).HasColumnName("predecessor_version_id").HasColumnType("uuid").IsRequired(false);
@@ -41,11 +41,11 @@ public sealed class SurveyDepositPolicyConfiguration : IEntityTypeConfiguration<
         builder.Property(policy => policy.EvidenceReference).HasColumnName("evidence_reference").HasColumnType("character varying(500)").HasMaxLength(500).IsRequired(false);
 
         builder.HasIndex(policy => policy.VersionNumber)
-            .HasDatabaseName("uq_survey_deposit_policies_version")
+            .HasDatabaseName("uq_v3_survey_deposit_policies_version")
             .IsUnique();
 
         builder.HasIndex(policy => policy.EffectiveFrom)
-            .HasDatabaseName("ix_survey_deposit_policies_effective")
+            .HasDatabaseName("ix_v3_survey_deposit_policies_effective")
             .IsDescending(true);
 
         builder.HasOne<SurveyDepositPolicy>()

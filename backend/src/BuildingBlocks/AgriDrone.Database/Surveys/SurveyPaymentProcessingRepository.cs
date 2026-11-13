@@ -98,7 +98,9 @@ internal sealed class SurveyPaymentProcessingRepository(
             purpose,
             evaluatedAt,
             cancellationToken);
-        if (!appointmentId.HasValue)
+        var requiresAppointment = purpose == PaymentPurpose.FinalBalance ||
+            (order.RequiresBaselineMapping && order.Status == SurveyOrderStatus.AwaitingBaselineDeposit);
+        if (!appointmentId.HasValue && requiresAppointment)
         {
             return Result.Failure<SurveyPaymentOwnerState>(
                 PaymentError.OrderNotReady());
@@ -122,7 +124,7 @@ internal sealed class SurveyPaymentProcessingRepository(
 
         return Result.Success(new SurveyPaymentOwnerState(
             order,
-            appointmentId.Value,
+            appointmentId ?? Guid.Empty,
             activePayments.SingleOrDefault()));
     }
 

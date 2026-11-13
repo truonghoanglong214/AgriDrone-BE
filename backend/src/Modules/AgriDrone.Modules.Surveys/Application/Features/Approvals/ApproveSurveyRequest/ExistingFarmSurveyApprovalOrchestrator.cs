@@ -104,7 +104,9 @@ internal sealed class ExistingFarmSurveyApprovalOrchestrator(
                 prerequisites.OrderCompatibility.PreviousCompatibleOrderId,
                 prerequisites.OrderCompatibility.PolicyVersion,
                 prerequisites.OrderCompatibility.Reason,
-                context.ApprovedAt);
+                context.ApprovedAt,
+                prerequisites.ApplicableDepositAmount,
+                prerequisites.ApplicableComboDiscountPercentage);
             orderRepository.Add(order);
         }
 

@@ -74,7 +74,7 @@ internal sealed partial class PlantHealthReviewService
             if (evidence.Length == 0 || evidence.Any(id => !s.AllowedMedia.Contains(id)))
                 Conflict("ProvenanceIncomplete", "Approval requires source-owned capture/review evidence.");
             var lockedMedia = await _db.Database.SqlQuery<ApprovalSourceLock>($"""
-                SELECT id AS "Id" FROM mission.media_assets
+                SELECT id AS "Id" FROM media.media_assets
                 WHERE id = ANY({evidence}) AND tenant_id = {s.Order.TenantId} AND farm_id = {s.Order.FarmId}
                 ORDER BY id FOR SHARE
                 """).ToListAsync(token);

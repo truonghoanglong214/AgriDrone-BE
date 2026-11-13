@@ -36,6 +36,9 @@ public sealed class SurveyResultConfiguration : IEntityTypeConfiguration<SurveyR
         builder.Property(result => result.ReviewedAt).HasColumnName("reviewed_at").HasColumnType("timestamp with time zone");
         builder.Property(result => result.PublishedBy).HasColumnName("published_by").HasColumnType("uuid");
         builder.Property(result => result.PublishedAt).HasColumnName("published_at").HasColumnType("timestamp with time zone");
+        builder.Property(result => result.InvalidatedByQualityRefundCaseId).HasColumnName("invalidated_by_quality_refund_case_id");
+        builder.Property(result => result.InvalidatedBy).HasColumnName("invalidated_by");
+        builder.Property(result => result.InvalidatedAt).HasColumnName("invalidated_at");
         builder.Property(result => result.Version).IsRowVersion();
         builder.Property(result => result.ActiveImportBatchId).HasColumnName("active_import_batch_id");
         builder.Property(result => result.SourceMissionId).HasColumnName("source_mission_id");
@@ -62,6 +65,8 @@ public sealed class SurveyResultConfiguration : IEntityTypeConfiguration<SurveyR
         builder.Property(result => result.UpdatedAt).HasColumnName("updated_at").HasColumnType("timestamp with time zone").HasDefaultValueSql("NOW()").IsRequired();
         builder.HasIndex(result => result.SurveyOrderId).HasDatabaseName("uq_survey_results_order").IsUnique();
         builder.HasIndex(result => new { result.TenantId, result.FarmId, result.Status }).HasDatabaseName("ix_survey_results_farm_status");
+        builder.HasIndex(result => result.InvalidatedByQualityRefundCaseId).IsUnique()
+            .HasFilter("invalidated_by_quality_refund_case_id IS NOT NULL");
         builder.HasIndex(result => new { result.FarmId, result.ServiceType, result.PublishedAt }).HasDatabaseName("ix_survey_results_profile_timeline").IsDescending(false, false, true);
         builder.HasOne(result => result.SurveyOrder).WithOne().HasForeignKey<SurveyResult>(result => new { result.SurveyOrderId, result.TenantId, result.FarmId }).HasPrincipalKey<SurveyOrder>(order => new { order.Id, order.TenantId, order.FarmId }).OnDelete(DeleteBehavior.Restrict).HasConstraintName("fk_survey_results_orders_same_tenant_farm");
     }

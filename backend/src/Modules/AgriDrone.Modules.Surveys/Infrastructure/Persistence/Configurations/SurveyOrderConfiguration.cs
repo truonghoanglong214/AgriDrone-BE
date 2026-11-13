@@ -67,8 +67,8 @@ public sealed class SurveyOrderConfiguration : IEntityTypeConfiguration<SurveyOr
                     "remaining_amount IS NULL OR remaining_amount >= 0");
                 table.HasCheckConstraint(
                     "ck_survey_orders_deposit_consistency",
-                    "scope = 'V3' OR (requires_baseline_mapping = false AND deposit_amount = 0 AND deposit_payment_status = 'PAID'::system.survey_payment_status) OR " +
-                    "(requires_baseline_mapping = true AND deposit_amount > 0)");
+                    "scope = 'V3' OR (deposit_amount = 0 AND deposit_payment_status = 'PAID'::system.survey_payment_status) OR " +
+                    "(deposit_amount > 0)");
                 table.HasCheckConstraint(
                     "ck_survey_orders_scope_policy",
                     "(scope = 'LEGACY' AND business_policy_version_id IS NULL) OR " +
@@ -158,6 +158,10 @@ public sealed class SurveyOrderConfiguration : IEntityTypeConfiguration<SurveyOr
             .HasPrecision(18, 2)
             .HasSentinel(-1m)
             .IsRequired();
+        builder.Property(order => order.ComboDiscountPercentage)
+            .HasColumnName("combo_discount_percentage")
+            .HasColumnType("numeric(5,2)")
+            .HasPrecision(5, 2);
         builder.Property(order => order.RemainingAmount)
             .HasColumnName("remaining_amount")
             .HasColumnType("numeric(18,2)")

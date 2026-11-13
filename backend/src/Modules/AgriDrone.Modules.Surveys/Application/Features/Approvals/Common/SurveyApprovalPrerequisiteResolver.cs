@@ -16,7 +16,9 @@ internal interface ISurveyApprovalPrerequisiteResolver
 }
 
 internal sealed class SurveyApprovalPrerequisiteResolver(
-    ISurveyApprovalReferenceQueries referenceQueries)
+    ISurveyApprovalReferenceQueries referenceQueries,
+    ISurveyDepositPolicyRepository? depositPolicyRepository = null,
+    ISurveyComboDiscountPolicyRepository? comboDiscountPolicyRepository = null)
     : ISurveyApprovalPrerequisiteResolver
 {
     public async Task<Result<SurveyApprovalPrerequisites>> ResolveAsync(
@@ -45,6 +47,23 @@ internal sealed class SurveyApprovalPrerequisiteResolver(
                 SurveyApprovalError.ServiceUnavailable());
         }
 
+        // V3 commercial terms are resolved atomically from the pinned policy bundle.
+        // Legacy Admin policies must never override or gate a V3 approval.
+        var applicableDeposit = SurveyOrder.DefaultBaselineDepositAmountVnd;
+        var applicableDiscount = SurveyOrder.DefaultComboDiscountPercentage;
+        if (service.Scope == ContractScope.Legacy)
+        {
+            var activeDepositPolicy = depositPolicyRepository is null
+                ? null
+                : await depositPolicyRepository.GetCurrentAsync(cancellationToken);
+            applicableDeposit = activeDepositPolicy?.AmountVnd ?? applicableDeposit;
+
+            var activeDiscountPolicy = comboDiscountPolicyRepository is null
+                ? null
+                : await comboDiscountPolicyRepository.GetCurrentAsync(cancellationToken);
+            applicableDiscount = activeDiscountPolicy?.DiscountPercentage ?? applicableDiscount;
+        }
+
         return request.Kind switch
         {
             SurveyRequestKind.NewCustomer =>
@@ -53,6 +72,8 @@ internal sealed class SurveyApprovalPrerequisiteResolver(
                     service,
                     selectedSystemManagerProfileId,
                     approvalTime,
+                    applicableDeposit,
+                    applicableDiscount,
                     cancellationToken),
             SurveyRequestKind.ExistingTenantNewFarm =>
                 await ResolveExistingTenantNewFarmAsync(
@@ -60,6 +81,8 @@ internal sealed class SurveyApprovalPrerequisiteResolver(
                     service,
                     selectedSystemManagerProfileId,
                     approvalTime,
+                    applicableDeposit,
+                    applicableDiscount,
                     cancellationToken),
             SurveyRequestKind.ExistingFarmSurvey =>
                 await ResolveExistingFarmAsync(
@@ -67,6 +90,8 @@ internal sealed class SurveyApprovalPrerequisiteResolver(
                     service,
                     selectedSystemManagerProfileId,
                     approvalTime,
+                    applicableDeposit,
+                    applicableDiscount,
                     cancellationToken),
             _ => Result.Failure<SurveyApprovalPrerequisites>(
                 SurveyApprovalError.RequestContextInvalid())
@@ -79,6 +104,8 @@ internal sealed class SurveyApprovalPrerequisiteResolver(
             SurveyApprovalServiceReference service,
             Guid? selectedManagerId,
             DateTimeOffset approvalTime,
+            decimal applicableDeposit,
+            decimal applicableDiscount,
             CancellationToken cancellationToken)
     {
         if (request.TenantId.HasValue ||
@@ -108,7 +135,9 @@ internal sealed class SurveyApprovalPrerequisiteResolver(
             FarmBaseline: null,
             RequiresBaselineMapping: true,
             OrderCompatibility:
-                SurveyApprovalOrderCompatibilityPolicy.ForNewFarm()));
+                SurveyApprovalOrderCompatibilityPolicy.ForNewFarm(),
+            ApplicableDepositAmount: applicableDeposit,
+            ApplicableComboDiscountPercentage: applicableDiscount));
     }
 
     private async Task<Result<SurveyApprovalPrerequisites>>
@@ -117,6 +146,8 @@ internal sealed class SurveyApprovalPrerequisiteResolver(
             SurveyApprovalServiceReference service,
             Guid? selectedManagerId,
             DateTimeOffset approvalTime,
+            decimal applicableDeposit,
+            decimal applicableDiscount,
             CancellationToken cancellationToken)
     {
         if (request.TenantId is not Guid tenantId ||
@@ -156,7 +187,9 @@ internal sealed class SurveyApprovalPrerequisiteResolver(
             FarmBaseline: null,
             RequiresBaselineMapping: true,
             OrderCompatibility:
-                SurveyApprovalOrderCompatibilityPolicy.ForNewFarm()));
+                SurveyApprovalOrderCompatibilityPolicy.ForNewFarm(),
+            ApplicableDepositAmount: applicableDeposit,
+            ApplicableComboDiscountPercentage: applicableDiscount));
     }
 
     private async Task<Result<SurveyApprovalPrerequisites>>
@@ -165,6 +198,8 @@ internal sealed class SurveyApprovalPrerequisiteResolver(
             SurveyApprovalServiceReference service,
             Guid? selectedManagerId,
             DateTimeOffset approvalTime,
+            decimal applicableDeposit,
+            decimal applicableDiscount,
             CancellationToken cancellationToken)
     {
         if (request.TenantId is not Guid tenantId ||
@@ -253,7 +288,9 @@ internal sealed class SurveyApprovalPrerequisiteResolver(
             baseline,
             SurveyApprovalBaselineRequirementResolver
                 .RequiresBaselineMapping(baseline),
-            compatibility));
+            compatibility,
+            applicableDeposit,
+            applicableDiscount));
     }
 
     private async Task<Result<SurveyApprovalManagerReference>>

@@ -575,6 +575,67 @@ public sealed class SurveyScopeBaselineRemediationTests
     // Test Harness & Fakes
     // -----------------------------------------------------------------------------------
 
+    [Theory]
+    [InlineData(ContractScope.Legacy)]
+    [InlineData(ContractScope.V3)]
+    public async Task ApprovalKeepsMainLegacyPoliciesSeparateFromPinnedV3Terms(ContractScope scope)
+    {
+        var baseline = new SurveyApprovalFarmBaselineReference(TenantId, FarmId, Guid.NewGuid(), 100);
+        var policies = new LegacyPolicyProbe();
+        var harness = new RemediationApprovalTestHarness(baseline, scope, policies, policies);
+        var request = harness.CreateExistingFarmRequest(scope, TenantId, FarmId, OwnerUserId);
+        harness.RequestRepository.Request = request;
+
+        var result = await harness.Handler.Handle(
+            RemediationApprovalTestHarness.CreateValidCommand(request.Id, request.Version),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess, result.Error?.Description);
+        var order = Assert.IsType<SurveyOrder>(harness.OrderRepository.SavedOrder);
+        Assert.Equal(scope, order.Scope);
+        if (scope == ContractScope.V3)
+        {
+            Assert.Equal(0, policies.DepositReads);
+            Assert.Equal(0, policies.DiscountReads);
+            Assert.Equal(harness.SnapshotResolver.Snapshot!.DepositAmount, order.DepositAmount);
+            Assert.Equal(harness.SnapshotResolver.Snapshot.BusinessPolicyVersionId, order.BusinessPolicyVersionId);
+            Assert.Null(order.ComboDiscountPercentage);
+        }
+        else
+        {
+            Assert.Equal(1, policies.DepositReads);
+            Assert.Equal(1, policies.DiscountReads);
+            Assert.Equal(25_000m, order.DepositAmount);
+            Assert.Equal(35m, order.ComboDiscountPercentage);
+            Assert.Null(order.BusinessPolicyVersionId);
+        }
+    }
+
+    private sealed class LegacyPolicyProbe : ISurveyDepositPolicyRepository, ISurveyComboDiscountPolicyRepository
+    {
+        public int DepositReads { get; private set; }
+        public int DiscountReads { get; private set; }
+
+        Task<LegacySurveyDepositPolicy?> ISurveyDepositPolicyRepository.GetCurrentAsync(CancellationToken cancellationToken)
+        {
+            DepositReads++;
+            return Task.FromResult<LegacySurveyDepositPolicy?>(LegacySurveyDepositPolicy.Create(1, 25_000m, AdminActorId, T0));
+        }
+
+        Task<SurveyComboDiscountPolicy?> ISurveyComboDiscountPolicyRepository.GetCurrentAsync(CancellationToken cancellationToken)
+        {
+            DiscountReads++;
+            return Task.FromResult<SurveyComboDiscountPolicy?>(SurveyComboDiscountPolicy.Create(1, 35m, AdminActorId, T0));
+        }
+
+        Task<LegacySurveyDepositPolicy?> ISurveyDepositPolicyRepository.GetCurrentForUpdateAsync(CancellationToken cancellationToken) => throw new NotSupportedException();
+        Task<IReadOnlyList<LegacySurveyDepositPolicy>> ISurveyDepositPolicyRepository.GetHistoryAsync(CancellationToken cancellationToken) => throw new NotSupportedException();
+        void ISurveyDepositPolicyRepository.Add(LegacySurveyDepositPolicy policy) => throw new NotSupportedException();
+        Task<SurveyComboDiscountPolicy?> ISurveyComboDiscountPolicyRepository.GetCurrentForUpdateAsync(CancellationToken cancellationToken) => throw new NotSupportedException();
+        Task<IReadOnlyList<SurveyComboDiscountPolicy>> ISurveyComboDiscountPolicyRepository.GetHistoryAsync(CancellationToken cancellationToken) => throw new NotSupportedException();
+        void ISurveyComboDiscountPolicyRepository.Add(SurveyComboDiscountPolicy policy) => throw new NotSupportedException();
+    }
+
     private sealed class RemediationApprovalTestHarness
     {
         public TestSurveyApprovalUnitOfWork UnitOfWork { get; } = new();
@@ -590,7 +651,11 @@ public sealed class SurveyScopeBaselineRemediationTests
         public TestSurveyCommercialSnapshotResolver SnapshotResolver { get; } = new();
         public ApproveSurveyRequestCommandHandler Handler { get; }
 
-        public RemediationApprovalTestHarness(SurveyApprovalFarmBaselineReference baseline)
+        public RemediationApprovalTestHarness(
+            SurveyApprovalFarmBaselineReference baseline,
+            ContractScope scope = ContractScope.Legacy,
+            ISurveyDepositPolicyRepository? depositPolicies = null,
+            ISurveyComboDiscountPolicyRepository? discountPolicies = null)
         {
 
             var snapshot = new ResolvedSurveyCommercialSnapshot(
@@ -621,8 +686,8 @@ public sealed class SurveyScopeBaselineRemediationTests
                 EvaluatedAt: T0);
             SnapshotResolver.Snapshot = snapshot;
 
-            var referenceQueries = new FakeSurveyApprovalReferenceQueries(baseline);
-            var prerequisiteResolver = new SurveyApprovalPrerequisiteResolver(referenceQueries);
+            var referenceQueries = new FakeSurveyApprovalReferenceQueries(baseline, scope);
+            var prerequisiteResolver = new SurveyApprovalPrerequisiteResolver(referenceQueries, depositPolicies, discountPolicies);
 
             var orchestrators = new ISurveyRequestKindApprovalOrchestrator[]
             {
@@ -703,7 +768,8 @@ public sealed class SurveyScopeBaselineRemediationTests
     }
 
     private sealed class FakeSurveyApprovalReferenceQueries(
-        SurveyApprovalFarmBaselineReference baseline) : ISurveyApprovalReferenceQueries
+        SurveyApprovalFarmBaselineReference baseline,
+        ContractScope scope = ContractScope.Legacy) : ISurveyApprovalReferenceQueries
     {
         private readonly SurveyApprovalFarmBaselineReference _baseline = baseline;
 
@@ -713,7 +779,7 @@ public sealed class SurveyScopeBaselineRemediationTests
                 SurveyServiceType.PlantHealth,
                 SurveyServiceStatus.Active,
                 1,
-                ContractScope.Legacy));
+                scope));
 
         public Task<SurveyApprovalTenantOwnerReference?> GetTenantOwnerForApprovalAsync(Guid tenantId, Guid userId, CancellationToken cancellationToken = default) =>
             Task.FromResult<SurveyApprovalTenantOwnerReference?>(new SurveyApprovalTenantOwnerReference(

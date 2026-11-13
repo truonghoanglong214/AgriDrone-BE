@@ -186,7 +186,8 @@ namespace AgriDrone.Database.Migrations
                 name: "ck_survey_orders_deposit_consistency",
                 schema: "survey",
                 table: "survey_orders",
-                sql: "scope = 'V3' OR (requires_baseline_mapping = false AND deposit_amount = 0 AND deposit_payment_status = 'PAID'::system.survey_payment_status) OR (requires_baseline_mapping = true AND deposit_amount > 0)");
+                // The merged legacy flow also supports a deposit on Follow-up orders.
+                sql: "scope = 'V3' OR (deposit_amount = 0 AND deposit_payment_status = 'PAID'::system.survey_payment_status) OR (deposit_amount > 0)");
 
             migrationBuilder.AddCheckConstraint(
                 name: "ck_survey_orders_final_price",

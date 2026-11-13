@@ -65,7 +65,7 @@ internal sealed partial class PlantHealthReviewService
                     source.InputMediaIds!.Any(id => !evidence.Contains(id)))
                     Conflict("ProvenanceIncomplete", "Frozen capture evidence is no longer available in this source Mission.");
                 var lockedEvidence = await _db.Database.SqlQuery<ApprovalSourceLock>($"""
-                    SELECT id AS "Id" FROM mission.media_assets
+                    SELECT id AS "Id" FROM media.media_assets
                     WHERE id = ANY({evidence}) AND tenant_id = {s.Order.TenantId} AND farm_id = {s.Order.FarmId}
                     ORDER BY id FOR SHARE
                     """).ToListAsync(ct);
@@ -80,7 +80,7 @@ internal sealed partial class PlantHealthReviewService
                     Conflict("ApprovalSnapshotChanged", "The accepted finding set differs from the approval snapshot.");
                 var plantIds = payload.Findings.Select(f => f.PlantId).Distinct().Order().ToArray();
                 var current = await _db.LatestReviewedHealth.FromSqlInterpolated($"""
-                    SELECT * FROM plant.latest_reviewed_plant_health
+                    SELECT *, xmin FROM plant.latest_reviewed_plant_health
                     WHERE plant_id = ANY({plantIds}) ORDER BY plant_id FOR UPDATE
                     """).ToDictionaryAsync(p => p.PlantId, ct);
                 List<Guid> advanced = [];

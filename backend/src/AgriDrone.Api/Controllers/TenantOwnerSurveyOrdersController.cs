@@ -8,6 +8,7 @@ using AgriDrone.Modules.Surveys.Application.Features.Payments.GetSurveyPaymentHi
 using AgriDrone.Modules.Surveys.Application.Features.Orders.GetTenantOwnerSurveyOrders;
 using AgriDrone.Modules.Surveys.Application.Features.Orders.GetTenantOwnerSurveyOrder;
 using AgriDrone.Modules.Surveys.Domain;
+using AgriDrone.Modules.Surveys.Application.Abstractions.Payments;
 using AgriDrone.SharedInfrastructure.Authorization;
 using AgriDrone.SharedInfrastructure.Http;
 using AgriDrone.SharedKernel.Application.Pagination;
@@ -20,7 +21,9 @@ namespace AgriDrone.Api.Controllers;
 [ApiController]
 [Route("api/tenant-owner/survey-orders")]
 [Authorize(Policy = AccessAuthorizationPolicies.TenantOwner)]
-public sealed class TenantOwnerSurveyOrdersController(ISender sender)
+public sealed class TenantOwnerSurveyOrdersController(
+    ISender sender,
+    IQualityRefundWorkflow qualityRefunds)
     : ControllerBase
 {
     /// <summary>Lấy danh sách SurveyOrder thuộc tenant hiện tại của Owner.</summary>
@@ -174,6 +177,36 @@ public sealed class TenantOwnerSurveyOrdersController(ISender sender)
             HttpContext,
             response => Results.Ok(
                 SurveyPaymentResponseMapper.ToResponse(response)));
+    }
+
+    /// <summary>Owner báo kết quả Plant Health đã công bố sai theo từng trụ cây.</summary>
+    [HttpPost("{orderId:guid}/quality-refunds")]
+    [ProducesResponseType(StatusCodes.Status201Created)]
+    public async Task<IResult> ReportQualityRefund(
+        [FromRoute] Guid orderId,
+        [FromBody] ReportQualityRefundRequest request,
+        CancellationToken cancellationToken)
+    {
+        var issues = request.Issues?.Select(item => item is null
+            ? null!
+            : new ReportedPoleIssue(item.PoleCode, item.IssueType, item.Details)).ToArray() ?? [];
+        var result = await qualityRefunds.ReportAsync(orderId, issues,
+            request.Description, request.EvidenceReference,
+            request.RecipientBankName, request.RecipientAccountNumber,
+            request.RecipientAccountName, cancellationToken);
+        return result.ToHttpResult(HttpContext,
+            response => Results.Json(response, statusCode: StatusCodes.Status201Created));
+    }
+
+    /// <summary>Owner xem các báo cáo sai kết quả và trạng thái hoàn tiền của đơn.</summary>
+    [HttpGet("{orderId:guid}/quality-refunds")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<IResult> GetQualityRefunds(
+        [FromRoute] Guid orderId,
+        CancellationToken cancellationToken)
+    {
+        var result = await qualityRefunds.GetOwnerCasesAsync(orderId, cancellationToken);
+        return result.ToHttpResult(HttpContext, Results.Ok);
     }
 
     private static bool TryParsePaymentPurpose(string? purpose, out PaymentPurpose parsedPurpose)

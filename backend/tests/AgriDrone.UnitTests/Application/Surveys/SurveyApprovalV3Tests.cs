@@ -811,7 +811,9 @@ public sealed class SurveyApprovalV3Tests
                 OrderCompatibility: new SurveyApprovalOrderCompatibilityDecision(
                     PreviousCompatibleOrderId: null,
                     PolicyVersion: "v1",
-                    Reason: "NO_PREVIOUS_ORDER"))));
+                    Reason: "NO_PREVIOUS_ORDER"),
+                ApplicableDepositAmount: 5_000m,
+                ApplicableComboDiscountPercentage: 20m)));
         }
     }
 

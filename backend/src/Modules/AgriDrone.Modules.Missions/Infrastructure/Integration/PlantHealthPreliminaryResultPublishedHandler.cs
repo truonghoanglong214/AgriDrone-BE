@@ -23,7 +23,7 @@ internal sealed class PlantHealthPreliminaryResultPublishedHandler(MissionsDbCon
         var p = envelope.Payload;
         if (envelope.TenantId is not Guid tenant || envelope.ActorId != p.PublishedBy || envelope.CausationId != p.CausationId || envelope.OccurredAt != p.PublishedAt)
             return InboxHandlerResult.PermanentFailure("PlantHealthPublication.EnvelopeMismatch", "Publication actor, causation and time must match its envelope.");
-        var mission = await db.DroneMissions.FromSqlInterpolated($"SELECT * FROM mission.drone_missions WHERE id = {p.MissionId} FOR UPDATE")
+        var mission = await db.DroneMissions.FromSqlInterpolated($"SELECT *, xmin FROM mission.drone_missions WHERE id = {p.MissionId} FOR UPDATE")
             .SingleOrDefaultAsync(token);
         if (mission is null) return InboxHandlerResult.Retry("The source Mission is not available yet.");
         if (mission.TenantId != tenant || mission.FarmId != p.FarmId || mission.SurveyOrderId != p.SurveyOrderId ||

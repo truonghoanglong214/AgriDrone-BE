@@ -90,7 +90,8 @@ public sealed class SurveyPoliciesTests
             IsPreflightCompleted: true,
             HasPendingPriceAdjustment: false,
             IsPaymentAmountAndCurrencyMatched: true,
-            SafetyChecksSatisfied: true));
+            SafetyChecksSatisfied: true,
+            DepositPaymentStatus: SurveyPaymentStatus.Paid));
 
         Assert.True(decision.IsReady);
         Assert.Empty(decision.Failures);

@@ -223,7 +223,10 @@ internal sealed class SystemManagerSurveyOrderQueries(
         join farm in context.Set<Farm>().AsNoTracking()
             on new { order.TenantId, order.FarmId }
             equals new { farm.TenantId, FarmId = farm.Id }
+        join service in context.Set<SurveyService>().AsNoTracking()
+            on order.SurveyServiceId equals service.Id
         where order.TenantId == tenantId && farm.DeletedAt == null
+            && order.Scope == ContractScope.Legacy && service.ServiceType.HasValue
             && (!surveyOrderId.HasValue || order.Id == surveyOrderId.Value)
             && (!status.HasValue || order.Status == status.Value)
         orderby order.CreatedAt descending, order.Id descending
@@ -239,6 +242,11 @@ internal sealed class SystemManagerSurveyOrderQueries(
             order.RemainingAmount,
             order.Currency ?? "VND",
             order.Appointments
+                // Revisions are scoped to each purpose. After pricing, only the paid-service
+                // appointment is current; a higher baseline revision must not hide it.
+                .Where(item => item.Purpose == (order.PricingConfirmedAt.HasValue
+                    ? SurveyAppointmentPurpose.PaidService
+                    : SurveyAppointmentPurpose.BaselineMapping))
                 .Where(item => item.Status == SurveyAppointmentStatus.Proposed ||
                                item.Status == SurveyAppointmentStatus.Confirmed ||
                                item.Status == SurveyAppointmentStatus.RescheduleRequested)
@@ -250,7 +258,8 @@ internal sealed class SystemManagerSurveyOrderQueries(
                     item.ProposedEndAt,
                     item.Status,
                     item.Version))
-                .FirstOrDefault());
+                .FirstOrDefault(),
+            service.ServiceType!.Value);
 
     private static void EnsureValidPage(PagedRequest page)
     {
