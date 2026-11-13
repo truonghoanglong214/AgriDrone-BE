@@ -10,7 +10,8 @@ using Microsoft.EntityFrameworkCore;
 namespace AgriDrone.Database.Surveys;
 
 internal sealed class SurveyApprovalReferenceQueries(
-    SurveyApprovalDbContext context)
+    SurveyApprovalDbContext context,
+    V3FollowUpBaselineEligibilityReader baselineEligibilityReader)
     : ISurveyApprovalReferenceQueries
 {
     public async Task<SurveyApprovalServiceReference?>
@@ -42,7 +43,8 @@ internal sealed class SurveyApprovalReferenceQueries(
             service.Id,
             service.ServiceType,
             service.Status,
-            service.Version);
+            service.Version,
+            service.Scope);
     }
 
     public async Task<SurveyApprovalTenantOwnerReference?>
@@ -261,6 +263,22 @@ internal sealed class SurveyApprovalReferenceQueries(
             farmId,
             baseMap.Id,
             sourceOrder.ConfirmedSurveyPoleCount?.Value);
+    }
+
+    public async Task<SurveyApprovalFarmBaselineReference>
+        GetV3FollowUpBaselineForApprovalAsync(
+            Guid tenantId,
+            Guid farmId,
+            CancellationToken cancellationToken = default)
+    {
+        var eligibility = await baselineEligibilityReader.GetEligibleAsync(
+            context, tenantId, farmId, cancellationToken);
+
+        return new SurveyApprovalFarmBaselineReference(
+            tenantId,
+            farmId,
+            eligibility.IsEligible ? eligibility.BaseMapVersionId : null,
+            eligibility.IsEligible ? eligibility.ConfirmedActivePoleCount : null);
     }
 
     public async Task<SurveyApprovalPreviousOrderReference?>

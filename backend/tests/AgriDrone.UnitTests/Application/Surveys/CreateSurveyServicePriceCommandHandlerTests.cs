@@ -104,6 +104,7 @@ public sealed class CreateSurveyServicePriceCommandHandlerTests
             throw new NotSupportedException();
 
         public void AddPrice(SurveyServicePrice price) => AddedPrice = price;
+        public void AddRevision(SurveyServiceRevision revision) => throw new NotSupportedException();
     }
 
     private sealed class FakeSurveyCatalogueQueries : ISurveyCatalogueQueries
@@ -124,6 +125,8 @@ public sealed class CreateSurveyServicePriceCommandHandlerTests
             ExcludingPriceId = excludingPriceId;
             return Task.FromResult(false);
         }
+
+        public Task<PublicCatalogueV3Result?> GetPublicCatalogueV3Async(DateTimeOffset evaluatedAt, CancellationToken cancellationToken = default) => Task.FromResult<PublicCatalogueV3Result?>(null);
 
         public Task<IReadOnlyList<PublicSurveyServiceCatalogueItem>>
             GetPublicCatalogueAsync(

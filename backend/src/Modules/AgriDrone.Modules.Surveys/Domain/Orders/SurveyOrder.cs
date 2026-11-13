@@ -1,3 +1,4 @@
+using AgriDrone.Modules.Surveys.Application.Abstractions.Pricing;
 using AgriDrone.SharedKernel.Domain;
 
 namespace AgriDrone.Modules.Surveys.Domain;
@@ -83,6 +84,8 @@ public sealed class SurveyOrder : AggregateRoot
 
     private SurveyOrder() { }
 
+    public ContractScope Scope { get; private set; } = ContractScope.Legacy;
+    public Guid? BusinessPolicyVersionId { get; private set; }
     public string OrderNumber { get; private set; } = null!;
     public Guid TenantId { get; private set; }
     public Guid FarmId { get; private set; }
@@ -198,6 +201,109 @@ public sealed class SurveyOrder : AggregateRoot
                 ? SurveyPaymentStatus.Pending
                 : SurveyPaymentStatus.Paid,
             DepositAmount = requiresBaselineMapping ? DefaultBaselineDepositAmountVnd : 0m,
+            CreatedAt = createdAt,
+            UpdatedAt = createdAt
+        };
+    }
+
+    public static SurveyOrder CreateV3(
+        string orderNumber,
+        Guid tenantId,
+        Guid farmId,
+        Guid surveyRequestId,
+        Guid surveyServiceId,
+        ResolvedSurveyCommercialSnapshot snapshot,
+        bool requiresBaselineMapping,
+        Guid? farmBaseMapVersionId = null,
+        Guid? previousCompatibleOrderId = null,
+        string? previousOrderCompatibilityPolicyVersion = null,
+        string? previousOrderCompatibilityReason = null,
+        DateTimeOffset createdAt = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(orderNumber);
+        DomainGuard.NotEmpty(tenantId);
+        DomainGuard.NotEmpty(farmId);
+        DomainGuard.NotEmpty(surveyRequestId);
+        DomainGuard.NotEmpty(surveyServiceId);
+        DomainGuard.Utc(createdAt);
+        ArgumentNullException.ThrowIfNull(snapshot);
+
+        if (orderNumber.Trim().Length > 40)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(orderNumber),
+                "Order number cannot exceed 40 characters.");
+        }
+
+        if (!requiresBaselineMapping)
+        {
+            if (!farmBaseMapVersionId.HasValue || farmBaseMapVersionId.Value == Guid.Empty)
+            {
+                throw new ArgumentException(
+                    "Follow-up survey order that does not require baseline mapping must pin an existing delivered baseline map version.",
+                    nameof(farmBaseMapVersionId));
+            }
+        }
+        else
+        {
+            if (farmBaseMapVersionId.HasValue)
+            {
+                throw new ArgumentException(
+                    "Survey order requiring baseline mapping cannot have a baseline map version pinned at creation.",
+                    nameof(farmBaseMapVersionId));
+            }
+        }
+
+        string? compatibilityPolicyVersion = null;
+        string? compatibilityReason = null;
+        if (previousCompatibleOrderId.HasValue)
+        {
+            if (previousCompatibleOrderId.Value == Guid.Empty)
+            {
+                throw new ArgumentException(
+                    "Previous compatible order identifier cannot be empty.",
+                    nameof(previousCompatibleOrderId));
+            }
+
+            if (previousOrderCompatibilityPolicyVersion is not null)
+            {
+                compatibilityPolicyVersion = NormalizeCompatibilityValue(
+                    previousOrderCompatibilityPolicyVersion,
+                    100,
+                    nameof(previousOrderCompatibilityPolicyVersion));
+            }
+
+            if (previousOrderCompatibilityReason is not null)
+            {
+                compatibilityReason = NormalizeCompatibilityValue(
+                    previousOrderCompatibilityReason,
+                    100,
+                    nameof(previousOrderCompatibilityReason));
+            }
+        }
+
+        return new SurveyOrder
+        {
+            Id = Guid.NewGuid(),
+            Scope = ContractScope.V3,
+            BusinessPolicyVersionId = snapshot.BusinessPolicyVersionId,
+            OrderNumber = orderNumber.Trim(),
+            TenantId = tenantId,
+            FarmId = farmId,
+            SurveyRequestId = surveyRequestId,
+            SurveyServiceId = surveyServiceId,
+            SurveyServicePriceId = snapshot.PriceVersionId,
+            PricePerPoleSnapshot = PricePerPole.Create(snapshot.PricePerPole),
+            Currency = snapshot.Currency,
+            DepositAmount = snapshot.DepositAmount,
+            DepositPaymentStatus = SurveyPaymentStatus.Pending,
+            RequiresBaselineMapping = requiresBaselineMapping,
+            FarmBaseMapVersionId = farmBaseMapVersionId,
+            PreviousCompatibleOrderId = previousCompatibleOrderId,
+            PreviousOrderCompatibilityPolicyVersion = compatibilityPolicyVersion,
+            PreviousOrderCompatibilityReason = compatibilityReason,
+            Status = SurveyOrderStatus.AwaitingBaselineAppointment,
+            ScopeType = SurveyScopeType.FarmWide,
             CreatedAt = createdAt,
             UpdatedAt = createdAt
         };

@@ -227,7 +227,7 @@ internal sealed class SurveyOrderOperationalContextV3Query(
 
         return new SurveyOrderOperationalContextV3(
             order.Id, order.TenantId, order.FarmId, order.SurveyService.Code,
-            order.SurveyService.ServiceType.ToString(), purpose.ToString(),
+            order.SurveyService.ServiceType?.ToString() ?? order.SurveyService.Code, purpose.ToString(),
             order.Status.ToString(), order.Version, order.FarmBoundaryVersionId,
             order.FarmBaseMapVersionId, order.RequiresBaselineMapping,
             order.ConfirmedSurveyPoleCount?.Value, order.SurveyServicePriceId,

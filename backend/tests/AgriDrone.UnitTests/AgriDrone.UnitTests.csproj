@@ -5,6 +5,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\src\BuildingBlocks\AgriDrone.IntegrationContracts\AgriDrone.IntegrationContracts.csproj" />
     <ProjectReference Include="..\..\src\BuildingBlocks\AgriDrone.SharedInfrastructure\AgriDrone.SharedInfrastructure.csproj" />
     <ProjectReference Include="..\..\src\BuildingBlocks\AgriDrone.SharedKernel\AgriDrone.SharedKernel.csproj" />

@@ -123,4 +123,24 @@ public static class SurveyRequestError
 
     public static AppError InvalidChecklist(string description) =>
         AppError.Validation(InvalidChecklistCode, description);
+
+    public static AppError FollowUpBaselineRequired() =>
+        AppError.Conflict(
+            "SurveyRequest.FollowUpBaselineRequired",
+            "Follow-up survey requires an approved and delivered baseline publication for the target farm.");
+
+    public static AppError TrackingTokenNotFound() =>
+        AppError.NotFound(
+            "SurveyRequest.TrackingTokenNotFound",
+            "No survey request was found matching the provided tracking token.");
+
+    public static AppError FarmNotOwnedByTenant() =>
+        AppError.Forbidden(
+            "SurveyRequest.FarmNotOwnedByTenant",
+            "The requested farm does not belong to the current authenticated tenant.");
+
+    public static AppError PublicIntakeDisabled() =>
+        AppError.Conflict(
+            "SurveyRequest.PublicIntakeDisabled",
+            "Public survey request intake is currently disabled by system policy.");
 }

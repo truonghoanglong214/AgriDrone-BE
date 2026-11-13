@@ -1,3 +1,4 @@
+using AgriDrone.Modules.Surveys.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
@@ -25,8 +26,14 @@ internal static class AgriDroneSchemaDbContextOptions
             .ConfigureWarnings(warnings =>
                 warnings.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning))
             .UseSeeding((dbContext, _) =>
-                SystemRoleSeeder.Seed(dbContext))
-            .UseAsyncSeeding((dbContext, _, cancellationToken) =>
-                SystemRoleSeeder.SeedAsync(dbContext, cancellationToken));
+            {
+                SystemRoleSeeder.Seed(dbContext);
+                SurveyServiceV3Seeder.Seed(dbContext);
+            })
+            .UseAsyncSeeding(async (dbContext, _, cancellationToken) =>
+            {
+                await SystemRoleSeeder.SeedAsync(dbContext, cancellationToken);
+                await SurveyServiceV3Seeder.SeedAsync(dbContext, cancellationToken);
+            });
     }
 }

@@ -225,10 +225,15 @@ internal sealed class SurveyApprovalPrerequisiteResolver(
                 SurveyApprovalError.ManagerNotAssignable());
         }
 
-        var baseline = await referenceQueries.GetFarmBaselineForApprovalAsync(
-            tenantId,
-            farmId,
-            cancellationToken);
+        var baseline = request.SurveyService.Scope == ContractScope.V3
+            ? await referenceQueries.GetV3FollowUpBaselineForApprovalAsync(
+                tenantId,
+                farmId,
+                cancellationToken)
+            : await referenceQueries.GetFarmBaselineForApprovalAsync(
+                tenantId,
+                farmId,
+                cancellationToken);
         var previousOrderCandidate = await referenceQueries
             .GetPreviousOrderCandidateForApprovalAsync(
                 tenantId,

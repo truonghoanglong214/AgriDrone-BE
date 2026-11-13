@@ -53,6 +53,11 @@ public static class DependencyInjection
             SurveyOrderOperationalContextV4Query>();
         services.AddScoped<ISystemManagerSurveyOrderQueries,
             SystemManagerSurveyOrderQueries>();
+        services.AddScoped<IV3FollowUpBaselineQuery,
+            V3FollowUpBaselineQuery>();
+        services.AddScoped<V3FollowUpBaselineEligibilityReader>();
+        services.TryAddScoped<IV3BaselineDeliveryProofReader,
+            UnavailableV3BaselineDeliveryProofReader>();
 
         return services;
     }
@@ -174,6 +179,8 @@ public static class DependencyInjection
         services.AddScoped<ISurveyApprovalOutbox, SurveyApprovalOutbox>();
         services.AddScoped<ISurveyOrderRepository,
             SurveyApprovalOrderRepository>();
+        services.AddScoped<ISurveyCommercialSnapshotResolver,
+            SurveyCommercialSnapshotResolver>();
         return services;
     }
 

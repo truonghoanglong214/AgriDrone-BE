@@ -18,6 +18,7 @@ internal sealed class SurveyCatalogueQueries(SurveysDbContext context)
         var services = await context.SurveyServices
             .AsNoTracking()
             .Where(service =>
+                service.Scope == ContractScope.Legacy &&
                 service.ServiceType == SurveyServiceType.PlantHealth &&
                 (service.Status == SurveyServiceStatus.Active ||
                  service.Status == SurveyServiceStatus.Experimental))
@@ -27,7 +28,7 @@ internal sealed class SurveyCatalogueQueries(SurveysDbContext context)
                 service.Code,
                 service.Name,
                 service.Description,
-                service.ServiceType,
+                service.ServiceType!.Value,
                 service.Status,
                 service.Version,
                 service.CreatedAt,
@@ -89,6 +90,178 @@ internal sealed class SurveyCatalogueQueries(SurveysDbContext context)
             .ToArray();
     }
 
+    public async Task<PublicCatalogueV3Result?> GetPublicCatalogueV3Async(
+        DateTimeOffset evaluatedAt,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureUtc(evaluatedAt, nameof(evaluatedAt));
+
+        var activation = await context.BusinessPolicyActivations
+            .AsNoTracking()
+            .SingleOrDefaultAsync(
+                a => a.Id == BusinessPolicyActivation.SingletonId,
+                cancellationToken);
+
+        if (activation is null)
+        {
+            return null;
+        }
+
+        var bundle = await context.BusinessPolicyVersions
+            .AsNoTracking()
+            .SingleOrDefaultAsync(
+                v => v.Id == activation.ActiveBusinessPolicyVersionId,
+                cancellationToken);
+
+        if (bundle is null || !bundle.IsEffectiveAt(evaluatedAt))
+        {
+            return null;
+        }
+
+        var deposit = await context.SurveyDepositPolicies
+            .AsNoTracking()
+            .SingleOrDefaultAsync(
+                d => d.Id == bundle.SurveyDepositPolicyId,
+                cancellationToken);
+
+        if (deposit is null || !deposit.IsEffectiveAt(evaluatedAt))
+        {
+            return null;
+        }
+
+        var claim = await context.ClaimPolicies
+            .AsNoTracking()
+            .SingleOrDefaultAsync(
+                c => c.Id == bundle.ClaimPolicyId,
+                cancellationToken);
+
+        if (claim is null || !claim.IsEffectiveAt(evaluatedAt))
+        {
+            return null;
+        }
+
+        var cancellation = await context.CancellationPolicies
+            .AsNoTracking()
+            .SingleOrDefaultAsync(
+                c => c.Id == bundle.CancellationPolicyId,
+                cancellationToken);
+
+        if (cancellation is null || !cancellation.IsEffectiveAt(evaluatedAt))
+        {
+            return null;
+        }
+
+        var bundleRevisionIds = bundle.ServiceRevisionIds;
+        var revisions = await context.SurveyServiceRevisions
+            .AsNoTracking()
+            .Where(r => bundleRevisionIds.Contains(r.Id) &&
+                        r.EffectiveFrom <= evaluatedAt &&
+                        (!r.EffectiveTo.HasValue || evaluatedAt < r.EffectiveTo.Value))
+            .ToListAsync(cancellationToken);
+
+        if (revisions.Count == 0)
+        {
+            return null;
+        }
+
+        var serviceIds = revisions.Select(r => r.SurveyServiceId).Distinct().ToArray();
+        var services = await context.SurveyServices
+            .AsNoTracking()
+            .Where(s => serviceIds.Contains(s.Id) &&
+                        s.Scope == ContractScope.V3 &&
+                        s.Status == SurveyServiceStatus.Active)
+            .OrderBy(s => s.Code)
+            .ToListAsync(cancellationToken);
+
+        var activePrices = await context.SurveyServicePrices
+            .AsNoTracking()
+            .Where(p => serviceIds.Contains(p.SurveyServiceId) &&
+                        p.VersionNumber.HasValue &&
+                        p.PricePerPole != null &&
+                        p.Currency == "VND" &&
+                        p.EffectiveFrom <= evaluatedAt &&
+                        (!p.EffectiveTo.HasValue || evaluatedAt < p.EffectiveTo.Value))
+            .ToListAsync(cancellationToken);
+
+        var pricesByService = activePrices
+            .GroupBy(p => p.SurveyServiceId)
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(p => p.EffectiveFrom).First());
+
+        var revisionsByService = revisions
+            .GroupBy(r => r.SurveyServiceId)
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(r => r.EffectiveFrom).First());
+
+        var serviceItems = new List<PublicCatalogueV3ServiceItem>();
+        foreach (var service in services)
+        {
+            if (!pricesByService.TryGetValue(service.Id, out var price) ||
+                !revisionsByService.TryGetValue(service.Id, out var rev))
+            {
+                continue;
+            }
+
+            var preliminaryLimitations = GetPreliminaryLimitations(service.Code);
+
+            serviceItems.Add(new PublicCatalogueV3ServiceItem(
+                SurveyServiceId: service.Id,
+                Code: service.Code,
+                RevisionId: rev.Id,
+                RevisionVersionNumber: rev.VersionNumber,
+                Name: rev.Name,
+                Description: rev.Description,
+                MapsPoles: rev.MapsPoles,
+                ScreensDisease: rev.ScreensDisease,
+                PriceVersionId: price.Id,
+                PriceVersionNumber: price.VersionNumber!.Value,
+                PricePerPole: price.PricePerPole!.Value.Amount,
+                Currency: price.Currency,
+                PreliminaryLimitations: preliminaryLimitations));
+        }
+
+        var isBookable = activation.PublicIntakeEnabled && activation.CaptureEnabled && activation.ReleaseEnabled;
+
+        var policySummary = new PublicCatalogueV3PolicySummary(
+            BundleVersionId: bundle.Id,
+            BundleVersionNumber: bundle.VersionNumber,
+            PolicyFingerprint: bundle.PolicyFingerprint,
+            PricingCurrency: bundle.PricingCurrency,
+            ClaimWindowDays: claim.CalendarWindowDays,
+            ClaimTimeZoneId: claim.TimeZoneId,
+            ExcludeNoticeDate: claim.ExcludeNoticeDate,
+            RefundableBeforeCapture: cancellation.RefundableBeforeCapture,
+            RetainDepositAfterCapture: cancellation.RetainDepositAfterCapture,
+            AllowedFreeNoShowReschedules: cancellation.AllowedFreeNoShowReschedules);
+
+        var sharedDeposit = new PublicCatalogueV3SharedDeposit(
+            DepositPolicyId: deposit.Id,
+            VersionNumber: deposit.VersionNumber,
+            Amount: deposit.Amount,
+            Currency: deposit.Currency);
+
+        return new PublicCatalogueV3Result(
+            EvaluatedAt: evaluatedAt,
+            IsBookable: isBookable,
+            PolicySummary: policySummary,
+            SharedDeposit: sharedDeposit,
+            Services: serviceItems);
+    }
+
+    private static IReadOnlyList<string> GetPreliminaryLimitations(string code) =>
+        code.Trim().ToUpperInvariant() switch
+        {
+            "MAP" =>
+            [
+                "Boundary and pole mapping baseline only.",
+                "Disease screening is not assessed in this service tier."
+            ],
+            "COMBO" =>
+            [
+                "Screening suspected findings for configured conditions only (2-3 labels).",
+                "Findings require expert agronomist review before confirmation."
+            ],
+            _ => []
+        };
+
     public async Task<IReadOnlyList<SurveyServiceCatalogueItem>>
         GetCatalogueAsync(
             DateTimeOffset evaluatedAt,
@@ -98,13 +271,16 @@ internal sealed class SurveyCatalogueQueries(SurveysDbContext context)
 
         var services = await context.SurveyServices
             .AsNoTracking()
+            .Where(service =>
+                service.Scope == ContractScope.Legacy &&
+                service.ServiceType != null)
             .OrderBy(service => service.Code)
             .Select(service => new ServiceRow(
                 service.Id,
                 service.Code,
                 service.Name,
                 service.Description,
-                service.ServiceType,
+                service.ServiceType!.Value,
                 service.Status,
                 service.Version,
                 service.CreatedAt,

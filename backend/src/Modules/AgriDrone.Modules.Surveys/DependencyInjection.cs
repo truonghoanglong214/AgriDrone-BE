@@ -51,6 +51,10 @@ public static class DependencyInjection
                 connectionString,
                 npgsql => npgsql
                     .UseNetTopologySuite()
+                    .MapEnum<ContractScope>(
+                        "contract_scope",
+                        "system",
+                        translator)
                     .MapEnum<SurveyServiceType>(
                         "survey_service_type",
                         "system",
@@ -123,6 +127,7 @@ public static class DependencyInjection
         services.AddScoped<ISurveysUnitOfWork>(serviceProvider =>
             serviceProvider.GetRequiredService<SurveysDbContext>());
         services.AddScoped<ISurveyServiceRepository, SurveyServiceRepository>();
+        services.AddScoped<IBusinessPolicyRepository, BusinessPolicyRepository>();
         services.AddScoped<IScopeAdjustmentRepository, ScopeAdjustmentRepository>();
         services.AddScoped<IAdjustmentSettlementRepository, AdjustmentSettlementRepository>();
         services.AddScoped<IExtraFlightRequestRepository, ExtraFlightRequestRepository>();
@@ -142,6 +147,8 @@ public static class DependencyInjection
             SurveyPaymentCallbackVerifier>();
         services.AddScoped<ISurveyOrderReadinessService,
             SurveyOrderReadinessService>();
+        services.AddDataProtection();
+        services.AddSingleton<ITrackingTokenProtector, TrackingTokenProtector>();
         services.AddSingleton<ISurveyRequestNumberGenerator, SurveyRequestNumberGenerator>();
         services.AddSingleton<
             ISurveyApprovalNumberGenerator,

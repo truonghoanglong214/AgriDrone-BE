@@ -39,6 +39,17 @@ internal sealed class SurveysDbContext(DbContextOptions<SurveysDbContext> option
     public DbSet<SurveyResult> SurveyResults => Set<SurveyResult>();
     public DbSet<HarvestReadinessAssessment> HarvestReadinessAssessments => Set<HarvestReadinessAssessment>();
     public DbSet<HarvestReadinessCriterion> HarvestReadinessCriteria => Set<HarvestReadinessCriterion>();
+    public DbSet<SurveyServiceRevision> SurveyServiceRevisions => Set<SurveyServiceRevision>();
+    public DbSet<SurveyDepositPolicy> SurveyDepositPolicies => Set<SurveyDepositPolicy>();
+    public DbSet<ClaimPolicy> ClaimPolicies => Set<ClaimPolicy>();
+    public DbSet<CancellationPolicy> CancellationPolicies => Set<CancellationPolicy>();
+    public DbSet<BusinessPolicyVersion> BusinessPolicyVersions => Set<BusinessPolicyVersion>();
+    public DbSet<BusinessPolicyActivation> BusinessPolicyActivations => Set<BusinessPolicyActivation>();
+    public DbSet<BusinessPolicyActivationDecision> BusinessPolicyActivationDecisions => Set<BusinessPolicyActivationDecision>();
+    public DbSet<SurveyRequestQuoteSnapshot> SurveyRequestQuoteSnapshots => Set<SurveyRequestQuoteSnapshot>();
+    public DbSet<SurveyRequestTracking> SurveyRequestTrackings => Set<SurveyRequestTracking>();
+    public DbSet<SurveyOrderCommercialSnapshot> SurveyOrderCommercialSnapshots => Set<SurveyOrderCommercialSnapshot>();
+    public DbSet<OrderStateHistory> OrderStateHistories => Set<OrderStateHistory>();
 
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 

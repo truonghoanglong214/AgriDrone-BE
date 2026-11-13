@@ -272,7 +272,7 @@ internal sealed class SurveyOrderOperationalContextV4Query(
             TenantId: order.TenantId,
             FarmId: order.FarmId,
             ServiceCode: order.SurveyService.Code,
-            ServiceType: order.SurveyService.ServiceType.ToString(),
+            ServiceType: order.SurveyService.ServiceType?.ToString() ?? order.SurveyService.Code,
             RequestedMissionPurpose: purpose.ToString(),
             OrderStatus: order.Status.ToString(),
             OrderVersion: order.Version,
