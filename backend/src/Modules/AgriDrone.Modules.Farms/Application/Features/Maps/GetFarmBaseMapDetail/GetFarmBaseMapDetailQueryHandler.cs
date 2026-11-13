@@ -1,4 +1,6 @@
 using AgriDrone.Modules.Farms.Domain.Maps;
+using AgriDrone.Modules.Farms.Application.Abstractions.Maps;
+using AgriDrone.Modules.Farms.Application.Services;
 using AgriDrone.Modules.Farms.Infrastructure.Persistence;
 using AgriDrone.SharedKernel.Application;
 using MediatR;
@@ -7,7 +9,9 @@ using Microsoft.EntityFrameworkCore;
 namespace AgriDrone.Modules.Farms.Application.Features.Maps.GetFarmBaseMapDetail;
 
 internal sealed class GetFarmBaseMapDetailQueryHandler(
-    FarmsDbContext dbContext)
+    FarmsDbContext dbContext,
+    FarmBaseMapReadAccess readAccess,
+    IFarmBaseMapPreviewReader previewReader)
     : IRequestHandler<GetFarmBaseMapDetailQuery, Result<FarmBaseMapDetailResponse>>
 {
     private sealed record PlantQueryRow(
@@ -62,6 +66,13 @@ internal sealed class GetFarmBaseMapDetailQueryHandler(
         {
             return Result.Failure<FarmBaseMapDetailResponse>(
                 AppError.NotFound("FarmBaseMapVersion.NotFound", $"Base map version {request.VersionId} not found for this farm."));
+        }
+
+        var access = await readAccess.CheckAsync(version.TenantId, version.FarmId, cancellationToken);
+        if (!access.IsAllowed || (version.Status == FarmBaseMapStatus.Draft && !access.CanReadDraft))
+        {
+            return Result.Failure<FarmBaseMapDetailResponse>(
+                AppError.NotFound("FarmBaseMapVersion.NotFound", "Base map version not found for this farm."));
         }
 
         // 1. Ranh giới Farm Boundary GeoJSON
@@ -230,8 +241,8 @@ internal sealed class GetFarmBaseMapDetailQueryHandler(
             Notes: m.Notes,
             CreatedAt: m.CreatedAt)).ToList();
 
-        var previewUrl = version.SourceMissionId.HasValue
-            ? $"http://localhost:9000/agridrone-media/tenants/{version.TenantId:D}/media/{version.SourceMissionId.Value:D}/map_preview.jpg"
+        var preview = version.SourceMissionId.HasValue
+            ? await previewReader.GetAsync(version.TenantId, version.FarmId, version.SourceMissionId.Value, cancellationToken)
             : null;
 
         var activePoles = plantItems.Count(p => p.LifecycleStatus != "REMOVED");
@@ -247,8 +258,8 @@ internal sealed class GetFarmBaseMapDetailQueryHandler(
             SourceSurveyOrderId: version.SourceSurveyOrderId,
             FarmBoundaryVersionId: version.FarmBoundaryVersionId,
             BoundaryGeoJson: boundaryGeoJson,
-            PreviewUrl: previewUrl,
-            Bounds: bounds,
+            PreviewUrl: preview?.Url,
+            Bounds: preview?.Bounds ?? bounds,
             GridBearingDeg: version.GridBearingDeg,
             RowSpacingM: version.RowSpacingM,
             PlantSpacingM: version.PlantSpacingM,

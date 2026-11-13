@@ -53,6 +53,7 @@ public static class DependencyInjection
             SurveyOrderOperationalContextV4Query>();
         services.AddScoped<ISystemManagerSurveyOrderQueries,
             SystemManagerSurveyOrderQueries>();
+        services.AddScoped<IFarmBaseMapPreviewReader, FarmBaseMapPreviewReader>();
 
         return services;
     }
