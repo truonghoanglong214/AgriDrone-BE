@@ -48,6 +48,12 @@ public static class SurveyApprovalError
         "SurveyApproval.OwnerInvitationConflict";
     public const string OrderNumberConflictCode =
         "SurveyApproval.OrderNumberConflict";
+    public const string PolicyConfigurationMissingCode =
+        "SurveyApproval.PolicyConfigurationMissing";
+    public const string PolicyConfigurationChangedCode =
+        "SurveyApproval.PolicyConfigurationChanged";
+    public const string CommercialPolicyMismatchCode =
+        "SurveyApproval.CommercialPolicyMismatch";
 
     public static AppError RequestNotFound(Guid requestId) =>
         AppError.NotFound(
@@ -158,4 +164,19 @@ public static class SurveyApprovalError
         AppError.Conflict(
             OrderNumberConflictCode,
             "A unique SurveyOrder number could not be allocated. Retry the approval operation.");
+
+    public static AppError PolicyConfigurationMissing(string message) =>
+        AppError.Conflict(
+            PolicyConfigurationMissingCode,
+            message);
+
+    public static AppError PolicyConfigurationChanged(string message) =>
+        AppError.Conflict(
+            PolicyConfigurationChangedCode,
+            message);
+
+    public static AppError CommercialPolicyMismatch(string message) =>
+        AppError.Validation(
+            CommercialPolicyMismatchCode,
+            message);
 }

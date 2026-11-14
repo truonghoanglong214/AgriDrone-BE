@@ -1,5 +1,9 @@
 # BE1 Step 0R — Locked business and V3 contract
 
+> **V3 scope notice — 2026-11-10.**
+> Historical locked contract/inventory: target business semantics are now governed by Business Rules v3 and ADR 0018. Previously released wire formats and recorded audit facts remain immutable; this notice does not rewrite them.
+> Current: [Business Rules v3](../../Codex-Plan/Business-Rules-v3.md), [ADR 0018](../adr/0018-v3-paid-map-combo-business-policy.md), [target contracts](../contracts/survey-business-v3.md). Documentation-only update; no runtime change.
+
 - Status: Approved design baseline
 - Date: 2026-10-07
 - Amended: 2026-10-17 — same-visit boundary capture and automatic Baseline route (superseded)

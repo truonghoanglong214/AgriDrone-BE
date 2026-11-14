@@ -17,6 +17,11 @@ internal static class SurveyApprovalRowLock
         ArgumentException.ThrowIfNullOrWhiteSpace(sql);
         context.EnsureApprovalTransaction();
 
+        if (context.Database.ProviderName != "Npgsql.EntityFrameworkCore.PostgreSQL")
+        {
+            return true;
+        }
+
         await using var command = context.Database.GetDbConnection().CreateCommand();
         command.CommandText = sql;
         command.Transaction = context.Database.CurrentTransaction!

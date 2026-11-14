@@ -13,7 +13,7 @@ public sealed class SurveyDepositPolicyTests
     public void CreateWithValidParametersSetsPropertiesCorrectly()
     {
         // Arrange & Act
-        var policy = SurveyDepositPolicy.Create(
+        var policy = LegacySurveyDepositPolicy.Create(
             versionNumber: 1,
             amountVnd: 500_000m,
             createdBy: AdminId,
@@ -34,13 +34,13 @@ public sealed class SurveyDepositPolicyTests
     public void CreateWithInvalidAmountThrowsArgumentOutOfRangeException(decimal invalidAmount)
     {
         Assert.Throws<ArgumentOutOfRangeException>(() =>
-            SurveyDepositPolicy.Create(1, invalidAmount, AdminId, Now));
+            LegacySurveyDepositPolicy.Create(1, invalidAmount, AdminId, Now));
     }
 
     [Fact]
     public void ZeroDepositPolicyCreatesFollowUpOrderWithoutDepositPayment()
     {
-        var policy = SurveyDepositPolicy.Create(1, 0m, AdminId, Now);
+        var policy = LegacySurveyDepositPolicy.Create(1, 0m, AdminId, Now);
         var order = SurveyOrder.Create(
             "ORD-ZERO-DEPOSIT", Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
             Guid.NewGuid(), false, null, "v1", "EXISTING_BASEMAP", Now,
@@ -55,7 +55,7 @@ public sealed class SurveyDepositPolicyTests
     public void CloseAtSetsEffectiveToWhenValid()
     {
         // Arrange
-        var policy = SurveyDepositPolicy.Create(1, 500_000m, AdminId, Now);
+        var policy = LegacySurveyDepositPolicy.Create(1, 500_000m, AdminId, Now);
         var closeTime = Now.AddDays(7);
 
         // Act
@@ -68,7 +68,7 @@ public sealed class SurveyDepositPolicyTests
     [Fact]
     public void CloseAtThrowsInvalidOperationExceptionWhenClosingBeforeEffectiveFrom()
     {
-        var policy = SurveyDepositPolicy.Create(1, 500_000m, AdminId, Now);
+        var policy = LegacySurveyDepositPolicy.Create(1, 500_000m, AdminId, Now);
         var invalidCloseTime = Now.AddMinutes(-5);
 
         Assert.Throws<InvalidOperationException>(() =>

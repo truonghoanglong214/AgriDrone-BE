@@ -1,6 +1,10 @@
 # BE1 R2 legacy artifact inventory
 
-Ngày khóa inventory: 2026-10-15. Nguồn nghiệp vụ: `Codex-Plan/Be-Plan-v2.md`.
+> **V3 scope notice — 2026-11-10.**
+> Historical locked contract/inventory: target business semantics are now governed by Business Rules v3 and ADR 0018. Previously released wire formats and recorded audit facts remain immutable; this notice does not rewrite them.
+> Current: [Business Rules v3](../../Codex-Plan/Business-Rules-v3.md), [ADR 0018](../adr/0018-v3-paid-map-combo-business-policy.md), [target contracts](../contracts/survey-business-v3.md). Documentation-only update; no runtime change.
+
+Ngày khóa inventory: 2026-10-15, theo proposal v2 tại checkpoint đó. Proposal v2 đã được dọn; giữ inventory này để giải thích legacy disposition và upgrade compatibility. Nghiệp vụ mới theo [Business Rules v3](../../Codex-Plan/Business-Rules-v3.md).
 
 | Artifact | Quyết định | Target write/read path |
 |---|---|---|

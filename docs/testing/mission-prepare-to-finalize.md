@@ -1,5 +1,9 @@
 # Hướng dẫn test từ Tạo Drone đến Upload Finalize
 
+> **V3 scope notice — 2026-11-10.**
+> Historical runtime walkthrough: endpoint names/payloads and paid-before-service assumptions describe an earlier implementation. It is not a v3 runbook; use v3-business-acceptance.md for the approved target, and verify actual runtime before executing old examples.
+> Current: [Business Rules v3](../../Codex-Plan/Business-Rules-v3.md), [ADR 0018](../adr/0018-v3-paid-map-combo-business-policy.md), [target contracts](../contracts/survey-business-v3.md). Documentation-only update; no runtime change.
+
 Tài liệu này mô tả luồng System Manager chuẩn trên Swagger từ lúc tạo mission đến khi hoàn tất upload và chuyển mission sang `READY_FOR_PROCESSING`.
 
 > `POST .../upload/finalize` hoàn tất **upload của mission**. Đây chưa phải là hoàn tất review/publish Farm Base Map. Với Baseline Mapping, phần review candidate và publish map được ghi ở cuối tài liệu.

@@ -2,14 +2,14 @@ namespace AgriDrone.Modules.Surveys.Domain;
 
 public interface ISurveyDepositPolicyRepository
 {
-    Task<SurveyDepositPolicy?> GetCurrentAsync(
+    Task<LegacySurveyDepositPolicy?> GetCurrentAsync(
         CancellationToken cancellationToken = default);
 
-    Task<SurveyDepositPolicy?> GetCurrentForUpdateAsync(
+    Task<LegacySurveyDepositPolicy?> GetCurrentForUpdateAsync(
         CancellationToken cancellationToken = default);
 
-    Task<IReadOnlyList<SurveyDepositPolicy>> GetHistoryAsync(
+    Task<IReadOnlyList<LegacySurveyDepositPolicy>> GetHistoryAsync(
         CancellationToken cancellationToken = default);
 
-    void Add(SurveyDepositPolicy policy);
+    void Add(LegacySurveyDepositPolicy policy);
 }

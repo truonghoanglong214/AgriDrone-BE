@@ -1,5 +1,9 @@
 # Plant Health 7C approval API
 
+> **V3 scope notice — 2026-11-10.**
+> Versioned runtime-baseline contract: retain the original payload, hashes and phase behavior below. For v3, service/context changes need version review; approval alone cannot release an unpaid result, and durable unlock notice/window belongs to the release transaction.
+> Current: [Business Rules v3](../../Codex-Plan/Business-Rules-v3.md), [ADR 0018](../adr/0018-v3-paid-map-combo-business-policy.md), [target contracts](survey-business-v3.md). Documentation-only update; no runtime change.
+
 Only the active, available primary SystemManager of the Farm can approve/read
 approval metadata. TenantOwner has no access through these routes.
 

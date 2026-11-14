@@ -65,22 +65,66 @@ internal sealed class NewCustomerApprovalOrchestrator(
                 farmResult.Error);
         }
 
-        var order = SurveyOrder.Create(
-            numberGenerator.CreateOrderNumber(),
-            tenantResult.Value.TenantId,
-            farmResult.Value.FarmId,
-            request.Id,
-            request.SurveyServiceId,
-            requiresBaselineMapping: true,
-            prerequisites.OrderCompatibility.PreviousCompatibleOrderId,
-            prerequisites.OrderCompatibility.PolicyVersion,
-            prerequisites.OrderCompatibility.Reason,
-            context.ApprovedAt,
-            prerequisites.ApplicableDepositAmount,
-            prerequisites.ApplicableComboDiscountPercentage);
-        order.EnablePostFlightSettlement(prerequisites.Service.ServiceType,
-            prerequisites.Service.PriceId!.Value, prerequisites.Service.PricePerPole!.Value);
-        orderRepository.Add(order);
+        SurveyOrder order;
+        if (request.SurveyService.Scope == ContractScope.V3)
+        {
+            if (context.CommercialSnapshot is null)
+            {
+                return Result.Failure<SurveyApprovalOrchestrationResult>(
+                    SurveyApprovalError.CommercialPolicyMismatch("Commercial snapshot is required for V3 survey order."));
+            }
+
+            order = SurveyOrder.CreateV3(
+                numberGenerator.CreateOrderNumber(),
+                tenantResult.Value.TenantId,
+                farmResult.Value.FarmId,
+                request.Id,
+                request.SurveyServiceId,
+                context.CommercialSnapshot,
+                requiresBaselineMapping: true,
+                previousCompatibleOrderId: prerequisites.OrderCompatibility.PreviousCompatibleOrderId,
+                previousOrderCompatibilityPolicyVersion: prerequisites.OrderCompatibility.PolicyVersion,
+                previousOrderCompatibilityReason: prerequisites.OrderCompatibility.Reason,
+                createdAt: context.ApprovedAt);
+            orderRepository.Add(order);
+
+            var commercialSnapshot = SurveyOrderCommercialSnapshot.Create(
+                order.Id,
+                context.CommercialSnapshot,
+                context.ApprovedAt);
+            orderRepository.AddCommercialSnapshot(commercialSnapshot);
+
+            var initialHistory = OrderStateHistory.CreateInitial(
+                Guid.NewGuid(),
+                order.Id,
+                order.Version,
+                order.Status,
+                context.ActorId,
+                "APPROVAL",
+                $"Survey order created by approval of survey request {request.RequestNumber}.",
+                context.CorrelationId,
+                context.ApprovedAt);
+            orderRepository.AddStateHistory(initialHistory);
+        }
+        else
+        {
+            order = SurveyOrder.Create(
+                numberGenerator.CreateOrderNumber(),
+                tenantResult.Value.TenantId,
+                farmResult.Value.FarmId,
+                request.Id,
+                request.SurveyServiceId,
+                requiresBaselineMapping: true,
+                prerequisites.OrderCompatibility.PreviousCompatibleOrderId,
+                prerequisites.OrderCompatibility.PolicyVersion,
+                prerequisites.OrderCompatibility.Reason,
+                context.ApprovedAt,
+                prerequisites.ApplicableDepositAmount,
+                prerequisites.ApplicableComboDiscountPercentage);
+            order.EnablePostFlightSettlement(prerequisites.Service.ServiceType!.Value,
+                prerequisites.Service.PriceId!.Value, prerequisites.Service.PricePerPole!.Value);
+            orderRepository.Add(order);
+        }
 
         var assignmentResult = await provisioningPort
             .StagePrimaryManagerAssignmentAsync(

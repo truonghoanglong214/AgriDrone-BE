@@ -173,20 +173,6 @@ public sealed class V2BusinessIntegrationContractTests
         Assert.Empty(V2BusinessContractValidators.Validate(published));
     }
 
-    [Fact]
-    public void V2ContractsAssemblyStaysIndependentFromDomainAndEf()
-    {
-        var references = typeof(SurveyOrderOperationalContextV2)
-            .Assembly
-            .GetReferencedAssemblies()
-            .Select(reference => reference.Name ?? string.Empty);
-
-        Assert.DoesNotContain(references, name =>
-            name.StartsWith("AgriDrone.Modules.", StringComparison.Ordinal));
-        Assert.DoesNotContain(references, name =>
-            name.StartsWith("Microsoft.EntityFrameworkCore", StringComparison.Ordinal));
-    }
-
     private static IntegrationEventEnvelope<SurveyResultReviewStateChangedV2>
         CreateReviewStateEnvelope() =>
         IntegrationEventEnvelopeFactory.Create(

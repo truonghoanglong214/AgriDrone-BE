@@ -9,12 +9,14 @@ public sealed class SurveyService : AggregateRoot
     public string Code { get; private set; } = null!;
     public string Name { get; private set; } = null!;
     public string Description { get; private set; } = null!;
-    public SurveyServiceType ServiceType { get; private set; }
+    public ContractScope Scope { get; private set; } = ContractScope.Legacy;
+    public SurveyServiceType? ServiceType { get; private set; }
     public SurveyServiceStatus Status { get; private set; }
     public uint Version { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
     public DateTimeOffset UpdatedAt { get; private set; }
     public ICollection<SurveyServicePrice> Prices { get; private set; } = [];
+    public ICollection<SurveyServiceRevision> Revisions { get; private set; } = [];
 
     public static SurveyService Create(
         string code,
@@ -45,7 +47,37 @@ public sealed class SurveyService : AggregateRoot
             Code = normalizedCode,
             Name = normalizedName,
             Description = normalizedDescription,
+            Scope = ContractScope.Legacy,
             ServiceType = serviceType,
+            Status = SurveyServiceStatus.Experimental,
+            CreatedAt = createdAt,
+            UpdatedAt = createdAt
+        };
+    }
+
+    public static SurveyService CreateV3(
+        string code,
+        string name,
+        string description,
+        DateTimeOffset createdAt)
+    {
+        var normalizedCode = NormalizeRequired(code, 50, nameof(code))
+            .ToUpperInvariant();
+        var normalizedName = NormalizeRequired(name, 150, nameof(name));
+        var normalizedDescription = NormalizeRequired(
+            description,
+            4000,
+            nameof(description));
+
+        DomainGuard.Utc(createdAt);
+        return new SurveyService
+        {
+            Id = Guid.NewGuid(),
+            Code = normalizedCode,
+            Name = normalizedName,
+            Description = normalizedDescription,
+            Scope = ContractScope.V3,
+            ServiceType = null,
             Status = SurveyServiceStatus.Experimental,
             CreatedAt = createdAt,
             UpdatedAt = createdAt
@@ -55,11 +87,14 @@ public sealed class SurveyService : AggregateRoot
     public void Activate(DateTimeOffset activatedAt, uint expectedVersion)
     {
         EnsureVersion(expectedVersion);
-        if (!SurveyServiceMvpPolicy.IsSellable(ServiceType))
+        if (Scope == ContractScope.Legacy)
         {
-            throw new SurveyDomainException(
-                SurveyServiceDomainErrorCodes.InvalidLifecycleTransition,
-                "This survey service is disabled for the MVP commercial surface.");
+            if (!ServiceType.HasValue || !SurveyServiceMvpPolicy.IsSellable(ServiceType.Value))
+            {
+                throw new SurveyDomainException(
+                    SurveyServiceDomainErrorCodes.InvalidLifecycleTransition,
+                    "This survey service is disabled for the MVP commercial surface.");
+            }
         }
 
         EnsureTransition(

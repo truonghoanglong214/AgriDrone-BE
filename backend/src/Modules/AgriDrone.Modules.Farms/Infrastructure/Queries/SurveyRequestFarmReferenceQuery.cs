@@ -1,4 +1,5 @@
 using AgriDrone.IntegrationContracts.Farms;
+using AgriDrone.Modules.Farms.Domain.Maps;
 using AgriDrone.Modules.Farms.Infrastructure.Persistence;
 using AgriDrone.SharedKernel.Domain;
 using Microsoft.EntityFrameworkCore;
@@ -35,5 +36,22 @@ internal sealed class SurveyRequestFarmReferenceQuery(
                     ? null
                     : farm.CenterPoint.SRID))
             .SingleOrDefaultAsync(cancellationToken);
+    }
+
+    public Task<bool> HasPublishedBaseMapAsync(
+        Guid tenantId,
+        Guid farmId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfEqual(tenantId, Guid.Empty);
+        ArgumentOutOfRangeException.ThrowIfEqual(farmId, Guid.Empty);
+
+        return context.FarmBaseMapVersions
+            .AsNoTracking()
+            .AnyAsync(
+                map => map.TenantId == tenantId &&
+                       map.FarmId == farmId &&
+                       map.Status == FarmBaseMapStatus.Published,
+                cancellationToken);
     }
 }

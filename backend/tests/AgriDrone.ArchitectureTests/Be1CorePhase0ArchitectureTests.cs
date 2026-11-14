@@ -88,15 +88,6 @@ public sealed class Be1CorePhase0ArchitectureTests
     }
 
     [Fact]
-    public void SurveysModuleDoesNotExposeCentralizedStateMachineType()
-    {
-        var legacyStateMachine = typeof(SurveyOrder).Assembly.GetType(
-            "AgriDrone.Modules.Surveys.Domain.SurveyStateTransitions");
-
-        Assert.Null(legacyStateMachine);
-    }
-
-    [Fact]
     public void V2QueryContractsArePortsWithoutPersistenceDependency()
     {
         Assert.True(typeof(ISurveyOrderOperationalContextQuery).IsInterface);

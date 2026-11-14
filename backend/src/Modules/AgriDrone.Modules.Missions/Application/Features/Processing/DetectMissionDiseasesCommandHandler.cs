@@ -129,6 +129,10 @@ internal sealed class DetectMissionDiseasesCommandHandler(
         {
             await SaveDiseaseDetectionsToDatabaseAsync(request, result, mediaList, captureMap, mission.EndedAt ?? mission.StartedAt, startedAt, cancellationToken);
         }
+        catch (DiseaseDetectionLocationException error)
+        {
+            return Result.Failure<DetectMissionDiseasesResult>(AppError.Validation("DetectDiseases.InvalidLocation", error.Message));
+        }
         catch (InvalidOperationException error)
         {
             return Result.Failure<DetectMissionDiseasesResult>(AppError.Conflict("DetectDiseases.ProvenanceRequired", error.Message));
@@ -266,7 +270,7 @@ internal sealed class DetectMissionDiseasesCommandHandler(
                     detectionConfidence: (decimal)Math.Clamp(detection.Confidence, 0.0, 1.0),
                     suggestedPlantId: matchedPlantId,
                     resolvedPlantId: null,
-                    gpsDistanceM: nearestPlant is null ? null : (decimal)Math.Round(minDistance, 3),
+                    gpsDistanceM: GetGpsDistanceMeters(nearestPlant is null ? null : minDistance, detection.ImageName),
                     matchingParameters: metadataDoc,
                     evidenceMediaId: evidenceMediaId,
                     reviewStatus: ObservationReviewStatus.Pending,
@@ -295,6 +299,23 @@ internal sealed class DetectMissionDiseasesCommandHandler(
                 request.MissionId, ex.Message);
             throw;
         }
+    }
+
+    internal static decimal? GetGpsDistanceMeters(double? distance, string imageName)
+    {
+        if (distance is null)
+        {
+            return null;
+        }
+
+        // PostgreSQL numeric(8,3) cannot store 100,000m, including after rounding.
+        if (!double.IsFinite(distance.Value) || distance.Value < 0 ||
+            Math.Round(distance.Value, 3, MidpointRounding.AwayFromZero) >= 100_000)
+        {
+            throw new DiseaseDetectionLocationException(imageName);
+        }
+
+        return (decimal)Math.Round(distance.Value, 3, MidpointRounding.AwayFromZero);
     }
 
     private static double CalculateHaversineMeters(double lat1, double lon1, double lat2, double lon2)

@@ -13,7 +13,7 @@ internal sealed class SurveysDbContext(DbContextOptions<SurveysDbContext> option
 {
     public DbSet<SurveyService> SurveyServices => Set<SurveyService>();
     public DbSet<SurveyServicePrice> SurveyServicePrices => Set<SurveyServicePrice>();
-    public DbSet<SurveyDepositPolicy> SurveyDepositPolicies => Set<SurveyDepositPolicy>();
+    public DbSet<LegacySurveyDepositPolicy> LegacySurveyDepositPolicies => Set<LegacySurveyDepositPolicy>();
     public DbSet<SurveyComboDiscountPolicy> SurveyComboDiscountPolicies => Set<SurveyComboDiscountPolicy>();
     public DbSet<SurveyRequest> SurveyRequests => Set<SurveyRequest>();
     public DbSet<SurveyRequestReview> SurveyRequestReviews => Set<SurveyRequestReview>();
@@ -42,6 +42,17 @@ internal sealed class SurveysDbContext(DbContextOptions<SurveysDbContext> option
     public DbSet<QualityRefundCase> QualityRefundCases => Set<QualityRefundCase>();
     public DbSet<HarvestReadinessAssessment> HarvestReadinessAssessments => Set<HarvestReadinessAssessment>();
     public DbSet<HarvestReadinessCriterion> HarvestReadinessCriteria => Set<HarvestReadinessCriterion>();
+    public DbSet<SurveyServiceRevision> SurveyServiceRevisions => Set<SurveyServiceRevision>();
+    public DbSet<SurveyDepositPolicy> SurveyDepositPolicies => Set<SurveyDepositPolicy>();
+    public DbSet<ClaimPolicy> ClaimPolicies => Set<ClaimPolicy>();
+    public DbSet<CancellationPolicy> CancellationPolicies => Set<CancellationPolicy>();
+    public DbSet<BusinessPolicyVersion> BusinessPolicyVersions => Set<BusinessPolicyVersion>();
+    public DbSet<BusinessPolicyActivation> BusinessPolicyActivations => Set<BusinessPolicyActivation>();
+    public DbSet<BusinessPolicyActivationDecision> BusinessPolicyActivationDecisions => Set<BusinessPolicyActivationDecision>();
+    public DbSet<SurveyRequestQuoteSnapshot> SurveyRequestQuoteSnapshots => Set<SurveyRequestQuoteSnapshot>();
+    public DbSet<SurveyRequestTracking> SurveyRequestTrackings => Set<SurveyRequestTracking>();
+    public DbSet<SurveyOrderCommercialSnapshot> SurveyOrderCommercialSnapshots => Set<SurveyOrderCommercialSnapshot>();
+    public DbSet<OrderStateHistory> OrderStateHistories => Set<OrderStateHistory>();
 
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 

@@ -1,5 +1,9 @@
 # Plant Health V4 golden envelopes
 
+> **V3 scope notice — 2026-11-10.**
+> Compatibility fixtures: all existing V4 JSON envelopes remain unchanged. Proposal v3 does not rename this wire version or authorize COMBO/internal-map semantics under validators that only accept legacy PlantHealth/published-map context.
+> Current: [Business Rules v3](../../../Codex-Plan/Business-Rules-v3.md), [ADR 0018](../../adr/0018-v3-paid-map-combo-business-policy.md), [target contracts](../survey-business-v3.md). Documentation-only update; no runtime change.
+
 Các JSON này là synthetic contract fixtures, không phải production seed hoặc kết
 quả test đã chạy. Schema/version/routing và field names khớp V4 DTO/validator.
 

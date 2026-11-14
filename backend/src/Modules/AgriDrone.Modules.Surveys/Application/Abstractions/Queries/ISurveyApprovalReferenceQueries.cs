@@ -49,6 +49,19 @@ public interface ISurveyApprovalReferenceQueries
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Returns the current published Farm base map and its authoritative confirmed
+    /// active-pole count for V3 follow-up orders only with durable release proof
+    /// for the exact Tenant/Farm/baseline/source Order, financially settled at
+    /// release and not withdrawn. Completed/Published statuses alone are not
+    /// delivery proof. Missing/unavailable proof returns null baseline fields.
+    /// All approval evidence must be read and locked in the active transaction.
+    /// </summary>
+    Task<SurveyApprovalFarmBaselineReference> GetV3FollowUpBaselineForApprovalAsync(
+        Guid tenantId,
+        Guid farmId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Returns the most recently published candidate whose order is Completed
     /// and belongs to the same Tenant, Farm and SurveyService. The caller must
     /// still apply the versioned compatibility policy; same service alone does
@@ -65,9 +78,10 @@ public interface ISurveyApprovalReferenceQueries
 
 public sealed record SurveyApprovalServiceReference(
     Guid SurveyServiceId,
-    SurveyServiceType ServiceType,
+    SurveyServiceType? ServiceType,
     SurveyServiceStatus Status,
     uint Version,
+    ContractScope Scope = ContractScope.Legacy,
     Guid? PriceId = null,
     decimal? PricePerPole = null);
 

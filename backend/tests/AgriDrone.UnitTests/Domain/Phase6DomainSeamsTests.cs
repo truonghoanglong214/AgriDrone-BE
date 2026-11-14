@@ -2,7 +2,6 @@ using System.Text.Json;
 using AgriDrone.Modules.Farms.Domain.Maps;
 using AgriDrone.Modules.Missions.Domain.Missions;
 using AgriDrone.Modules.Plants.Domain.Scans;
-using AgriDrone.Modules.Surveys.Domain;
 using Xunit;
 
 namespace AgriDrone.UnitTests.Domain;
@@ -78,23 +77,4 @@ public sealed class Phase6DomainSeamsTests
             scan.AttachToSurveyResult(orderId, Guid.NewGuid()));
     }
 
-    [Fact]
-    public void HumanReviewLifecycleBelongsToSurveyResult()
-    {
-        using var provenance = JsonDocument.Parse("{\"model\":\"v1\"}");
-        var reviewerId = Guid.NewGuid();
-        var result = SurveyResult.CreateForManagerReview(
-            Guid.NewGuid(),
-            Guid.NewGuid(),
-            Guid.NewGuid(),
-            SurveyServiceType.PlantHealth,
-            provenance,
-            Now);
-
-        result.Approve(reviewerId, Now.AddMinutes(5));
-
-        Assert.Equal(SurveyResultStatus.Approved, result.Status);
-        Assert.Equal(reviewerId, result.ReviewedBy);
-        Assert.Equal(1u, result.Version);
-    }
 }

@@ -74,7 +74,8 @@ internal sealed class CreateSurveyServicePriceCommandHandler(
                     "A retired survey service cannot receive a new price."));
         }
 
-        if (!SurveyServiceMvpPolicy.IsSellable(service.ServiceType))
+        if (service.Scope == ContractScope.Legacy &&
+            (!service.ServiceType.HasValue || !SurveyServiceMvpPolicy.IsSellable(service.ServiceType.Value)))
         {
             return Result.Failure<CreateSurveyServicePriceResponse>(
                 SurveyServiceError.InvalidLifecycle(

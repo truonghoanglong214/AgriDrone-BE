@@ -5,6 +5,11 @@ public interface ISurveyRequestFarmReferenceQuery
     Task<SurveyRequestFarmReference?> GetAsync(
         Guid farmId,
         CancellationToken cancellationToken = default);
+
+    Task<bool> HasPublishedBaseMapAsync(
+        Guid tenantId,
+        Guid farmId,
+        CancellationToken cancellationToken = default);
 }
 
 public sealed record SurveyRequestFarmReference(

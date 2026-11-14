@@ -1,0 +1,31 @@
+@startuml
+title AgriDrone v3 - Result revision lifecycle (target)
+[*] --> PendingReview
+PendingReview --> ApprovedInternal : Manager freezes exact revision
+ApprovedInternal --> PendingReview : Required source/review revision changed
+ApprovedInternal --> AwaitingSettlement : Finalized invoice / Due > 0
+AwaitingSettlement --> PendingReview : Approval/invoice dependency invalidated
+AwaitingSettlement --> Published : Current approved revision / Due = 0
+ApprovedInternal --> Published : Current finalized invoice / Due = 0
+note right of ApprovedInternal
+  Baseline / profiles may exist internally.
+  Owner result content remains locked.
+end note
+note right of Published
+  Atomic publication / unlock / durable notice
+  PublishedAt = UnlockedAt = NoticeCreatedAt
+  One original service value per Order
+  Claim deadline: local D+8 00:00 exclusive
+end note
+Published --> Withdrawn : Verified error / authorized withdrawal
+Published --> Superseded : Reviewed substantive replacement released
+Withdrawn --> Superseded : Reviewed replacement released
+note right of Superseded
+  Keep original evidence and dependent source references.
+  Replacement revision has its own notice/window.
+  No additional service charge or second sale.
+end note
+Published --> Published : Cosmetic edit / no window reset
+Published --> Published : Complaint refund / no reopened balance
+Superseded --> [*]
+@enduml

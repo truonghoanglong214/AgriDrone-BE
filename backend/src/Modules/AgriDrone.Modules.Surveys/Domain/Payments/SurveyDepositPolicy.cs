@@ -2,9 +2,9 @@ using AgriDrone.SharedKernel.Domain;
 
 namespace AgriDrone.Modules.Surveys.Domain;
 
-public sealed class SurveyDepositPolicy : Entity
+public sealed class LegacySurveyDepositPolicy : Entity
 {
-    private SurveyDepositPolicy() { }
+    private LegacySurveyDepositPolicy() { }
 
     public int VersionNumber { get; private set; }
     public decimal AmountVnd { get; private set; }
@@ -12,7 +12,7 @@ public sealed class SurveyDepositPolicy : Entity
     public DateTimeOffset? EffectiveTo { get; private set; }
     public Guid CreatedBy { get; private set; }
 
-    public static SurveyDepositPolicy Create(
+    public static LegacySurveyDepositPolicy Create(
         int versionNumber,
         decimal amountVnd,
         Guid createdBy,
@@ -28,7 +28,7 @@ public sealed class SurveyDepositPolicy : Entity
                 "The shared VND deposit must be a non-negative whole amount.");
         }
 
-        return new SurveyDepositPolicy
+        return new LegacySurveyDepositPolicy
         {
             Id = Guid.CreateVersion7(),
             VersionNumber = versionNumber,

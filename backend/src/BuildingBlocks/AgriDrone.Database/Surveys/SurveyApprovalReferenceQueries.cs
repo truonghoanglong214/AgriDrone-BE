@@ -10,7 +10,8 @@ using Microsoft.EntityFrameworkCore;
 namespace AgriDrone.Database.Surveys;
 
 internal sealed class SurveyApprovalReferenceQueries(
-    SurveyApprovalDbContext context)
+    SurveyApprovalDbContext context,
+    V3FollowUpBaselineEligibilityReader baselineEligibilityReader)
     : ISurveyApprovalReferenceQueries
 {
     private sealed record BookingPriceRow(Guid Id, decimal PricePerPole);
@@ -40,26 +41,32 @@ internal sealed class SurveyApprovalReferenceQueries(
             .AsNoTracking()
             .SingleAsync(service => service.Id == surveyServiceId, cancellationToken);
 
-        // The service row is locked above; lock the one effective booking rate too.
-        var prices = await context.Database.SqlQuery<BookingPriceRow>($"""
-            SELECT id AS "Id", price_per_pole AS "PricePerPole" FROM survey.survey_service_prices
-            WHERE survey_service_id = {surveyServiceId}
-              AND price_per_pole IS NOT NULL AND price_per_ha IS NULL
-              AND btrim(currency) = 'VND'
-              AND effective_from <= now()
-              AND (effective_to IS NULL OR effective_to > now())
-            FOR SHARE
-            """).ToListAsync(cancellationToken);
-        if (prices.Count != 1) return null;
-        var price = prices[0];
+        // V3 resolves price and policy versions through the commercial snapshot resolver.
+        // Legacy booking freezes its own effective per-pole rate in the same transaction.
+        BookingPriceRow? price = null;
+        if (service.Scope == ContractScope.Legacy)
+        {
+            var prices = await context.Database.SqlQuery<BookingPriceRow>($"""
+                SELECT id AS "Id", price_per_pole AS "PricePerPole" FROM survey.survey_service_prices
+                WHERE survey_service_id = {surveyServiceId}
+                  AND price_per_pole IS NOT NULL AND price_per_ha IS NULL
+                  AND btrim(currency) = 'VND'
+                  AND effective_from <= now()
+                  AND (effective_to IS NULL OR effective_to > now())
+                FOR SHARE
+                """).ToListAsync(cancellationToken);
+            if (prices.Count != 1) return null;
+            price = prices[0];
+        }
 
         return new SurveyApprovalServiceReference(
             service.Id,
             service.ServiceType,
             service.Status,
             service.Version,
-            price.Id,
-            price.PricePerPole);
+            service.Scope,
+            PriceId: price?.Id,
+            PricePerPole: price?.PricePerPole);
     }
 
     public async Task<SurveyApprovalTenantOwnerReference?>
@@ -278,6 +285,22 @@ internal sealed class SurveyApprovalReferenceQueries(
             farmId,
             baseMap.Id,
             sourceOrder.ConfirmedSurveyPoleCount?.Value);
+    }
+
+    public async Task<SurveyApprovalFarmBaselineReference>
+        GetV3FollowUpBaselineForApprovalAsync(
+            Guid tenantId,
+            Guid farmId,
+            CancellationToken cancellationToken = default)
+    {
+        var eligibility = await baselineEligibilityReader.GetEligibleAsync(
+            context, tenantId, farmId, cancellationToken);
+
+        return new SurveyApprovalFarmBaselineReference(
+            tenantId,
+            farmId,
+            eligibility.IsEligible ? eligibility.BaseMapVersionId : null,
+            eligibility.IsEligible ? eligibility.ConfirmedActivePoleCount : null);
     }
 
     public async Task<SurveyApprovalPreviousOrderReference?>

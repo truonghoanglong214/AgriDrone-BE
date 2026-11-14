@@ -63,7 +63,7 @@ internal sealed class CreateSurveyDepositPolicyCommandHandler(
                     // Release the unique current-policy slot inside this transaction.
                     await unitOfWork.SaveChangesAsync(token);
                 }
-                var policy = SurveyDepositPolicy.Create(
+                var policy = LegacySurveyDepositPolicy.Create(
                     command.ExpectedVersion + 1,
                     command.AmountVnd,
                     actorId,
@@ -86,7 +86,7 @@ internal sealed class CreateSurveyDepositPolicyCommandHandler(
                     unitOfWork,
                     actorId,
                     executionContext.CorrelationId,
-                    nameof(SurveyDepositPolicy),
+                    nameof(LegacySurveyDepositPolicy),
                     policy.Id,
                     "CREATE_VERSION",
                     oldData,

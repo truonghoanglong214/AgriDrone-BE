@@ -17,8 +17,8 @@ internal interface ISurveyApprovalPrerequisiteResolver
 
 internal sealed class SurveyApprovalPrerequisiteResolver(
     ISurveyApprovalReferenceQueries referenceQueries,
-    ISurveyDepositPolicyRepository depositPolicyRepository,
-    ISurveyComboDiscountPolicyRepository comboDiscountPolicyRepository)
+    ISurveyDepositPolicyRepository? depositPolicyRepository = null,
+    ISurveyComboDiscountPolicyRepository? comboDiscountPolicyRepository = null)
     : ISurveyApprovalPrerequisiteResolver
 {
     public async Task<Result<SurveyApprovalPrerequisites>> ResolveAsync(
@@ -27,7 +27,7 @@ internal sealed class SurveyApprovalPrerequisiteResolver(
         DateTimeOffset approvalTime,
         CancellationToken cancellationToken = default)
     {
-        _ = comboDiscountPolicyRepository; // Legacy policy endpoints remain for legacy orders.
+        _ = comboDiscountPolicyRepository; // Existing policy endpoints remain compatible; new post-flight orders have no discount.
         ArgumentNullException.ThrowIfNull(request);
         DomainGuard.Utc(approvalTime);
 
@@ -43,21 +43,32 @@ internal sealed class SurveyApprovalPrerequisiteResolver(
         if (service is null ||
             service.Status != SurveyServiceStatus.Active ||
             service.ServiceType == SurveyServiceType.HarvestReadiness ||
-            service.PriceId is null || service.PricePerPole is null)
+            (service.Scope == ContractScope.Legacy &&
+             (service.ServiceType is null || service.PriceId is null || service.PricePerPole is null)))
         {
             return Result.Failure<SurveyApprovalPrerequisites>(
                 SurveyApprovalError.ServiceUnavailable());
         }
 
-        var activeDepositPolicy = await depositPolicyRepository.GetCurrentAsync(cancellationToken);
-        var applicableDeposit = activeDepositPolicy?.AmountVnd ?? SurveyOrder.DefaultBaselineDepositAmountVnd;
-        if (applicableDeposit <= 0m)
-            return Result.Failure<SurveyApprovalPrerequisites>(AppError.Conflict(
-                "SurveyDepositPolicy.PositiveDepositRequired",
-                "Registration v2.6 requires a positive shared deposit before approving a new order."));
+        // V3 commercial terms are resolved atomically from the pinned policy bundle.
+        // Legacy Admin policies must never override or gate a V3 approval.
+        var applicableDeposit = 0m;
+        var applicableDiscount = 0m;
+        if (service.Scope == ContractScope.Legacy)
+        {
+            var activeDepositPolicy = depositPolicyRepository is null
+                ? null
+                : await depositPolicyRepository.GetCurrentAsync(cancellationToken);
+            applicableDeposit = activeDepositPolicy?.AmountVnd ?? SurveyOrder.DefaultBaselineDepositAmountVnd;
 
-        // Registration v2.6 has no Combo discount or Follow-up price tier.
-        const decimal applicableDiscount = 0m;
+            if (applicableDeposit <= 0m)
+            {
+                return Result.Failure<SurveyApprovalPrerequisites>(AppError.Conflict(
+                    "SurveyDepositPolicy.PositiveDepositRequired",
+                    "A positive shared pre-flight deposit is required for a new post-flight order."));
+            }
+            applicableDiscount = 0m;
+        }
 
         return request.Kind switch
         {
@@ -255,10 +266,15 @@ internal sealed class SurveyApprovalPrerequisiteResolver(
                 SurveyApprovalError.ManagerNotAssignable());
         }
 
-        var baseline = await referenceQueries.GetFarmBaselineForApprovalAsync(
-            tenantId,
-            farmId,
-            cancellationToken);
+        var baseline = request.SurveyService.Scope == ContractScope.V3
+            ? await referenceQueries.GetV3FollowUpBaselineForApprovalAsync(
+                tenantId,
+                farmId,
+                cancellationToken)
+            : await referenceQueries.GetFarmBaselineForApprovalAsync(
+                tenantId,
+                farmId,
+                cancellationToken);
         var previousOrderCandidate = await referenceQueries
             .GetPreviousOrderCandidateForApprovalAsync(
                 tenantId,

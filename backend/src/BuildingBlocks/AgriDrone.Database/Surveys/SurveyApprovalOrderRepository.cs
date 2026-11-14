@@ -20,4 +20,18 @@ internal sealed class SurveyApprovalOrderRepository(
         context.EnsureApprovalTransaction();
         context.SurveyOrders.Add(surveyOrder);
     }
+
+    public void AddCommercialSnapshot(SurveyOrderCommercialSnapshot snapshot)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        context.EnsureApprovalTransaction();
+        context.SurveyOrderCommercialSnapshots.Add(snapshot);
+    }
+
+    public void AddStateHistory(OrderStateHistory history)
+    {
+        ArgumentNullException.ThrowIfNull(history);
+        context.EnsureApprovalTransaction();
+        context.OrderStateHistories.Add(history);
+    }
 }

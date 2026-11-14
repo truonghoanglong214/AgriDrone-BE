@@ -43,6 +43,15 @@ public sealed class SurveyApprovalDbContext(
     public DbSet<FarmBaseMapVersion> FarmBaseMapVersions =>
         Set<FarmBaseMapVersion>();
     public DbSet<SurveyService> SurveyServices => Set<SurveyService>();
+    public DbSet<SurveyServicePrice> SurveyServicePrices => Set<SurveyServicePrice>();
+    public DbSet<SurveyServiceRevision> SurveyServiceRevisions => Set<SurveyServiceRevision>();
+    public DbSet<SurveyDepositPolicy> SurveyDepositPolicies => Set<SurveyDepositPolicy>();
+    public DbSet<ClaimPolicy> ClaimPolicies => Set<ClaimPolicy>();
+    public DbSet<CancellationPolicy> CancellationPolicies => Set<CancellationPolicy>();
+    public DbSet<BusinessPolicyVersion> BusinessPolicyVersions => Set<BusinessPolicyVersion>();
+    public DbSet<BusinessPolicyActivation> BusinessPolicyActivations => Set<BusinessPolicyActivation>();
+    public DbSet<SurveyOrderCommercialSnapshot> SurveyOrderCommercialSnapshots => Set<SurveyOrderCommercialSnapshot>();
+    public DbSet<OrderStateHistory> OrderStateHistories => Set<OrderStateHistory>();
     public DbSet<SurveyRequest> SurveyRequests => Set<SurveyRequest>();
     public DbSet<SurveyRequestReview> SurveyRequestReviews =>
         Set<SurveyRequestReview>();
@@ -163,6 +172,15 @@ public sealed class SurveyApprovalDbContext(
         modelBuilder.ApplyConfiguration(new FarmConfiguration());
         modelBuilder.ApplyConfiguration(new FarmBaseMapVersionConfiguration());
         modelBuilder.ApplyConfiguration(new SurveyServiceConfiguration());
+        modelBuilder.ApplyConfiguration(new SurveyServicePriceConfiguration());
+        modelBuilder.ApplyConfiguration(new SurveyServiceRevisionConfiguration());
+        modelBuilder.ApplyConfiguration(new SurveyDepositPolicyConfiguration());
+        modelBuilder.ApplyConfiguration(new ClaimPolicyConfiguration());
+        modelBuilder.ApplyConfiguration(new CancellationPolicyConfiguration());
+        modelBuilder.ApplyConfiguration(new BusinessPolicyVersionConfiguration());
+        modelBuilder.ApplyConfiguration(new BusinessPolicyActivationConfiguration());
+        modelBuilder.ApplyConfiguration(new SurveyOrderCommercialSnapshotConfiguration());
+        modelBuilder.ApplyConfiguration(new OrderStateHistoryConfiguration());
         modelBuilder.ApplyConfiguration(new SurveyRequestConfiguration());
         modelBuilder.ApplyConfiguration(new SurveyRequestReviewConfiguration());
         modelBuilder.ApplyConfiguration(
@@ -197,7 +215,7 @@ public sealed class SurveyApprovalDbContext(
         modelBuilder.Entity<SurveyResult>()
             .Ignore(result => result.HarvestReadinessAssessments);
 
-        modelBuilder.Ignore<SurveyServicePrice>();
+
     }
 
     private static void ConfigureCrossModuleRelationships(ModelBuilder modelBuilder)

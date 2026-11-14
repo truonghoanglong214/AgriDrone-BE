@@ -1,0 +1,30 @@
+<mxfile host="app.diagrams.net">
+  <diagram id="agridrone-v3-business" name="V3 paid survey target">
+    <mxGraphModel dx="1400" dy="900" grid="1" gridSize="10" page="1" pageWidth="1400" pageHeight="1100">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" value="AgriDrone v3 - Approved policy 2026-11-10; target design, runtime unchanged" style="text;html=1;align=center;fontSize=18;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="80" y="20" width="1180" height="50" as="geometry" /></mxCell>
+        <mxCell id="order" value="MAP / COMBO paid Order&#xa;First: onboard; Follow-up: reuse Farm + delivered Baseline&#xa;Snapshot unit price / shared deposit / policy" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1"><mxGeometry x="160" y="100" width="450" height="90" as="geometry" /></mxCell>
+        <mxCell id="capture" value="Appointment + confirmed deposit&#xa;Assignment / drone / preflight / safety / authorization&#xa;Capture imagery + GNSS; no full-balance prerequisite" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1"><mxGeometry x="160" y="240" width="450" height="90" as="geometry" /></mxCell>
+        <mxCell id="process" value="FastAPI processing; .NET source receipts&#xa;Manager review mapping / billable poles&#xa;COMBO: suspected disease / zones / cited guidance" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1"><mxGeometry x="160" y="380" width="450" height="90" as="geometry" /></mxCell>
+        <mxCell id="reflight" value="Quality Re-flight&#xa;Same Order, no extra fee/deposit&#xa;Keep original evidence; recheck safety" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1"><mxGeometry x="780" y="240" width="340" height="90" as="geometry" /></mxCell>
+        <mxCell id="maps" value="First: approved internal Baseline + profiles&#xa;Follow-up: own snapshot; Baseline unchanged&#xa;MAP: NotAssessed, preserve disease history" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1"><mxGeometry x="780" y="380" width="340" height="90" as="geometry" /></mxCell>
+        <mxCell id="settle" value="Freeze approved revision + finalized invoice&#xa;Total = reviewed in-boundary poles x snapshotted rate&#xa;Pay balance; reserve excess refund if needed" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1"><mxGeometry x="160" y="520" width="450" height="90" as="geometry" /></mxCell>
+        <mxCell id="release" value="Atomic release when review valid and Due = 0&#xa;Publication + unlock + durable in-app notice + claim window&#xa;One original service value / Order + audit / Outbox" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1"><mxGeometry x="160" y="660" width="450" height="100" as="geometry" /></mxCell>
+        <mxCell id="claim" value="Claim until end of D+7, Vietnam calendar&#xa;Manager verifies; Admin proposes; Owner accepts&#xa;Capped bank refund / reviewed replacement&#xa;No second service charge or sale" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1"><mxGeometry x="780" y="650" width="340" height="110" as="geometry" /></mxCell>
+        <mxCell id="report" value="Admin monthly service revenue / cash / Excel&#xa;Return excess affects cash, not service revenue&#xa;Cancellation retention reported separately" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1"><mxGeometry x="160" y="820" width="450" height="90" as="geometry" /></mxCell>
+        <mxCell id="e1" edge="1" parent="1" source="order" target="capture" style="endArrow=block;"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e2" edge="1" parent="1" source="capture" target="process" style="endArrow=block;"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e3" value="inadequate imagery" edge="1" parent="1" source="process" target="reflight" style="endArrow=block;dashed=1;"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e4" edge="1" parent="1" source="reflight" target="capture" style="endArrow=block;dashed=1;"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e5" edge="1" parent="1" source="process" target="maps" style="endArrow=block;"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e6" edge="1" parent="1" source="process" target="settle" style="endArrow=block;"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e7" edge="1" parent="1" source="settle" target="release" style="endArrow=block;"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e8" edge="1" parent="1" source="release" target="claim" style="endArrow=block;dashed=1;"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e9" edge="1" parent="1" source="release" target="report" style="endArrow=block;"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e10" edge="1" parent="1" source="claim" target="report" style="endArrow=block;dashed=1;"><mxGeometry relative="1" as="geometry" /></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

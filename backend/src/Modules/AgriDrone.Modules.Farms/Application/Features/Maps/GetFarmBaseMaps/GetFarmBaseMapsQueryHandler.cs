@@ -1,4 +1,6 @@
 using AgriDrone.Modules.Farms.Domain.Maps;
+using AgriDrone.Modules.Farms.Application.Abstractions.Maps;
+using AgriDrone.Modules.Farms.Application.Services;
 using AgriDrone.Modules.Farms.Infrastructure.Persistence;
 using AgriDrone.SharedKernel.Application;
 using MediatR;
@@ -7,7 +9,9 @@ using Microsoft.EntityFrameworkCore;
 namespace AgriDrone.Modules.Farms.Application.Features.Maps.GetFarmBaseMaps;
 
 internal sealed class GetFarmBaseMapsQueryHandler(
-    FarmsDbContext dbContext)
+    FarmsDbContext dbContext,
+    FarmBaseMapReadAccess readAccess,
+    IFarmBaseMapPreviewReader previewReader)
     : IRequestHandler<GetFarmBaseMapsQuery, Result<IReadOnlyList<FarmBaseMapSummaryResponse>>>
 {
     private sealed record PoleCountRow(Guid VersionId, int Count);
@@ -17,19 +21,26 @@ internal sealed class GetFarmBaseMapsQueryHandler(
         GetFarmBaseMapsQuery request,
         CancellationToken cancellationToken)
     {
-        var farmExists = await dbContext.Farms.AsNoTracking()
-            .AnyAsync(f => f.Id == request.FarmId, cancellationToken);
+        var farm = await dbContext.Farms.AsNoTracking()
+            .SingleOrDefaultAsync(f => f.Id == request.FarmId, cancellationToken);
 
-        if (!farmExists)
+        if (farm is null)
         {
             return Result.Failure<IReadOnlyList<FarmBaseMapSummaryResponse>>(
                 AppError.NotFound("Farm.NotFound", $"Farm with ID {request.FarmId} was not found."));
         }
 
+        var access = await readAccess.CheckAsync(farm.TenantId, farm.Id, cancellationToken);
+        if (!access.IsAllowed)
+        {
+            return Result.Failure<IReadOnlyList<FarmBaseMapSummaryResponse>>(
+                AppError.NotFound("Farm.NotFound", "Farm was not found."));
+        }
+
         var query = dbContext.FarmBaseMapVersions.AsNoTracking()
             .Where(v => v.FarmId == request.FarmId);
 
-        if (!request.IncludeDraft)
+        if (!request.IncludeDraft || !access.CanReadDraft)
         {
             query = query.Where(v => v.Status != FarmBaseMapStatus.Draft);
         }
@@ -115,8 +126,8 @@ internal sealed class GetFarmBaseMapsQueryHandler(
                 missionInfoMap.TryGetValue(v.SourceMissionId.Value, out missionInfo);
             }
 
-            var previewUrl = v.SourceMissionId.HasValue
-                ? $"http://localhost:9000/agridrone-media/tenants/{v.TenantId:D}/media/{v.SourceMissionId.Value:D}/map_preview.jpg"
+            var preview = v.SourceMissionId.HasValue
+                ? await previewReader.GetAsync(v.TenantId, v.FarmId, v.SourceMissionId.Value, cancellationToken)
                 : null;
 
             var totalPoles = countByVersion.GetValueOrDefault(v.Id, 0);
@@ -136,7 +147,7 @@ internal sealed class GetFarmBaseMapsQueryHandler(
                 RowSpacingM: v.RowSpacingM,
                 PlantSpacingM: v.PlantSpacingM,
                 TotalPoles: totalPoles,
-                PreviewUrl: previewUrl,
+                PreviewUrl: preview?.Url,
                 PublishedAt: v.PublishedAt,
                 PublishedBy: v.PublishedBy,
                 CreatedAt: v.CreatedAt,

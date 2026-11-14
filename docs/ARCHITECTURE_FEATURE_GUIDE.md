@@ -1,5 +1,9 @@
 # Hướng dẫn viết feature theo kiến trúc AgriDrone
 
+> **V3 scope notice — 2026-11-10.**
+> Current scope: these generic .NET layer examples remain valid, but business rules come from v3. User/registration examples are not authorization for public self-provisioning. .NET owns transactional business state; FastAPI is an external imagery/AI processor; no Java migration or offline-mobile backlog.
+> Current: [Business Rules v3](../Codex-Plan/Business-Rules-v3.md), [ADR 0018](adr/0018-v3-paid-map-combo-business-policy.md), [target contracts](contracts/survey-business-v3.md). Documentation-only update; no runtime change.
+
 Tài liệu này giải thích cách một request đi từ HTTP API xuống PostgreSQL trong dự án AgriDrone, đồng thời trả lời các câu hỏi:
 
 - Vì sao phải tạo từng file?
