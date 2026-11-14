@@ -37,7 +37,7 @@ internal sealed class GetSurveyServiceCatalogueQueryHandler(
                         service.CurrentPrice.PricePerPole,
                         service.CurrentPrice.Currency,
                         service.CurrentPrice.EffectiveFrom,
-                        service.CurrentPrice.EffectiveTo)))
+                        service.CurrentPrice.EffectiveTo, service.CurrentPrice.MappingPricePerPole, service.CurrentPrice.PlantHealthPricePerPole)))
             .ToArray();
 
         return Result.Success(response);

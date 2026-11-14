@@ -1,4 +1,5 @@
 using System.Text.Json;
+using AgriDrone.Modules.Surveys.Domain;
 using AgriDrone.Modules.Farms.Application.Abstractions.Maps;
 using AgriDrone.Modules.Farms.Application.Features.Maps.GetFarmBaseMapDetail;
 using AgriDrone.Modules.Missions.Application.Abstractions.Media;
@@ -13,6 +14,18 @@ internal sealed class FarmBaseMapPreviewReader(
     IObjectStorage storage,
     ILogger<FarmBaseMapPreviewReader> logger) : IFarmBaseMapPreviewReader
 {
+    public Task<bool> CanOwnerReadAsync(Guid tenantId, Guid farmId, Guid sourceOrderId,
+        CancellationToken cancellationToken = default) =>
+        context.Set<SurveyOrder>().AsNoTracking().AnyAsync(order =>
+            order.Id == sourceOrderId && order.TenantId == tenantId && order.FarmId == farmId &&
+            order.Scope == ContractScope.Legacy && order.Status != SurveyOrderStatus.Cancelled &&
+            (!order.PostFlightSettlement ||
+                (order.Status == SurveyOrderStatus.Completed && order.ServiceReviewedAt != null &&
+                 order.FinalPrice > 0m && order.DepositPaymentStatus == SurveyPaymentStatus.Paid &&
+                 (order.RemainingAmount == 0m || order.Payments.Any(payment =>
+                     payment.Purpose == PaymentPurpose.FinalBalance && payment.Status == SurveyPaymentStatus.Paid &&
+                     payment.Amount == order.RemainingAmount && payment.Currency == order.Currency)))), cancellationToken);
+
     public async Task<FarmBaseMapPreview?> GetAsync(
         Guid tenantId, Guid farmId, Guid missionId,
         CancellationToken cancellationToken = default)

@@ -132,14 +132,23 @@ public sealed class SurveyPaymentHandlerRegressionTests
     }
 
     [Theory]
-    [InlineData("CALLBACK")]
-    [InlineData("RECONCILE")]
-    [InlineData("ZERO")]
-    public async Task PostFlightSettlementCompletesAndStagesUnlockOnlyOnce(string route)
+    [InlineData("CALLBACK", 0, 15000, false)]
+    [InlineData("CALLBACK", 20, 11000, false)]
+    [InlineData("RECONCILE", 0, 15000, false)]
+    [InlineData("RECONCILE", 20, 11000, false)]
+    [InlineData("ZERO", 0, 0, false)]
+    [InlineData("ZERO", 20, 0, false)]
+    [InlineData("CALLBACK", 20, 20600, true)]
+    [InlineData("RECONCILE", 20, 20600, true)]
+    [InlineData("ZERO", 20, 0, true)]
+    public async Task PostFlightSettlementCompletesAndStagesUnlockOnlyOnce(string route, decimal discount, decimal balance, bool components)
     {
         var order = SurveyOrder.Create("POST-FLIGHT", Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
-            false, null, "v2.6", "TEST", Start, 5000m, 0m);
-        order.EnablePostFlightSettlement(SurveyServiceType.PlantHealth, Guid.NewGuid(), 1000m);
+            false, null, "v2.6", "TEST", Start, 5000m, discount);
+        if (components)
+            order.EnablePostFlightSettlement(SurveyServiceType.PlantHealth, Guid.NewGuid(), 2500m, 1000m, 1500m);
+        else
+            order.EnablePostFlightSettlement(SurveyServiceType.PlantHealth, Guid.NewGuid(), 1000m);
         order.RecordFollowUpDepositConfirmed(Guid.NewGuid(), 5000m, Start.AddHours(1));
         var map = Guid.NewGuid();
         var count = ConfirmedSurveyPoleCount.Create(route == "ZERO" ? 5 : 20);
@@ -148,9 +157,14 @@ public sealed class SurveyPaymentHandlerRegressionTests
         order.StartPaidService(Start.AddHours(3));
         order.MarkAnalysisReady(Start.AddHours(3));
         order.RecordReviewedServicePublication(Start.AddHours(4));
-        order.ConfirmPoleCountAndPricing(map, count, SurveyPoleCountSource.CurrentPublishedInventory,
+        if (components)
+            order.ConfirmComboComponentPricing(map, route == "ZERO" ? 3 : 20, route == "ZERO" ? 1 : 8,
+                SurveyPoleCountSource.CurrentPublishedInventory, "independent map and Health counts", Actor, Start.AddHours(4));
+        else order.ConfirmPoleCountAndPricing(map, count, SurveyPoleCountSource.CurrentPublishedInventory,
             "Reviewed after flight", order.BookedServicePriceId!.Value, PricePerPole.Create(1000m), CurrencyCode.Vnd, Actor, Start.AddHours(4));
-        var payment = route == "ZERO" ? null : NewPayment(order, 15000m, PaymentPurpose.FinalBalance);
+        Assert.Equal(discount, order.ComboDiscountPercentage);
+        Assert.Equal(balance, order.RemainingAmount);
+        var payment = route == "ZERO" ? null : NewPayment(order, balance, PaymentPurpose.FinalBalance);
         var repository = new Repository(order, payment);
         var outbox = new Outbox();
         if (route == "ZERO")
@@ -164,7 +178,7 @@ public sealed class SurveyPaymentHandlerRegressionTests
         {
             var result = await new ReconcileSurveyPaymentCommandHandler(new UnitOfWork(), repository, outbox,
                 new Audit(), new Context(), new Clock()).Handle(new ReconcileSurveyPaymentCommand(payment!.Id,
-                    "REFERENCE", 15000m, "VND", "Verified transfer", "BANK-EVIDENCE", payment.Version, order.Version), default);
+                    "REFERENCE", balance, "VND", "Verified transfer", "BANK-EVIDENCE", payment.Version, order.Version), default);
             Assert.True(result.IsSuccess);
         }
         else
@@ -172,7 +186,7 @@ public sealed class SurveyPaymentHandlerRegressionTests
             var handler = new ProcessSurveyPaymentEventCommandHandler(new UnitOfWork(), repository, outbox, new Context());
             using var payload = JsonDocument.Parse("{}");
             var command = new ProcessSurveyPaymentEventCommand("sepay", "REFERENCE", "POST-FLIGHT-EVENT",
-                "payment.succeeded", 15000m, "VND", Start.AddHours(9), Start.AddHours(10), payload);
+                "payment.succeeded", balance, "VND", Start.AddHours(9), Start.AddHours(10), payload);
             Assert.True((await handler.Handle(command, default)).IsSuccess);
             Assert.True((await handler.Handle(command, default)).Value.Duplicate);
         }

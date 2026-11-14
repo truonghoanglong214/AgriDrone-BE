@@ -112,6 +112,16 @@ internal sealed class CreateSurveyServicePriceCommandHandler(
                 SurveyServiceError.PriceWindowOverlap());
         }
 
+        if ((request.MappingPricePerPole.HasValue || request.PlantHealthPricePerPole.HasValue) &&
+            (service.Scope != ContractScope.Legacy || service.ServiceType != SurveyServiceType.PlantHealth ||
+             !request.MappingPricePerPole.HasValue || !request.PlantHealthPricePerPole.HasValue ||
+             request.MappingPricePerPole <= 0m || request.PlantHealthPricePerPole <= 0m ||
+             request.MappingPricePerPole != decimal.Truncate(request.MappingPricePerPole.Value) ||
+             request.PlantHealthPricePerPole != decimal.Truncate(request.PlantHealthPricePerPole.Value) ||
+             request.MappingPricePerPole + request.PlantHealthPricePerPole != request.AmountPerPole))
+            return Result.Failure<CreateSurveyServicePriceResponse>(AppError.Validation(
+                "SurveyService.InvalidComboComponentPrices", "Both component rates must be positive whole VND and sum to AmountPerPole on the existing Combo service."));
+
         var price = SurveyServicePrice.CreatePerPole(
             service.Id,
             PricePerPole.Create(request.AmountPerPole),
@@ -119,7 +129,9 @@ internal sealed class CreateSurveyServicePriceCommandHandler(
             now,
             effectiveTo: null,
             actorId,
-            now);
+            now,
+            request.MappingPricePerPole,
+            request.PlantHealthPricePerPole);
 
         using var oldData = JsonSerializer.SerializeToDocument(new
         {
@@ -145,6 +157,8 @@ internal sealed class CreateSurveyServicePriceCommandHandler(
             PriceVersionId = price.Id,
             service.Id,
             AmountPerPole = price.PricePerPole!.Value.Amount,
+            price.MappingPricePerPole,
+            price.PlantHealthPricePerPole,
             price.Currency,
             price.EffectiveFrom,
             price.EffectiveTo,
@@ -216,6 +230,8 @@ internal sealed class CreateSurveyServicePriceCommandHandler(
             price.EffectiveFrom,
             priceToClose?.Id,
             service.Version,
-            price.CreatedAt));
+            price.CreatedAt,
+            price.MappingPricePerPole,
+            price.PlantHealthPricePerPole));
     }
 }

@@ -49,6 +49,18 @@ internal sealed class GetFarmBaseMapsQueryHandler(
             .OrderByDescending(v => v.VersionNumber)
             .ToListAsync(cancellationToken);
 
+        if (!access.CanReadDraft)
+        {
+            var readable = new List<FarmBaseMapVersion>(versions.Count);
+            foreach (var version in versions)
+            {
+                if (await previewReader.CanOwnerReadAsync(
+                        version.TenantId, version.FarmId, version.SourceSurveyOrderId, cancellationToken))
+                    readable.Add(version);
+            }
+            versions = readable;
+        }
+
         if (versions.Count == 0)
         {
             return Result.Success<IReadOnlyList<FarmBaseMapSummaryResponse>>([]);

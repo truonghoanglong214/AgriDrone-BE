@@ -8,9 +8,11 @@ public sealed class PostFlightSettlementTests
     private static readonly DateTimeOffset Now = new(2026, 11, 13, 0, 0, 0, TimeSpan.Zero);
 
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public void FirstAndFollowUpOnlyBillAfterFlightAndReview(bool first)
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    public void ComboAndFollowUpComboApplyFrozenDiscountOnlyAfterFlightAndReview(bool first, bool separatePricing)
     {
         var order = Create(first);
         var boundary = Guid.NewGuid();
@@ -30,20 +32,31 @@ public sealed class PostFlightSettlementTests
             order.VerifyBoundaryScopeAndCurrentInventory(boundary, map, ConfirmedSurveyPoleCount.Create(20), manager, Now);
         }
 
-        Assert.Throws<SurveyDomainException>(() => Confirm(order, map, manager));
+        void ConfirmFinal()
+        {
+            if (separatePricing)
+                order.ConfirmPricing(Guid.NewGuid(), PricePerPole.Create(9999m), CurrencyCode.Vnd, manager, Now);
+            else
+                Confirm(order, map, manager);
+        }
+
+        Assert.Throws<SurveyDomainException>(ConfirmFinal);
         Assert.Null(order.FinalPrice);
         order.MarkPaidAppointmentConfirmed(Now);
         Assert.Equal(SurveyOrderStatus.ReadyForPaidService, order.Status);
         order.StartPaidService(Now);
         order.MarkAnalysisReady(Now);
-        Assert.Throws<SurveyDomainException>(() => Confirm(order, map, manager));
+        Assert.Throws<SurveyDomainException>(ConfirmFinal);
         order.RecordReviewedServicePublication(Now);
-        Confirm(order, map, manager);
+        ConfirmFinal();
         Assert.Equal(SurveyOrderStatus.AwaitingPayment, order.Status);
-        Assert.Equal(0m, order.ComboDiscountPercentage);
-        Assert.Equal(1000m, order.PricePerPoleSnapshot?.Amount);
-        Assert.Equal(20000m, order.FinalPrice);
-        Assert.Equal(15000m, order.RemainingAmount);
+        Assert.Equal(20m, order.ComboDiscountPercentage);
+        Assert.Equal(800m, order.PricePerPoleSnapshot?.Amount);
+        Assert.Equal(1000m, order.BookedPricePerPole);
+        Assert.Equal(20000m, order.OriginalFinalPrice);
+        Assert.Equal(order.BookedServicePriceId, order.OriginalSurveyServicePriceId);
+        Assert.Equal(16000m, order.FinalPrice);
+        Assert.Equal(11000m, order.RemainingAmount);
         Assert.Equal(order.BookedServicePriceId, order.SurveyServicePriceId);
         order.MarkPaymentConfirmed(Now);
         Assert.Equal(SurveyOrderStatus.Completed, order.Status);
@@ -106,6 +119,93 @@ public sealed class PostFlightSettlementTests
         Assert.Throws<SurveyDomainException>(() => order.MarkPaymentConfirmed(Now));
         Assert.Throws<SurveyDomainException>(() => order.Complete(Now));
         Assert.Equal(1000m, order.BookedPricePerPole);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void DiscountUsesFrozenBookingRateOnceDespiteDifferentCatalogueOrAlreadyDiscountedInput(bool first)
+    {
+        var order = SurveyOrder.Create("PINNED-DISCOUNT", Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
+            first, null, "v2.6", "NEW_ORDER", Now, 5000m, 12.5m);
+        order.EnablePostFlightSettlement(SurveyServiceType.PlantHealth, Guid.NewGuid(), 1001m);
+
+        var effective = order.GetEffectivePricePerPole(PricePerPole.Create(9999m));
+        Assert.Equal(876m, effective.Amount);
+        Assert.Equal(876m, order.GetEffectivePricePerPole(effective).Amount);
+        Assert.Equal(12.5m, order.ComboDiscountPercentage);
+        Assert.Equal(1001m, order.BookedPricePerPole);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void ComponentComboBillsAllMappedPolesAndOnlyHealthScopeAtDifferentRates(bool first)
+    {
+        var order = SurveyOrder.Create("COMPONENT", Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
+            first, null, "components.v1", "NEW_ORDER", Now, 500000m, 20m);
+        var priceId = Guid.NewGuid();
+        order.EnablePostFlightSettlement(SurveyServiceType.PlantHealth, priceId, 2500m, 1500m, 1000m);
+        var map = Guid.NewGuid(); var boundary = Guid.NewGuid(); var manager = Guid.NewGuid();
+        if (first)
+        {
+            order.MarkBaselineAppointmentConfirmed(Now);
+            order.RecordBaselineDepositConfirmed(Guid.NewGuid(), 500000m, Now);
+            order.StartBaselineMapping(Now); order.MarkBaselineCandidatesReady(Now);
+            order.RecordBaselinePublication(map, ConfirmedSurveyPoleCount.Create(1000), manager, Now, boundary);
+        }
+        else
+        {
+            order.RecordFollowUpDepositConfirmed(Guid.NewGuid(), 500000m, Now);
+            order.VerifyBoundaryScopeAndCurrentInventory(boundary, map, ConfirmedSurveyPoleCount.Create(1000), manager, Now);
+        }
+        var source = first ? SurveyPoleCountSource.BaselinePublication : SurveyPoleCountSource.CurrentPublishedInventory;
+        Assert.Throws<SurveyDomainException>(() => order.ConfirmComboComponentPricing(map, 1000, 300, source, "review", manager, Now));
+        order.MarkPaidAppointmentConfirmed(Now); order.StartPaidService(Now); order.MarkAnalysisReady(Now);
+        Assert.Throws<SurveyDomainException>(() => order.ConfirmComboComponentPricing(map, 1000, 300, source, "review", manager, Now));
+        order.RecordReviewedServicePublication(Now);
+        Assert.Throws<SurveyDomainException>(() => order.ConfirmPricing(priceId, PricePerPole.Create(9999m), CurrencyCode.Vnd, manager, Now));
+        Assert.Throws<SurveyDomainException>(() => order.ConfirmPoleCountAndPricing(map, ConfirmedSurveyPoleCount.Create(300), source,
+            "review", priceId, PricePerPole.Create(9999m), CurrencyCode.Vnd, manager, Now));
+        Assert.Throws<SurveyDomainException>(() => order.ConfirmComboComponentPricing(map, 1000, 1001, source, "review", manager, Now));
+        Assert.Null(order.FinalPrice);
+
+        order.ConfirmComboComponentPricing(map, 1000, 300, source, "reviewed full map and selected Health scope", manager, Now);
+
+        Assert.Equal(1000, order.ConfirmedMappingPoleCount);
+        Assert.Equal(300, order.ConfirmedPlantHealthPoleCount);
+        Assert.Equal(1500000m, order.MappingSubtotal);
+        Assert.Equal(300000m, order.PlantHealthSubtotal);
+        Assert.Equal(360000m, order.ComboDiscountAmount);
+        Assert.Equal(1800000m, order.OriginalFinalPrice);
+        Assert.Equal(1440000m, order.FinalPrice);
+        Assert.Equal(940000m, order.RemainingAmount);
+        Assert.Equal(SurveyOrderStatus.AwaitingPayment, order.Status);
+        Assert.Equal(1500m, order.BookedMappingPricePerPole);
+        Assert.Equal(1000m, order.BookedPlantHealthPricePerPole);
+        Assert.Throws<SurveyDomainException>(() => order.ApplyPriceAdjustment(priceId, ConfirmedSurveyPoleCount.Create(300),
+            PricePerPole.Create(1m), CurrencyCode.Vnd, manager, Now));
+        Assert.Equal(1440000m, order.FinalPrice);
+        order.MarkPaymentConfirmed(Now);
+        Assert.Equal(SurveyOrderStatus.Completed, order.Status);
+    }
+
+    [Theory]
+    [InlineData(1500, 1000, 2500, true)]
+    [InlineData(1500, 1000, 2600, false)]
+    [InlineData(0, 1000, 1000, false)]
+    public void CatalogueComponentRatesMustBePositiveAndSumToCombinedNominalRate(decimal mapRate, decimal healthRate, decimal combined, bool valid)
+    {
+        SurveyServicePrice CreatePrice() => SurveyServicePrice.CreatePerPole(Guid.NewGuid(), PricePerPole.Create(combined),
+            CurrencyCode.Vnd, Now, null, Guid.NewGuid(), Now, mapRate, healthRate);
+        if (!valid) Assert.Throws<ArgumentException>(() => CreatePrice());
+        else
+        {
+            var price = CreatePrice();
+            Assert.Equal(mapRate, price.MappingPricePerPole);
+            Assert.Equal(healthRate, price.PlantHealthPricePerPole);
+            Assert.Equal(combined, price.PricePerPole!.Value.Amount);
+        }
     }
 
     private static SurveyOrder Create(bool first)

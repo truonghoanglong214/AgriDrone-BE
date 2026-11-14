@@ -17,7 +17,9 @@ public sealed record SystemSurveyServiceCurrentPriceApiResponse(
     decimal AmountPerPole,
     string Currency,
     DateTimeOffset EffectiveFrom,
-    DateTimeOffset? EffectiveTo);
+    DateTimeOffset? EffectiveTo,
+    decimal? MappingPricePerPole = null,
+    decimal? PlantHealthPricePerPole = null);
 
 public sealed record SurveyServiceMutationApiResponse(
     Guid SurveyServiceId,

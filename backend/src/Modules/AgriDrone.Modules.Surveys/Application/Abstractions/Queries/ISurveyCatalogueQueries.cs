@@ -108,7 +108,9 @@ internal sealed record SurveyServicePriceHistoryItem(
     DateTimeOffset EffectiveFrom,
     DateTimeOffset? EffectiveTo,
     Guid CreatedBy,
-    DateTimeOffset CreatedAt)
+    DateTimeOffset CreatedAt,
+    decimal? MappingPricePerPole = null,
+    decimal? PlantHealthPricePerPole = null)
 {
     public bool IsLegacyPerHectarePrice =>
         PricePerPole is null && LegacyPricePerHa.HasValue;
@@ -120,4 +122,6 @@ internal sealed record EffectiveSurveyServicePrice(
     decimal PricePerPole,
     string Currency,
     DateTimeOffset EffectiveFrom,
-    DateTimeOffset? EffectiveTo);
+    DateTimeOffset? EffectiveTo,
+    decimal? MappingPricePerPole = null,
+    decimal? PlantHealthPricePerPole = null);

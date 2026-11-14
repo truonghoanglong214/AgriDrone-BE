@@ -8635,6 +8635,16 @@ namespace AgriDrone.Database.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("baseline_route_plan_id");
 
+                    b.Property<decimal?>("BookedMappingPricePerPole")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("booked_mapping_price_per_pole");
+
+                    b.Property<decimal?>("BookedPlantHealthPricePerPole")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("booked_plant_health_price_per_pole");
+
                     b.Property<decimal?>("BookedPricePerPole")
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)")
@@ -8656,10 +8666,23 @@ namespace AgriDrone.Database.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("business_policy_version_id");
 
+                    b.Property<decimal?>("ComboDiscountAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("combo_discount_amount");
+
                     b.Property<decimal?>("ComboDiscountPercentage")
                         .HasPrecision(5, 2)
                         .HasColumnType("numeric(5,2)")
                         .HasColumnName("combo_discount_percentage");
+
+                    b.Property<int?>("ConfirmedMappingPoleCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("confirmed_mapping_pole_count");
+
+                    b.Property<int?>("ConfirmedPlantHealthPoleCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("confirmed_plant_health_pole_count");
 
                     b.Property<decimal?>("ConfirmedSurveyAreaHa")
                         .HasPrecision(12, 4)
@@ -8716,6 +8739,11 @@ namespace AgriDrone.Database.Migrations
                         .HasColumnType("numeric(18,2)")
                         .HasColumnName("final_price");
 
+                    b.Property<decimal?>("MappingSubtotal")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("mapping_subtotal");
+
                     b.Property<string>("OrderNumber")
                         .IsRequired()
                         .HasMaxLength(40)
@@ -8739,6 +8767,11 @@ namespace AgriDrone.Database.Migrations
                     b.Property<Guid?>("OriginalSurveyServicePriceId")
                         .HasColumnType("uuid")
                         .HasColumnName("original_survey_service_price_id");
+
+                    b.Property<decimal?>("PlantHealthSubtotal")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("plant_health_subtotal");
 
                     b.Property<DateTimeOffset?>("PoleCountConfirmedAt")
                         .HasColumnType("timestamp with time zone")
@@ -8913,17 +8946,21 @@ namespace AgriDrone.Database.Migrations
                         {
                             t.HasCheckConstraint("ck_survey_orders_area_positive", "confirmed_survey_area_ha IS NULL OR confirmed_survey_area_ha > 0");
 
+                            t.HasCheckConstraint("ck_survey_orders_combo_component_booking", "(booked_mapping_price_per_pole IS NULL AND booked_plant_health_price_per_pole IS NULL) OR (booked_mapping_price_per_pole IS NOT NULL AND booked_plant_health_price_per_pole IS NOT NULL AND scope = 'LEGACY' AND post_flight_settlement AND booked_service_price_id IS NOT NULL AND booked_price_per_pole IS NOT NULL AND booked_mapping_price_per_pole > 0 AND booked_plant_health_price_per_pole > 0 AND booked_mapping_price_per_pole = trunc(booked_mapping_price_per_pole) AND booked_plant_health_price_per_pole = trunc(booked_plant_health_price_per_pole) AND booked_price_per_pole = booked_mapping_price_per_pole + booked_plant_health_price_per_pole)");
+
+                            t.HasCheckConstraint("ck_survey_orders_combo_component_invoice", "(confirmed_mapping_pole_count IS NULL AND confirmed_plant_health_pole_count IS NULL AND mapping_subtotal IS NULL AND plant_health_subtotal IS NULL AND combo_discount_amount IS NULL AND (booked_mapping_price_per_pole IS NULL OR final_price IS NULL)) OR (booked_mapping_price_per_pole IS NOT NULL AND booked_plant_health_price_per_pole IS NOT NULL AND confirmed_mapping_pole_count IS NOT NULL AND confirmed_plant_health_pole_count IS NOT NULL AND confirmed_mapping_pole_count > 0 AND confirmed_plant_health_pole_count > 0 AND confirmed_plant_health_pole_count <= confirmed_mapping_pole_count AND mapping_subtotal IS NOT NULL AND plant_health_subtotal IS NOT NULL AND combo_discount_amount IS NOT NULL AND combo_discount_percentage IS NOT NULL AND mapping_subtotal = confirmed_mapping_pole_count * booked_mapping_price_per_pole AND plant_health_subtotal = confirmed_plant_health_pole_count * booked_plant_health_price_per_pole AND final_price IS NOT NULL AND final_price = round((mapping_subtotal + plant_health_subtotal) * (1 - combo_discount_percentage / 100), 0) AND combo_discount_amount = mapping_subtotal + plant_health_subtotal - final_price AND original_final_price IS NOT NULL AND original_final_price = mapping_subtotal + plant_health_subtotal AND original_survey_service_price_id IS NOT NULL AND original_survey_service_price_id = booked_service_price_id AND confirmed_survey_pole_count IS NOT NULL AND confirmed_survey_pole_count = confirmed_plant_health_pole_count)");
+
                             t.HasCheckConstraint("ck_survey_orders_currency", "currency IS NULL OR currency ~ '^[A-Z]{3}$'");
 
                             t.HasCheckConstraint("ck_survey_orders_deposit_consistency", "scope = 'V3' OR (deposit_amount = 0 AND deposit_payment_status = 'PAID'::system.survey_payment_status) OR (deposit_amount > 0)");
 
                             t.HasCheckConstraint("ck_survey_orders_deposit_nonnegative", "deposit_amount >= 0");
 
-                            t.HasCheckConstraint("ck_survey_orders_final_price", "scope = 'V3' OR final_price IS NULL OR (price_per_pole_snapshot IS NOT NULL AND final_price = round(confirmed_survey_pole_count * price_per_pole_snapshot, 2)) OR (price_per_ha_snapshot IS NOT NULL AND final_price = round(confirmed_survey_area_ha * price_per_ha_snapshot, 2))");
+                            t.HasCheckConstraint("ck_survey_orders_final_price", "booked_mapping_price_per_pole IS NOT NULL OR scope = 'V3' OR final_price IS NULL OR (price_per_pole_snapshot IS NOT NULL AND final_price = round(confirmed_survey_pole_count * price_per_pole_snapshot, 2)) OR (price_per_ha_snapshot IS NOT NULL AND final_price = round(confirmed_survey_area_ha * price_per_ha_snapshot, 2))");
 
                             t.HasCheckConstraint("ck_survey_orders_legacy_pricing_snapshot_complete", "scope = 'V3' OR (confirmed_survey_area_ha IS NULL AND price_per_ha_snapshot IS NULL) OR (confirmed_survey_area_ha IS NOT NULL AND price_per_ha_snapshot IS NOT NULL AND currency IS NOT NULL AND final_price IS NOT NULL AND scope_confirmed_by IS NOT NULL AND scope_confirmed_at IS NOT NULL)");
 
-                            t.HasCheckConstraint("ck_survey_orders_original_commercial_snapshot", "(original_final_price IS NULL AND original_survey_service_price_id IS NULL AND original_confirmed_pole_count IS NULL AND original_price_per_pole_snapshot IS NULL) OR (original_final_price = round(original_confirmed_pole_count * original_price_per_pole_snapshot, 2) AND original_survey_service_price_id IS NOT NULL)");
+                            t.HasCheckConstraint("ck_survey_orders_original_commercial_snapshot", "booked_mapping_price_per_pole IS NOT NULL OR (original_final_price IS NULL AND original_survey_service_price_id IS NULL AND original_confirmed_pole_count IS NULL AND original_price_per_pole_snapshot IS NULL) OR (original_final_price = round(original_confirmed_pole_count * original_price_per_pole_snapshot, 2) AND original_survey_service_price_id IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_survey_orders_per_pole_pricing_snapshot_complete", "scope = 'V3' OR (price_per_pole_snapshot IS NULL AND pricing_confirmed_by IS NULL AND pricing_confirmed_at IS NULL) OR (price_per_pole_snapshot IS NOT NULL AND survey_service_price_id IS NOT NULL AND confirmed_survey_pole_count IS NOT NULL AND farm_boundary_version_id IS NOT NULL AND farm_base_map_version_id IS NOT NULL AND pricing_confirmed_by IS NOT NULL AND pricing_confirmed_at IS NOT NULL AND currency IS NOT NULL AND final_price IS NOT NULL)");
 
@@ -9928,6 +9965,16 @@ namespace AgriDrone.Database.Migrations
                         .HasColumnType("character varying(500)")
                         .HasColumnName("evidence_reference");
 
+                    b.Property<decimal?>("MappingPricePerPole")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("mapping_price_per_pole");
+
+                    b.Property<decimal?>("PlantHealthPricePerPole")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("plant_health_price_per_pole");
+
                     b.Property<Guid?>("PredecessorVersionId")
                         .HasColumnType("uuid")
                         .HasColumnName("predecessor_version_id");
@@ -9977,6 +10024,8 @@ namespace AgriDrone.Database.Migrations
                     b.ToTable("survey_service_prices", "survey", t =>
                         {
                             t.HasCheckConstraint("ck_survey_service_prices_amount_positive", "(price_per_pole IS NULL OR price_per_pole > 0) AND (price_per_ha IS NULL OR price_per_ha > 0)");
+
+                            t.HasCheckConstraint("ck_survey_service_prices_combo_components", "(mapping_price_per_pole IS NULL AND plant_health_price_per_pole IS NULL) OR (mapping_price_per_pole IS NOT NULL AND plant_health_price_per_pole IS NOT NULL AND mapping_price_per_pole > 0 AND plant_health_price_per_pole > 0 AND mapping_price_per_pole = trunc(mapping_price_per_pole) AND plant_health_price_per_pole = trunc(plant_health_price_per_pole) AND price_per_pole IS NOT NULL AND price_per_pole = mapping_price_per_pole + plant_health_price_per_pole)");
 
                             t.HasCheckConstraint("ck_survey_service_prices_currency", "currency ~ '^[A-Z]{3}$'");
 

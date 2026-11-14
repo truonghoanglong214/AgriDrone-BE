@@ -81,6 +81,16 @@ internal sealed class SurveyPricingConfirmationRepository(
                 SurveyPricingError.InventoryOutsideApprovedScope());
         }
 
+        int? mappingPoleCount = null;
+        if (order.UsesComponentPricing)
+        {
+            var mappingInventory = await ReadInventoryAsync(order, map.Value.MapVersionId, cancellationToken, fullMap: true);
+            if (mappingInventory.EligibleActiveCount <= 0 ||
+                mappingInventory.TotalActiveCount != mappingInventory.EligibleActiveCount)
+                return Result.Failure<SurveyPricingConfirmationState>(SurveyPricingError.InventoryOutsideApprovedScope());
+            mappingPoleCount = mappingInventory.EligibleActiveCount;
+        }
+
         PriceSnapshot price;
         if (order.PostFlightSettlement)
         {
@@ -117,7 +127,8 @@ internal sealed class SurveyPricingConfirmationRepository(
             inventory.EligibleActiveCount,
             price.PriceVersionId,
             price.PricePerPole,
-            price.Currency));
+            price.Currency,
+            mappingPoleCount));
     }
 
     private async Task<Guid?> ReadManagerAccessAsync(
@@ -207,7 +218,8 @@ internal sealed class SurveyPricingConfirmationRepository(
     private async Task<InventorySnapshot> ReadInventoryAsync(
         SurveyOrder order,
         Guid mapVersionId,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool fullMap = false)
     {
         await using var command = CreateCommand(
             """
@@ -270,7 +282,7 @@ internal sealed class SurveyPricingConfirmationRepository(
             Id("order_id", order.Id),
             new NpgsqlParameter(
                 "scope_type",
-                order.ScopeType == SurveyScopeType.FarmWide
+                fullMap || order.ScopeType == SurveyScopeType.FarmWide
                     ? "FARM_WIDE"
                     : "ZONES"));
         await using var reader = await command.ExecuteReaderAsync(

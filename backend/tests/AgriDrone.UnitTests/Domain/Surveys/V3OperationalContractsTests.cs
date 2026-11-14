@@ -49,6 +49,24 @@ public sealed class V3OperationalContractsTests
             EvaluatedAt: Now);
     }
 
+    [Theory]
+    [InlineData("MAP", false)]
+    [InlineData("COMBO", true)]
+    public void V3ServicesCannotUseLegacyPostFlightOrCompletionShortcuts(string code, bool screensDisease)
+    {
+        var snapshot = CreateSampleSnapshot() with { ServiceCode = code, ScreensDisease = screensDisease };
+        var order = SurveyOrder.CreateV3CaptureOrder("V3-GUARD", TenantId, FarmId,
+            SurveyRequestId, SurveyServiceId, snapshot, requiresBaselineMapping: true, createdAt: Now);
+
+        Assert.Throws<InvalidOperationException>(() => order.EnablePostFlightSettlement(
+            SurveyServiceType.PlantHealth, PriceVersionId, snapshot.PricePerPole));
+        Assert.Throws<SurveyDomainException>(() => order.MarkPaymentConfirmed(Now));
+        Assert.Throws<SurveyDomainException>(() => order.Complete(Now));
+        Assert.False(order.PostFlightSettlement);
+        Assert.Equal(SurveyOrderStatus.AwaitingAppointment, order.Status);
+        Assert.Equal(snapshot.DepositAmount, order.DepositAmount);
+    }
+
     [Fact]
     public void V3OrderStatusTransitionsAreStrictlyEnforced()
     {

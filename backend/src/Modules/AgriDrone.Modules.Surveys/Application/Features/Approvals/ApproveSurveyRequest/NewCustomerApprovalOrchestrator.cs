@@ -122,7 +122,8 @@ internal sealed class NewCustomerApprovalOrchestrator(
                 prerequisites.ApplicableDepositAmount,
                 prerequisites.ApplicableComboDiscountPercentage);
             order.EnablePostFlightSettlement(prerequisites.Service.ServiceType!.Value,
-                prerequisites.Service.PriceId!.Value, prerequisites.Service.PricePerPole!.Value);
+                prerequisites.Service.PriceId!.Value, prerequisites.Service.PricePerPole!.Value,
+                prerequisites.Service.MappingPricePerPole, prerequisites.Service.PlantHealthPricePerPole);
             orderRepository.Add(order);
         }
 

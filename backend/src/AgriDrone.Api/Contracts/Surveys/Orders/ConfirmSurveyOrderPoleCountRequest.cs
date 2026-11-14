@@ -29,4 +29,13 @@ public sealed record ConfirmSurveyOrderPoleCountApiResponse(
     Guid SystemManagerProfileId,
     string OrderStatus,
     uint OrderVersion,
-    DateTimeOffset ConfirmedAt);
+    DateTimeOffset ConfirmedAt,
+    decimal? RemainingAmount = null,
+    int? ConfirmedMappingPoleCount = null,
+    int? ConfirmedPlantHealthPoleCount = null,
+    decimal? MappingPricePerPole = null,
+    decimal? PlantHealthPricePerPole = null,
+    decimal? MappingSubtotal = null,
+    decimal? PlantHealthSubtotal = null,
+    decimal? ComboDiscountPercentage = null,
+    decimal? ComboDiscountAmount = null);

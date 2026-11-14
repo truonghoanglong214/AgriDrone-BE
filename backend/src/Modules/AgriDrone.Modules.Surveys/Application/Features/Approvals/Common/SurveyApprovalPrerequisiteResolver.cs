@@ -27,7 +27,6 @@ internal sealed class SurveyApprovalPrerequisiteResolver(
         DateTimeOffset approvalTime,
         CancellationToken cancellationToken = default)
     {
-        _ = comboDiscountPolicyRepository; // Existing policy endpoints remain compatible; new post-flight orders have no discount.
         ArgumentNullException.ThrowIfNull(request);
         DomainGuard.Utc(approvalTime);
 
@@ -50,6 +49,11 @@ internal sealed class SurveyApprovalPrerequisiteResolver(
                 SurveyApprovalError.ServiceUnavailable());
         }
 
+        if (service.Scope == ContractScope.Legacy &&
+            (service.MappingPricePerPole is null || service.PlantHealthPricePerPole is null))
+            return Result.Failure<SurveyApprovalPrerequisites>(SurveyApprovalError.PolicyConfigurationMissing(
+                "Configure both MappingPricePerPole and PlantHealthPricePerPole before approving a new Combo Order."));
+
         // V3 commercial terms are resolved atomically from the pinned policy bundle.
         // Legacy Admin policies must never override or gate a V3 approval.
         var applicableDeposit = 0m;
@@ -67,7 +71,11 @@ internal sealed class SurveyApprovalPrerequisiteResolver(
                     "SurveyDepositPolicy.PositiveDepositRequired",
                     "A positive shared pre-flight deposit is required for a new post-flight order."));
             }
-            applicableDiscount = 0m;
+            // Both first and Follow-up Combo orders pin the current Admin policy at approval.
+            var activeDiscountPolicy = comboDiscountPolicyRepository is null
+                ? null
+                : await comboDiscountPolicyRepository.GetCurrentAsync(cancellationToken);
+            applicableDiscount = activeDiscountPolicy?.DiscountPercentage ?? SurveyOrder.DefaultComboDiscountPercentage;
         }
 
         return request.Kind switch

@@ -83,7 +83,9 @@ public sealed record SurveyApprovalServiceReference(
     uint Version,
     ContractScope Scope = ContractScope.Legacy,
     Guid? PriceId = null,
-    decimal? PricePerPole = null);
+    decimal? PricePerPole = null,
+    decimal? MappingPricePerPole = null,
+    decimal? PlantHealthPricePerPole = null);
 
 public sealed record SurveyApprovalTenantOwnerReference(
     Guid TenantId,

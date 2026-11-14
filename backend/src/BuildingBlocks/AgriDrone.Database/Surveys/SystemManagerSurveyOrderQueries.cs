@@ -259,7 +259,11 @@ internal sealed class SystemManagerSurveyOrderQueries(
                     item.Status,
                     item.Version))
                 .FirstOrDefault(),
-            service.ServiceType!.Value);
+            service.ServiceType!.Value,
+            order.ConfirmedMappingPoleCount, order.ConfirmedPlantHealthPoleCount,
+            order.BookedMappingPricePerPole, order.BookedPlantHealthPricePerPole,
+            order.MappingSubtotal, order.PlantHealthSubtotal,
+            order.ComboDiscountPercentage, order.ComboDiscountAmount);
 
     private static void EnsureValidPage(PagedRequest page)
     {

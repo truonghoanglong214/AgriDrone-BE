@@ -149,7 +149,12 @@ internal static class SurveyOrderResponseMapper
             response.SystemManagerProfileId,
             MapStatus(response.OrderStatus),
             response.OrderVersion,
-            response.ConfirmedAt);
+            response.ConfirmedAt,
+            response.RemainingAmount,
+            response.ConfirmedMappingPoleCount, response.ConfirmedPlantHealthPoleCount,
+            response.MappingPricePerPole, response.PlantHealthPricePerPole,
+            response.MappingSubtotal, response.PlantHealthSubtotal,
+            response.ComboDiscountPercentage, response.ComboDiscountAmount);
 
     private static string MapStatus(SurveyOrderStatus status) =>
         status switch

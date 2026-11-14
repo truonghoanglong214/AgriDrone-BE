@@ -771,7 +771,10 @@ public sealed class SurveyApprovalV3Tests
                     request.SurveyServiceId,
                     request.SurveyService.ServiceType,
                     SurveyServiceStatus.Active,
-                    Version: 1),
+                    Version: 1,
+                    Scope: request.SurveyService.Scope,
+                    PriceId: request.SurveyService.Scope == ContractScope.Legacy ? Guid.NewGuid() : null,
+                    PricePerPole: request.SurveyService.Scope == ContractScope.Legacy ? 1000m : null),
                 Manager: manager,
                 TenantOwner: request.TenantId.HasValue && request.RequestedByUserId.HasValue
                     ? new SurveyApprovalTenantOwnerReference(

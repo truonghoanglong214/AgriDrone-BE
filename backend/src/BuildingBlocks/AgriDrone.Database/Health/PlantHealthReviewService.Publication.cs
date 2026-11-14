@@ -85,7 +85,9 @@ internal sealed partial class PlantHealthReviewService
                     """).ToDictionaryAsync(p => p.PlantId, ct);
                 List<Guid> advanced = [];
                 var staged = 0;
-                foreach (var group in payload.Findings.GroupBy(f => f.PlantId).OrderBy(g => g.Key))
+                // Locked orders must not advance the Owner-visible latest projection during internal review.
+                foreach (var group in payload.Findings.Where(_ => !s.Order.PostFlightSettlement)
+                             .GroupBy(f => f.PlantId).OrderBy(g => g.Key))
                 {
                     var values = group.OrderBy(f => f.FindingId).ToArray();
                     if (current.TryGetValue(group.Key, out var latest))
@@ -198,11 +200,11 @@ internal sealed partial class PlantHealthReviewService
 
     private void AddPublicationOutbox(Session s, PlantHealthPreliminaryResultPublishedV1 payload)
     {
+        if (s.Order.PostFlightSettlement) return; // Settlement emits delivery events after payment, never during internal review.
         var outcome = IntegrationEventEnvelopeFactory.Create(IntegrationEventDescriptors.PlantHealthPreliminaryResultPublishedV1,
             Guid.CreateVersion7(), _execution.CorrelationId, s.Order.TenantId, payload.PublishedBy, payload.PublishedAt, payload,
             causationId: payload.CausationId);
         _db.OutboxMessages.Add(_outbox.Create(outcome, outcome.EventType, s.Order.FarmId.ToString()));
-        if (s.Order.PostFlightSettlement) return; // Settlement stages the Owner notification in its own transaction.
         var notification = new PlantHealthPublicationNotificationRequestedV1(payload.CausationId, payload.PublicationId,
             s.Order.Id, s.Result.Id, s.Order.FarmId, payload.PublicationVersion, payload.ResultNature, payload.TeamLabelLimitation, payload.PublishedAt);
         var intent = IntegrationEventEnvelopeFactory.Create(IntegrationEventDescriptors.PlantHealthPublicationNotificationRequestedV1,

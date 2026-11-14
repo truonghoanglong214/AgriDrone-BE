@@ -40,7 +40,7 @@ internal sealed class GetSurveyServicePriceHistoryQueryHandler(
                 price.EffectiveTo,
                 price.CreatedBy,
                 price.CreatedAt,
-                price.IsLegacyPerHectarePrice))
+                price.IsLegacyPerHectarePrice, price.MappingPricePerPole, price.PlantHealthPricePerPole))
             .ToArray();
         return Result.Success(response);
     }

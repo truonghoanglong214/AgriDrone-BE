@@ -14,7 +14,7 @@ internal sealed class SurveyApprovalReferenceQueries(
     V3FollowUpBaselineEligibilityReader baselineEligibilityReader)
     : ISurveyApprovalReferenceQueries
 {
-    private sealed record BookingPriceRow(Guid Id, decimal PricePerPole);
+    private sealed record BookingPriceRow(Guid Id, decimal PricePerPole, decimal? MappingPricePerPole, decimal? PlantHealthPricePerPole);
 
     public async Task<SurveyApprovalServiceReference?>
         GetServiceForApprovalAsync(
@@ -47,7 +47,9 @@ internal sealed class SurveyApprovalReferenceQueries(
         if (service.Scope == ContractScope.Legacy)
         {
             var prices = await context.Database.SqlQuery<BookingPriceRow>($"""
-                SELECT id AS "Id", price_per_pole AS "PricePerPole" FROM survey.survey_service_prices
+                SELECT id AS "Id", price_per_pole AS "PricePerPole",
+                    mapping_price_per_pole AS "MappingPricePerPole", plant_health_price_per_pole AS "PlantHealthPricePerPole"
+                FROM survey.survey_service_prices
                 WHERE survey_service_id = {surveyServiceId}
                   AND price_per_pole IS NOT NULL AND price_per_ha IS NULL
                   AND btrim(currency) = 'VND'
@@ -66,7 +68,9 @@ internal sealed class SurveyApprovalReferenceQueries(
             service.Version,
             service.Scope,
             PriceId: price?.Id,
-            PricePerPole: price?.PricePerPole);
+            PricePerPole: price?.PricePerPole,
+            MappingPricePerPole: price?.MappingPricePerPole,
+            PlantHealthPricePerPole: price?.PlantHealthPricePerPole);
     }
 
     public async Task<SurveyApprovalTenantOwnerReference?>

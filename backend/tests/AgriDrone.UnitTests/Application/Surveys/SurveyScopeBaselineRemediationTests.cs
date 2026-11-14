@@ -576,13 +576,14 @@ public sealed class SurveyScopeBaselineRemediationTests
     // -----------------------------------------------------------------------------------
 
     [Theory]
-    [InlineData(ContractScope.Legacy)]
-    [InlineData(ContractScope.V3)]
-    public async Task ApprovalKeepsMainLegacyPoliciesSeparateFromPinnedV3Terms(ContractScope scope)
+    [InlineData(ContractScope.Legacy, false)]
+    [InlineData(ContractScope.Legacy, true)]
+    [InlineData(ContractScope.V3, false)]
+    public async Task ApprovalKeepsMainLegacyPoliciesSeparateFromPinnedV3Terms(ContractScope scope, bool components)
     {
         var baseline = new SurveyApprovalFarmBaselineReference(TenantId, FarmId, Guid.NewGuid(), 100);
         var policies = new LegacyPolicyProbe();
-        var harness = new RemediationApprovalTestHarness(baseline, scope, policies, policies);
+        var harness = new RemediationApprovalTestHarness(baseline, scope, policies, policies, components);
         var request = harness.CreateExistingFarmRequest(scope, TenantId, FarmId, OwnerUserId);
         harness.RequestRepository.Request = request;
 
@@ -590,6 +591,13 @@ public sealed class SurveyScopeBaselineRemediationTests
             RemediationApprovalTestHarness.CreateValidCommand(request.Id, request.Version),
             CancellationToken.None);
 
+        if (scope == ContractScope.Legacy && !components)
+        {
+            Assert.True(result.IsFailure);
+            Assert.Equal(SurveyApprovalError.PolicyConfigurationMissingCode, result.Error.Code);
+            Assert.Null(harness.OrderRepository.SavedOrder);
+            return;
+        }
         Assert.True(result.IsSuccess, result.Error?.Description);
         var order = Assert.IsType<SurveyOrder>(harness.OrderRepository.SavedOrder);
         Assert.Equal(scope, order.Scope);
@@ -607,6 +615,8 @@ public sealed class SurveyScopeBaselineRemediationTests
             Assert.Equal(1, policies.DiscountReads);
             Assert.Equal(25_000m, order.DepositAmount);
             Assert.Equal(35m, order.ComboDiscountPercentage);
+            Assert.Equal(components ? 600m : (decimal?)null, order.BookedMappingPricePerPole);
+            Assert.Equal(components ? 400m : (decimal?)null, order.BookedPlantHealthPricePerPole);
             Assert.Null(order.BusinessPolicyVersionId);
         }
     }
@@ -655,7 +665,8 @@ public sealed class SurveyScopeBaselineRemediationTests
             SurveyApprovalFarmBaselineReference baseline,
             ContractScope scope = ContractScope.Legacy,
             ISurveyDepositPolicyRepository? depositPolicies = null,
-            ISurveyComboDiscountPolicyRepository? discountPolicies = null)
+            ISurveyComboDiscountPolicyRepository? discountPolicies = null,
+            bool components = true)
         {
 
             var snapshot = new ResolvedSurveyCommercialSnapshot(
@@ -686,7 +697,7 @@ public sealed class SurveyScopeBaselineRemediationTests
                 EvaluatedAt: T0);
             SnapshotResolver.Snapshot = snapshot;
 
-            var referenceQueries = new FakeSurveyApprovalReferenceQueries(baseline, scope);
+            var referenceQueries = new FakeSurveyApprovalReferenceQueries(baseline, scope, components);
             var prerequisiteResolver = new SurveyApprovalPrerequisiteResolver(referenceQueries, depositPolicies, discountPolicies);
 
             var orchestrators = new ISurveyRequestKindApprovalOrchestrator[]
@@ -769,7 +780,7 @@ public sealed class SurveyScopeBaselineRemediationTests
 
     private sealed class FakeSurveyApprovalReferenceQueries(
         SurveyApprovalFarmBaselineReference baseline,
-        ContractScope scope = ContractScope.Legacy) : ISurveyApprovalReferenceQueries
+        ContractScope scope = ContractScope.Legacy, bool components = true) : ISurveyApprovalReferenceQueries
     {
         private readonly SurveyApprovalFarmBaselineReference _baseline = baseline;
 
@@ -779,7 +790,11 @@ public sealed class SurveyScopeBaselineRemediationTests
                 SurveyServiceType.PlantHealth,
                 SurveyServiceStatus.Active,
                 1,
-                scope));
+                scope,
+                PriceId: scope == ContractScope.Legacy ? Guid.NewGuid() : null,
+                PricePerPole: scope == ContractScope.Legacy ? 1000m : null,
+                MappingPricePerPole: components && scope == ContractScope.Legacy ? 600m : null,
+                PlantHealthPricePerPole: components && scope == ContractScope.Legacy ? 400m : null));
 
         public Task<SurveyApprovalTenantOwnerReference?> GetTenantOwnerForApprovalAsync(Guid tenantId, Guid userId, CancellationToken cancellationToken = default) =>
             Task.FromResult<SurveyApprovalTenantOwnerReference?>(new SurveyApprovalTenantOwnerReference(

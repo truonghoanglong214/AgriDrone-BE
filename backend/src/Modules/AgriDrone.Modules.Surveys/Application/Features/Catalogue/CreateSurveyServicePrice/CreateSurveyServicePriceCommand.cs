@@ -7,5 +7,7 @@ public sealed record CreateSurveyServicePriceCommand(
     Guid SurveyServiceId,
     decimal AmountPerPole,
     string Currency,
-    uint ExpectedServiceVersion)
+    uint ExpectedServiceVersion,
+    decimal? MappingPricePerPole = null,
+    decimal? PlantHealthPricePerPole = null)
     : IRequest<Result<CreateSurveyServicePriceResponse>>;

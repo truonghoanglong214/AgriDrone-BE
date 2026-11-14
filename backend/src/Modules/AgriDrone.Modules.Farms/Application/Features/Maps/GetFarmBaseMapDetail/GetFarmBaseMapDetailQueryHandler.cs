@@ -75,6 +75,13 @@ internal sealed class GetFarmBaseMapDetailQueryHandler(
                 AppError.NotFound("FarmBaseMapVersion.NotFound", "Base map version not found for this farm."));
         }
 
+        if (!access.CanReadDraft && !await previewReader.CanOwnerReadAsync(
+                version.TenantId, version.FarmId, version.SourceSurveyOrderId, cancellationToken))
+        {
+            return Result.Failure<FarmBaseMapDetailResponse>(AppError.Conflict(
+                "FarmBaseMapVersion.PaymentRequired", "Reviewed survey results remain locked until final settlement."));
+        }
+
         // 1. Ranh giới Farm Boundary GeoJSON
         string? boundaryGeoJson = null;
         if (version.FarmBoundaryVersionId.HasValue)

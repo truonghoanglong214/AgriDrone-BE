@@ -8,7 +8,9 @@ public sealed record CreateSurveyServicePriceApiResponse(
     DateTimeOffset EffectiveFrom,
     Guid? ClosedPriceVersionId,
     uint ServiceVersion,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    decimal? MappingPricePerPole = null,
+    decimal? PlantHealthPricePerPole = null);
 
 public sealed record SurveyServicePriceHistoryApiResponse(
     Guid PriceVersionId,
@@ -20,4 +22,6 @@ public sealed record SurveyServicePriceHistoryApiResponse(
     DateTimeOffset? EffectiveTo,
     Guid CreatedBy,
     DateTimeOffset CreatedAt,
-    bool IsLegacyPerHectarePrice);
+    bool IsLegacyPerHectarePrice,
+    decimal? MappingPricePerPole = null,
+    decimal? PlantHealthPricePerPole = null);

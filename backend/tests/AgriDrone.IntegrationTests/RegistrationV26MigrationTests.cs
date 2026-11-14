@@ -12,6 +12,21 @@ namespace AgriDrone.IntegrationTests;
 public sealed class RegistrationV26MigrationTests
 {
     [Fact]
+    public void ComboComponentMigrationAddsNullableColumnsWithoutRewritingHistoricalMoney()
+    {
+        var migration = new AddComboComponentPricing();
+        var columns = migration.UpOperations.OfType<AddColumnOperation>().ToArray();
+        Assert.Equal(9, columns.Length);
+        Assert.All(columns, column => Assert.True(column.IsNullable));
+        Assert.DoesNotContain(migration.UpOperations, operation => operation is SqlOperation or DropColumnOperation or DropTableOperation or AlterColumnOperation);
+        var constraints = migration.UpOperations.OfType<AddCheckConstraintOperation>().ToArray();
+        Assert.Contains(constraints, constraint => constraint.Name == "ck_survey_orders_combo_component_invoice" &&
+            constraint.Sql.Contains("confirmed_mapping_pole_count") && constraint.Sql.Contains("confirmed_plant_health_pole_count"));
+        Assert.Contains(constraints, constraint => constraint.Name == "ck_survey_orders_original_commercial_snapshot" &&
+            constraint.Sql.Contains("original_confirmed_pole_count * original_price_per_pole_snapshot"));
+    }
+
+    [Fact]
     public void UpgradeOnlyAddsNullableSnapshotsAndLegacyDefaultFlag()
     {
         var migration = new RegistrationV26PostFlightSettlement();
