@@ -154,6 +154,8 @@ internal sealed class ProcessSurveyPaymentEventCommandHandler(
             command,
             payment,
             order);
+        if (transitionApplied && order.Status == SurveyOrderStatus.Completed)
+            await outbox.AddPostFlightUnlockAsync(order, executionContext.CorrelationId, cancellationToken);
         var paymentEvent = PaymentEvent.Create(
             payment.Id,
             identity,

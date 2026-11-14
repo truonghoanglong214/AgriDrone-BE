@@ -13,6 +13,8 @@ internal sealed class SurveyApprovalReferenceQueries(
     SurveyApprovalDbContext context)
     : ISurveyApprovalReferenceQueries
 {
+    private sealed record BookingPriceRow(Guid Id, decimal PricePerPole);
+
     public async Task<SurveyApprovalServiceReference?>
         GetServiceForApprovalAsync(
             Guid surveyServiceId,
@@ -38,11 +40,26 @@ internal sealed class SurveyApprovalReferenceQueries(
             .AsNoTracking()
             .SingleAsync(service => service.Id == surveyServiceId, cancellationToken);
 
+        // The service row is locked above; lock the one effective booking rate too.
+        var prices = await context.Database.SqlQuery<BookingPriceRow>($"""
+            SELECT id AS "Id", price_per_pole AS "PricePerPole" FROM survey.survey_service_prices
+            WHERE survey_service_id = {surveyServiceId}
+              AND price_per_pole IS NOT NULL AND price_per_ha IS NULL
+              AND btrim(currency) = 'VND'
+              AND effective_from <= now()
+              AND (effective_to IS NULL OR effective_to > now())
+            FOR SHARE
+            """).ToListAsync(cancellationToken);
+        if (prices.Count != 1) return null;
+        var price = prices[0];
+
         return new SurveyApprovalServiceReference(
             service.Id,
             service.ServiceType,
             service.Status,
-            service.Version);
+            service.Version,
+            price.Id,
+            price.PricePerPole);
     }
 
     public async Task<SurveyApprovalTenantOwnerReference?>

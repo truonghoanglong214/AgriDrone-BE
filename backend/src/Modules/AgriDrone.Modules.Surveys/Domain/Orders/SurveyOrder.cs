@@ -116,6 +116,12 @@ public sealed class SurveyOrder : AggregateRoot
     public SurveyPaymentStatus DepositPaymentStatus { get; private set; } = SurveyPaymentStatus.Pending;
     public decimal DepositAmount { get; private set; } = DefaultBaselineDepositAmountVnd;
     public decimal? ComboDiscountPercentage { get; private set; }
+    // Registration v2.6. Legacy orders retain their original commercial terms.
+    public bool PostFlightSettlement { get; private set; }
+    public Guid? BookedServicePriceId { get; private set; }
+    public decimal? BookedPricePerPole { get; private set; }
+    public SurveyServiceType? BookedServiceType { get; private set; }
+    public DateTimeOffset? ServiceReviewedAt { get; private set; }
     public decimal? RemainingAmount { get; private set; }
     public Guid? DepositPaymentId { get; private set; }
     public DateTimeOffset? DepositConfirmedAt { get; private set; }
@@ -238,6 +244,43 @@ public sealed class SurveyOrder : AggregateRoot
     public static bool CanTransition(SurveyOrderStatus from, SurveyOrderStatus to) =>
         AllowedTransitions.TryGetValue(from, out var allowed) && allowed.Contains(to);
 
+    public void EnablePostFlightSettlement(SurveyServiceType serviceType, Guid priceId, decimal pricePerPole)
+    {
+        if (PostFlightSettlement || FinalPrice.HasValue || Payments.Count != 0)
+            throw new InvalidOperationException("Commercial terms must be frozen once, before payment or pricing.");
+        if (DepositAmount <= 0m)
+            throw new InvalidOperationException("Registration v2.6 requires a positive shared pre-flight deposit.");
+        DomainGuard.NotEmpty(priceId);
+        _ = PricePerPole.Create(pricePerPole);
+        if (serviceType == SurveyServiceType.HarvestReadiness)
+            throw new InvalidOperationException("Harvest Readiness is outside registration v2.6.");
+        PostFlightSettlement = true;
+        BookedServicePriceId = priceId;
+        BookedPricePerPole = pricePerPole;
+        BookedServiceType = serviceType;
+        ComboDiscountPercentage = 0m;
+    }
+
+    public void RecordReviewedServicePublication(DateTimeOffset occurredAt)
+    {
+        if (PostFlightSettlement)
+        {
+            ApplyPostFlightTransition(SurveyOrderStatus.PendingReview, SurveyOrderStatus.AwaitingPricing, occurredAt);
+            ServiceReviewedAt = occurredAt;
+        }
+        else
+            Complete(occurredAt);
+    }
+
+    private void ApplyPostFlightTransition(SurveyOrderStatus from, SurveyOrderStatus to, DateTimeOffset occurredAt)
+    {
+        if (Status != from)
+            throw new SurveyDomainException(SurveyOrderDomainErrorCodes.InvalidTransition,
+                $"Order in state '{Status}' cannot transition to '{to}'.");
+        SurveyTransitionGuard.EnsureTimestamp(occurredAt, UpdatedAt);
+        ApplyTransition(to, occurredAt);
+    }
+
     public void ConfirmFlightScope(
         SurveyScopeType scopeType,
         IReadOnlyCollection<(Guid ZoneId, long ZoneVersion, NetTopologySuite.Geometries.Polygon Boundary)> zones,
@@ -325,7 +368,13 @@ public sealed class SurveyOrder : AggregateRoot
         var validatedPoleCount =
             global::AgriDrone.Modules.Surveys.Domain.ConfirmedSurveyPoleCount
                 .Create(confirmedPoleCount.Value);
-        EnsureTransitionTo(SurveyOrderStatus.AwaitingPricing, verifiedAt);
+        if (!PostFlightSettlement) EnsureTransitionTo(SurveyOrderStatus.AwaitingPricing, verifiedAt);
+        else
+        {
+            if (Status != SurveyOrderStatus.PendingBoundaryVerification)
+                throw new SurveyDomainException(SurveyOrderDomainErrorCodes.InvalidTransition, "Flight scope is already verified.");
+            SurveyTransitionGuard.EnsureTimestamp(verifiedAt, UpdatedAt);
+        }
 
         FarmBoundaryVersionId = farmBoundaryVersionId;
         FarmBaseMapVersionId = farmBaseMapVersionId;
@@ -336,7 +385,7 @@ public sealed class SurveyOrder : AggregateRoot
         ScopeConfirmedAt = verifiedAt;
         PoleCountConfirmedBy = verifiedBy;
         PoleCountConfirmedAt = verifiedAt;
-        ApplyTransition(SurveyOrderStatus.AwaitingPricing, verifiedAt);
+        ApplyTransition(PostFlightSettlement ? SurveyOrderStatus.AwaitingPaidAppointment : SurveyOrderStatus.AwaitingPricing, verifiedAt);
     }
 
     public void VerifyBoundaryAndScope(
@@ -382,7 +431,13 @@ public sealed class SurveyOrder : AggregateRoot
         var validatedPoleCount =
             global::AgriDrone.Modules.Surveys.Domain.ConfirmedSurveyPoleCount
                 .Create(currentConfirmedPoleCount!.Value.Value);
-        EnsureTransitionTo(SurveyOrderStatus.AwaitingPricing, verifiedAt);
+        if (!PostFlightSettlement) EnsureTransitionTo(SurveyOrderStatus.AwaitingPricing, verifiedAt);
+        else
+        {
+            if (Status != SurveyOrderStatus.PendingBoundaryVerification)
+                throw new SurveyDomainException(SurveyOrderDomainErrorCodes.InvalidTransition, "Flight scope is already verified.");
+            SurveyTransitionGuard.EnsureTimestamp(verifiedAt, UpdatedAt);
+        }
 
         FarmBoundaryVersionId = farmBoundaryVersionId;
         ScopeConfirmedBy = verifiedBy;
@@ -394,7 +449,7 @@ public sealed class SurveyOrder : AggregateRoot
         PoleCountEvidenceReference = null;
         PoleCountConfirmedBy = verifiedBy;
         PoleCountConfirmedAt = verifiedAt;
-        ApplyTransition(SurveyOrderStatus.AwaitingPricing, verifiedAt);
+        ApplyTransition(PostFlightSettlement ? SurveyOrderStatus.AwaitingPaidAppointment : SurveyOrderStatus.AwaitingPricing, verifiedAt);
     }
 
     public void SetFarmBoundaryFromOrthophoto(
@@ -508,6 +563,12 @@ public sealed class SurveyOrder : AggregateRoot
         if (FinalPrice.HasValue)
         {
             RemainingAmount = Math.Max(0m, FinalPrice.Value - DepositAmount);
+        }
+
+        if (PostFlightSettlement && Status == SurveyOrderStatus.AwaitingBaselineDeposit)
+        {
+            ApplyPostFlightTransition(SurveyOrderStatus.AwaitingBaselineDeposit, SurveyOrderStatus.ReadyForPaidService, confirmedAt);
+            return;
         }
 
         UpdatedAt = confirmedAt;
@@ -630,7 +691,7 @@ public sealed class SurveyOrder : AggregateRoot
     {
         DomainGuard.NotEmpty(surveyServicePriceId);
         DomainGuard.NotEmpty(confirmedBy);
-        EnsureTransitionTo(SurveyOrderStatus.AwaitingPaidAppointment, confirmedAt);
+        EnsurePricingAllowed(confirmedAt);
 
         if (currency != CurrencyCode.Vnd)
         {
@@ -649,14 +710,14 @@ public sealed class SurveyOrder : AggregateRoot
         }
 
         var validatedPrice = global::AgriDrone.Modules.Surveys.Domain.PricePerPole
-            .Create(pricePerPole.Amount);
+            .Create(PostFlightSettlement ? BookedPricePerPole!.Value : pricePerPole.Amount);
 
         var finalPrice = Money.CalculateSurveyPrice(
             ConfirmedSurveyPoleCount.Value,
             validatedPrice,
             currency);
 
-        SurveyServicePriceId = surveyServicePriceId;
+        SurveyServicePriceId = PostFlightSettlement ? BookedServicePriceId : surveyServicePriceId;
         PricePerPoleSnapshot = validatedPrice;
         Currency = currency.Value;
         FinalPrice = finalPrice.Amount;
@@ -671,7 +732,7 @@ public sealed class SurveyOrder : AggregateRoot
             finalPrice.Amount);
         PricingConfirmedBy = confirmedBy;
         PricingConfirmedAt = confirmedAt;
-        ApplyTransition(SurveyOrderStatus.AwaitingPaidAppointment, confirmedAt);
+        ApplyTransition(PostFlightSettlement ? SurveyOrderStatus.AwaitingPayment : SurveyOrderStatus.AwaitingPaidAppointment, confirmedAt);
     }
 
     public void ConfirmPoleCountAndPricing(
@@ -704,7 +765,7 @@ public sealed class SurveyOrder : AggregateRoot
             throw new ArgumentOutOfRangeException(nameof(poleCountSource));
         }
 
-        EnsureTransitionTo(SurveyOrderStatus.AwaitingPaidAppointment, confirmedAt);
+        EnsurePricingAllowed(confirmedAt);
 
         if (currency != CurrencyCode.Vnd)
         {
@@ -724,7 +785,7 @@ public sealed class SurveyOrder : AggregateRoot
             global::AgriDrone.Modules.Surveys.Domain.ConfirmedSurveyPoleCount
                 .Create(confirmedPoleCount.Value);
         var validatedPrice = global::AgriDrone.Modules.Surveys.Domain.PricePerPole
-            .Create(pricePerPole.Amount);
+            .Create(PostFlightSettlement ? BookedPricePerPole!.Value : pricePerPole.Amount);
         var originalPrice = Money.CalculateSurveyPrice(
             validatedPoleCount,
             validatedPrice,
@@ -740,7 +801,7 @@ public sealed class SurveyOrder : AggregateRoot
         PoleCountEvidenceReference = normalizedEvidence;
         PoleCountConfirmedBy = confirmedBy;
         PoleCountConfirmedAt = confirmedAt;
-        SurveyServicePriceId = surveyServicePriceId;
+        SurveyServicePriceId = PostFlightSettlement ? BookedServicePriceId : surveyServicePriceId;
         PricePerPoleSnapshot = effectivePricePerPole;
         Currency = currency.Value;
         FinalPrice = finalPriceAmount;
@@ -755,21 +816,67 @@ public sealed class SurveyOrder : AggregateRoot
             originalPrice.Amount);
         PricingConfirmedBy = confirmedBy;
         PricingConfirmedAt = confirmedAt;
-        ApplyTransition(SurveyOrderStatus.AwaitingPaidAppointment, confirmedAt);
+        ApplyTransition(PostFlightSettlement ? SurveyOrderStatus.AwaitingPayment : SurveyOrderStatus.AwaitingPaidAppointment, confirmedAt);
     }
 
-    public void MarkPaidAppointmentConfirmed(DateTimeOffset occurredAt) =>
-        TransitionTo(SurveyOrderStatus.AwaitingPayment, occurredAt);
+    private void EnsurePricingAllowed(DateTimeOffset confirmedAt)
+    {
+        if (!PostFlightSettlement)
+        {
+            EnsureTransitionTo(SurveyOrderStatus.AwaitingPaidAppointment, confirmedAt);
+            return;
+        }
+        SurveyTransitionGuard.EnsureTimestamp(confirmedAt, UpdatedAt);
+        if (Status != SurveyOrderStatus.AwaitingPricing || ServiceReviewedAt is null ||
+            BookedServicePriceId is null || BookedPricePerPole is null ||
+            DepositPaymentStatus != SurveyPaymentStatus.Paid)
+            throw new SurveyDomainException(SurveyOrderDomainErrorCodes.InvalidTransition,
+                "Final pricing requires post-flight Manager-reviewed results, frozen booking terms and a paid deposit.");
+    }
 
-    public void ReopenPaidAppointment(DateTimeOffset occurredAt) =>
-        TransitionTo(SurveyOrderStatus.AwaitingPaidAppointment, occurredAt);
+    public void MarkPaidAppointmentConfirmed(DateTimeOffset occurredAt)
+    {
+        if (PostFlightSettlement)
+        {
+            if (ServiceReviewedAt is not null)
+                throw new SurveyDomainException(SurveyOrderDomainErrorCodes.InvalidTransition, "The survey has already been reviewed.");
+            var target = DepositPaymentStatus == SurveyPaymentStatus.Paid
+                ? SurveyOrderStatus.ReadyForPaidService : SurveyOrderStatus.AwaitingBaselineDeposit;
+            ApplyPostFlightTransition(Status == SurveyOrderStatus.AwaitingPricing
+                ? SurveyOrderStatus.AwaitingPricing : SurveyOrderStatus.AwaitingPaidAppointment, target, occurredAt);
+        }
+        else TransitionTo(SurveyOrderStatus.AwaitingPayment, occurredAt);
+    }
 
-    public void MarkPaymentConfirmed(DateTimeOffset occurredAt) =>
-        TransitionTo(SurveyOrderStatus.ReadyForPaidService, occurredAt);
+    public void ReopenPaidAppointment(DateTimeOffset occurredAt)
+    {
+        if (PostFlightSettlement)
+        {
+            if (ServiceReviewedAt is not null || Status is not (SurveyOrderStatus.ReadyForPaidService or SurveyOrderStatus.AwaitingBaselineDeposit))
+                throw new SurveyDomainException(SurveyOrderDomainErrorCodes.InvalidTransition, "Only an unflown service appointment can be reopened.");
+            ApplyPostFlightTransition(Status, SurveyOrderStatus.AwaitingPaidAppointment, occurredAt);
+        }
+        else TransitionTo(SurveyOrderStatus.AwaitingPaidAppointment, occurredAt);
+    }
+
+    public void MarkPaymentConfirmed(DateTimeOffset occurredAt)
+    {
+        if (PostFlightSettlement)
+        {
+            if (ServiceReviewedAt is null)
+                throw new SurveyDomainException(SurveyOrderDomainErrorCodes.InvalidTransition, "Post-flight review is required before settlement.");
+            ApplyPostFlightTransition(SurveyOrderStatus.AwaitingPayment, SurveyOrderStatus.Completed, occurredAt);
+        }
+        else TransitionTo(SurveyOrderStatus.ReadyForPaidService, occurredAt);
+    }
 
     public bool CanAcceptDepositPayment() => DepositAmount > 0m &&
         DepositPaymentStatus != SurveyPaymentStatus.Paid &&
-        (RequiresBaselineMapping
+        (PostFlightSettlement
+            ? (Status is SurveyOrderStatus.AwaitingBaselineDeposit or SurveyOrderStatus.PendingBoundaryVerification
+                or SurveyOrderStatus.AwaitingPaidAppointment or SurveyOrderStatus.AwaitingBaselineAppointment ||
+                (Status == SurveyOrderStatus.AwaitingPayment && DepositPaymentStatus == SurveyPaymentStatus.Refunded))
+            : RequiresBaselineMapping
             ? Status == SurveyOrderStatus.AwaitingBaselineDeposit ||
               (DepositPaymentStatus == SurveyPaymentStatus.Refunded &&
                Status is SurveyOrderStatus.AwaitingPricing or SurveyOrderStatus.AwaitingPaidAppointment
@@ -785,6 +892,7 @@ public sealed class SurveyOrder : AggregateRoot
 
     public PricePerPole GetEffectivePricePerPole(PricePerPole cataloguePrice)
     {
+        if (PostFlightSettlement) return PricePerPole.Create(BookedPricePerPole!.Value);
         var percentage = ComboDiscountPercentage ?? 0m;
         if (percentage < 0m || percentage >= 100m)
             throw new SurveyDomainException(SurveyOrderDomainErrorCodes.PricingSnapshotIncomplete,
@@ -797,10 +905,10 @@ public sealed class SurveyOrder : AggregateRoot
 
     public void RevokePaidServiceReadiness(DateTimeOffset occurredAt)
     {
-        if (Status == SurveyOrderStatus.ReadyForPaidService)
-        {
+        if (PostFlightSettlement && Status == SurveyOrderStatus.Completed)
+            ApplyPostFlightTransition(SurveyOrderStatus.Completed, SurveyOrderStatus.AwaitingPayment, occurredAt);
+        else if (Status == SurveyOrderStatus.ReadyForPaidService)
             TransitionTo(SurveyOrderStatus.AwaitingPayment, occurredAt);
-        }
     }
 
     public void RevokeBaselineDeposit(DateTimeOffset occurredAt)
@@ -820,10 +928,10 @@ public sealed class SurveyOrder : AggregateRoot
             {
                 RemainingAmount = FinalPrice.Value;
             }
-            if (Status == SurveyOrderStatus.ReadyForPaidService)
-            {
+            if (PostFlightSettlement && Status == SurveyOrderStatus.ReadyForPaidService)
+                Status = SurveyOrderStatus.AwaitingBaselineDeposit;
+            else if (Status == SurveyOrderStatus.ReadyForPaidService || (PostFlightSettlement && Status == SurveyOrderStatus.Completed))
                 Status = SurveyOrderStatus.AwaitingPayment;
-            }
             UpdatedAt = occurredAt;
             Version++;
         }
@@ -909,8 +1017,12 @@ public sealed class SurveyOrder : AggregateRoot
     public void MarkAnalysisReady(DateTimeOffset occurredAt) =>
         TransitionTo(SurveyOrderStatus.PendingReview, occurredAt);
 
-    public void Complete(DateTimeOffset occurredAt) =>
+    public void Complete(DateTimeOffset occurredAt)
+    {
+        if (PostFlightSettlement)
+            throw new SurveyDomainException(SurveyOrderDomainErrorCodes.InvalidTransition, "Post-flight orders complete through final settlement, after review.");
         TransitionTo(SurveyOrderStatus.Completed, occurredAt);
+    }
 
     public void RecordPublishedPlantHealthComparison(Guid? previousOrderId, string policyVersion, string reason)
     {

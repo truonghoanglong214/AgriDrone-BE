@@ -146,6 +146,11 @@ public sealed class SurveyOrderConfiguration : IEntityTypeConfiguration<SurveyOr
             .HasColumnName("combo_discount_percentage")
             .HasColumnType("numeric(5,2)")
             .HasPrecision(5, 2);
+        builder.Property(order => order.PostFlightSettlement).HasColumnName("post_flight_settlement").HasDefaultValue(false);
+        builder.Property(order => order.BookedServicePriceId).HasColumnName("booked_service_price_id");
+        builder.Property(order => order.BookedPricePerPole).HasColumnName("booked_price_per_pole").HasPrecision(18, 2);
+        builder.Property(order => order.BookedServiceType).HasColumnName("booked_service_type").HasColumnType("system.survey_service_type");
+        builder.Property(order => order.ServiceReviewedAt).HasColumnName("service_reviewed_at");
         builder.Property(order => order.RemainingAmount)
             .HasColumnName("remaining_amount")
             .HasColumnType("numeric(18,2)")

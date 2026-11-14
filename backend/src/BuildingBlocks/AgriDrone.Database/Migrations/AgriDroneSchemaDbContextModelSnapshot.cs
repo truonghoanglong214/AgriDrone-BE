@@ -8088,6 +8088,19 @@ namespace AgriDrone.Database.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("baseline_route_plan_id");
 
+                    b.Property<decimal?>("BookedPricePerPole")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("booked_price_per_pole");
+
+                    b.Property<Guid?>("BookedServicePriceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("booked_service_price_id");
+
+                    b.Property<SurveyServiceType?>("BookedServiceType")
+                        .HasColumnType("system.survey_service_type")
+                        .HasColumnName("booked_service_type");
+
                     b.Property<Guid?>("BoundaryCaptureSessionId")
                         .HasColumnType("uuid")
                         .HasColumnName("boundary_capture_session_id");
@@ -8193,6 +8206,12 @@ namespace AgriDrone.Database.Migrations
                         .HasColumnType("system.survey_pole_count_source")
                         .HasColumnName("pole_count_source");
 
+                    b.Property<bool>("PostFlightSettlement")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("post_flight_settlement");
+
                     b.Property<Guid?>("PreviousCompatibleOrderId")
                         .HasColumnType("uuid")
                         .HasColumnName("previous_compatible_order_id");
@@ -8247,6 +8266,10 @@ namespace AgriDrone.Database.Migrations
                         .HasColumnType("system.survey_scope_type")
                         .HasDefaultValue(SurveyScopeType.FarmWide)
                         .HasColumnName("scope_type");
+
+                    b.Property<DateTimeOffset?>("ServiceReviewedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("service_reviewed_at");
 
                     b.Property<SurveyOrderStatus>("Status")
                         .ValueGeneratedOnAdd()

@@ -27,6 +27,7 @@ internal sealed class SurveyApprovalPrerequisiteResolver(
         DateTimeOffset approvalTime,
         CancellationToken cancellationToken = default)
     {
+        _ = comboDiscountPolicyRepository; // Legacy policy endpoints remain for legacy orders.
         ArgumentNullException.ThrowIfNull(request);
         DomainGuard.Utc(approvalTime);
 
@@ -40,8 +41,9 @@ internal sealed class SurveyApprovalPrerequisiteResolver(
             request.SurveyServiceId,
             cancellationToken);
         if (service is null ||
-            service.Status is not SurveyServiceStatus.Active and
-                not SurveyServiceStatus.Experimental)
+            service.Status != SurveyServiceStatus.Active ||
+            service.ServiceType == SurveyServiceType.HarvestReadiness ||
+            service.PriceId is null || service.PricePerPole is null)
         {
             return Result.Failure<SurveyApprovalPrerequisites>(
                 SurveyApprovalError.ServiceUnavailable());
@@ -49,9 +51,13 @@ internal sealed class SurveyApprovalPrerequisiteResolver(
 
         var activeDepositPolicy = await depositPolicyRepository.GetCurrentAsync(cancellationToken);
         var applicableDeposit = activeDepositPolicy?.AmountVnd ?? SurveyOrder.DefaultBaselineDepositAmountVnd;
+        if (applicableDeposit <= 0m)
+            return Result.Failure<SurveyApprovalPrerequisites>(AppError.Conflict(
+                "SurveyDepositPolicy.PositiveDepositRequired",
+                "Registration v2.6 requires a positive shared deposit before approving a new order."));
 
-        var activeDiscountPolicy = await comboDiscountPolicyRepository.GetCurrentAsync(cancellationToken);
-        var applicableDiscount = activeDiscountPolicy?.DiscountPercentage ?? SurveyOrder.DefaultComboDiscountPercentage;
+        // Registration v2.6 has no Combo discount or Follow-up price tier.
+        const decimal applicableDiscount = 0m;
 
         return request.Kind switch
         {

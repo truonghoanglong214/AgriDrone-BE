@@ -28,7 +28,8 @@ public sealed record SurveyOrderReadinessSnapshot(
     bool HasApprovedBaselineRoute = false,
     bool IsBaselineRouteCurrent = false,
     bool IsBaselineRouteWithinSafetyInset = false,
-    SurveyPaymentStatus? DepositPaymentStatus = null)
+    SurveyPaymentStatus? DepositPaymentStatus = null,
+    bool PostFlightSettlement = false)
 {
     public SurveyOrderReadinessSnapshot(
         SurveyOrderStatus OrderStatus,

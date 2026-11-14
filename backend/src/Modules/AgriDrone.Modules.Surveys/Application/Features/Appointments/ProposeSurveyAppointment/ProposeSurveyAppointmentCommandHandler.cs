@@ -117,7 +117,7 @@ internal sealed class ProposeSurveyAppointmentCommandHandler(
                     "A Baseline Mapping appointment can only be proposed while the order awaits that appointment."));
         }
 
-        if (command.Purpose == SurveyAppointmentPurpose.PaidService &&
+        if (command.Purpose == SurveyAppointmentPurpose.PaidService && !order.PostFlightSettlement &&
             (order.ConfirmedSurveyPoleCount is null ||
              order.PricePerPoleSnapshot is null ||
              order.FinalPrice is null ||
@@ -128,7 +128,8 @@ internal sealed class ProposeSurveyAppointmentCommandHandler(
         }
 
         if (command.Purpose == SurveyAppointmentPurpose.PaidService &&
-            order.Status != SurveyOrderStatus.AwaitingPaidAppointment)
+            order.Status != SurveyOrderStatus.AwaitingPaidAppointment &&
+            !(order.PostFlightSettlement && order.ServiceReviewedAt is null && order.Status == SurveyOrderStatus.AwaitingPricing))
         {
             return Result.Failure<ProposeSurveyAppointmentResponse>(
                 SurveyOrderError.InvalidTransition(

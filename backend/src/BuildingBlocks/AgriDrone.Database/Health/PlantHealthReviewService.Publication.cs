@@ -111,14 +111,14 @@ internal sealed partial class PlantHealthReviewService
                 foreach (var zone in payload.DiseaseZones) s.Zones[zone.ZoneId].Publish(actor, s.Now);
                 s.Result.PublishReviewedPlantHealth(publication, request.ExpectedResultVersion);
                 s.Order.RecordPublishedPlantHealthComparison(comparison.PreviousOrderId, comparison.PolicyVersion, comparison.Reason);
-                s.Order.Complete(s.Now);
+                s.Order.RecordReviewedServicePublication(s.Now);
                 AddPublicationOutbox(s, payload);
                 _db.AddAuditLog(AuditLog.ForUserAction(s.Order.TenantId, s.Order.FarmId, actor, _execution.CorrelationId,
                     "SurveyResult", s.Result.Id, "PlantHealth.ResultPublished", null, JsonSerializer.SerializeToDocument(new
                     { publication.Id, publication.PublicationVersion, publication.BatchId, publication.ApprovalFingerprint,
                         publication.Fingerprint, payload.Conclusion, comparison, AdvancedPlantIds = advanced, OperationId = request.OperationId }), s.Now));
                 var output = new PublishPlantHealthSurveyResultResponse(request.OperationId, publication.Id, s.Result.Id, s.Batch.Id,
-                    version, "PUBLISHED", "COMPLETED", payload.ResultNature, payload.TeamLabelLimitation, payload.Conclusion,
+                    version, "PUBLISHED", s.Order.PostFlightSettlement ? "AWAITING_PRICING" : "COMPLETED", payload.ResultNature, payload.TeamLabelLimitation, payload.Conclusion,
                     payload.Findings.Count, payload.DiseaseZones.Count, advanced, actor, s.Now, publication.Fingerprint);
                 _db.HealthReviewOperations.Add(PlantHealthReviewOperation.Create(s.Order.TenantId, actor, request.OperationId,
                     s.Result.Id, s.Batch.Id, fingerprint, JsonSerializer.SerializeToDocument(output), s.Now));
@@ -202,6 +202,7 @@ internal sealed partial class PlantHealthReviewService
             Guid.CreateVersion7(), _execution.CorrelationId, s.Order.TenantId, payload.PublishedBy, payload.PublishedAt, payload,
             causationId: payload.CausationId);
         _db.OutboxMessages.Add(_outbox.Create(outcome, outcome.EventType, s.Order.FarmId.ToString()));
+        if (s.Order.PostFlightSettlement) return; // Settlement stages the Owner notification in its own transaction.
         var notification = new PlantHealthPublicationNotificationRequestedV1(payload.CausationId, payload.PublicationId,
             s.Order.Id, s.Result.Id, s.Order.FarmId, payload.PublicationVersion, payload.ResultNature, payload.TeamLabelLimitation, payload.PublishedAt);
         var intent = IntegrationEventEnvelopeFactory.Create(IntegrationEventDescriptors.PlantHealthPublicationNotificationRequestedV1,

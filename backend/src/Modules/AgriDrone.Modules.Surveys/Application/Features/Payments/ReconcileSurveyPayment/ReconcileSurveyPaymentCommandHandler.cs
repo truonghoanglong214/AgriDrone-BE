@@ -103,6 +103,7 @@ internal sealed class ReconcileSurveyPaymentCommandHandler(
                         else
                         {
                             order.MarkPaymentConfirmed(reconciledAt);
+                            await outbox.AddPostFlightUnlockAsync(order, executionContext.CorrelationId, token);
                         }
                     }
                     catch (SurveyDomainException exception)

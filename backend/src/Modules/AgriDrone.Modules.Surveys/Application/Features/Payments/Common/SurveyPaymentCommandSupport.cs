@@ -49,6 +49,7 @@ internal static class SurveyPaymentCommandSupport
         {
             SurveyOrderStatus.PendingBoundaryVerification =>
                 "PENDING_BOUNDARY_VERIFICATION",
+            SurveyOrderStatus.AwaitingBaselineDeposit => "AWAITING_BASELINE_DEPOSIT",
             SurveyOrderStatus.AwaitingBaselineAppointment =>
                 "AWAITING_BASELINE_APPOINTMENT",
             SurveyOrderStatus.AwaitingBoundaryCapture =>

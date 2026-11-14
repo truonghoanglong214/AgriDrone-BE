@@ -132,6 +132,7 @@ internal sealed class InitiateSurveyPaymentCommandHandler(
                     or SurveyPaymentStatus.Processing or SurveyPaymentStatus.AdjustmentRequired)
                     return Result.Failure<InitiateSurveyPaymentResponse>(PaymentError.ActivePaymentExists());
                 order.MarkPaymentConfirmed(initiatedAt);
+                await outbox.AddPostFlightUnlockAsync(order, executionContext.CorrelationId, cancellationToken);
 
                 using var zeroData = JsonSerializer.SerializeToDocument(new
                 {

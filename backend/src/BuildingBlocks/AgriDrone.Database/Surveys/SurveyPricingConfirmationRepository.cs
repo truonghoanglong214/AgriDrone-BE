@@ -81,23 +81,34 @@ internal sealed class SurveyPricingConfirmationRepository(
                 SurveyPricingError.InventoryOutsideApprovedScope());
         }
 
-        var prices = await ReadEffectivePricesAsync(
-            order.SurveyServiceId,
-            evaluatedAt,
-            cancellationToken);
-        if (prices.Count == 0)
+        PriceSnapshot price;
+        if (order.PostFlightSettlement)
         {
-            return Result.Failure<SurveyPricingConfirmationState>(
-                SurveyPricingError.EffectivePriceNotFound());
+            if (order.ServiceReviewedAt is null || order.BookedServicePriceId is null || order.BookedPricePerPole is null)
+                return Result.Failure<SurveyPricingConfirmationState>(SurveyOrderError.InvalidTransition(
+                    "Final pricing requires Manager-reviewed post-flight results."));
+            price = new PriceSnapshot(order.BookedServicePriceId.Value, order.BookedPricePerPole.Value, "VND");
         }
-
-        if (prices.Count > 1)
+        else
         {
-            return Result.Failure<SurveyPricingConfirmationState>(
-                SurveyPricingError.EffectivePriceAmbiguous());
-        }
+            var prices = await ReadEffectivePricesAsync(
+                order.SurveyServiceId,
+                evaluatedAt,
+                cancellationToken);
+            if (prices.Count == 0)
+            {
+                return Result.Failure<SurveyPricingConfirmationState>(
+                    SurveyPricingError.EffectivePriceNotFound());
+            }
 
-        var price = prices[0];
+            if (prices.Count > 1)
+            {
+                return Result.Failure<SurveyPricingConfirmationState>(
+                    SurveyPricingError.EffectivePriceAmbiguous());
+            }
+
+            price = prices[0];
+        }
         return Result.Success(new SurveyPricingConfirmationState(
             order,
             managerProfileId.Value,

@@ -56,6 +56,8 @@ internal sealed class ExistingFarmSurveyApprovalOrchestrator(
             context.ApprovedAt,
             prerequisites.ApplicableDepositAmount,
             prerequisites.ApplicableComboDiscountPercentage);
+        order.EnablePostFlightSettlement(prerequisites.Service.ServiceType,
+            prerequisites.Service.PriceId!.Value, prerequisites.Service.PricePerPole!.Value);
         orderRepository.Add(order);
 
         return Task.FromResult(Result.Success(

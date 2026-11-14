@@ -81,6 +81,25 @@ public static class SurveyOrderReadinessPolicy
             return;
         }
 
+        if (snapshot.PostFlightSettlement)
+        {
+            var expected = snapshot.Purpose == SurveyOperationPurpose.BaselineMapping
+                ? SurveyOrderStatus.BaselineReady : SurveyOrderStatus.ReadyForPaidService;
+            if (snapshot.OrderStatus != expected) failures.Add(SurveyOrderReadinessFailure.OrderNotEligible);
+            if (snapshot.DepositPaymentStatus != SurveyPaymentStatus.Paid)
+                failures.Add(SurveyOrderReadinessFailure.PaymentNotConfirmed);
+            if (snapshot.Purpose == SurveyOperationPurpose.PlantHealth)
+            {
+                if (!snapshot.HasApprovedFarmBoundary) failures.Add(SurveyOrderReadinessFailure.BoundaryNotApproved);
+                if (!snapshot.IsScopeConfirmed) failures.Add(SurveyOrderReadinessFailure.ScopeNotConfirmed);
+                if (!snapshot.HasPublishedFarmBaseMap) failures.Add(SurveyOrderReadinessFailure.FarmBaseMapNotPublished);
+            }
+            EvaluateAppointmentAndSafetyOwnership(snapshot, failures);
+            if (snapshot.HasPendingFinancialSettlement) failures.Add(SurveyOrderReadinessFailure.FinancialSettlementPending);
+            if (snapshot.HasUnapprovedExtraFlight) failures.Add(SurveyOrderReadinessFailure.ExtraFlightNotApproved);
+            return;
+        }
+
         var expectedOrderStatus = snapshot.Purpose switch
         {
             SurveyOperationPurpose.BaselineMapping => SurveyOrderStatus.BaselineReady,
@@ -133,6 +152,28 @@ public static class SurveyOrderReadinessPolicy
             }
         }
 
+        EvaluateAppointmentAndSafetyOwnership(snapshot, failures);
+
+        if (snapshot.Purpose == SurveyOperationPurpose.PlantHealth)
+        {
+            EvaluatePaidService(snapshot, failures);
+        }
+
+        if (snapshot.HasPendingFinancialSettlement)
+        {
+            failures.Add(
+                SurveyOrderReadinessFailure.FinancialSettlementPending);
+        }
+
+        if (snapshot.HasUnapprovedExtraFlight)
+        {
+            failures.Add(SurveyOrderReadinessFailure.ExtraFlightNotApproved);
+        }
+    }
+
+    private static void EvaluateAppointmentAndSafetyOwnership(
+        SurveyOrderReadinessSnapshot snapshot, List<SurveyOrderReadinessFailure> failures)
+    {
         var expectedAppointmentPurpose = snapshot.Purpose switch
         {
             SurveyOperationPurpose.BaselineMapping =>
@@ -167,21 +208,6 @@ public static class SurveyOrderReadinessPolicy
             failures.Add(SurveyOrderReadinessFailure.PrimaryManagerUnavailable);
         }
 
-        if (snapshot.Purpose == SurveyOperationPurpose.PlantHealth)
-        {
-            EvaluatePaidService(snapshot, failures);
-        }
-
-        if (snapshot.HasPendingFinancialSettlement)
-        {
-            failures.Add(
-                SurveyOrderReadinessFailure.FinancialSettlementPending);
-        }
-
-        if (snapshot.HasUnapprovedExtraFlight)
-        {
-            failures.Add(SurveyOrderReadinessFailure.ExtraFlightNotApproved);
-        }
     }
 
     private static void EvaluatePaidService(

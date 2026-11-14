@@ -98,7 +98,7 @@ internal sealed class SurveyPaymentProcessingRepository(
             purpose,
             evaluatedAt,
             cancellationToken);
-        var requiresAppointment = purpose == PaymentPurpose.FinalBalance ||
+        var requiresAppointment = (purpose == PaymentPurpose.FinalBalance && !order.PostFlightSettlement) ||
             (order.RequiresBaselineMapping && order.Status == SurveyOrderStatus.AwaitingBaselineDeposit);
         if (!appointmentId.HasValue && requiresAppointment)
         {

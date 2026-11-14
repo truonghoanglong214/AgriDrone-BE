@@ -67,7 +67,9 @@ public sealed record SurveyApprovalServiceReference(
     Guid SurveyServiceId,
     SurveyServiceType ServiceType,
     SurveyServiceStatus Status,
-    uint Version);
+    uint Version,
+    Guid? PriceId = null,
+    decimal? PricePerPole = null);
 
 public sealed record SurveyApprovalTenantOwnerReference(
     Guid TenantId,

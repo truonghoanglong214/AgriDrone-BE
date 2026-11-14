@@ -78,6 +78,8 @@ internal sealed class NewCustomerApprovalOrchestrator(
             context.ApprovedAt,
             prerequisites.ApplicableDepositAmount,
             prerequisites.ApplicableComboDiscountPercentage);
+        order.EnablePostFlightSettlement(prerequisites.Service.ServiceType,
+            prerequisites.Service.PriceId!.Value, prerequisites.Service.PricePerPole!.Value);
         orderRepository.Add(order);
 
         var assignmentResult = await provisioningPort
