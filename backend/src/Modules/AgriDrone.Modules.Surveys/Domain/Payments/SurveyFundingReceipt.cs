@@ -47,8 +47,8 @@ public sealed class SurveyFundingReceipt : Entity
             CurrencyCode.Create(currency), nameof(currency));
 
         var normalizedProvider = PolicyValidationGuard.NormalizeRequired(provider, 64, nameof(provider));
-        var normalizedTxId = PolicyValidationGuard.NormalizeRequired(providerTransactionId, 128, nameof(providerTransactionId));
-        var normalizedRef = PolicyValidationGuard.NormalizeRequired(paymentReference, 128, nameof(paymentReference));
+        var normalizedTxId = PolicyValidationGuard.NormalizeRequired(providerTransactionId, 150, nameof(providerTransactionId));
+        var normalizedRef = PolicyValidationGuard.NormalizeRequired(paymentReference, 150, nameof(paymentReference));
         var normalizedFingerprint = PolicyValidationGuard.NormalizeRequired(payloadFingerprint, 128, nameof(payloadFingerprint));
 
         return new SurveyFundingReceipt

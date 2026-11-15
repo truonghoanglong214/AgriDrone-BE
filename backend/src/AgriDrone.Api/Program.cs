@@ -22,10 +22,12 @@ using AgriDrone.SharedInfrastructure.Health;
 using AgriDrone.SharedInfrastructure.Messaging;
 using AgriDrone.SharedInfrastructure.Validation;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.OpenApi;
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -121,6 +123,38 @@ builder.Services.AddCors(options =>
     });
 });
 
+var publicSubmitPermitLimit = Math.Max(1, builder.Configuration.GetValue(
+    "RateLimiting:V3PublicSurvey:SubmitPermitLimit", 5));
+var publicTrackPermitLimit = Math.Max(1, builder.Configuration.GetValue(
+    "RateLimiting:V3PublicSurvey:TrackPermitLimit", 30));
+var publicWindowSeconds = Math.Max(1, builder.Configuration.GetValue(
+    "RateLimiting:V3PublicSurvey:WindowSeconds", 60));
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy(V3PublicRateLimitPolicies.Submit, httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            GetPublicRateLimitPartition(httpContext),
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = publicSubmitPermitLimit,
+                Window = TimeSpan.FromSeconds(publicWindowSeconds),
+                QueueLimit = 0,
+                AutoReplenishment = true
+            }));
+    options.AddPolicy(V3PublicRateLimitPolicies.Track, httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            GetPublicRateLimitPartition(httpContext),
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = publicTrackPermitLimit,
+                Window = TimeSpan.FromSeconds(publicWindowSeconds),
+                QueueLimit = 0,
+                AutoReplenishment = true
+            }));
+});
+
 // Modules
 builder.Services
     .AddEmailIntegration(builder.Configuration)
@@ -192,6 +226,7 @@ if (!app.Environment.IsDevelopment())
 }
 
 app.UseRouting();
+app.UseRateLimiter();
 
 app.UseCors("Frontend");
 
@@ -221,3 +256,6 @@ app.MapHealthChecks(
         Predicate = registration => registration.Tags.Contains("minio")
     });
 app.Run();
+
+static string GetPublicRateLimitPartition(HttpContext httpContext) =>
+    httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown-client";

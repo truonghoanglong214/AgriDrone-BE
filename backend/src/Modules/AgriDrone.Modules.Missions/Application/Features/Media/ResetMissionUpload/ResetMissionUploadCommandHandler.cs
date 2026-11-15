@@ -63,6 +63,14 @@ internal sealed class ResetMissionUploadCommandHandler(
                     "Legacy Missions cannot reset uploads."));
         }
 
+        if (mission.CaptureAttemptId.HasValue)
+        {
+            return Result.Failure<ResetMissionUploadResult>(
+                AppError.Conflict(
+                    "MissionUpload.V3ImmutableEvidence",
+                    "V3 capture evidence is immutable and cannot use the destructive upload reset route."));
+        }
+
         if (mission.Status is not (
             MissionStatus.Uploading or
             MissionStatus.UploadFailed or

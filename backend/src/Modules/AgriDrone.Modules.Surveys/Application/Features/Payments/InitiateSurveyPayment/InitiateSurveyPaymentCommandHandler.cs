@@ -97,9 +97,31 @@ internal sealed class InitiateSurveyPaymentCommandHandler(
         }
 
         Money amount;
-        if (command.Purpose == PaymentPurpose.BaselineDeposit)
+        Guid? depositObligationId = null;
+        if (command.Purpose == PaymentPurpose.OrderDeposit)
         {
-            if (!order.CanAcceptDepositPayment())
+            var obligation = state.DepositObligation;
+            if (order.Scope != ContractScope.V3 ||
+                order.Status != SurveyOrderStatus.AwaitingDeposit ||
+                !order.DepositObligationId.HasValue ||
+                obligation is null ||
+                obligation.Id != order.DepositObligationId.Value ||
+                obligation.Status != SurveyDepositObligationStatus.Pending ||
+                obligation.RemainingAmount <= 0m)
+            {
+                return Result.Failure<InitiateSurveyPaymentResponse>(
+                    PaymentError.OrderNotReady());
+            }
+
+            depositObligationId = obligation.Id;
+            amount = Money.Create(
+                obligation.RemainingAmount,
+                CurrencyCode.Create(obligation.Currency));
+        }
+        else if (command.Purpose == PaymentPurpose.BaselineDeposit)
+        {
+            if (order.Scope != ContractScope.Legacy ||
+                !order.CanAcceptDepositPayment())
             {
                 return Result.Failure<InitiateSurveyPaymentResponse>(
                     PaymentError.OrderNotReady());
@@ -109,7 +131,8 @@ internal sealed class InitiateSurveyPaymentCommandHandler(
         }
         else
         {
-            if (order.Status != SurveyOrderStatus.AwaitingPayment ||
+            if (order.Scope != ContractScope.Legacy ||
+                order.Status != SurveyOrderStatus.AwaitingPayment ||
                 order.FinalPrice is not > 0 ||
                 string.IsNullOrWhiteSpace(order.Currency) ||
                 order.PricePerPoleSnapshot is null ||
@@ -190,7 +213,8 @@ internal sealed class InitiateSurveyPaymentCommandHandler(
             amount,
             gateway.Provider,
             initiatedAt,
-            command.Purpose);
+            command.Purpose,
+            depositObligationId);
         var sessionResult = await gateway.CreateSessionAsync(
             new CreatePaymentSession(
                 payment.Id,

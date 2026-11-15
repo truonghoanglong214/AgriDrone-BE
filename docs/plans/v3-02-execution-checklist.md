@@ -341,3 +341,9 @@ PostgreSQL fixture `127.0.0.1:55432` chưa có listener khi kiểm tra. 02A-2 da
 
 [V3-03 A–H plan](v3-03-capture-funding-and-cancellation-implementation-plan.md) và [19-item checklist](v3-03-execution-checklist.md) tiếp tục appointment/deposit/capture/Re-flight/cancellation. Bắt đầu 03-00 inventory rồi 03A-1 domain; chưa sửa code trong phiên lập kế hoạch. V3-02 pending DB gates vẫn giữ nguyên, không được đóng bằng việc tạo plan V3-03. `UnavailableV3BaselineDeliveryProofReader` production không bị thay bằng test fixture; Follow-up/go-live chờ đúng downstream acceptance.
 
+## 11. Review remediation — 2026-11-14
+
+- Policy revision/price/deposit/claim/cancellation/bundle publishers và activation transition nay chạy toàn bộ read-check-close-create-save trong một transaction sau exclusive PostgreSQL advisory activation guard. Approval resolver lấy shared guard cùng key; policy evaluation timestamp được lấy từ server sau guard lock. Unique/exclusion constraints và actual PostgreSQL race/rollback tests vẫn thuộc 02A-2/02D-3/02F-1, chưa được coi là accepted chỉ vì source lock protocol đã sửa.
+- Public V3 submit và tracking dùng hai named fixed-window rate-limit policies riêng, partition theo remote client address; giới hạn cấu hình tại `RateLimiting:V3PublicSurvey` và trả HTTP 429 khi vượt ngưỡng.
+- Regression coverage kiểm tra endpoint rate-limit metadata. Verification: build PASS 0 warnings/errors; UnitTests **935/935**; ArchitectureTests **87/87**; filtered V3 no-DB component/model tests **15/15**. PostgreSQL fixture vẫn không reachable, vì vậy acceptance vẫn pending.
+

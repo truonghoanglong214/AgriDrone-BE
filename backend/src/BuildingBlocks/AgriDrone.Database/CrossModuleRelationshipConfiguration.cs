@@ -868,6 +868,83 @@ internal static class CrossModuleRelationshipConfiguration
             .OnDelete(DeleteBehavior.Restrict)
             .HasConstraintName("fk_survey_orders_users_pricing_confirmed_by");
 
+        modelBuilder.Entity<DroneMission>()
+            .HasOne<CaptureAttempt>()
+            .WithOne()
+            .HasForeignKey<DroneMission>(mission => new
+            {
+                mission.CaptureAttemptId,
+                mission.TenantId,
+                mission.FarmId,
+                mission.SurveyOrderId
+            })
+            .HasPrincipalKey<CaptureAttempt>(attempt => new
+            {
+                attempt.Id,
+                attempt.TenantId,
+                attempt.FarmId,
+                attempt.OrderId
+            })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_drone_missions_capture_attempt_same_owner");
+
+        modelBuilder.Entity<CaptureAttempt>()
+            .HasOne<User>()
+            .WithMany()
+            .HasForeignKey(attempt => attempt.ReflightApprovedBy)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_capture_attempts_users_reflight_approved_by");
+
+        modelBuilder.Entity<CaptureAttemptHistory>()
+            .HasOne<User>()
+            .WithMany()
+            .HasForeignKey(history => history.ActorId)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_capture_attempt_history_users_actor");
+
+        modelBuilder.Entity<CaptureInputManifest>()
+            .HasOne<DroneMission>()
+            .WithMany()
+            .HasForeignKey(manifest => manifest.MissionId)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_capture_input_manifests_mission");
+
+        modelBuilder.Entity<CaptureInputApproval>()
+            .HasOne<DroneMission>()
+            .WithMany()
+            .HasForeignKey(approval => approval.MissionId)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_capture_input_approvals_mission");
+
+        modelBuilder.Entity<CaptureInputApproval>()
+            .HasOne<AiProcessingJob>()
+            .WithMany()
+            .HasForeignKey(approval => approval.ProcessingJobId)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_capture_input_approvals_processing_job");
+
+        modelBuilder.Entity<CaptureInputApproval>()
+            .HasOne<User>()
+            .WithMany()
+            .HasForeignKey(approval => approval.ApprovedBy)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_capture_input_approvals_users_approved_by");
+
+        modelBuilder.Entity<SurveyCancellationDecision>()
+            .HasOne<User>()
+            .WithMany()
+            .HasForeignKey(decision => decision.RequesterId)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_survey_cancellation_decisions_users_requester");
+
+        modelBuilder.Entity<SurveyCancellationDecision>()
+            .HasOne<User>()
+            .WithMany()
+            .HasForeignKey(decision => decision.DecisionActorId)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_survey_cancellation_decisions_users_actor");
+
+
         modelBuilder.Entity<SurveyOrder>()
             .HasOne<FarmBaseMapVersion>()
             .WithMany()

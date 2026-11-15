@@ -139,6 +139,7 @@ internal static class SurveyAppointmentResponseMapper
         {
             SurveyAppointmentPurpose.BaselineMapping => "BASELINE_MAPPING",
             SurveyAppointmentPurpose.PaidService => "PAID_SERVICE",
+            SurveyAppointmentPurpose.Capture => "CAPTURE",
             _ => throw new ArgumentOutOfRangeException(nameof(purpose))
         };
 

@@ -74,6 +74,9 @@ namespace AgriDrone.IntegrationContracts.Messaging
         public const string SurveyBoundaryCaptureChangedV1 =
             "survey.boundary-capture-changed.v1";
 
+        public const string SurveyCaptureStateChangedV1 =
+            "survey.capture-state-changed.v1";
+
         public const string BaselineMissionStartedV1 =
             "mission.baseline-started.v1";
 

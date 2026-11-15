@@ -84,6 +84,14 @@ internal sealed class RequestSurveyAppointmentRescheduleCommandHandler(
 
         var order = stateResult.Value.Order;
         var appointment = stateResult.Value.Appointment;
+        if (order.Scope != command.ExpectedScope ||
+            (order.Scope == ContractScope.V3 && appointment.Purpose != SurveyAppointmentPurpose.Capture) ||
+            (order.Scope == ContractScope.Legacy && appointment.Purpose == SurveyAppointmentPurpose.Capture))
+        {
+            return Result.Failure<RequestSurveyAppointmentRescheduleResponse>(
+                SurveyOrderError.InvalidTransition(
+                    "Appointment purpose does not match the Order contract scope."));
+        }
         if (appointment.Purpose == SurveyAppointmentPurpose.BaselineMapping &&
             !order.RequiresBaselineMapping)
         {
@@ -98,6 +106,14 @@ internal sealed class RequestSurveyAppointmentRescheduleCommandHandler(
                 SurveyAppointmentError.ActivePaymentBlocksReschedule());
         }
 
+        if (appointment.Purpose == SurveyAppointmentPurpose.Capture &&
+            stateResult.Value.HasActiveCaptureAttempt)
+        {
+            return Result.Failure<RequestSurveyAppointmentRescheduleResponse>(
+                SurveyOrderError.InvalidTransition(
+                    "A capture appointment cannot be rescheduled after an active CaptureAttempt has been prepared."));
+        }
+
         var previousAppointmentStatus = appointment.Status;
         var previousOrderStatus = order.Status;
         try
@@ -105,7 +121,19 @@ internal sealed class RequestSurveyAppointmentRescheduleCommandHandler(
             order.EnsureVersion(command.ExpectedOrderVersion);
             appointment.EnsureVersion(command.ExpectedAppointmentVersion);
             appointment.RequestReschedule(command.Reason, requestedAt);
-            if (appointment.Purpose == SurveyAppointmentPurpose.BaselineMapping &&
+            if (appointment.Purpose == SurveyAppointmentPurpose.Capture &&
+                previousOrderStatus is SurveyOrderStatus.AwaitingDeposit or SurveyOrderStatus.ReadyForCapture)
+            {
+                order.TransitionToAwaitingAppointmentV3(requestedAt);
+            }
+            else if (appointment.Purpose == SurveyAppointmentPurpose.Capture &&
+                     previousOrderStatus != SurveyOrderStatus.AwaitingAppointment)
+            {
+                return Result.Failure<RequestSurveyAppointmentRescheduleResponse>(
+                    SurveyOrderError.InvalidTransition(
+                        "A capture appointment cannot be rescheduled after capture execution started."));
+            }
+            else if (appointment.Purpose == SurveyAppointmentPurpose.BaselineMapping &&
                 previousOrderStatus is
                     SurveyOrderStatus.AwaitingBoundaryCapture or
                     SurveyOrderStatus.AwaitingBaselineDeposit or
@@ -162,9 +190,13 @@ internal sealed class RequestSurveyAppointmentRescheduleCommandHandler(
             executionContext.CorrelationId,
             nameof(SurveyAppointment),
             appointment.Id,
-            appointment.Purpose == SurveyAppointmentPurpose.BaselineMapping
-                ? "REQUEST_BASELINE_APPOINTMENT_RESCHEDULE"
-                : "REQUEST_PAID_SERVICE_APPOINTMENT_RESCHEDULE",
+            appointment.Purpose switch
+            {
+                SurveyAppointmentPurpose.BaselineMapping => "REQUEST_BASELINE_APPOINTMENT_RESCHEDULE",
+                SurveyAppointmentPurpose.PaidService => "REQUEST_PAID_SERVICE_APPOINTMENT_RESCHEDULE",
+                SurveyAppointmentPurpose.Capture => "REQUEST_CAPTURE_APPOINTMENT_RESCHEDULE",
+                _ => throw new InvalidOperationException("Unsupported appointment purpose.")
+            },
             oldData,
             newData,
             requestedAt);

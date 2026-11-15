@@ -15,6 +15,32 @@ namespace AgriDrone.UnitTests.Integration;
 public sealed class V3OrderPlanningContractTests
 {
     [Fact]
+    public void CaptureMutationContractsKeepServerTimesOutAndRequireOperationIdentity()
+    {
+        Assert.Null(typeof(StartCaptureFlightRequest).GetProperty("StartedAt"));
+        Assert.Null(typeof(ApproveCaptureInputRequest).GetProperty("ApprovedAt"));
+        Assert.Null(typeof(CreateQualityReflightRequest).GetProperty("CreatedAt"));
+        Assert.Null(typeof(CancelCaptureOrderRequest).GetProperty("CancelledAt"));
+
+        var mutationTypes = new[]
+        {
+            typeof(PrepareCaptureAttemptRequest),
+            typeof(StartCaptureFlightRequest),
+            typeof(EndCaptureFlightRequest),
+            typeof(RecordFlightFailureRequest),
+            typeof(ApproveCaptureInputRequest),
+            typeof(CreateQualityReflightRequest),
+            typeof(CancelCaptureOrderRequest)
+        };
+
+        foreach (var mutationType in mutationTypes)
+        {
+            Assert.Equal(typeof(Guid), mutationType.GetProperty("OperationId")?.PropertyType);
+            Assert.Equal(typeof(string), mutationType.GetProperty("PayloadFingerprint")?.PropertyType);
+        }
+    }
+
+    [Fact]
     public async Task BaselineCanBePreparedBeforePaidServiceIsReady()
     {
         var orderId = Guid.NewGuid();

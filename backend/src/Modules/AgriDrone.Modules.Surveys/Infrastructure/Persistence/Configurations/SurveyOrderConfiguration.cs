@@ -8,10 +8,6 @@ public sealed class SurveyOrderConfiguration : IEntityTypeConfiguration<SurveyOr
 {
     public void Configure(EntityTypeBuilder<SurveyOrder> builder)
     {
-        // 03A-2 is domain-only. Map this in 03B with its expand migration;
-        // convention mapping would otherwise break reads against Step8 schemas.
-        builder.Ignore(order => order.DepositObligationId);
-
         builder.ToTable(
             "survey_orders",
             "survey",
@@ -169,6 +165,9 @@ public sealed class SurveyOrderConfiguration : IEntityTypeConfiguration<SurveyOr
         builder.Property(order => order.DepositPaymentId)
             .HasColumnName("deposit_payment_id")
             .HasColumnType("uuid");
+        builder.Property(order => order.DepositObligationId)
+            .HasColumnName("deposit_obligation_id")
+            .HasColumnType("uuid");
         builder.Property(order => order.DepositConfirmedAt)
             .HasColumnName("deposit_confirmed_at")
             .HasColumnType("timestamp with time zone");
@@ -201,6 +200,10 @@ public sealed class SurveyOrderConfiguration : IEntityTypeConfiguration<SurveyOr
 
         builder.HasIndex(order => order.OrderNumber).HasDatabaseName("uq_survey_orders_number").IsUnique();
         builder.HasIndex(order => order.SurveyRequestId).HasDatabaseName("uq_survey_orders_request").IsUnique();
+        builder.HasIndex(order => order.DepositObligationId)
+            .HasDatabaseName("uq_survey_orders_deposit_obligation")
+            .HasFilter("deposit_obligation_id IS NOT NULL")
+            .IsUnique();
         builder.HasIndex(order => new { order.TenantId, order.FarmId, order.Status }).HasDatabaseName("ix_survey_orders_manager_work_queue");
         builder.HasIndex(order => new { order.FarmId, order.SurveyServiceId, order.CreatedAt }).HasDatabaseName("ix_survey_orders_farm_service_history").IsDescending(false, false, true);
 
@@ -214,6 +217,7 @@ public sealed class SurveyOrderConfiguration : IEntityTypeConfiguration<SurveyOr
             .HasForeignKey(order => order.BusinessPolicyVersionId)
             .OnDelete(DeleteBehavior.Restrict)
             .HasConstraintName("fk_survey_orders_business_policy_version");
+
 
         builder.HasMany(order => order.ZoneScopes)
             .WithOne()

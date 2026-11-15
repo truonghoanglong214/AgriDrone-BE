@@ -11,5 +11,6 @@ public sealed record ProposeSurveyAppointmentCommand(
     DateTimeOffset ProposedEndAt,
     uint ExpectedOrderVersion,
     Guid? ExpectedCurrentAppointmentId,
-    uint? ExpectedCurrentAppointmentVersion)
+    uint? ExpectedCurrentAppointmentVersion,
+    ContractScope ExpectedScope = ContractScope.Legacy)
     : IRequest<Result<ProposeSurveyAppointmentResponse>>;

@@ -12,6 +12,10 @@ internal static class MissionOperationError
         AppError.Conflict("MissionOperation.MissionNotOrderBound",
             "This operational endpoint only accepts order-bound Missions.");
 
+    public static AppError V3CoordinatorRequired() =>
+        AppError.Conflict("MissionOperation.V3CoordinatorRequired",
+            "A V3 capture Mission must be mutated through the Survey Capture coordinator.");
+
     public static AppError OrderContextUnavailable() =>
         AppError.Failure("MissionOperation.OrderContextUnavailable",
             "The authoritative Survey Order context is unavailable. Retry later.");

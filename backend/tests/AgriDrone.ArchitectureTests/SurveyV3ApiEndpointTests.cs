@@ -22,6 +22,7 @@ using AgriDrone.SharedKernel.Application;
 using MediatR;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.AspNetCore.RateLimiting;
 using Xunit;
 
 namespace AgriDrone.ArchitectureTests;
@@ -29,6 +30,24 @@ namespace AgriDrone.ArchitectureTests;
 public sealed class SurveyV3ApiEndpointTests
 {
     private static readonly DateTimeOffset T0 = new(2026, 11, 11, 10, 0, 0, TimeSpan.Zero);
+
+    [Fact]
+    public void V3AnonymousSurveyEndpointsDeclareSeparateRateLimitPolicies()
+    {
+        var submit = typeof(V3PublicSurveyRequestsController)
+            .GetMethod(nameof(V3PublicSurveyRequestsController.Submit))!
+            .GetCustomAttributes(typeof(EnableRateLimitingAttribute), inherit: true)
+            .Cast<EnableRateLimitingAttribute>()
+            .Single();
+        var track = typeof(V3PublicSurveyRequestsController)
+            .GetMethod(nameof(V3PublicSurveyRequestsController.Track))!
+            .GetCustomAttributes(typeof(EnableRateLimitingAttribute), inherit: true)
+            .Cast<EnableRateLimitingAttribute>()
+            .Single();
+
+        Assert.Equal(V3PublicRateLimitPolicies.Submit, submit.PolicyName);
+        Assert.Equal(V3PublicRateLimitPolicies.Track, track.PolicyName);
+    }
 
     [Fact]
     public async Task V3CatalogControllerReturns200WithCatalogueWhenConfigured()

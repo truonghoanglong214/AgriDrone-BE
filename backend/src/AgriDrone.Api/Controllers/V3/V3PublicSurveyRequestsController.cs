@@ -8,6 +8,7 @@ using AgriDrone.SharedInfrastructure.Http;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace AgriDrone.Api.Controllers.V3;
 
@@ -24,10 +25,12 @@ public sealed class V3PublicSurveyRequestsController(
     /// Trả về quote tham khảo và mã theo dõi trk_... để tra cứu tiến độ.
     /// </remarks>
     [HttpPost]
+    [EnableRateLimiting(V3PublicRateLimitPolicies.Submit)]
     [ProducesResponseType<SubmitNewCustomerSurveyRequestV3Response>(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
     public async Task<IResult> Submit(
         [FromHeader(Name = SurveyRequestHttpIdempotency.HeaderName), Required]
         [StringLength(SurveyRequestHttpIdempotency.MaximumKeyLength, MinimumLength = 1)]
@@ -79,9 +82,11 @@ public sealed class V3PublicSurveyRequestsController(
     /// Response chỉ trả về thông tin tối thiểu, tuyệt đối không lộ thông tin cá nhân (PII).
     /// </remarks>
     [HttpPost("track")]
+    [EnableRateLimiting(V3PublicRateLimitPolicies.Track)]
     [ProducesResponseType<TrackSurveyRequestV3Response>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
     public async Task<IResult> Track(
         [FromBody] TrackSurveyRequestV3ApiRequest request,
         CancellationToken cancellationToken)

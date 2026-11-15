@@ -23,6 +23,8 @@ public sealed class DroneMission : AggregateRoot
 
     public Guid? SurveyOrderId { get; private set; }
 
+    public Guid? CaptureAttemptId { get; private set; }
+
     public MissionPurpose? Purpose { get; private set; }
 
     public Guid? PreparationOperationId { get; private set; }
@@ -40,6 +42,25 @@ public sealed class DroneMission : AggregateRoot
     public bool RequiresBaselineCompletion { get; private set; }
 
     public MissionPurpose? MissionPurpose => Purpose;
+
+    public void BindCaptureAttempt(Guid captureAttemptId)
+    {
+        DomainGuard.NotEmpty(captureAttemptId, nameof(captureAttemptId));
+
+        if (!SurveyOrderId.HasValue)
+        {
+            throw new InvalidOperationException(
+                "Only an Order-bound mission can be linked to a capture attempt.");
+        }
+
+        if (CaptureAttemptId.HasValue && CaptureAttemptId.Value != captureAttemptId)
+        {
+            throw new InvalidOperationException(
+                $"Mission is already linked to capture attempt '{CaptureAttemptId.Value}'.");
+        }
+
+        CaptureAttemptId = captureAttemptId;
+    }
 
     public Guid? SourceMapVersionId { get; private set; }
 
@@ -378,6 +399,7 @@ public sealed class DroneMission : AggregateRoot
 
         if (!requiresBaselineCompletion &&
             purpose != global::AgriDrone.Modules.Missions.Domain.Missions.MissionPurpose.BaselineMapping &&
+            purpose != global::AgriDrone.Modules.Missions.Domain.Missions.MissionPurpose.Capture &&
             sourceMapVersionId is null)
         {
             throw new ArgumentException(
@@ -580,6 +602,11 @@ public sealed class DroneMission : AggregateRoot
     public void RecoverFailedFlight(Guid droneId, DateTimeOffset scheduledAt,
         DateTimeOffset scheduledEndAt, DateTimeOffset changedAt)
     {
+        if (CaptureAttemptId.HasValue)
+        {
+            throw new InvalidOperationException(
+                "V3 capture Missions cannot be recovered in place; create an approved successor Capture Attempt.");
+        }
         DomainGuard.NotEmpty(droneId);
         DomainGuard.Utc(scheduledAt);
         DomainGuard.Utc(scheduledEndAt);

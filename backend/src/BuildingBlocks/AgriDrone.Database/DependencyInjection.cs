@@ -51,6 +51,10 @@ public static class DependencyInjection
             SurveyOrderOperationalContextV3Query>();
         services.AddScoped<ISurveyOrderOperationalContextV4Query,
             SurveyOrderOperationalContextV4Query>();
+        services.AddScoped<ISurveyOrderCaptureContextV5Query,
+            SurveyOrderCaptureContextV5Query>();
+        services.AddScoped<ISurveyCaptureExecutionCoordinator,
+            SurveyCaptureExecutionCoordinator>();
         services.AddScoped<ISystemManagerSurveyOrderQueries,
             SystemManagerSurveyOrderQueries>();
         services.AddScoped<IV3FollowUpBaselineQuery,

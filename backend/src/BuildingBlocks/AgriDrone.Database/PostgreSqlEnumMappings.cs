@@ -92,6 +92,12 @@ internal static class PostgreSqlEnumMappings
         modelBuilder.HasPostgresEnum<SurveyRequestStatus>(DbSchemas.System, "survey_request_status", translator);
         modelBuilder.HasPostgresEnum<SurveyReviewDecision>(DbSchemas.System, "survey_review_decision", translator);
         modelBuilder.HasPostgresEnum<SurveyOrderStatus>(DbSchemas.System, "survey_order_status", translator);
+        modelBuilder.HasPostgresEnum<CaptureAttemptStatus>(DbSchemas.System, "capture_attempt_status", translator);
+        modelBuilder.HasPostgresEnum<CaptureInputManifestStatus>(DbSchemas.System, "capture_input_manifest_status", translator);
+        modelBuilder.HasPostgresEnum<SurveyDepositObligationStatus>(DbSchemas.System, "survey_deposit_obligation_status", translator);
+        modelBuilder.HasPostgresEnum<CancellationDecisionKind>(DbSchemas.System, "cancellation_decision_kind", translator);
+        modelBuilder.HasPostgresEnum<SurveyRefundOriginKind>(DbSchemas.System, "survey_refund_origin_kind", translator);
+        modelBuilder.HasPostgresEnum<SurveyRefundObligationStatus>(DbSchemas.System, "survey_refund_obligation_status", translator);
         modelBuilder.HasPostgresEnum<SurveyScopeType>(DbSchemas.System, "survey_scope_type", translator);
         modelBuilder.HasPostgresEnum<SurveyPoleCountSource>(DbSchemas.System, "survey_pole_count_source", translator);
         modelBuilder.HasPostgresEnum<SurveyAppointmentPurpose>(DbSchemas.System, "survey_appointment_purpose", translator);
@@ -166,6 +172,12 @@ internal static class PostgreSqlEnumMappings
         dataSourceBuilder.MapEnum<SurveyRequestStatus>("system.survey_request_status", translator);
         dataSourceBuilder.MapEnum<SurveyReviewDecision>("system.survey_review_decision", translator);
         dataSourceBuilder.MapEnum<SurveyOrderStatus>("system.survey_order_status", translator);
+        dataSourceBuilder.MapEnum<CaptureAttemptStatus>("system.capture_attempt_status", translator);
+        dataSourceBuilder.MapEnum<CaptureInputManifestStatus>("system.capture_input_manifest_status", translator);
+        dataSourceBuilder.MapEnum<SurveyDepositObligationStatus>("system.survey_deposit_obligation_status", translator);
+        dataSourceBuilder.MapEnum<CancellationDecisionKind>("system.cancellation_decision_kind", translator);
+        dataSourceBuilder.MapEnum<SurveyRefundOriginKind>("system.survey_refund_origin_kind", translator);
+        dataSourceBuilder.MapEnum<SurveyRefundObligationStatus>("system.survey_refund_obligation_status", translator);
         dataSourceBuilder.MapEnum<SurveyScopeType>("system.survey_scope_type", translator);
         dataSourceBuilder.MapEnum<SurveyPoleCountSource>("system.survey_pole_count_source", translator);
         dataSourceBuilder.MapEnum<SurveyAppointmentPurpose>("system.survey_appointment_purpose", translator);
@@ -240,6 +252,12 @@ internal static class PostgreSqlEnumMappings
         optionsBuilder.MapEnum<SurveyRequestStatus>("survey_request_status", DbSchemas.System, translator);
         optionsBuilder.MapEnum<SurveyReviewDecision>("survey_review_decision", DbSchemas.System, translator);
         optionsBuilder.MapEnum<SurveyOrderStatus>("survey_order_status", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<CaptureAttemptStatus>("capture_attempt_status", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<CaptureInputManifestStatus>("capture_input_manifest_status", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<SurveyDepositObligationStatus>("survey_deposit_obligation_status", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<CancellationDecisionKind>("cancellation_decision_kind", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<SurveyRefundOriginKind>("survey_refund_origin_kind", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<SurveyRefundObligationStatus>("survey_refund_obligation_status", DbSchemas.System, translator);
         optionsBuilder.MapEnum<SurveyScopeType>("survey_scope_type", DbSchemas.System, translator);
         optionsBuilder.MapEnum<SurveyPoleCountSource>("survey_pole_count_source", DbSchemas.System, translator);
         optionsBuilder.MapEnum<SurveyAppointmentPurpose>("survey_appointment_purpose", DbSchemas.System, translator);

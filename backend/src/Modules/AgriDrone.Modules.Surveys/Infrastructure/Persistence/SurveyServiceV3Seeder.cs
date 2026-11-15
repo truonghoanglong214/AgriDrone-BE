@@ -1,6 +1,7 @@
 using System.Data;
 using AgriDrone.Modules.Surveys.Domain;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace AgriDrone.Modules.Surveys.Infrastructure.Persistence;
 
@@ -20,6 +21,8 @@ public static class SurveyServiceV3Seeder
         {
             return;
         }
+
+        ReloadPostgreSqlTypes(dbContext);
 
         var services = dbContext.Set<SurveyService>();
 
@@ -45,6 +48,8 @@ public static class SurveyServiceV3Seeder
         {
             return;
         }
+
+        await ReloadPostgreSqlTypesAsync(dbContext, cancellationToken);
 
         var services = dbContext.Set<SurveyService>();
 
@@ -132,6 +137,70 @@ public static class SurveyServiceV3Seeder
                 """;
             var result = await cmd.ExecuteScalarAsync(cancellationToken);
             return result is not null;
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
+    private static void ReloadPostgreSqlTypes(DbContext dbContext)
+    {
+        if (!dbContext.Database.IsRelational())
+        {
+            return;
+        }
+
+        if (dbContext.Database.GetDbConnection() is not NpgsqlConnection connection)
+        {
+            return;
+        }
+
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            connection.Open();
+        }
+
+        try
+        {
+            connection.ReloadTypes();
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                connection.Close();
+            }
+        }
+    }
+
+    private static async Task ReloadPostgreSqlTypesAsync(
+        DbContext dbContext,
+        CancellationToken cancellationToken)
+    {
+        if (!dbContext.Database.IsRelational())
+        {
+            return;
+        }
+
+        if (dbContext.Database.GetDbConnection() is not NpgsqlConnection connection)
+        {
+            return;
+        }
+
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync(cancellationToken);
+        }
+
+        try
+        {
+            await connection.ReloadTypesAsync(cancellationToken);
         }
         finally
         {

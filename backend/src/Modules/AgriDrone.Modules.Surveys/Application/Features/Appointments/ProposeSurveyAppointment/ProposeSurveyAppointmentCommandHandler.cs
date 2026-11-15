@@ -102,6 +102,23 @@ internal sealed class ProposeSurveyAppointmentCommandHandler(
                 SurveyAppointmentCommandSupport.MapDomainError(exception));
         }
 
+        if (order.Scope != command.ExpectedScope ||
+            (order.Scope == ContractScope.V3 && command.Purpose != SurveyAppointmentPurpose.Capture) ||
+            (order.Scope == ContractScope.Legacy && command.Purpose == SurveyAppointmentPurpose.Capture))
+        {
+            return Result.Failure<ProposeSurveyAppointmentResponse>(
+                SurveyOrderError.InvalidTransition(
+                    "V3 Orders require CAPTURE appointments; Legacy Orders cannot use CAPTURE appointments."));
+        }
+
+        if (command.Purpose == SurveyAppointmentPurpose.Capture &&
+            order.Status != SurveyOrderStatus.AwaitingAppointment)
+        {
+            return Result.Failure<ProposeSurveyAppointmentResponse>(
+                SurveyOrderError.InvalidTransition(
+                    "A capture appointment can only be proposed while the V3 Order awaits an appointment."));
+        }
+
         if (command.Purpose == SurveyAppointmentPurpose.BaselineMapping &&
             !order.RequiresBaselineMapping)
         {
@@ -217,9 +234,13 @@ internal sealed class ProposeSurveyAppointmentCommandHandler(
             executionContext.CorrelationId,
             nameof(SurveyAppointment),
             appointment.Id,
-            command.Purpose == SurveyAppointmentPurpose.BaselineMapping
-                ? "PROPOSE_BASELINE_APPOINTMENT"
-                : "PROPOSE_PAID_SERVICE_APPOINTMENT",
+            command.Purpose switch
+            {
+                SurveyAppointmentPurpose.BaselineMapping => "PROPOSE_BASELINE_APPOINTMENT",
+                SurveyAppointmentPurpose.PaidService => "PROPOSE_PAID_SERVICE_APPOINTMENT",
+                SurveyAppointmentPurpose.Capture => "PROPOSE_CAPTURE_APPOINTMENT",
+                _ => throw new InvalidOperationException("Unsupported appointment purpose.")
+            },
             oldData,
             newData,
             proposedAt);

@@ -53,6 +53,16 @@ internal sealed class SurveysDbContext(DbContextOptions<SurveysDbContext> option
     public DbSet<SurveyRequestTracking> SurveyRequestTrackings => Set<SurveyRequestTracking>();
     public DbSet<SurveyOrderCommercialSnapshot> SurveyOrderCommercialSnapshots => Set<SurveyOrderCommercialSnapshot>();
     public DbSet<OrderStateHistory> OrderStateHistories => Set<OrderStateHistory>();
+    public DbSet<CaptureAttempt> CaptureAttempts => Set<CaptureAttempt>();
+    public DbSet<CaptureAttemptHistory> CaptureAttemptHistories => Set<CaptureAttemptHistory>();
+    public DbSet<CaptureInputManifest> CaptureInputManifests => Set<CaptureInputManifest>();
+    public DbSet<CaptureInputApproval> CaptureInputApprovals => Set<CaptureInputApproval>();
+    public DbSet<SurveyDepositObligation> SurveyDepositObligations => Set<SurveyDepositObligation>();
+    public DbSet<SurveyFundingReceipt> SurveyFundingReceipts => Set<SurveyFundingReceipt>();
+    public DbSet<SurveyFundingAllocation> SurveyFundingAllocations => Set<SurveyFundingAllocation>();
+    public DbSet<SurveyCancellationDecision> SurveyCancellationDecisions => Set<SurveyCancellationDecision>();
+    public DbSet<SurveyRefundObligation> SurveyRefundObligations => Set<SurveyRefundObligation>();
+    public DbSet<CancellationRetention> CancellationRetentions => Set<CancellationRetention>();
 
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 
@@ -64,6 +74,25 @@ internal sealed class SurveysDbContext(DbContextOptions<SurveysDbContext> option
     {
         ArgumentNullException.ThrowIfNull(auditLog);
         AuditLogs.Add(auditLog);
+    }
+
+    public async Task AcquireBusinessPolicyWriteLockAsync(
+        CancellationToken cancellationToken = default)
+    {
+        if (Database.ProviderName != "Npgsql.EntityFrameworkCore.PostgreSQL")
+        {
+            return;
+        }
+
+        if (Database.CurrentTransaction is null)
+        {
+            throw new InvalidOperationException(
+                "The business-policy write guard requires an active transaction.");
+        }
+
+        await Database.ExecuteSqlInterpolatedAsync(
+            $"SELECT pg_advisory_xact_lock({BusinessPolicyLockKeys.ActivationGuard})",
+            cancellationToken);
     }
 
     public async Task<T> ExecuteInTransactionAsync<T>(

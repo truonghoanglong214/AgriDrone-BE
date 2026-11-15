@@ -47,18 +47,28 @@ public interface ISurveyPaymentProcessingRepository
 
     void AddPayment(SurveyPayment payment);
     void AddEvent(PaymentEvent paymentEvent);
+    void AddFundingReceipt(SurveyFundingReceipt receipt);
+    void AddFundingAllocation(SurveyFundingAllocation allocation);
+    void AddRefundObligation(SurveyRefundObligation obligation);
     void AddPriceAdjustment(PriceAdjustment adjustment);
 }
 
 public sealed record SurveyPaymentOwnerState(
     SurveyOrder Order,
     Guid PaidServiceAppointmentId,
-    SurveyPayment? ActivePayment);
+    SurveyPayment? ActivePayment,
+    SurveyDepositObligation? DepositObligation);
 
 public sealed record SurveyPaymentEventState(
     SurveyOrder Order,
     SurveyPayment Payment,
-    bool EventAlreadyProcessed);
+    bool EventAlreadyProcessed,
+    SurveyDepositObligation? DepositObligation,
+    SurveyCancellationReceiptDisposition? CancellationDecision);
+
+public sealed record SurveyCancellationReceiptDisposition(
+    Guid DecisionId,
+    CancellationDecisionKind DecisionKind);
 
 public sealed record EffectiveSurveyPrice(
     Guid SurveyServicePriceId,

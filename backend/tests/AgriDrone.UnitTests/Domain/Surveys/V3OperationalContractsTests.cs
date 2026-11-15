@@ -384,12 +384,21 @@ public sealed class V3OperationalContractsTests
         var requesterId = Guid.NewGuid();
         var decisionActorId = Guid.NewGuid();
         var inputEvidenceId = Guid.NewGuid();
+        var policyTerms = PinnedCancellationPolicyTerms.Create(
+            CancellationPolicyId,
+            versionNumber: 1,
+            refundableBeforeCapture: true,
+            retainDepositAfterCapture: true,
+            allowedFreeNoShowReschedules: 1,
+            operationalPostponementRefundable: true,
+            serviceFailureRefundable: true);
 
         // 1. Violation of R >= F + A
         var ex1 = Assert.Throws<SurveyDomainException>(() =>
             SurveyCancellationDecision.Create(
                 Guid.NewGuid(), orderId, 2, requesterId, decisionActorId,
-                CancellationPolicyId, 1, "CUSTOMER_REQUEST", "Changed mind",
+                policyTerms, CancellationDecisionKind.CustomerBeforeCapture,
+                "CUSTOMER_REQUEST", "Changed mind",
                 confirmedReceiptsAmount: 5_000m,
                 completedRefundsAmount: 4_000m,
                 activeRefundReservationsAmount: 2_000m, // F + A = 6000 > R (5000)
@@ -404,7 +413,8 @@ public sealed class V3OperationalContractsTests
         // 2. Full return before capture: R = 5000, F = 0, A = 0 => U = 5000. Retention = 0, Refund = 5000
         var fullReturn = SurveyCancellationDecision.Create(
             Guid.NewGuid(), orderId, 2, requesterId, decisionActorId,
-            CancellationPolicyId, 1, "BEFORE_CAPTURE_CANCEL", "Weather unsuitable",
+            policyTerms, CancellationDecisionKind.CustomerBeforeCapture,
+            "BEFORE_CAPTURE_CANCEL", "Weather unsuitable",
             confirmedReceiptsAmount: 5_000m,
             completedRefundsAmount: 0m,
             activeRefundReservationsAmount: 0m,
@@ -421,7 +431,8 @@ public sealed class V3OperationalContractsTests
         var ex2 = Assert.Throws<SurveyDomainException>(() =>
             SurveyCancellationDecision.Create(
                 Guid.NewGuid(), orderId, 2, requesterId, decisionActorId,
-                CancellationPolicyId, 1, "AFTER_CAPTURE_CANCEL", "Customer decided not to proceed",
+                policyTerms, CancellationDecisionKind.CustomerAfterAcceptableCapture,
+                "AFTER_CAPTURE_CANCEL", "Customer decided not to proceed",
                 confirmedReceiptsAmount: 10_000m,
                 completedRefundsAmount: 0m,
                 activeRefundReservationsAmount: 0m,
@@ -439,7 +450,8 @@ public sealed class V3OperationalContractsTests
         var ex3 = Assert.Throws<SurveyDomainException>(() =>
             SurveyCancellationDecision.Create(
                 Guid.NewGuid(), orderId, 2, requesterId, decisionActorId,
-                CancellationPolicyId, 1, "AFTER_CAPTURE_CANCEL", "Customer decided not to proceed",
+                policyTerms, CancellationDecisionKind.CustomerAfterAcceptableCapture,
+                "AFTER_CAPTURE_CANCEL", "Customer decided not to proceed",
                 confirmedReceiptsAmount: 3_000m,
                 completedRefundsAmount: 0m,
                 activeRefundReservationsAmount: 0m,
@@ -456,7 +468,8 @@ public sealed class V3OperationalContractsTests
         var ex4 = Assert.Throws<SurveyDomainException>(() =>
             SurveyCancellationDecision.Create(
                 Guid.NewGuid(), orderId, 2, requesterId, decisionActorId,
-                CancellationPolicyId, 1, "AFTER_CAPTURE_CANCEL", "Customer decided not to proceed",
+                policyTerms, CancellationDecisionKind.CustomerAfterAcceptableCapture,
+                "AFTER_CAPTURE_CANCEL", "Customer decided not to proceed",
                 confirmedReceiptsAmount: 10_000m,
                 completedRefundsAmount: 0m,
                 activeRefundReservationsAmount: 0m,
@@ -472,7 +485,8 @@ public sealed class V3OperationalContractsTests
         // 6. Valid acceptable capture cancellation with retention and refund
         var validRetained = SurveyCancellationDecision.Create(
             Guid.NewGuid(), orderId, 2, requesterId, decisionActorId,
-            CancellationPolicyId, 1, "AFTER_CAPTURE_CANCEL", "Customer decided not to proceed",
+            policyTerms, CancellationDecisionKind.CustomerAfterAcceptableCapture,
+            "AFTER_CAPTURE_CANCEL", "Customer decided not to proceed",
             confirmedReceiptsAmount: 10_000m,
             completedRefundsAmount: 0m,
             activeRefundReservationsAmount: 0m,
@@ -486,6 +500,59 @@ public sealed class V3OperationalContractsTests
 
         Assert.Equal(5_000m, validRetained.RetainedAmount);
         Assert.Equal(5_000m, validRetained.RefundAmount);
+        Assert.Equal(CancellationDecisionKind.CustomerAfterAcceptableCapture, validRetained.DecisionKind);
+
+        var nonRetainingPolicy = PinnedCancellationPolicyTerms.Create(
+            Guid.NewGuid(), 2, true, false, 1, true, true);
+        var policyError = Assert.Throws<SurveyDomainException>(() =>
+            SurveyCancellationDecision.Create(
+                Guid.NewGuid(), orderId, 2, requesterId, decisionActorId,
+                nonRetainingPolicy, CancellationDecisionKind.CustomerAfterAcceptableCapture,
+                "AFTER_CAPTURE_CANCEL", "Customer decided not to proceed",
+                confirmedReceiptsAmount: 10_000m,
+                completedRefundsAmount: 0m,
+                activeRefundReservationsAmount: 0m,
+                pinnedDepositAmount: 5_000m,
+                retainedAmount: 5_000m,
+                refundAmount: 5_000m,
+                currency: "VND",
+                payloadFingerprint: "fingerprint-policy-retention-denied",
+                createdAt: Now,
+                inputApprovalEvidenceId: inputEvidenceId));
+        Assert.Equal(CancellationDomainErrorCodes.PolicyDoesNotPermitRetention, policyError.Code);
+
+        var nonRefundableBeforeCapturePolicy = PinnedCancellationPolicyTerms.Create(
+            Guid.NewGuid(), 3, false, true, 1, true, true);
+        var refundPolicyError = Assert.Throws<SurveyDomainException>(() =>
+            SurveyCancellationDecision.Create(
+                Guid.NewGuid(), orderId, 2, requesterId, decisionActorId,
+                nonRefundableBeforeCapturePolicy, CancellationDecisionKind.CustomerBeforeCapture,
+                "BEFORE_CAPTURE_CANCEL", "Policy does not permit return",
+                confirmedReceiptsAmount: 5_000m,
+                completedRefundsAmount: 0m,
+                activeRefundReservationsAmount: 0m,
+                pinnedDepositAmount: 5_000m,
+                retainedAmount: 0m,
+                refundAmount: 5_000m,
+                currency: "VND",
+                payloadFingerprint: "fingerprint-policy-refund-denied",
+                createdAt: Now));
+        Assert.Equal(CancellationDomainErrorCodes.PolicyDoesNotPermitRefund, refundPolicyError.Code);
+
+        Assert.Throws<ArgumentException>(() =>
+            SurveyCancellationDecision.Create(
+                Guid.NewGuid(), orderId, 2, requesterId, decisionActorId,
+                policyTerms, CancellationDecisionKind.CustomerBeforeCapture,
+                "BEFORE_CAPTURE_CANCEL", "Invalid negative retention",
+                confirmedReceiptsAmount: 5_000m,
+                completedRefundsAmount: 0m,
+                activeRefundReservationsAmount: 0m,
+                pinnedDepositAmount: 5_000m,
+                retainedAmount: -1m,
+                refundAmount: 5_000m,
+                currency: "VND",
+                payloadFingerprint: "fingerprint-negative-retention",
+                createdAt: Now));
     }
 
     [Fact]

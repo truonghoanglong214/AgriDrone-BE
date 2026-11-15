@@ -8,15 +8,18 @@ public sealed class OrderStateHistoryConfiguration : IEntityTypeConfiguration<Or
 {
     public void Configure(EntityTypeBuilder<OrderStateHistory> builder)
     {
-        // Keep Step8 history queries compatible until 03B adds this column.
-        builder.Ignore(history => history.TransitionSequence);
-
-        builder.ToTable("order_state_history", "survey");
+        builder.ToTable(
+            "order_state_history",
+            "survey",
+            table => table.HasCheckConstraint(
+                "ck_order_state_history_transition_sequence",
+                "transition_sequence IS NULL OR transition_sequence >= 1"));
 
         builder.HasKey(h => h.Id).HasName("pk_order_state_history");
         builder.Property(h => h.Id).HasColumnName("id").HasColumnType("uuid");
         builder.Property(h => h.SurveyOrderId).HasColumnName("survey_order_id").HasColumnType("uuid").IsRequired();
         builder.Property(h => h.OrderVersion).HasColumnName("order_version").HasColumnType("bigint").IsRequired();
+        builder.Property(h => h.TransitionSequence).HasColumnName("transition_sequence").HasColumnType("bigint").IsRequired(false);
         builder.Property(h => h.FromStatus).HasColumnName("from_status").HasColumnType("system.survey_order_status").IsRequired(false);
         builder.Property(h => h.ToStatus).HasColumnName("to_status").HasColumnType("system.survey_order_status").IsRequired();
         builder.Property(h => h.ActorId).HasColumnName("actor_id").HasColumnType("uuid").IsRequired(false);
@@ -29,6 +32,11 @@ public sealed class OrderStateHistoryConfiguration : IEntityTypeConfiguration<Or
 
         builder.HasIndex(h => new { h.SurveyOrderId, h.OrderVersion })
             .HasDatabaseName("ix_order_state_history_order_version");
+
+        builder.HasIndex(h => new { h.SurveyOrderId, h.TransitionSequence })
+            .HasDatabaseName("uq_order_state_history_transition_sequence")
+            .HasFilter("transition_sequence IS NOT NULL")
+            .IsUnique();
 
         builder.HasOne<SurveyOrder>()
             .WithMany()

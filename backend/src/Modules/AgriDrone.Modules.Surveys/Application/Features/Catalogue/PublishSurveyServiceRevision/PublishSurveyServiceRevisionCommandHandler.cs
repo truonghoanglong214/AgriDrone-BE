@@ -31,6 +31,33 @@ internal sealed class PublishSurveyServiceRevisionCommandHandler(
                 BusinessPolicyError.CurrentUserRequired());
         }
 
+        try
+        {
+            return await unitOfWork.ExecuteInTransactionAsync(
+                async ct =>
+                {
+                    await unitOfWork.AcquireBusinessPolicyWriteLockAsync(ct);
+                    return await PublishLockedAsync(request, actorId, ct);
+                },
+                cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Result.Failure<PublishSurveyServiceRevisionResponse>(
+                BusinessPolicyError.ConcurrentUpdate());
+        }
+        catch (DbUpdateException ex)
+        {
+            return Result.Failure<PublishSurveyServiceRevisionResponse>(
+                BusinessPolicyError.ConcurrentUpdate(ex.Message));
+        }
+    }
+
+    private async Task<Result<PublishSurveyServiceRevisionResponse>> PublishLockedAsync(
+        PublishSurveyServiceRevisionCommand request,
+        Guid actorId,
+        CancellationToken cancellationToken)
+    {
         var service = await serviceRepository.GetByIdAsync(
             request.SurveyServiceId,
             cancellationToken);
@@ -129,39 +156,20 @@ internal sealed class PublishSurveyServiceRevisionCommandHandler(
             newRevision.ReasonCode
         });
 
-        try
-        {
-            await unitOfWork.ExecuteInTransactionAsync(
-                async ct =>
-                {
-                    policyRepository.AddRevision(newRevision);
+        policyRepository.AddRevision(newRevision);
 
-                    auditWriter.AddSystemAdminAction(
-                        unitOfWork,
-                        actorId,
-                        executionContext.CorrelationId,
-                        "SurveyServiceRevision",
-                        newRevision.Id,
-                        "PUBLISH_REVISION",
-                        oldData,
-                        newData,
-                        now);
+        auditWriter.AddSystemAdminAction(
+            unitOfWork,
+            actorId,
+            executionContext.CorrelationId,
+            "SurveyServiceRevision",
+            newRevision.Id,
+            "PUBLISH_REVISION",
+            oldData,
+            newData,
+            now);
 
-                    await unitOfWork.SaveChangesAsync(ct);
-                    return true;
-                },
-                cancellationToken);
-        }
-        catch (DbUpdateConcurrencyException)
-        {
-            return Result.Failure<PublishSurveyServiceRevisionResponse>(
-                BusinessPolicyError.ConcurrentUpdate());
-        }
-        catch (DbUpdateException ex)
-        {
-            return Result.Failure<PublishSurveyServiceRevisionResponse>(
-                BusinessPolicyError.ConcurrentUpdate(ex.Message));
-        }
+        await unitOfWork.SaveChangesAsync(cancellationToken);
 
         return Result.Success(new PublishSurveyServiceRevisionResponse(
             newRevision.Id,

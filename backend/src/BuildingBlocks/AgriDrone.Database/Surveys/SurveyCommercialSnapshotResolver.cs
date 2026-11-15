@@ -7,7 +7,8 @@ using Microsoft.EntityFrameworkCore;
 namespace AgriDrone.Database.Surveys;
 
 public sealed class SurveyCommercialSnapshotResolver(
-    SurveyApprovalDbContext context)
+    SurveyApprovalDbContext context,
+    TimeProvider timeProvider)
     : ISurveyCommercialSnapshotResolver
 {
     public async Task<Result<ResolvedSurveyCommercialSnapshot>> ResolveForApprovalAsync(
@@ -16,6 +17,13 @@ public sealed class SurveyCommercialSnapshotResolver(
         CancellationToken cancellationToken = default)
     {
         context.EnsureApprovalTransaction();
+
+        if (context.Database.ProviderName == "Npgsql.EntityFrameworkCore.PostgreSQL")
+        {
+            await context.Database.ExecuteSqlInterpolatedAsync(
+                $"SELECT pg_advisory_xact_lock_shared({BusinessPolicyLockKeys.ActivationGuard})",
+                cancellationToken);
+        }
 
         // 1. Acquire FOR SHARE lock on active policy activation
         var activationLocked = await SurveyApprovalRowLock.ExistsAsync(
@@ -34,6 +42,11 @@ public sealed class SurveyCommercialSnapshotResolver(
             return Result.Failure<ResolvedSurveyCommercialSnapshot>(
                 SurveyApprovalError.PolicyConfigurationMissing("Active policy configuration pointer does not exist."));
         }
+
+        // Policy eligibility must be evaluated with a server timestamp obtained
+        // after the shared guard has been acquired. The caller-supplied value is
+        // intentionally replaced so a long lock wait cannot backdate approval.
+        evaluatedAt = timeProvider.GetUtcNow();
 
         // 2. Query BusinessPolicyActivation
         var activation = await context.BusinessPolicyActivations

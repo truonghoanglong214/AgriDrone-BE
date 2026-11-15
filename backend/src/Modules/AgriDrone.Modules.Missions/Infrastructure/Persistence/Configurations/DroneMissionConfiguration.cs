@@ -78,7 +78,9 @@ public sealed class DroneMissionConfiguration : IEntityTypeConfiguration<DroneMi
                     "requires_baseline_completion = TRUE AND " +
                     "source_map_version_id IS NULL) OR (" +
                     "requires_baseline_completion = FALSE AND " +
-                    "source_map_version_id IS NOT NULL)))");
+                    "source_map_version_id IS NOT NULL))) OR " +
+                    "(mission_purpose = 'CAPTURE'::system.mission_purpose AND " +
+                    "requires_baseline_completion = FALSE)");
 
                 tableBuilder.HasCheckConstraint(
                     "ck_drone_missions_order_binding",
@@ -86,6 +88,10 @@ public sealed class DroneMissionConfiguration : IEntityTypeConfiguration<DroneMi
                     "preparation_operation_id IS NULL) OR " +
                     "(survey_order_id IS NOT NULL AND mission_purpose IS NOT NULL AND " +
                     "preparation_operation_id IS NOT NULL)");
+
+                tableBuilder.HasCheckConstraint(
+                    "ck_drone_missions_capture_attempt_order",
+                    "capture_attempt_id IS NULL OR survey_order_id IS NOT NULL");
 
                 tableBuilder.HasCheckConstraint(
                     "ck_drone_missions_baseline_dependency",
@@ -121,6 +127,10 @@ public sealed class DroneMissionConfiguration : IEntityTypeConfiguration<DroneMi
 
         builder.Property(mission => mission.SurveyOrderId)
             .HasColumnName("survey_order_id")
+            .HasColumnType("uuid");
+
+        builder.Property(mission => mission.CaptureAttemptId)
+            .HasColumnName("capture_attempt_id")
             .HasColumnType("uuid");
 
         builder.Property(mission => mission.PreparationOperationId)
@@ -391,8 +401,22 @@ public sealed class DroneMissionConfiguration : IEntityTypeConfiguration<DroneMi
                 mission.Purpose
             })
             .HasDatabaseName("uq_drone_missions_order_purpose")
-            .HasFilter("survey_order_id IS NOT NULL")
+            .HasFilter("survey_order_id IS NOT NULL AND capture_attempt_id IS NULL")
             .IsUnique();
+
+        builder.HasIndex(mission => mission.CaptureAttemptId)
+            .HasDatabaseName("uq_drone_missions_capture_attempt")
+            .HasFilter("capture_attempt_id IS NOT NULL")
+            .IsUnique();
+
+        builder.HasIndex(mission => new
+            {
+                mission.CaptureAttemptId,
+                mission.TenantId,
+                mission.FarmId,
+                mission.SurveyOrderId
+            })
+            .HasDatabaseName("ix_drone_missions_capture_attempt_owner");
 
         builder.HasIndex(mission => new
             {

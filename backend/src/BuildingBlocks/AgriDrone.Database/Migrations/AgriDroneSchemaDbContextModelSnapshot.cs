@@ -55,6 +55,9 @@ namespace AgriDrone.Database.Migrations
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "boundary_exception_decision", new[] { "ACCEPTED_INSIDE", "REJECTED_OUTSIDE", "LOCATION_CORRECTED" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "boundary_exception_source", new[] { "BASELINE_CANDIDATE", "HEALTH_OBSERVATION", "PLANT_INVENTORY_CHANGE", "MANUAL" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "boundary_exception_state", new[] { "OUT_OF_BOUNDARY", "NEEDS_REVIEW", "RESOLVED" });
+            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "cancellation_decision_kind", new[] { "CUSTOMER_BEFORE_CAPTURE", "CUSTOMER_AFTER_ACCEPTABLE_CAPTURE", "OPERATIONAL_POSTPONEMENT", "SERVICE_FAILURE" });
+            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "capture_attempt_status", new[] { "PLANNED", "PREFLIGHT_READY", "IN_FLIGHT", "AWAITING_UPLOAD", "UPLOADED", "PROCESSING", "ACCEPTED", "REFLIGHT_REQUIRED", "FLIGHT_FAILED", "CANCELLED" });
+            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "capture_input_manifest_status", new[] { "UPLOADED", "SUPERSEDED", "APPROVED", "REJECTED" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "condition_review_decision", new[] { "CONFIRMED", "CORRECTED", "REJECTED" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "condition_type", new[] { "DISEASE", "ABIOTIC_DAMAGE", "MECHANICAL_DAMAGE", "OTHER" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "contract_scope", new[] { "LEGACY", "V3" });
@@ -77,7 +80,7 @@ namespace AgriDrone.Database.Migrations
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "media_type", new[] { "IMAGE", "VIDEO" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "mission_media_role", new[] { "RAW_VIDEO", "RAW_IMAGE", "PROCESSED_IMAGE", "THUMBNAIL", "OTHER" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "mission_preflight_checklist_status", new[] { "DRAFT", "COMPLETED", "SUPERSEDED" });
-            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "mission_purpose", new[] { "BASELINE_MAPPING", "PLANT_HEALTH", "HARVEST_READINESS" });
+            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "mission_purpose", new[] { "BASELINE_MAPPING", "PLANT_HEALTH", "HARVEST_READINESS", "CAPTURE" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "mission_status", new[] { "DRAFT", "SCHEDULED", "IN_FLIGHT", "FLIGHT_COMPLETED", "UPLOADING", "READY_FOR_PROCESSING", "PROCESSING", "AWAITING_REVIEW", "COMPLETED", "CANCELLED", "FLIGHT_FAILED", "UPLOAD_FAILED", "PROCESSING_FAILED" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "mission_type", new[] { "MAPPING", "HEALTH_INSPECTION" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "observation_review_status", new[] { "PENDING", "MATCHED", "CONFIRMED", "REJECTED", "NEW_PLANT", "DUPLICATE" });
@@ -95,9 +98,12 @@ namespace AgriDrone.Database.Migrations
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "scan_source", new[] { "DRONE_AI", "FIELD_MANUAL", "MANAGER" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "survey_appointment_purpose", new[] { "BASELINE_MAPPING", "PAID_SERVICE", "CAPTURE" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "survey_appointment_status", new[] { "PROPOSED", "CONFIRMED", "RESCHEDULE_REQUESTED", "CANCELLED", "SUPERSEDED" });
+            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "survey_deposit_obligation_status", new[] { "PENDING", "SATISFIED", "CANCELLED" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "survey_order_status", new[] { "PENDING_BOUNDARY_VERIFICATION", "AWAITING_BASELINE_APPOINTMENT", "AWAITING_BASELINE_DEPOSIT", "AWAITING_BOUNDARY_CAPTURE", "BASELINE_READY", "BASELINE_IN_PROGRESS", "AWAITING_BASELINE_REVIEW", "AWAITING_PRICING", "AWAITING_PAID_APPOINTMENT", "AWAITING_PAYMENT", "READY_FOR_PAID_SERVICE", "IN_PROGRESS", "PENDING_REVIEW", "COMPLETED", "CANCELLED", "AWAITING_APPOINTMENT", "AWAITING_DEPOSIT", "READY_FOR_CAPTURE", "CAPTURING", "AWAITING_CAPTURE_UPLOAD", "AWAITING_INPUT_REVIEW", "AWAITING_PROCESSING", "PROCESSING", "AWAITING_REFLIGHT_DECISION", "AWAITING_SETTLEMENT" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "survey_payment_status", new[] { "PENDING", "PROCESSING", "PAID", "FAILED", "REFUNDED", "ADJUSTMENT_REQUIRED" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "survey_pole_count_source", new[] { "BASELINE_PUBLICATION", "CURRENT_PUBLISHED_INVENTORY" });
+            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "survey_refund_obligation_status", new[] { "PENDING", "RESERVED", "EXECUTING", "COMPLETED", "CANCELLED" });
+            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "survey_refund_origin_kind", new[] { "CANCELLATION_RETURN", "SERVICE_FAILURE", "OVERPAYMENT", "COMPLAINT_REFUND" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "survey_request_kind", new[] { "NEW_CUSTOMER", "EXISTING_TENANT_NEW_FARM", "EXISTING_FARM_SURVEY" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "survey_request_status", new[] { "SUBMITTED", "UNDER_REVIEW", "APPROVED", "REJECTED", "WITHDRAWN" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "survey_result_status", new[] { "PENDING_REVIEW", "APPROVED", "PUBLISHED" });
@@ -2529,6 +2535,10 @@ namespace AgriDrone.Database.Migrations
                         .HasColumnName("id")
                         .HasDefaultValueSql("gen_random_uuid()");
 
+                    b.Property<Guid?>("CaptureAttemptId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("capture_attempt_id");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
@@ -2792,6 +2802,11 @@ namespace AgriDrone.Database.Migrations
                     b.HasAlternateKey("Id", "TenantId")
                         .HasName("uq_drone_missions_id_tenant");
 
+                    b.HasIndex("CaptureAttemptId")
+                        .IsUnique()
+                        .HasDatabaseName("uq_drone_missions_capture_attempt")
+                        .HasFilter("capture_attempt_id IS NOT NULL");
+
                     b.HasIndex("CreatedBy");
 
                     b.HasIndex("FlightRoute")
@@ -2848,7 +2863,7 @@ namespace AgriDrone.Database.Migrations
                     b.HasIndex("SurveyOrderId", "Purpose")
                         .IsUnique()
                         .HasDatabaseName("uq_drone_missions_order_purpose")
-                        .HasFilter("survey_order_id IS NOT NULL");
+                        .HasFilter("survey_order_id IS NOT NULL AND capture_attempt_id IS NULL");
 
                     b.HasIndex("ZoneId", "FarmId");
 
@@ -2857,11 +2872,17 @@ namespace AgriDrone.Database.Migrations
 
                     b.HasIndex("SurveyOrderId", "TenantId", "FarmId");
 
+                    b.HasIndex("CaptureAttemptId", "TenantId", "FarmId", "SurveyOrderId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_drone_missions_capture_attempt_owner");
+
                     b.ToTable("drone_missions", "mission", t =>
                         {
                             t.HasComment("Drone flight mission for mapping or health inspection, including route and processing state.");
 
                             t.HasCheckConstraint("ck_drone_missions_baseline_dependency", "requires_baseline_completion = FALSE OR mission_purpose IN ('PLANT_HEALTH'::system.mission_purpose, 'HARVEST_READINESS'::system.mission_purpose)");
+
+                            t.HasCheckConstraint("ck_drone_missions_capture_attempt_order", "capture_attempt_id IS NULL OR survey_order_id IS NOT NULL");
 
                             t.HasCheckConstraint("ck_drone_missions_detected_count", "detected_plant_count IS NULL OR detected_plant_count >= 0");
 
@@ -2875,7 +2896,7 @@ namespace AgriDrone.Database.Migrations
 
                             t.HasCheckConstraint("ck_drone_missions_schedule_time", "scheduled_end_at IS NULL OR scheduled_at IS NULL OR scheduled_end_at > scheduled_at");
 
-                            t.HasCheckConstraint("ck_drone_missions_source_map", "(mission_purpose IS NULL AND ((mission_type = 'MAPPING'::system.mission_type AND source_map_version_id IS NULL) OR (mission_type = 'HEALTH_INSPECTION'::system.mission_type AND source_map_version_id IS NOT NULL))) OR (mission_purpose = 'BASELINE_MAPPING'::system.mission_purpose AND source_map_version_id IS NULL AND requires_baseline_completion = FALSE) OR (mission_purpose IN ('PLANT_HEALTH'::system.mission_purpose, 'HARVEST_READINESS'::system.mission_purpose) AND ((requires_baseline_completion = TRUE AND source_map_version_id IS NULL) OR (requires_baseline_completion = FALSE AND source_map_version_id IS NOT NULL)))");
+                            t.HasCheckConstraint("ck_drone_missions_source_map", "(mission_purpose IS NULL AND ((mission_type = 'MAPPING'::system.mission_type AND source_map_version_id IS NULL) OR (mission_type = 'HEALTH_INSPECTION'::system.mission_type AND source_map_version_id IS NOT NULL))) OR (mission_purpose = 'BASELINE_MAPPING'::system.mission_purpose AND source_map_version_id IS NULL AND requires_baseline_completion = FALSE) OR (mission_purpose IN ('PLANT_HEALTH'::system.mission_purpose, 'HARVEST_READINESS'::system.mission_purpose) AND ((requires_baseline_completion = TRUE AND source_map_version_id IS NULL) OR (requires_baseline_completion = FALSE AND source_map_version_id IS NOT NULL))) OR (mission_purpose = 'CAPTURE'::system.mission_purpose AND requires_baseline_completion = FALSE)");
 
                             t.HasCheckConstraint("ck_drone_missions_time", "ended_at IS NULL OR started_at IS NULL OR ended_at >= started_at");
 
@@ -6994,6 +7015,500 @@ namespace AgriDrone.Database.Migrations
                         });
                 });
 
+            modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.CancellationRetention", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("amount");
+
+                    b.Property<Guid>("CancellationDecisionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("cancellation_decision_id");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character(3)")
+                        .HasColumnName("currency")
+                        .IsFixedLength();
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("reason");
+
+                    b.Property<DateTimeOffset>("RecordedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("recorded_at");
+
+                    b.Property<Guid>("SurveyOrderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("survey_order_id");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_cancellation_retentions");
+
+                    b.HasIndex("CancellationDecisionId")
+                        .IsUnique()
+                        .HasDatabaseName("uq_cancellation_retentions_decision");
+
+                    b.HasIndex("SurveyOrderId")
+                        .HasDatabaseName("ix_cancellation_retentions_order");
+
+                    b.HasIndex("CancellationDecisionId", "SurveyOrderId");
+
+                    b.ToTable("cancellation_retentions", "survey", t =>
+                        {
+                            t.HasCheckConstraint("ck_cancellation_retentions_amount", "amount > 0 AND amount = FLOOR(amount)");
+
+                            t.HasCheckConstraint("ck_cancellation_retentions_currency", "currency = 'VND'");
+                        });
+                });
+
+            modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.CaptureAttempt", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("AttemptIndex")
+                        .HasColumnType("integer")
+                        .HasColumnName("attempt_index");
+
+                    b.Property<string>("CancellationEvidenceReference")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("cancellation_evidence_reference");
+
+                    b.Property<string>("CancellationReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("cancellation_reason");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTimeOffset?>("EndedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("ended_at");
+
+                    b.Property<Guid>("FarmId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("farm_id");
+
+                    b.Property<string>("FlightCompletionReceipt")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("flight_completion_receipt");
+
+                    b.Property<string>("FlightFailureEvidence")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("flight_failure_evidence");
+
+                    b.Property<string>("InputApprovalReference")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("input_approval_reference");
+
+                    b.Property<Guid>("LastPredecessorHistoryId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("last_predecessor_history_id");
+
+                    b.Property<Guid>("OrderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("order_id");
+
+                    b.Property<Guid?>("ParentMissionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("parent_mission_id");
+
+                    b.Property<string>("PreflightEvidenceReference")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("preflight_evidence_reference");
+
+                    b.Property<string>("ProcessingAcceptanceReceipt")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("processing_acceptance_receipt");
+
+                    b.Property<string>("ProcessingJobReference")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("processing_job_reference");
+
+                    b.Property<string>("ReflightApprovalReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("reflight_approval_reason");
+
+                    b.Property<DateTimeOffset?>("ReflightApprovedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("reflight_approved_at");
+
+                    b.Property<Guid?>("ReflightApprovedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("reflight_approved_by");
+
+                    b.Property<string>("ReflightDecisionEvidence")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("reflight_decision_evidence");
+
+                    b.Property<DateTimeOffset?>("StartedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("started_at");
+
+                    b.Property<CaptureAttemptStatus>("Status")
+                        .HasColumnType("system.capture_attempt_status")
+                        .HasColumnName("status");
+
+                    b.Property<Guid?>("SupersededAttemptId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("superseded_attempt_id");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<string>("UploadManifestFingerprint")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("upload_manifest_fingerprint");
+
+                    b.Property<string>("UploadManifestReference")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("upload_manifest_reference");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id")
+                        .HasName("pk_capture_attempts");
+
+                    b.HasAlternateKey("Id", "TenantId", "FarmId", "OrderId")
+                        .HasName("uq_capture_attempts_id_owner");
+
+                    b.HasIndex("OrderId")
+                        .IsUnique()
+                        .HasDatabaseName("uq_capture_attempts_active_order")
+                        .HasFilter("status IN ('PLANNED', 'PREFLIGHT_READY', 'IN_FLIGHT', 'AWAITING_UPLOAD', 'UPLOADED', 'PROCESSING')");
+
+                    b.HasIndex("ReflightApprovedBy")
+                        .HasDatabaseName("ix_capture_attempts_reflight_approved_by");
+
+                    b.HasIndex("SupersededAttemptId")
+                        .IsUnique()
+                        .HasDatabaseName("uq_capture_attempts_parent_successor")
+                        .HasFilter("superseded_attempt_id IS NOT NULL");
+
+                    b.HasIndex("OrderId", "AttemptIndex")
+                        .IsUnique()
+                        .HasDatabaseName("uq_capture_attempts_order_index");
+
+                    b.HasIndex("OrderId", "TenantId", "FarmId")
+                        .HasDatabaseName("ix_capture_attempts_order_owner");
+
+                    b.HasIndex("SupersededAttemptId", "TenantId", "FarmId", "OrderId")
+                        .HasDatabaseName("ix_capture_attempts_parent_owner");
+
+                    b.ToTable("capture_attempts", "survey", t =>
+                        {
+                            t.HasCheckConstraint("ck_capture_attempts_flight_time", "ended_at IS NULL OR started_at IS NULL OR ended_at >= started_at");
+
+                            t.HasCheckConstraint("ck_capture_attempts_index", "attempt_index >= 1");
+
+                            t.HasCheckConstraint("ck_capture_attempts_successor_approval", "(superseded_attempt_id IS NULL AND reflight_approved_by IS NULL AND reflight_approval_reason IS NULL AND reflight_approved_at IS NULL) OR (superseded_attempt_id IS NOT NULL AND reflight_approved_by IS NOT NULL AND reflight_approval_reason IS NOT NULL AND reflight_approved_at IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_capture_attempts_updated_at", "updated_at >= created_at");
+
+                            t.HasCheckConstraint("ck_capture_attempts_version", "version >= 1");
+                        });
+                });
+
+            modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.CaptureAttemptHistory", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("action");
+
+                    b.Property<Guid?>("ActorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("actor_id");
+
+                    b.Property<Guid>("CaptureAttemptId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("capture_attempt_id");
+
+                    b.Property<Guid>("CorrelationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("correlation_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("EvidenceReference")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("evidence_reference");
+
+                    b.Property<CaptureAttemptStatus?>("FromStatus")
+                        .HasColumnType("system.capture_attempt_status")
+                        .HasColumnName("from_status");
+
+                    b.Property<Guid?>("OperationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("operation_id");
+
+                    b.Property<string>("PayloadFingerprint")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("payload_fingerprint");
+
+                    b.Property<Guid?>("PredecessorHistoryId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("predecessor_history_id");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("reason");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("source");
+
+                    b.Property<CaptureAttemptStatus>("ToStatus")
+                        .HasColumnType("system.capture_attempt_status")
+                        .HasColumnName("to_status");
+
+                    b.Property<long>("TransitionSequence")
+                        .HasColumnType("bigint")
+                        .HasColumnName("transition_sequence");
+
+                    b.HasKey("Id")
+                        .HasName("pk_capture_attempt_history");
+
+                    b.HasAlternateKey("Id", "CaptureAttemptId")
+                        .HasName("uq_capture_attempt_history_id_attempt");
+
+                    b.HasIndex("ActorId")
+                        .HasDatabaseName("ix_capture_attempt_history_actor");
+
+                    b.HasIndex("CorrelationId")
+                        .HasDatabaseName("ix_capture_attempt_history_correlation");
+
+                    b.HasIndex("CaptureAttemptId", "OperationId")
+                        .IsUnique()
+                        .HasDatabaseName("uq_capture_attempt_history_operation")
+                        .HasFilter("operation_id IS NOT NULL");
+
+                    b.HasIndex("CaptureAttemptId", "TransitionSequence")
+                        .IsUnique()
+                        .HasDatabaseName("uq_capture_attempt_history_sequence");
+
+                    b.HasIndex("PredecessorHistoryId", "CaptureAttemptId")
+                        .HasDatabaseName("ix_capture_attempt_history_predecessor");
+
+                    b.ToTable("capture_attempt_history", "survey", t =>
+                        {
+                            t.HasCheckConstraint("ck_capture_attempt_history_sequence", "transition_sequence >= 1");
+                        });
+                });
+
+            modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.CaptureInputApproval", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("ApprovedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("approved_at");
+
+                    b.Property<Guid>("ApprovedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("approved_by");
+
+                    b.Property<Guid>("CaptureAttemptId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("capture_attempt_id");
+
+                    b.Property<Guid>("FarmId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("farm_id");
+
+                    b.Property<Guid>("InputManifestId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("input_manifest_id");
+
+                    b.Property<string>("ManifestFingerprint")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("manifest_fingerprint");
+
+                    b.Property<Guid>("MissionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("mission_id");
+
+                    b.Property<Guid>("ProcessingJobId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("processing_job_id");
+
+                    b.Property<Guid>("SurveyOrderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("survey_order_id");
+
+                    b.Property<string>("TechnicalQualityNotes")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("technical_quality_notes");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_capture_input_approvals");
+
+                    b.HasIndex("ApprovedBy")
+                        .HasDatabaseName("ix_capture_input_approvals_approved_by");
+
+                    b.HasIndex("InputManifestId")
+                        .IsUnique()
+                        .HasDatabaseName("uq_capture_input_approvals_manifest");
+
+                    b.HasIndex("MissionId")
+                        .HasDatabaseName("ix_capture_input_approvals_mission");
+
+                    b.HasIndex("ProcessingJobId")
+                        .IsUnique()
+                        .HasDatabaseName("uq_capture_input_approvals_processing_job");
+
+                    b.HasIndex("InputManifestId", "TenantId", "FarmId", "SurveyOrderId", "CaptureAttemptId", "MissionId", "ManifestFingerprint")
+                        .HasDatabaseName("ix_capture_input_approvals_manifest_identity");
+
+                    b.ToTable("capture_input_approvals", "survey");
+                });
+
+            modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.CaptureInputManifest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("CaptureAttemptId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("capture_attempt_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTimeOffset?>("EvaluatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("evaluated_at");
+
+                    b.Property<Guid>("FarmId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("farm_id");
+
+                    b.Property<string>("GpsMetadataSummary")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("gps_metadata_summary");
+
+                    b.Property<string>("ManifestFingerprint")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("manifest_fingerprint");
+
+                    b.Property<Guid>("MissionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("mission_id");
+
+                    b.Property<CaptureInputManifestStatus>("Status")
+                        .HasColumnType("system.capture_input_manifest_status")
+                        .HasColumnName("status");
+
+                    b.Property<Guid>("SurveyOrderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("survey_order_id");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<int>("TotalFileCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("total_file_count");
+
+                    b.Property<long>("TotalSizeBytes")
+                        .HasColumnType("bigint")
+                        .HasColumnName("total_size_bytes");
+
+                    b.HasKey("Id")
+                        .HasName("pk_capture_input_manifests");
+
+                    b.HasAlternateKey("Id", "TenantId", "FarmId", "SurveyOrderId", "CaptureAttemptId", "MissionId", "ManifestFingerprint")
+                        .HasName("uq_capture_input_manifests_identity");
+
+                    b.HasIndex("MissionId")
+                        .HasDatabaseName("ix_capture_input_manifests_mission");
+
+                    b.HasIndex("CaptureAttemptId", "ManifestFingerprint")
+                        .IsUnique()
+                        .HasDatabaseName("uq_capture_input_manifests_attempt_fingerprint");
+
+                    b.HasIndex("CaptureAttemptId", "TenantId", "FarmId", "SurveyOrderId")
+                        .HasDatabaseName("ix_capture_input_manifests_attempt_owner");
+
+                    b.ToTable("capture_input_manifests", "survey", t =>
+                        {
+                            t.HasCheckConstraint("ck_capture_input_manifests_evaluated", "evaluated_at IS NULL OR evaluated_at >= created_at");
+
+                            t.HasCheckConstraint("ck_capture_input_manifests_file_count", "total_file_count > 0");
+
+                            t.HasCheckConstraint("ck_capture_input_manifests_size", "total_size_bytes > 0");
+                        });
+                });
+
             modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.ClaimPolicy", b =>
                 {
                     b.Property<Guid>("Id")
@@ -7563,6 +8078,10 @@ namespace AgriDrone.Database.Migrations
                         .HasColumnType("system.survey_order_status")
                         .HasColumnName("to_status");
 
+                    b.Property<long?>("TransitionSequence")
+                        .HasColumnType("bigint")
+                        .HasColumnName("transition_sequence");
+
                     b.HasKey("Id")
                         .HasName("pk_order_state_history");
 
@@ -7571,7 +8090,15 @@ namespace AgriDrone.Database.Migrations
                     b.HasIndex("SurveyOrderId", "OrderVersion")
                         .HasDatabaseName("ix_order_state_history_order_version");
 
-                    b.ToTable("order_state_history", "survey");
+                    b.HasIndex("SurveyOrderId", "TransitionSequence")
+                        .IsUnique()
+                        .HasDatabaseName("uq_order_state_history_transition_sequence")
+                        .HasFilter("transition_sequence IS NOT NULL");
+
+                    b.ToTable("order_state_history", "survey", t =>
+                        {
+                            t.HasCheckConstraint("ck_order_state_history_transition_sequence", "transition_sequence IS NULL OR transition_sequence >= 1");
+                        });
                 });
 
             modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.PaymentEvent", b =>
@@ -8497,6 +9024,173 @@ namespace AgriDrone.Database.Migrations
                         });
                 });
 
+            modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.SurveyCancellationDecision", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<decimal>("ActiveRefundReservationsAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("active_refund_reservations_amount");
+
+                    b.Property<int>("AllowedFreeNoShowReschedules")
+                        .HasColumnType("integer")
+                        .HasColumnName("allowed_free_no_show_reschedules");
+
+                    b.Property<Guid>("CancellationPolicyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("cancellation_policy_id");
+
+                    b.Property<int>("CancellationPolicyVersion")
+                        .HasColumnType("integer")
+                        .HasColumnName("cancellation_policy_version");
+
+                    b.Property<decimal>("CompletedRefundsAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("completed_refunds_amount");
+
+                    b.Property<decimal>("ConfirmedReceiptsAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("confirmed_receipts_amount");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character(3)")
+                        .HasColumnName("currency")
+                        .IsFixedLength();
+
+                    b.Property<Guid>("DecisionActorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("decision_actor_id");
+
+                    b.Property<CancellationDecisionKind>("DecisionKind")
+                        .HasColumnType("system.cancellation_decision_kind")
+                        .HasColumnName("decision_kind");
+
+                    b.Property<Guid?>("InputApprovalEvidenceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("input_approval_evidence_id");
+
+                    b.Property<Guid>("OperationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("operation_id");
+
+                    b.Property<bool>("OperationalPostponementRefundable")
+                        .HasColumnType("boolean")
+                        .HasColumnName("operational_postponement_refundable");
+
+                    b.Property<uint>("OrderVersion")
+                        .HasColumnType("xid")
+                        .HasColumnName("order_version");
+
+                    b.Property<string>("PayloadFingerprint")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("payload_fingerprint");
+
+                    b.Property<decimal>("PinnedDepositAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("pinned_deposit_amount");
+
+                    b.Property<Guid?>("PredecessorDecisionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("predecessor_decision_id");
+
+                    b.Property<string>("ReasonCode")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("reason_code");
+
+                    b.Property<string>("ReasonDescription")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("reason_description");
+
+                    b.Property<decimal>("RefundAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("refund_amount");
+
+                    b.Property<bool>("RefundableBeforeCapture")
+                        .HasColumnType("boolean")
+                        .HasColumnName("refundable_before_capture");
+
+                    b.Property<Guid>("RequesterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("requester_id");
+
+                    b.Property<bool>("RetainDepositAfterCapture")
+                        .HasColumnType("boolean")
+                        .HasColumnName("retain_deposit_after_capture");
+
+                    b.Property<decimal>("RetainedAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("retained_amount");
+
+                    b.Property<bool>("ServiceFailureRefundable")
+                        .HasColumnType("boolean")
+                        .HasColumnName("service_failure_refundable");
+
+                    b.Property<Guid>("SurveyOrderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("survey_order_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_survey_cancellation_decisions");
+
+                    b.HasAlternateKey("Id", "SurveyOrderId")
+                        .HasName("uq_survey_cancellation_decisions_id_order");
+
+                    b.HasIndex("CancellationPolicyId");
+
+                    b.HasIndex("DecisionActorId");
+
+                    b.HasIndex("InputApprovalEvidenceId");
+
+                    b.HasIndex("PredecessorDecisionId")
+                        .IsUnique()
+                        .HasDatabaseName("uq_survey_cancellation_decisions_predecessor")
+                        .HasFilter("predecessor_decision_id IS NOT NULL");
+
+                    b.HasIndex("RequesterId");
+
+                    b.HasIndex("PredecessorDecisionId", "SurveyOrderId");
+
+                    b.HasIndex("SurveyOrderId", "OperationId")
+                        .IsUnique()
+                        .HasDatabaseName("uq_survey_cancellation_decisions_order_operation");
+
+                    b.ToTable("survey_cancellation_decisions", "survey", t =>
+                        {
+                            t.HasCheckConstraint("ck_survey_cancellation_decisions_acceptable_capture", "decision_kind <> 'CUSTOMER_AFTER_ACCEPTABLE_CAPTURE'::system.cancellation_decision_kind OR input_approval_evidence_id IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_survey_cancellation_decisions_amounts", "confirmed_receipts_amount >= 0 AND completed_refunds_amount >= 0 AND active_refund_reservations_amount >= 0 AND pinned_deposit_amount >= 0 AND retained_amount >= 0 AND refund_amount >= 0 AND confirmed_receipts_amount = FLOOR(confirmed_receipts_amount) AND completed_refunds_amount = FLOOR(completed_refunds_amount) AND active_refund_reservations_amount = FLOOR(active_refund_reservations_amount) AND pinned_deposit_amount = FLOOR(pinned_deposit_amount) AND retained_amount = FLOOR(retained_amount) AND refund_amount = FLOOR(refund_amount)");
+
+                            t.HasCheckConstraint("ck_survey_cancellation_decisions_arithmetic", "confirmed_receipts_amount >= completed_refunds_amount + active_refund_reservations_amount AND retained_amount <= LEAST(pinned_deposit_amount, confirmed_receipts_amount - completed_refunds_amount - active_refund_reservations_amount) AND refund_amount = confirmed_receipts_amount - completed_refunds_amount - active_refund_reservations_amount - retained_amount");
+
+                            t.HasCheckConstraint("ck_survey_cancellation_decisions_currency", "currency = 'VND'");
+
+                            t.HasCheckConstraint("ck_survey_cancellation_decisions_free_reschedules", "allowed_free_no_show_reschedules >= 0");
+
+                            t.HasCheckConstraint("ck_survey_cancellation_decisions_policy_version", "cancellation_policy_version >= 1");
+                        });
+                });
+
             modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.SurveyComboDiscountPolicy", b =>
                 {
                     b.Property<Guid>("Id")
@@ -8541,6 +9235,95 @@ namespace AgriDrone.Database.Migrations
                     b.ToTable("survey_combo_discount_policies", "survey", t =>
                         {
                             t.HasCheckConstraint("ck_survey_combo_discount_policies_percentage_valid", "discount_percentage >= 0 AND discount_percentage <= 100 AND (effective_to IS NOT NULL OR discount_percentage < 100)");
+                        });
+                });
+
+            modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.SurveyDepositObligation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<decimal>("AllocatedAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("allocated_amount");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("amount");
+
+                    b.Property<Guid>("BusinessPolicyVersionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("business_policy_version_id");
+
+                    b.Property<DateTimeOffset?>("CancelledAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("cancelled_at");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character(3)")
+                        .HasColumnName("currency")
+                        .IsFixedLength();
+
+                    b.Property<Guid>("DepositPolicyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("deposit_policy_id");
+
+                    b.Property<Guid>("FarmId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("farm_id");
+
+                    b.Property<DateTimeOffset?>("SatisfiedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("satisfied_at");
+
+                    b.Property<SurveyDepositObligationStatus>("Status")
+                        .HasColumnType("system.survey_deposit_obligation_status")
+                        .HasColumnName("status");
+
+                    b.Property<Guid>("SurveyOrderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("survey_order_id");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_survey_deposit_obligations");
+
+                    b.HasAlternateKey("Id", "SurveyOrderId")
+                        .HasName("uq_survey_deposit_obligations_id_order");
+
+                    b.HasIndex("BusinessPolicyVersionId");
+
+                    b.HasIndex("DepositPolicyId");
+
+                    b.HasIndex("SurveyOrderId")
+                        .IsUnique()
+                        .HasDatabaseName("uq_survey_deposit_obligations_order");
+
+                    b.HasIndex("SurveyOrderId", "TenantId", "FarmId")
+                        .HasDatabaseName("ix_survey_deposit_obligations_order_owner");
+
+                    b.ToTable("survey_deposit_obligations", "survey", t =>
+                        {
+                            t.HasCheckConstraint("ck_survey_deposit_obligations_allocated", "allocated_amount >= 0 AND allocated_amount = FLOOR(allocated_amount)");
+
+                            t.HasCheckConstraint("ck_survey_deposit_obligations_amount", "amount > 0 AND amount = FLOOR(amount)");
+
+                            t.HasCheckConstraint("ck_survey_deposit_obligations_currency", "currency = 'VND'");
+
+                            t.HasCheckConstraint("ck_survey_deposit_obligations_status_time", "(status = 'SATISFIED'::system.survey_deposit_obligation_status AND satisfied_at IS NOT NULL) OR (status = 'CANCELLED'::system.survey_deposit_obligation_status AND cancelled_at IS NOT NULL) OR (status = 'PENDING'::system.survey_deposit_obligation_status AND satisfied_at IS NULL AND cancelled_at IS NULL)");
                         });
                 });
 
@@ -8623,6 +9406,154 @@ namespace AgriDrone.Database.Migrations
                         });
                 });
 
+            modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.SurveyFundingAllocation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<decimal>("AllocatedAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("allocated_amount");
+
+                    b.Property<DateTimeOffset>("AllocatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("allocated_at");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character(3)")
+                        .HasColumnName("currency")
+                        .IsFixedLength();
+
+                    b.Property<Guid>("DepositObligationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("deposit_obligation_id");
+
+                    b.Property<Guid>("FundingReceiptId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("funding_receipt_id");
+
+                    b.Property<Guid>("SurveyOrderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("survey_order_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_survey_funding_allocations");
+
+                    b.HasIndex("DepositObligationId", "SurveyOrderId");
+
+                    b.HasIndex("FundingReceiptId", "DepositObligationId")
+                        .IsUnique()
+                        .HasDatabaseName("uq_survey_funding_allocations_receipt_obligation");
+
+                    b.HasIndex("FundingReceiptId", "SurveyOrderId");
+
+                    b.HasIndex("SurveyOrderId", "DepositObligationId", "AllocatedAt")
+                        .HasDatabaseName("ix_survey_funding_allocations_order_obligation");
+
+                    b.ToTable("survey_funding_allocations", "survey", t =>
+                        {
+                            t.HasCheckConstraint("ck_survey_funding_allocations_amount", "allocated_amount > 0 AND allocated_amount = FLOOR(allocated_amount)");
+
+                            t.HasCheckConstraint("ck_survey_funding_allocations_currency", "currency = 'VND'");
+                        });
+                });
+
+            modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.SurveyFundingReceipt", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("amount");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character(3)")
+                        .HasColumnName("currency")
+                        .IsFixedLength();
+
+                    b.Property<Guid?>("DepositObligationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("deposit_obligation_id");
+
+                    b.Property<string>("PayloadFingerprint")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("payload_fingerprint");
+
+                    b.Property<string>("PaymentReference")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)")
+                        .HasColumnName("payment_reference");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("provider");
+
+                    b.Property<string>("ProviderTransactionId")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)")
+                        .HasColumnName("provider_transaction_id");
+
+                    b.Property<DateTimeOffset>("ReceivedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("received_at");
+
+                    b.Property<Guid>("SurveyOrderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("survey_order_id");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_survey_funding_receipts");
+
+                    b.HasAlternateKey("Id", "SurveyOrderId")
+                        .HasName("uq_survey_funding_receipts_id_order");
+
+                    b.HasIndex("DepositObligationId")
+                        .HasDatabaseName("ix_survey_funding_receipts_deposit_obligation");
+
+                    b.HasIndex("DepositObligationId", "SurveyOrderId");
+
+                    b.HasIndex("Provider", "ProviderTransactionId")
+                        .IsUnique()
+                        .HasDatabaseName("uq_survey_funding_receipts_provider_transaction");
+
+                    b.HasIndex("SurveyOrderId", "ReceivedAt")
+                        .HasDatabaseName("ix_survey_funding_receipts_order_received");
+
+                    b.ToTable("survey_funding_receipts", "survey", t =>
+                        {
+                            t.HasCheckConstraint("ck_survey_funding_receipts_amount", "amount > 0 AND amount = FLOOR(amount)");
+
+                            t.HasCheckConstraint("ck_survey_funding_receipts_currency", "currency = 'VND'");
+
+                            t.HasCheckConstraint("ck_survey_funding_receipts_received_at", "created_at >= received_at");
+                        });
+                });
+
             modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.SurveyOrder", b =>
                 {
                     b.Property<Guid>("Id")
@@ -8677,6 +9608,10 @@ namespace AgriDrone.Database.Migrations
                     b.Property<DateTimeOffset?>("DepositConfirmedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("deposit_confirmed_at");
+
+                    b.Property<Guid?>("DepositObligationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("deposit_obligation_id");
 
                     b.Property<Guid?>("DepositPaymentId")
                         .HasColumnType("uuid")
@@ -8852,6 +9787,11 @@ namespace AgriDrone.Database.Migrations
                         .HasName("uq_survey_orders_id_tenant_farm");
 
                     b.HasIndex("BusinessPolicyVersionId");
+
+                    b.HasIndex("DepositObligationId")
+                        .IsUnique()
+                        .HasDatabaseName("uq_survey_orders_deposit_obligation")
+                        .HasFilter("deposit_obligation_id IS NOT NULL");
 
                     b.HasIndex("OrderNumber")
                         .IsUnique()
@@ -9155,6 +10095,10 @@ namespace AgriDrone.Database.Migrations
                         .HasColumnName("currency")
                         .IsFixedLength();
 
+                    b.Property<Guid?>("DepositObligationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("deposit_obligation_id");
+
                     b.Property<string>("Provider")
                         .IsRequired()
                         .HasMaxLength(50)
@@ -9195,6 +10139,13 @@ namespace AgriDrone.Database.Migrations
                     b.HasKey("Id")
                         .HasName("pk_survey_payments");
 
+                    b.HasIndex("DepositObligationId")
+                        .IsUnique()
+                        .HasDatabaseName("uq_survey_payments_active_deposit_obligation")
+                        .HasFilter("deposit_obligation_id IS NOT NULL AND status IN ('PENDING'::system.survey_payment_status, 'PROCESSING'::system.survey_payment_status, 'PAID'::system.survey_payment_status, 'ADJUSTMENT_REQUIRED'::system.survey_payment_status)");
+
+                    b.HasIndex("DepositObligationId", "SurveyOrderId");
+
                     b.HasIndex("Provider", "ProviderReference")
                         .IsUnique()
                         .HasDatabaseName("uq_survey_payments_provider_reference")
@@ -9216,9 +10167,110 @@ namespace AgriDrone.Database.Migrations
 
                             t.HasCheckConstraint("ck_survey_payments_currency", "currency ~ '^[A-Z]{3}$'");
 
+                            t.HasCheckConstraint("ck_survey_payments_deposit_obligation", "(purpose = 'OrderDeposit' AND deposit_obligation_id IS NOT NULL) OR (purpose <> 'OrderDeposit' AND deposit_obligation_id IS NULL)");
+
                             t.HasCheckConstraint("ck_survey_payments_provider_session", "status = 'PENDING'::system.survey_payment_status OR provider_reference IS NOT NULL");
 
-                            t.HasCheckConstraint("ck_survey_payments_purpose", "purpose IN ('BaselineDeposit', 'FinalBalance')");
+                            t.HasCheckConstraint("ck_survey_payments_purpose", "purpose IN ('BaselineDeposit', 'FinalBalance', 'OrderDeposit')");
+                        });
+                });
+
+            modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.SurveyRefundObligation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("amount");
+
+                    b.Property<DateTimeOffset?>("CancelledAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("cancelled_at");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character(3)")
+                        .HasColumnName("currency")
+                        .IsFixedLength();
+
+                    b.Property<DateTimeOffset?>("ExecutingAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("executing_at");
+
+                    b.Property<Guid?>("FundingReceiptId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("funding_receipt_id");
+
+                    b.Property<Guid>("OriginDecisionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("origin_decision_id");
+
+                    b.Property<SurveyRefundOriginKind>("OriginKind")
+                        .HasColumnType("system.survey_refund_origin_kind")
+                        .HasColumnName("origin_kind");
+
+                    b.Property<DateTimeOffset?>("ReservedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("reserved_at");
+
+                    b.Property<SurveyRefundObligationStatus>("Status")
+                        .HasColumnType("system.survey_refund_obligation_status")
+                        .HasColumnName("status");
+
+                    b.Property<Guid>("SurveyOrderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("survey_order_id");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_survey_refund_obligations");
+
+                    b.HasIndex("FundingReceiptId")
+                        .IsUnique()
+                        .HasDatabaseName("uq_survey_refund_obligations_late_receipt")
+                        .HasFilter("funding_receipt_id IS NOT NULL");
+
+                    b.HasIndex("FundingReceiptId", "SurveyOrderId");
+
+                    b.HasIndex("OriginDecisionId", "SurveyOrderId");
+
+                    b.HasIndex("SurveyOrderId", "Status")
+                        .HasDatabaseName("ix_survey_refund_obligations_order_status");
+
+                    b.HasIndex("SurveyOrderId", "OriginKind", "OriginDecisionId")
+                        .IsUnique()
+                        .HasDatabaseName("uq_survey_refund_obligations_origin")
+                        .HasFilter("funding_receipt_id IS NULL");
+
+                    b.ToTable("survey_refund_obligations", "survey", t =>
+                        {
+                            t.HasCheckConstraint("ck_survey_refund_obligations_amount", "amount > 0 AND amount = FLOOR(amount)");
+
+                            t.HasCheckConstraint("ck_survey_refund_obligations_currency", "currency = 'VND'");
+
+                            t.HasCheckConstraint("ck_survey_refund_obligations_status_time", "(status = 'PENDING'::system.survey_refund_obligation_status) OR (status = 'RESERVED'::system.survey_refund_obligation_status AND reserved_at IS NOT NULL) OR (status = 'EXECUTING'::system.survey_refund_obligation_status AND reserved_at IS NOT NULL AND executing_at IS NOT NULL) OR (status = 'COMPLETED'::system.survey_refund_obligation_status AND reserved_at IS NOT NULL AND executing_at IS NOT NULL AND completed_at IS NOT NULL) OR (status = 'CANCELLED'::system.survey_refund_obligation_status AND cancelled_at IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_survey_refund_obligations_updated_at", "updated_at >= created_at");
                         });
                 });
 
@@ -10928,6 +11980,13 @@ namespace AgriDrone.Database.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("fk_drone_missions_orders_same_tenant_farm");
 
+                    b.HasOne("AgriDrone.Modules.Surveys.Domain.CaptureAttempt", null)
+                        .WithOne()
+                        .HasForeignKey("AgriDrone.Modules.Missions.Domain.Missions.DroneMission", "CaptureAttemptId", "TenantId", "FarmId", "SurveyOrderId")
+                        .HasPrincipalKey("AgriDrone.Modules.Surveys.Domain.CaptureAttempt", "Id", "TenantId", "FarmId", "OrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_drone_missions_capture_attempt_same_owner");
+
                     b.Navigation("Drone");
                 });
 
@@ -12077,6 +13136,114 @@ namespace AgriDrone.Database.Migrations
                         .HasConstraintName("fk_cancellation_policies_predecessor");
                 });
 
+            modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.CancellationRetention", b =>
+                {
+                    b.HasOne("AgriDrone.Modules.Surveys.Domain.SurveyCancellationDecision", null)
+                        .WithMany()
+                        .HasForeignKey("CancellationDecisionId", "SurveyOrderId")
+                        .HasPrincipalKey("Id", "SurveyOrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_cancellation_retentions_decision_order");
+                });
+
+            modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.CaptureAttempt", b =>
+                {
+                    b.HasOne("AgriDrone.Modules.Identity.Domain.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("ReflightApprovedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_capture_attempts_users_reflight_approved_by");
+
+                    b.HasOne("AgriDrone.Modules.Surveys.Domain.SurveyOrder", null)
+                        .WithMany()
+                        .HasForeignKey("OrderId", "TenantId", "FarmId")
+                        .HasPrincipalKey("Id", "TenantId", "FarmId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_capture_attempts_order_same_owner");
+
+                    b.HasOne("AgriDrone.Modules.Surveys.Domain.CaptureAttempt", null)
+                        .WithMany()
+                        .HasForeignKey("SupersededAttemptId", "TenantId", "FarmId", "OrderId")
+                        .HasPrincipalKey("Id", "TenantId", "FarmId", "OrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_capture_attempts_parent_same_owner");
+                });
+
+            modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.CaptureAttemptHistory", b =>
+                {
+                    b.HasOne("AgriDrone.Modules.Identity.Domain.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("ActorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_capture_attempt_history_users_actor");
+
+                    b.HasOne("AgriDrone.Modules.Surveys.Domain.CaptureAttempt", null)
+                        .WithMany("History")
+                        .HasForeignKey("CaptureAttemptId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_capture_attempt_history_attempt");
+
+                    b.HasOne("AgriDrone.Modules.Surveys.Domain.CaptureAttemptHistory", null)
+                        .WithMany()
+                        .HasForeignKey("PredecessorHistoryId", "CaptureAttemptId")
+                        .HasPrincipalKey("Id", "CaptureAttemptId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_capture_attempt_history_predecessor_same_attempt");
+                });
+
+            modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.CaptureInputApproval", b =>
+                {
+                    b.HasOne("AgriDrone.Modules.Identity.Domain.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("ApprovedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_capture_input_approvals_users_approved_by");
+
+                    b.HasOne("AgriDrone.Modules.Missions.Domain.Missions.DroneMission", null)
+                        .WithMany()
+                        .HasForeignKey("MissionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_capture_input_approvals_mission");
+
+                    b.HasOne("AgriDrone.Modules.Missions.Domain.Processing.AiProcessingJob", null)
+                        .WithMany()
+                        .HasForeignKey("ProcessingJobId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_capture_input_approvals_processing_job");
+
+                    b.HasOne("AgriDrone.Modules.Surveys.Domain.CaptureInputManifest", null)
+                        .WithMany()
+                        .HasForeignKey("InputManifestId", "TenantId", "FarmId", "SurveyOrderId", "CaptureAttemptId", "MissionId", "ManifestFingerprint")
+                        .HasPrincipalKey("Id", "TenantId", "FarmId", "SurveyOrderId", "CaptureAttemptId", "MissionId", "ManifestFingerprint")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_capture_input_approvals_manifest_identity");
+                });
+
+            modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.CaptureInputManifest", b =>
+                {
+                    b.HasOne("AgriDrone.Modules.Missions.Domain.Missions.DroneMission", null)
+                        .WithMany()
+                        .HasForeignKey("MissionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_capture_input_manifests_mission");
+
+                    b.HasOne("AgriDrone.Modules.Surveys.Domain.CaptureAttempt", null)
+                        .WithMany()
+                        .HasForeignKey("CaptureAttemptId", "TenantId", "FarmId", "SurveyOrderId")
+                        .HasPrincipalKey("Id", "TenantId", "FarmId", "OrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_capture_input_manifests_attempt_same_owner");
+                });
+
             modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.ClaimPolicy", b =>
                 {
                     b.HasOne("AgriDrone.Modules.Surveys.Domain.ClaimPolicy", null)
@@ -12367,6 +13534,75 @@ namespace AgriDrone.Database.Migrations
                         .HasConstraintName("fk_survey_approval_idempotency_requests_request_id");
                 });
 
+            modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.SurveyCancellationDecision", b =>
+                {
+                    b.HasOne("AgriDrone.Modules.Surveys.Domain.CancellationPolicy", null)
+                        .WithMany()
+                        .HasForeignKey("CancellationPolicyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_survey_cancellation_decisions_policy");
+
+                    b.HasOne("AgriDrone.Modules.Identity.Domain.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("DecisionActorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_survey_cancellation_decisions_users_actor");
+
+                    b.HasOne("AgriDrone.Modules.Surveys.Domain.CaptureInputApproval", null)
+                        .WithMany()
+                        .HasForeignKey("InputApprovalEvidenceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_survey_cancellation_decisions_input_approval");
+
+                    b.HasOne("AgriDrone.Modules.Identity.Domain.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("RequesterId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_survey_cancellation_decisions_users_requester");
+
+                    b.HasOne("AgriDrone.Modules.Surveys.Domain.SurveyOrder", null)
+                        .WithMany()
+                        .HasForeignKey("SurveyOrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_survey_cancellation_decisions_order");
+
+                    b.HasOne("AgriDrone.Modules.Surveys.Domain.SurveyCancellationDecision", null)
+                        .WithMany()
+                        .HasForeignKey("PredecessorDecisionId", "SurveyOrderId")
+                        .HasPrincipalKey("Id", "SurveyOrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_survey_cancellation_decisions_predecessor_order");
+                });
+
+            modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.SurveyDepositObligation", b =>
+                {
+                    b.HasOne("AgriDrone.Modules.Surveys.Domain.BusinessPolicyVersion", null)
+                        .WithMany()
+                        .HasForeignKey("BusinessPolicyVersionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_survey_deposit_obligations_business_policy");
+
+                    b.HasOne("AgriDrone.Modules.Surveys.Domain.SurveyDepositPolicy", null)
+                        .WithMany()
+                        .HasForeignKey("DepositPolicyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_survey_deposit_obligations_deposit_policy");
+
+                    b.HasOne("AgriDrone.Modules.Surveys.Domain.SurveyOrder", null)
+                        .WithMany()
+                        .HasForeignKey("SurveyOrderId", "TenantId", "FarmId")
+                        .HasPrincipalKey("Id", "TenantId", "FarmId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_survey_deposit_obligations_order_same_owner");
+                });
+
             modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.SurveyDepositPolicy", b =>
                 {
                     b.HasOne("AgriDrone.Modules.Surveys.Domain.SurveyDepositPolicy", null)
@@ -12374,6 +13610,42 @@ namespace AgriDrone.Database.Migrations
                         .HasForeignKey("PredecessorVersionId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("fk_survey_deposit_policies_predecessor");
+                });
+
+            modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.SurveyFundingAllocation", b =>
+                {
+                    b.HasOne("AgriDrone.Modules.Surveys.Domain.SurveyDepositObligation", null)
+                        .WithMany()
+                        .HasForeignKey("DepositObligationId", "SurveyOrderId")
+                        .HasPrincipalKey("Id", "SurveyOrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_survey_funding_allocations_obligation_order");
+
+                    b.HasOne("AgriDrone.Modules.Surveys.Domain.SurveyFundingReceipt", null)
+                        .WithMany()
+                        .HasForeignKey("FundingReceiptId", "SurveyOrderId")
+                        .HasPrincipalKey("Id", "SurveyOrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_survey_funding_allocations_receipt_order");
+                });
+
+            modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.SurveyFundingReceipt", b =>
+                {
+                    b.HasOne("AgriDrone.Modules.Surveys.Domain.SurveyOrder", null)
+                        .WithMany()
+                        .HasForeignKey("SurveyOrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_survey_funding_receipts_order");
+
+                    b.HasOne("AgriDrone.Modules.Surveys.Domain.SurveyDepositObligation", null)
+                        .WithMany()
+                        .HasForeignKey("DepositObligationId", "SurveyOrderId")
+                        .HasPrincipalKey("Id", "SurveyOrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_survey_funding_receipts_deposit_order");
                 });
 
             modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.SurveyOrder", b =>
@@ -12548,7 +13820,39 @@ namespace AgriDrone.Database.Migrations
                         .IsRequired()
                         .HasConstraintName("fk_survey_payments_orders_order_id");
 
+                    b.HasOne("AgriDrone.Modules.Surveys.Domain.SurveyDepositObligation", null)
+                        .WithMany()
+                        .HasForeignKey("DepositObligationId", "SurveyOrderId")
+                        .HasPrincipalKey("Id", "SurveyOrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_survey_payments_deposit_obligation_order");
+
                     b.Navigation("SurveyOrder");
+                });
+
+            modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.SurveyRefundObligation", b =>
+                {
+                    b.HasOne("AgriDrone.Modules.Surveys.Domain.SurveyCancellationDecision", null)
+                        .WithMany()
+                        .HasForeignKey("OriginDecisionId", "SurveyOrderId")
+                        .HasPrincipalKey("Id", "SurveyOrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_survey_refund_obligations_decision_order");
+
+                    b.HasOne("AgriDrone.Modules.Surveys.Domain.SurveyOrder", null)
+                        .WithMany()
+                        .HasForeignKey("SurveyOrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_survey_refund_obligations_order");
+
+                    b.HasOne("AgriDrone.Modules.Surveys.Domain.SurveyFundingReceipt", null)
+                        .WithMany()
+                        .HasForeignKey("FundingReceiptId", "SurveyOrderId")
+                        .HasPrincipalKey("Id", "SurveyOrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_survey_refund_obligations_receipt_order");
                 });
 
             modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.SurveyRequest", b =>
@@ -12917,6 +14221,11 @@ namespace AgriDrone.Database.Migrations
             modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.BoundaryCaptureSession", b =>
                 {
                     b.Navigation("Samples");
+                });
+
+            modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.CaptureAttempt", b =>
+                {
+                    b.Navigation("History");
                 });
 
             modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.SurveyOrder", b =>

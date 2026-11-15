@@ -170,6 +170,13 @@ public static class IntegrationEventDescriptors
             IntegrationSchemaVersions.V1,
             RequiresActorId: true);
 
+    public static IntegrationEventDescriptor<SurveyCaptureStateChangedV1>
+        SurveyCaptureStateChangedV1 { get; } =
+        new(
+            IntegrationEventTypes.SurveyCaptureStateChangedV1,
+            IntegrationSchemaVersions.V1,
+            RequiresActorId: true);
+
     public static IntegrationEventDescriptor<BaselineMissionStartedV1>
         BaselineMissionStartedV1 { get; } =
         new(

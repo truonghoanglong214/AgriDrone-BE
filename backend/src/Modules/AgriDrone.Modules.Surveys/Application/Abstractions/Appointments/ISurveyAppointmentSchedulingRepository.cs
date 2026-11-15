@@ -34,4 +34,6 @@ public sealed record SurveyAppointmentManagerState(
 public sealed record SurveyAppointmentOwnerState(
     SurveyOrder Order,
     SurveyAppointment Appointment,
-    bool HasActivePayment);
+    bool HasActivePayment,
+    bool DepositSatisfied,
+    bool HasActiveCaptureAttempt);

@@ -84,6 +84,14 @@ internal sealed class ConfirmSurveyAppointmentCommandHandler(
 
         var order = stateResult.Value.Order;
         var appointment = stateResult.Value.Appointment;
+        if (order.Scope != command.ExpectedScope ||
+            (order.Scope == ContractScope.V3 && appointment.Purpose != SurveyAppointmentPurpose.Capture) ||
+            (order.Scope == ContractScope.Legacy && appointment.Purpose == SurveyAppointmentPurpose.Capture))
+        {
+            return Result.Failure<ConfirmSurveyAppointmentResponse>(
+                SurveyOrderError.InvalidTransition(
+                    "Appointment purpose does not match the Order contract scope."));
+        }
         if (appointment.Purpose == SurveyAppointmentPurpose.BaselineMapping &&
             !order.RequiresBaselineMapping)
         {
@@ -98,7 +106,25 @@ internal sealed class ConfirmSurveyAppointmentCommandHandler(
             order.EnsureVersion(command.ExpectedOrderVersion);
             appointment.EnsureVersion(command.ExpectedAppointmentVersion);
             appointment.Confirm(actorId, confirmedAt);
-            if (appointment.Purpose == SurveyAppointmentPurpose.BaselineMapping)
+            if (appointment.Purpose == SurveyAppointmentPurpose.Capture)
+            {
+                if (!order.DepositObligationId.HasValue)
+                {
+                    return Result.Failure<ConfirmSurveyAppointmentResponse>(
+                        SurveyOrderError.InvalidTransition(
+                            "The V3 Order has no pinned deposit obligation."));
+                }
+
+                if (stateResult.Value.DepositSatisfied)
+                {
+                    order.TransitionToReadyForCaptureV3(confirmedAt);
+                }
+                else
+                {
+                    order.TransitionToAwaitingDepositV3(confirmedAt);
+                }
+            }
+            else if (appointment.Purpose == SurveyAppointmentPurpose.BaselineMapping)
             {
                 order.MarkBaselineAppointmentConfirmed(confirmedAt);
             }
@@ -132,9 +158,13 @@ internal sealed class ConfirmSurveyAppointmentCommandHandler(
             executionContext.CorrelationId,
             nameof(SurveyAppointment),
             appointment.Id,
-            appointment.Purpose == SurveyAppointmentPurpose.BaselineMapping
-                ? "CONFIRM_BASELINE_APPOINTMENT"
-                : "CONFIRM_PAID_SERVICE_APPOINTMENT",
+            appointment.Purpose switch
+            {
+                SurveyAppointmentPurpose.BaselineMapping => "CONFIRM_BASELINE_APPOINTMENT",
+                SurveyAppointmentPurpose.PaidService => "CONFIRM_PAID_SERVICE_APPOINTMENT",
+                SurveyAppointmentPurpose.Capture => "CONFIRM_CAPTURE_APPOINTMENT",
+                _ => throw new InvalidOperationException("Unsupported appointment purpose.")
+            },
             oldData,
             newData,
             confirmedAt);
