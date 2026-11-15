@@ -1,4 +1,5 @@
 using System.Text.Json;
+using AgriDrone.IntegrationContracts.Surveys;
 using AgriDrone.Modules.Identity.Application.Abstractions.Persistence;
 using AgriDrone.Modules.Identity.Application.Errors;
 using AgriDrone.Modules.Identity.Domain.SystemManagers;
@@ -16,7 +17,8 @@ internal sealed class EndPrimaryFarmManagerAssignmentCommandHandler(
     IAuditWriter auditWriter,
     IAuditLogSink auditLogSink,
     IExecutionContext executionContext,
-    TimeProvider timeProvider)
+    TimeProvider timeProvider,
+    IActiveCaptureAssignmentGuard? activeCaptureGuard = null)
     : IRequestHandler<EndPrimaryFarmManagerAssignmentCommand, Result>
 {
     public async Task<Result> Handle(
@@ -39,6 +41,18 @@ internal sealed class EndPrimaryFarmManagerAssignmentCommandHandler(
         if (assignment.Version != request.ExpectedVersion)
         {
             return Result.Failure(SystemManagerError.ConcurrentUpdate());
+        }
+
+        if (activeCaptureGuard is not null &&
+            await activeCaptureGuard.HasInFlightCaptureAsync(
+                assignment.TenantId,
+                assignment.FarmId,
+                assignment.SystemManagerProfileId,
+                cancellationToken))
+        {
+            return Result.Failure(AppError.Conflict(
+                "ACTIVE_CAPTURE_IN_FLIGHT",
+                "Cannot end assignment while a drone capture is in flight."));
         }
 
         var now = timeProvider.GetUtcNow();

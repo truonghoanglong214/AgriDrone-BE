@@ -22,8 +22,10 @@ namespace AgriDrone.Database.Surveys;
 internal sealed class SurveyCaptureExecutionCoordinator(
     AgriDroneSchemaDbContext db,
     TimeProvider clock,
-    OutboxMessageFactory outboxFactory) : ISurveyCaptureExecutionCoordinator
+    OutboxMessageFactory outboxFactory,
+    ISurveyCaptureExecutionProbe? probe = null) : ISurveyCaptureExecutionCoordinator
 {
+    private readonly ISurveyCaptureExecutionProbe _probe = probe ?? new NoopSurveyCaptureExecutionProbe();
     public Task<PrepareCaptureAttemptResult> PrepareAttemptAsync(
         PrepareCaptureAttemptRequest request,
         CancellationToken cancellationToken = default) => ExecuteAsync(
@@ -230,6 +232,7 @@ internal sealed class SurveyCaptureExecutionCoordinator(
             {
                 return StartFailure("CAPTURE_GRAPH_NOT_FOUND", "The Order, Attempt, or Mission binding was not found.");
             }
+            await _probe.HitAsync(SurveyCaptureCheckpoint.AfterAttemptAndMissionTracked, token);
             if (!await IsAssignedManagerAsync(
                     order.TenantId,
                     order.FarmId,
@@ -315,8 +318,10 @@ internal sealed class SurveyCaptureExecutionCoordinator(
             mission.StartFlight(request.ActorId, now);
             drone.StartMission(now);
             order.TransitionToCapturingV3(now);
+            await _probe.HitAsync(SurveyCaptureCheckpoint.AfterStateTransitionsTracked, token);
             AddCaptureEvidence(order, request.ActorId, request.CorrelationId,
                 "CAPTURE_STARTED", now, attempt.Id, mission.Id);
+            await _probe.HitAsync(SurveyCaptureCheckpoint.AfterAuditAndOutboxTracked, token);
             await db.SaveChangesAsync(token);
             return new StartCaptureFlightResult(
                 true,
@@ -679,57 +684,57 @@ internal sealed class SurveyCaptureExecutionCoordinator(
                 .OrderByDescending(value => value.CreatedAt)
                 .FirstOrDefaultAsync(token);
 
-            CaptureInputManifest manifest;
             if (existing is not null)
             {
-                manifest = existing;
+                return ManifestFailure(
+                    "CAPTURE_MANIFEST_STATE_CONFLICT",
+                    "An active manifest exists without a matching idempotent operation receipt.");
             }
-            else
-            {
-                var files = await db.Set<MissionMedia>()
-                    .AsNoTracking()
-                    .Where(value =>
-                        value.MissionId == mission.Id &&
-                        value.Media.StorageStatus == MediaStorageStatus.Active &&
-                        value.Media.DeletedAt == null)
-                    .OrderBy(value => value.MediaId)
-                    .Select(value => new
-                    {
-                        value.MediaId,
-                        value.Media.Checksum,
-                        value.Media.FileSizeBytes,
-                        Role = value.MediaRole.ToString()
-                    })
-                    .ToListAsync(token);
-                if (files.Count == 0 || files.Any(value =>
-                        string.IsNullOrWhiteSpace(value.Checksum) ||
-                        value.FileSizeBytes is null or <= 0))
-                {
-                    return ManifestFailure(
-                        "CAPTURE_MEDIA_INCOMPLETE",
-                        "Every frozen input file requires an immutable SHA-256 checksum and positive size.");
-                }
 
-                var canonical = string.Join(
-                    '\n',
-                    files.Select(value =>
-                        $"{value.MediaId:D}|{value.Checksum!.ToLowerInvariant()}|{value.FileSizeBytes}|{value.Role}"));
-                var fingerprint = Convert.ToHexString(
-                    SHA256.HashData(Encoding.UTF8.GetBytes(canonical)));
-                manifest = CaptureInputManifest.Create(
-                    Guid.CreateVersion7(),
-                    order.TenantId,
-                    order.FarmId,
-                    order.Id,
-                    attempt.Id,
-                    mission.Id,
-                    fingerprint,
-                    files.Count,
-                    files.Sum(value => value.FileSizeBytes!.Value),
-                    now,
-                    $"files={files.Count}");
-                db.Set<CaptureInputManifest>().Add(manifest);
+            var files = await db.Set<MissionMedia>()
+                .AsNoTracking()
+                .Where(value =>
+                    value.MissionId == mission.Id &&
+                    value.Media.StorageStatus == MediaStorageStatus.Active &&
+                    value.Media.DeletedAt == null)
+                .OrderBy(value => value.MediaId)
+                .Select(value => new
+                {
+                    value.MediaId,
+                    value.Media.Checksum,
+                    value.Media.FileSizeBytes,
+                    Role = value.MediaRole.ToString()
+                })
+                .ToListAsync(token);
+            if (files.Count == 0 || files.Any(value =>
+                    string.IsNullOrWhiteSpace(value.Checksum) ||
+                    value.Checksum.Length != 64 ||
+                    value.FileSizeBytes is null or <= 0))
+            {
+                return ManifestFailure(
+                    "CAPTURE_MEDIA_INCOMPLETE",
+                    "Every frozen input file requires an immutable SHA-256 checksum and positive size.");
             }
+
+            var canonical = string.Join(
+                '\n',
+                files.Select(value =>
+                    $"{value.MediaId:D}|{value.Checksum!.ToLowerInvariant()}|{value.FileSizeBytes}|{value.Role}"));
+            var fingerprint = Convert.ToHexString(
+                SHA256.HashData(Encoding.UTF8.GetBytes(canonical)));
+            var manifest = CaptureInputManifest.Create(
+                Guid.CreateVersion7(),
+                order.TenantId,
+                order.FarmId,
+                order.Id,
+                attempt.Id,
+                mission.Id,
+                fingerprint,
+                files.Count,
+                files.Sum(value => value.FileSizeBytes!.Value),
+                now,
+                $"files={files.Count}");
+            db.Set<CaptureInputManifest>().Add(manifest);
 
             attempt.BindMission(mission.Id);
             attempt.MarkUploaded(
@@ -1303,6 +1308,7 @@ internal sealed class SurveyCaptureExecutionCoordinator(
         try
         {
             var result = await operation(cancellationToken);
+            await _probe.HitAsync(SurveyCaptureCheckpoint.AfterSaveBeforeCommit, cancellationToken);
             await transaction.CommitAsync(cancellationToken);
             return result;
         }
@@ -1323,8 +1329,11 @@ internal sealed class SurveyCaptureExecutionCoordinator(
         }
     }
 
-    private Task<bool> LockOrderAsync(Guid orderId, CancellationToken token) =>
-        LockRowAsync("SELECT id FROM survey.survey_orders WHERE id = @id FOR UPDATE", orderId, token);
+    private async Task<bool> LockOrderAsync(Guid orderId, CancellationToken token)
+    {
+        await _probe.HitAsync(SurveyCaptureCheckpoint.BeforeOrderLock, token);
+        return await LockRowAsync("SELECT id FROM survey.survey_orders WHERE id = @id FOR UPDATE", orderId, token);
+    }
 
     private Task<bool> LockDroneAsync(Guid droneId, CancellationToken token) =>
         LockRowAsync("SELECT id FROM mission.drones WHERE id = @id FOR UPDATE", droneId, token);
@@ -1369,19 +1378,43 @@ internal sealed class SurveyCaptureExecutionCoordinator(
         return command;
     }
 
-    private Task<bool> IsAssignedManagerAsync(
+    private async Task<bool> IsAssignedManagerAsync(
         Guid tenantId,
         Guid farmId,
         Guid actorId,
-        CancellationToken token) => db.Set<FarmManagerAssignment>()
-        .AsNoTracking()
-        .AnyAsync(value =>
-            value.TenantId == tenantId &&
-            value.FarmId == farmId &&
-            value.EndedAt == null &&
-            value.SystemManagerProfile.UserId == actorId &&
-            value.SystemManagerProfile.Status == SystemManagerProfileStatus.Active,
-            token);
+        CancellationToken token)
+    {
+        if (db.Database.IsRelational())
+        {
+            var assignmentId = await db.Set<FarmManagerAssignment>()
+                .Where(value =>
+                    value.TenantId == tenantId &&
+                    value.FarmId == farmId &&
+                    value.EndedAt == null &&
+                    value.SystemManagerProfile.UserId == actorId &&
+                    value.SystemManagerProfile.Status == SystemManagerProfileStatus.Active)
+                .Select(value => (Guid?)value.Id)
+                .FirstOrDefaultAsync(token);
+
+            if (!assignmentId.HasValue || assignmentId.Value == Guid.Empty)
+            {
+                return false;
+            }
+
+            await LockRowAsync("SELECT id FROM identity.farm_manager_assignments WHERE id = @id FOR SHARE", assignmentId.Value, token);
+            return true;
+        }
+
+        return await db.Set<FarmManagerAssignment>()
+            .AsNoTracking()
+            .AnyAsync(value =>
+                value.TenantId == tenantId &&
+                value.FarmId == farmId &&
+                value.EndedAt == null &&
+                value.SystemManagerProfile.UserId == actorId &&
+                value.SystemManagerProfile.Status == SystemManagerProfileStatus.Active,
+                token);
+    }
 
     private Task<Guid?> ReadAssignedManagerProfileIdAsync(
         Guid tenantId,

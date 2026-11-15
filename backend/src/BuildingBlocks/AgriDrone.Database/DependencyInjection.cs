@@ -53,6 +53,10 @@ public static class DependencyInjection
             SurveyOrderOperationalContextV4Query>();
         services.AddScoped<ISurveyOrderCaptureContextV5Query,
             SurveyOrderCaptureContextV5Query>();
+        services.AddScoped<IActiveCaptureAssignmentGuard,
+            ActiveCaptureAssignmentGuard>();
+        services.TryAddSingleton<ISurveyCaptureExecutionProbe,
+            NoopSurveyCaptureExecutionProbe>();
         services.AddScoped<ISurveyCaptureExecutionCoordinator,
             SurveyCaptureExecutionCoordinator>();
         services.AddScoped<ISystemManagerSurveyOrderQueries,
