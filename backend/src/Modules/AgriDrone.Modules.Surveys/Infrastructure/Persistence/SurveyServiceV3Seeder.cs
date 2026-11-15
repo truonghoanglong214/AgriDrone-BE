@@ -1,6 +1,7 @@
 using System.Data;
 using AgriDrone.Modules.Surveys.Domain;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace AgriDrone.Modules.Surveys.Infrastructure.Persistence;
 
@@ -91,7 +92,13 @@ public static class SurveyServiceV3Seeder
                   AND column_name = 'scope'
                 LIMIT 1;
                 """;
-            return cmd.ExecuteScalar() is not null;
+            var isReady = cmd.ExecuteScalar() is not null;
+            if (isReady && connection is NpgsqlConnection npgsqlConnection)
+            {
+                npgsqlConnection.ReloadTypes();
+            }
+
+            return isReady;
         }
         finally
         {
@@ -130,8 +137,13 @@ public static class SurveyServiceV3Seeder
                   AND column_name = 'scope'
                 LIMIT 1;
                 """;
-            var result = await cmd.ExecuteScalarAsync(cancellationToken);
-            return result is not null;
+            var isReady = await cmd.ExecuteScalarAsync(cancellationToken) is not null;
+            if (isReady && connection is NpgsqlConnection npgsqlConnection)
+            {
+                await npgsqlConnection.ReloadTypesAsync(cancellationToken);
+            }
+
+            return isReady;
         }
         finally
         {
