@@ -52,6 +52,22 @@ public sealed class PlantChangeEventConfiguration : IEntityTypeConfiguration<Pla
             .HasColumnName("plant_id")
             .HasColumnType("uuid");
 
+        builder.Property(changeEvent => changeEvent.PlantProfileId)
+            .HasColumnName("plant_profile_id")
+            .HasColumnType("uuid");
+
+        builder.Property(changeEvent => changeEvent.SourceSurveyOrderId)
+            .HasColumnName("source_survey_order_id")
+            .HasColumnType("uuid");
+
+        builder.Property(changeEvent => changeEvent.SpatialPolicyVersionId)
+            .HasColumnName("spatial_policy_version_id")
+            .HasColumnType("uuid");
+
+        builder.Property(changeEvent => changeEvent.ManagerDecisionId)
+            .HasColumnName("manager_decision_id")
+            .HasColumnType("uuid");
+
         builder.Property(changeEvent => changeEvent.ChangeType)
             .HasColumnName("change_type")
             .HasColumnType("system.plant_change_type")
@@ -119,6 +135,12 @@ public sealed class PlantChangeEventConfiguration : IEntityTypeConfiguration<Pla
 
         builder.HasIndex(changeEvent => changeEvent.PlantId)
             .HasDatabaseName("ix_plant_change_events_plant");
+
+        builder.HasIndex(changeEvent => changeEvent.PlantProfileId)
+            .HasDatabaseName("ix_plant_change_events_plant_profile");
+
+        builder.HasIndex(changeEvent => changeEvent.SourceSurveyOrderId)
+            .HasDatabaseName("ix_plant_change_events_source_survey_order");
 
         builder.HasIndex(changeEvent => changeEvent.FarmBaseMapVersionId)
             .HasDatabaseName("ix_plant_change_events_farm_base_map");

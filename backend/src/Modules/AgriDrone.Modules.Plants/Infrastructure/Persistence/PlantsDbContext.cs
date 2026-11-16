@@ -19,6 +19,8 @@ internal sealed class PlantsDbContext(DbContextOptions<PlantsDbContext> options)
 {
     public DbSet<Plant> Plants => Set<Plant>();
 
+    public DbSet<PlantProfile> PlantProfiles => Set<PlantProfile>();
+
     public DbSet<PlantChangeEvent> PlantChangeEvents => Set<PlantChangeEvent>();
 
     public DbSet<PlantInventoryChangeReport> PlantInventoryChangeReports =>

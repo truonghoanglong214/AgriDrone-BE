@@ -72,6 +72,9 @@ public sealed class SurveyOrderConfiguration : IEntityTypeConfiguration<SurveyOr
                 table.HasCheckConstraint(
                     "ck_survey_orders_v3_deposit",
                     "scope = 'LEGACY' OR (deposit_amount > 0 AND deposit_amount = FLOOR(deposit_amount))");
+                table.HasCheckConstraint(
+                    "ck_survey_orders_verified_billable_pole_count",
+                    "verified_billable_pole_count IS NULL OR verified_billable_pole_count >= 0");
             });
 
         builder.HasKey(order => order.Id).HasName("pk_survey_orders");
@@ -131,6 +134,10 @@ public sealed class SurveyOrderConfiguration : IEntityTypeConfiguration<SurveyOr
             .HasPrecision(18, 2);
         builder.Property(order => order.FarmBoundaryVersionId).HasColumnName("farm_boundary_version_id").HasColumnType("uuid");
         builder.Property(order => order.FarmBaseMapVersionId).HasColumnName("farm_base_map_version_id").HasColumnType("uuid");
+        builder.Property(order => order.BaselineMapVersionId).HasColumnName("baseline_map_version_id").HasColumnType("uuid");
+        builder.Property(order => order.VerifiedBillablePoleCount).HasColumnName("verified_billable_pole_count").HasColumnType("integer");
+        builder.Property(order => order.CountVerifiedBy).HasColumnName("count_verified_by").HasColumnType("uuid");
+        builder.Property(order => order.CountVerifiedAt).HasColumnName("count_verified_at").HasColumnType("timestamp with time zone");
         builder.Property(order => order.BoundaryCaptureSessionId).HasColumnName("boundary_capture_session_id").HasColumnType("uuid");
         builder.Property(order => order.BaselineRoutePlanId).HasColumnName("baseline_route_plan_id").HasColumnType("uuid");
         builder.Property(order => order.PoleCountSource).HasColumnName("pole_count_source").HasColumnType("system.survey_pole_count_source");

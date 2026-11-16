@@ -28,8 +28,8 @@ AgriDrone là hệ thống quản lý và điều phối dịch vụ khảo sát
 | **V3-01** | Policy model, contracts, scope separation | **[x] Done** | Tách MAP/COMBO, First/Follow-up |
 | **V3-02** | Catalogue, shared deposit, approval snapshots | **[x] Done** | Published price revisions, deposit policies |
 | **V3-03** | Capture execution, funding, re-flight, cancellation | **[x] Done (Code)** | Hoàn thành `03A` → `03H-2` (Commit `16210b3`), `03H-3` handoff |
-| **V3-04** | **Mapping, Plant Identity & Spatial Lineage** | **[→] NEXT** | **Đang chuẩn bị triển khai** (Xem mục 4) |
-| **V3-05** | Combo review, invoice finalization, pole count | **[ ] Planned** | Billable count, InvoiceRevision |
+| **V3-04** | **Mapping, Plant Identity & Spatial Lineage** | **[x] Done (Code)** | **Hoàn thành Task 1-7 (Migration `V3_04MappingAndPlantIdentity`)** |
+| **V3-05** | **Combo review, invoice finalization, pole count** | **[→] NEXT** | **Đang chuẩn bị triển khai** (Xem mục 5) |
 | **V3-06** | Settlement, atomic release, customer notice | **[ ] Planned** | Release proof, financial facts |
 | **V3-07** | Owner portal, media viewer, comparison | **[ ] Planned** | Historical comparison UI |
 | **V3-08** | Claims, refund execution, post-release correction | **[ ] Planned** | Transfer proofs, complaint window |
@@ -56,20 +56,40 @@ AgriDrone là hệ thống quản lý và điều phối dịch vụ khảo sát
 
 ---
 
-## 4. Kế hoạch & Nhiệm vụ tiếp theo: Phase V3-04 (Mapping & Plant Identity)
-Trọng tâm công việc Phase V3-04:
-1. **Quản lý Bản đồ số (`FarmBaseMapVersion`)**:
-   - First Order tạo bản đồ Baseline đầu tiên (nội bộ).
-   - Follow-up Order tạo phiên bản mới trỏ `PredecessorVersionId` (bảo toàn Baseline cũ, không ghi đè).
-2. **Định danh Cây trồng bất biến (`PlantProfile`)**:
-   - Cấp `PlantProfileId` vĩnh viễn cho từng trụ trên bản đồ Baseline.
-   - Mọi biến động (thêm mới, dịch chuyển toạ độ do sai số GPS/GNSS, thay thế, hủy) ghi nhận vào `PlantChangeEvent` bất biến kèm quyết định duyệt của Manager.
-3. **Tính số trụ tính tiền (`VerifiedBillablePoleCount`)**:
-   - Lọc và đếm số trụ nằm trong ranh giới trang trại (`in-boundary`) làm căn cứ lập hóa đơn ở V3-05.
+## 4. Tóm tắt kết quả Phase V3-04 vừa hoàn thành
+- **Bản đồ số & Lineage (`FarmBaseMapVersion`)**:
+  - Hỗ trợ First Order tạo Baseline nội bộ (`IsBaseline = true`, `PredecessorVersionId = null`, `BaselineMapVersionId = Id`).
+  - Hỗ trợ Follow-up Order tạo phiên bản mới (`IsBaseline = false`, `PredecessorVersionId = latestMap.Id`, `BaselineMapVersionId = baselineMap.Id`), bảo toàn Baseline gốc.
+  - Phê duyệt nội bộ qua `ApproveInternalBaseMapCommand` và tích hợp tự động qua `FarmBaseMapPublicationOrchestrator`.
+- **Dung sai Không gian Động (`SpatialPolicy`)**:
+  - Entity `SpatialPolicy` lưu tại `survey.spatial_policies` với `StreamKey`, `VersionNumber`, `PredecessorVersionId`, `PolicyFingerprint` (SHA-256), `BoundaryToleranceM`, `MatchingDistanceThresholdM`, `RowBearingToleranceDeg`, `GridSpacingToleranceM`.
+  - Tích hợp `ISpatialPolicyRepository` vào dependency injection.
+- **Định danh Trụ/Cây Trồng Bất biến (`PlantProfile`)**:
+  - Entity `PlantProfile` lưu tại `plant.plant_profiles`, quản lý định danh vật lý bền vững (`PhysicalPoleIdentifier`, `BaselineLocation`, `CurrentLocation`, `Status`, `PredecessorProfileId`).
+  - Phân biệt giữa dịch chuyển toạ độ do sai số GPS/GNSS (`Relocate` trong ngưỡng tolerance) và thay thế trụ (`ReplaceWithNewProfile`), hủy trụ (`Retire`).
+  - `PlantChangeEvent` liên kết đầy đủ lineage metadata: `PlantProfileId`, `SourceSurveyOrderId`, `SpatialPolicyVersionId`, `ManagerDecisionId`.
+- **Chốt Số trụ Tính tiền (`VerifiedBillablePoleCount`)**:
+  - Mở rộng `SurveyOrder` với `VerifiedBillablePoleCount`, `CountVerifiedAt`, `CountVerifiedBy`, `BaselineMapVersionId`.
+  - Query PostGIS `ST_Within(p.current_location, b.boundary_geometry)` strictly lọc và chốt số lượng trụ nằm bên trong ranh giới trang trại, phục vụ lập hóa đơn thanh quyết toán.
+- **Database Migration**:
+  - Migration EF Core `V3_04MappingAndPlantIdentity` sạch 100%, đồng bộ model snapshot.
 
 ---
 
-## 5. Nguyên tắc Vận hành Bắt buộc cho AI Agent
+## 5. Kế hoạch & Nhiệm vụ tiếp theo: Phase V3-05 (Combo Review, Invoice Finalization, Pole Count)
+Trọng tâm công việc Phase V3-05:
+1. **Rà soát Combo Đa dịch vụ (Combo Review Workflow)**:
+   - Tổng hợp kết quả bay định kỳ và kết quả khảo sát sức khỏe cây trồng theo đợt.
+   - Đối chiếu số trụ phát hiện với số trụ đã chốt tại V3-04.
+2. **Khóa Hóa đơn & Bảng giá Cuối cùng (`InvoiceFinalization` / `InvoiceRevision`)**:
+   - Tính toán `FinalPrice = VerifiedBillablePoleCount * PricePerPoleSnapshot * (1 - ComboDiscountPercentage)`.
+   - Lập biên bản quyết toán, trừ tiền cọc (`SurveyFundingReceipt`), xác định số dư còn phải trả (`RemainingAmount`).
+3. **Quản lý Bất biến & Không ngoại lệ (Fail-closed)**:
+   - Đảm bảo snapshot thương mại bất biến trước khi phát hành hóa đơn cho chủ vườn.
+
+---
+
+## 6. Nguyên tắc Vận hành Bắt buộc cho AI Agent
 1. **KHÔNG CHẠY TEST TÍCH HỢP TRONG CÁC PHASE CODE (V3-01 -> V3-09)**:
    - Nghiêm cấm chạy `dotnet test` với PostgreSQL container / integration test suites vì gây treo máy và tốn thời gian.
    - Toàn bộ test nghiệm thu tích hợp sẽ chạy tập trung ở **Phase V3-10**.

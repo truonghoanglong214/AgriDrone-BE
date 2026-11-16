@@ -58,6 +58,14 @@ public sealed class PlantChangeEvent : Entity
 
     public Guid? PlantId { get; private set; }
 
+    public Guid? PlantProfileId { get; private set; }
+
+    public Guid? SourceSurveyOrderId { get; private set; }
+
+    public Guid? SpatialPolicyVersionId { get; private set; }
+
+    public Guid? ManagerDecisionId { get; private set; }
+
     public PlantChangeType ChangeType { get; private set; }
 
     public PlantChangeSource Source { get; private set; }
@@ -91,6 +99,23 @@ public sealed class PlantChangeEvent : Entity
     public DateTimeOffset CreatedAt { get; private set; }
 
     public Plant? Plant { get; private set; }
+
+    public void SetLineageMetadata(
+        Guid? plantProfileId,
+        Guid? sourceSurveyOrderId,
+        Guid? spatialPolicyVersionId,
+        Guid? managerDecisionId)
+    {
+        if (plantProfileId.HasValue) DomainGuard.NotEmpty(plantProfileId.Value);
+        if (sourceSurveyOrderId.HasValue) DomainGuard.NotEmpty(sourceSurveyOrderId.Value);
+        if (spatialPolicyVersionId.HasValue) DomainGuard.NotEmpty(spatialPolicyVersionId.Value);
+        if (managerDecisionId.HasValue) DomainGuard.NotEmpty(managerDecisionId.Value);
+
+        PlantProfileId = plantProfileId;
+        SourceSurveyOrderId = sourceSurveyOrderId;
+        SpatialPolicyVersionId = spatialPolicyVersionId;
+        ManagerDecisionId = managerDecisionId;
+    }
 
     public static PlantChangeEvent BaseMapPlantCreated(
         Guid farmId,

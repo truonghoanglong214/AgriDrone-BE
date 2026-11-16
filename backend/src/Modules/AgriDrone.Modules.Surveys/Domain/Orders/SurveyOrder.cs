@@ -161,6 +161,10 @@ public sealed class SurveyOrder : AggregateRoot
     public decimal? OriginalFinalPrice { get; private set; }
     public Guid? FarmBoundaryVersionId { get; private set; }
     public Guid? FarmBaseMapVersionId { get; private set; }
+    public Guid? BaselineMapVersionId { get; private set; }
+    public int? VerifiedBillablePoleCount { get; private set; }
+    public Guid? CountVerifiedBy { get; private set; }
+    public DateTimeOffset? CountVerifiedAt { get; private set; }
     public Guid? BoundaryCaptureSessionId { get; private set; }
     public Guid? BaselineRoutePlanId { get; private set; }
     public SurveyPoleCountSource? PoleCountSource { get; private set; }
@@ -724,6 +728,33 @@ public sealed class SurveyOrder : AggregateRoot
         ScopeConfirmedAt = verifiedAt;
         UpdatedAt = verifiedAt;
         Version++;
+    }
+
+    public void RecordVerifiedBillablePoleCount(
+        int count,
+        Guid verifiedBy,
+        DateTimeOffset verifiedAt)
+    {
+        DomainGuard.NotEmpty(verifiedBy, nameof(verifiedBy));
+        DomainGuard.Utc(verifiedAt, nameof(verifiedAt));
+        SurveyTransitionGuard.EnsureTimestamp(verifiedAt, UpdatedAt);
+
+        if (count < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(count), "Verified billable pole count cannot be negative.");
+        }
+
+        VerifiedBillablePoleCount = count;
+        CountVerifiedBy = verifiedBy;
+        CountVerifiedAt = verifiedAt;
+        UpdatedAt = verifiedAt;
+        Version++;
+    }
+
+    public void SetBaselineMapVersion(Guid baselineMapVersionId)
+    {
+        DomainGuard.NotEmpty(baselineMapVersionId, nameof(baselineMapVersionId));
+        BaselineMapVersionId = baselineMapVersionId;
     }
 
     public void MarkBaselineAppointmentConfirmed(DateTimeOffset occurredAt)

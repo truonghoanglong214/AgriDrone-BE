@@ -47,12 +47,16 @@ public sealed class MappingPublicationDbContext(
 
     public DbSet<Plant> Plants => Set<Plant>();
 
+    public DbSet<PlantProfile> PlantProfiles => Set<PlantProfile>();
+
     public DbSet<PlantChangeEvent> PlantChangeEvents => Set<PlantChangeEvent>();
 
     public DbSet<PlantInventoryChangeReport> PlantInventoryChangeReports =>
         Set<PlantInventoryChangeReport>();
 
     public DbSet<SurveyOrder> SurveyOrders => Set<SurveyOrder>();
+
+    public DbSet<SpatialPolicy> SpatialPolicies => Set<SpatialPolicy>();
 
     public DbSet<InboxMessage> InboxMessages => Set<InboxMessage>();
 
@@ -97,10 +101,12 @@ public sealed class MappingPublicationDbContext(
         modelBuilder.ApplyConfiguration(new MappingCandidateConfiguration());
         modelBuilder.ApplyConfiguration(new HealthLevelConfiguration());
         modelBuilder.ApplyConfiguration(new PlantConfiguration());
+        modelBuilder.ApplyConfiguration(new PlantProfileConfiguration());
         modelBuilder.ApplyConfiguration(new PlantChangeEventConfiguration());
         modelBuilder.ApplyConfiguration(
             new PlantInventoryChangeReportConfiguration());
         modelBuilder.ApplyConfiguration(new SurveyOrderConfiguration());
+        modelBuilder.ApplyConfiguration(new SpatialPolicyConfiguration());
         modelBuilder.ApplyConfiguration(new InboxMessageConfiguration());
         modelBuilder.ApplyConfiguration(new OutboxMessageConfiguration());
         modelBuilder.ApplyConfiguration(new AuditLogConfiguration());

@@ -9,6 +9,9 @@ public sealed class FarmBaseMapVersion : AggregateRoot
     public Guid TenantId { get; private set; }
     public Guid FarmId { get; private set; }
     public int VersionNumber { get; private set; }
+    public Guid? PredecessorVersionId { get; private set; }
+    public bool IsBaseline { get; private set; }
+    public Guid? BaselineMapVersionId { get; private set; }
     public Guid SourceSurveyOrderId { get; private set; }
     public Guid? SourceMissionGroupId { get; private set; }
     public Guid? SourceMissionId { get; private set; }
@@ -20,6 +23,8 @@ public sealed class FarmBaseMapVersion : AggregateRoot
     public FarmBaseMapStatus Status { get; private set; }
     public Guid? PublishedBy { get; private set; }
     public DateTimeOffset? PublishedAt { get; private set; }
+    public Guid? ApprovedInternalBy { get; private set; }
+    public DateTimeOffset? ApprovedInternalAt { get; private set; }
     public uint Version { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
     public DateTimeOffset UpdatedAt { get; private set; }
@@ -38,6 +43,9 @@ public sealed class FarmBaseMapVersion : AggregateRoot
             TenantId = context.TenantId,
             FarmId = context.FarmId,
             VersionNumber = context.VersionNumber,
+            PredecessorVersionId = context.PredecessorVersionId,
+            IsBaseline = context.IsBaseline,
+            BaselineMapVersionId = context.BaselineMapVersionId,
             SourceSurveyOrderId = context.SourceSurveyOrderId,
             SourceMissionGroupId = context.SourceMissionGroupId,
             SourceMissionId = context.SourceMissionId,
@@ -50,6 +58,35 @@ public sealed class FarmBaseMapVersion : AggregateRoot
             CreatedAt = createdAt,
             UpdatedAt = createdAt
         };
+    }
+
+    public void ApproveInternal(Guid approvedBy, DateTimeOffset approvedAt)
+    {
+        DomainGuard.NotEmpty(approvedBy);
+        DomainGuard.Utc(approvedAt);
+
+        ApprovedInternalBy = approvedBy;
+        ApprovedInternalAt = approvedAt;
+        UpdatedAt = approvedAt;
+        Version++;
+    }
+
+    public void SetLineage(
+        bool isBaseline,
+        Guid? predecessorVersionId,
+        Guid? baselineMapVersionId)
+    {
+        if (isBaseline && predecessorVersionId.HasValue)
+        {
+            throw new InvalidOperationException("A baseline farm base map cannot have a predecessor version.");
+        }
+
+        if (predecessorVersionId.HasValue) DomainGuard.NotEmpty(predecessorVersionId.Value);
+        if (baselineMapVersionId.HasValue) DomainGuard.NotEmpty(baselineMapVersionId.Value);
+
+        IsBaseline = isBaseline;
+        PredecessorVersionId = predecessorVersionId;
+        BaselineMapVersionId = baselineMapVersionId;
     }
 
     public void SetPublicationProvenance(
