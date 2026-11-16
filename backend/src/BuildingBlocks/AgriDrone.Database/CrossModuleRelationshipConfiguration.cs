@@ -879,6 +879,13 @@ internal static class CrossModuleRelationshipConfiguration
         modelBuilder.Entity<SurveyAppointment>()
             .HasOne<User>()
             .WithMany()
+            .HasForeignKey(appointment => appointment.ConfirmedBySystemManagerId)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_survey_appointments_users_confirmed_by_manager");
+
+        modelBuilder.Entity<SurveyAppointment>()
+            .HasOne<User>()
+            .WithMany()
             .HasForeignKey(appointment => appointment.ConfirmedByTenantOwnerId)
             .OnDelete(DeleteBehavior.Restrict)
             .HasConstraintName("fk_survey_appointments_users_confirmed_by");

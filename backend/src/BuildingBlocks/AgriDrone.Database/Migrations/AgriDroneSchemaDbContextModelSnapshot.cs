@@ -8337,6 +8337,10 @@ namespace AgriDrone.Database.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("confirmed_at");
 
+                    b.Property<Guid?>("ConfirmedBySystemManagerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("confirmed_by_system_manager_id");
+
                     b.Property<Guid?>("ConfirmedByTenantOwnerId")
                         .HasColumnType("uuid")
                         .HasColumnName("confirmed_by_tenant_owner_id");
@@ -8405,6 +8409,8 @@ namespace AgriDrone.Database.Migrations
                     b.HasKey("Id")
                         .HasName("pk_survey_appointments");
 
+                    b.HasIndex("ConfirmedBySystemManagerId");
+
                     b.HasIndex("ConfirmedByTenantOwnerId");
 
                     b.HasIndex("PreviousAppointmentId")
@@ -8428,7 +8434,7 @@ namespace AgriDrone.Database.Migrations
 
                     b.ToTable("survey_appointments", "survey", t =>
                         {
-                            t.HasCheckConstraint("ck_survey_appointments_confirmation", "(status = 'CONFIRMED'::system.survey_appointment_status AND confirmed_by_tenant_owner_id IS NOT NULL AND confirmed_at IS NOT NULL) OR (status <> 'CONFIRMED'::system.survey_appointment_status AND confirmed_at IS NULL)");
+                            t.HasCheckConstraint("ck_survey_appointments_confirmation", "(status = 'CONFIRMED'::system.survey_appointment_status AND confirmed_at IS NOT NULL AND ((confirmed_by_tenant_owner_id IS NOT NULL AND confirmed_by_system_manager_id IS NULL) OR (purpose = 'PAID_SERVICE'::system.survey_appointment_purpose AND confirmed_by_tenant_owner_id IS NULL AND confirmed_by_system_manager_id IS NOT NULL))) OR (status <> 'CONFIRMED'::system.survey_appointment_status AND confirmed_at IS NULL AND confirmed_by_system_manager_id IS NULL)");
 
                             t.HasCheckConstraint("ck_survey_appointments_reschedule_reason", "status <> 'RESCHEDULE_REQUESTED'::system.survey_appointment_status OR (reschedule_reason IS NOT NULL AND length(btrim(reschedule_reason)) > 0)");
 
@@ -12401,6 +12407,12 @@ namespace AgriDrone.Database.Migrations
 
             modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.SurveyAppointment", b =>
                 {
+                    b.HasOne("AgriDrone.Modules.Identity.Domain.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("ConfirmedBySystemManagerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_survey_appointments_users_confirmed_by_manager");
+
                     b.HasOne("AgriDrone.Modules.Identity.Domain.Users.User", null)
                         .WithMany()
                         .HasForeignKey("ConfirmedByTenantOwnerId")

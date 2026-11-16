@@ -44,6 +44,7 @@ internal sealed class SystemManagerSurveyOrderQueries(
                 assignment.SystemManagerProfileId == managerProfile.Id &&
                 assignment.EndedAt == null);
 
+        var currentAppointments = SelectCurrentAppointments(context.Set<SurveyOrder>().AsNoTracking());
         var orders =
             from order in context.Set<SurveyOrder>().AsNoTracking()
             join assignment in assignments
@@ -54,8 +55,11 @@ internal sealed class SystemManagerSurveyOrderQueries(
                 equals new { farm.TenantId, FarmId = farm.Id }
             join service in context.Set<SurveyService>().AsNoTracking()
                 on order.SurveyServiceId equals service.Id
+            join appointment in currentAppointments
+                on order.Id equals appointment.SurveyOrderId into appointments
+            from currentAppointment in appointments.DefaultIfEmpty()
             where farm.DeletedAt == null
-            select new { Order = order, Farm = farm, Service = service };
+            select new { Order = order, Farm = farm, Service = service, CurrentAppointment = currentAppointment };
 
         if (filter.Status.HasValue)
         {
@@ -82,29 +86,12 @@ internal sealed class SystemManagerSurveyOrderQueries(
                 row.Order.FarmBoundaryVersionId,
                 row.Order.BoundaryCaptureSessionId,
                 row.Order.BaselineRoutePlanId,
-                row.Order.Appointments
-                    .Where(item => item.Status == SurveyAppointmentStatus.Proposed ||
-                                   item.Status == SurveyAppointmentStatus.Confirmed ||
-                                   item.Status == SurveyAppointmentStatus.RescheduleRequested)
-                    .OrderByDescending(item => item.RevisionNumber)
-                    .Select(item => (Guid?)item.Id)
-                    .FirstOrDefault(),
-                row.Order.Appointments
-                    .Where(item => item.Status == SurveyAppointmentStatus.Proposed ||
-                                   item.Status == SurveyAppointmentStatus.Confirmed ||
-                                   item.Status == SurveyAppointmentStatus.RescheduleRequested)
-                    .OrderByDescending(item => item.RevisionNumber)
-                    .Select(item => (uint?)item.Version)
-                    .FirstOrDefault(),
-                row.Order.Appointments
-                    .Where(item => item.Status == SurveyAppointmentStatus.Proposed ||
-                                   item.Status == SurveyAppointmentStatus.Confirmed ||
-                                   item.Status == SurveyAppointmentStatus.RescheduleRequested)
-                    .OrderByDescending(item => item.RevisionNumber)
-                    .Select(item => (SurveyAppointmentStatus?)item.Status)
-                    .FirstOrDefault(),
+                row.CurrentAppointment == null ? null : row.CurrentAppointment.Id,
+                row.CurrentAppointment == null ? null : row.CurrentAppointment.Version,
+                row.CurrentAppointment == null ? null : row.CurrentAppointment.Status,
                 row.Order.CreatedAt,
-                row.Order.UpdatedAt))
+                row.Order.UpdatedAt,
+                row.CurrentAppointment == null ? null : row.CurrentAppointment.Purpose))
             .ToPagedResultAsync(page, cancellationToken);
     }
 
@@ -225,6 +212,9 @@ internal sealed class SystemManagerSurveyOrderQueries(
             equals new { farm.TenantId, FarmId = farm.Id }
         join service in context.Set<SurveyService>().AsNoTracking()
             on order.SurveyServiceId equals service.Id
+        join appointment in SelectCurrentAppointments(context.Set<SurveyOrder>().AsNoTracking())
+            on order.Id equals appointment.SurveyOrderId into appointments
+        from currentAppointment in appointments.DefaultIfEmpty()
         where order.TenantId == tenantId && farm.DeletedAt == null
             && order.Scope == ContractScope.Legacy && service.ServiceType.HasValue
             && (!surveyOrderId.HasValue || order.Id == surveyOrderId.Value)
@@ -241,29 +231,35 @@ internal sealed class SystemManagerSurveyOrderQueries(
             order.FinalPrice,
             order.RemainingAmount,
             order.Currency ?? "VND",
-            order.Appointments
-                // Revisions are scoped to each purpose. After pricing, only the paid-service
-                // appointment is current; a higher baseline revision must not hide it.
-                .Where(item => item.Purpose == (order.PricingConfirmedAt.HasValue
-                    ? SurveyAppointmentPurpose.PaidService
-                    : SurveyAppointmentPurpose.BaselineMapping))
-                .Where(item => item.Status == SurveyAppointmentStatus.Proposed ||
-                               item.Status == SurveyAppointmentStatus.Confirmed ||
-                               item.Status == SurveyAppointmentStatus.RescheduleRequested)
-                .OrderByDescending(item => item.RevisionNumber)
-                .Select(item => new TenantOwnerCurrentAppointmentItem(
-                    item.Id,
-                    item.Purpose,
-                    item.ProposedStartAt,
-                    item.ProposedEndAt,
-                    item.Status,
-                    item.Version))
-                .FirstOrDefault(),
+            currentAppointment == null
+                ? null
+                : new TenantOwnerCurrentAppointmentItem(
+                    currentAppointment.Id,
+                    currentAppointment.Purpose,
+                    currentAppointment.ProposedStartAt,
+                    currentAppointment.ProposedEndAt,
+                    currentAppointment.Status,
+                    currentAppointment.Version),
             service.ServiceType!.Value,
             order.ConfirmedMappingPoleCount, order.ConfirmedPlantHealthPoleCount,
             order.BookedMappingPricePerPole, order.BookedPlantHealthPricePerPole,
             order.MappingSubtotal, order.PlantHealthSubtotal,
             order.ComboDiscountPercentage, order.ComboDiscountAmount);
+
+    // The active-appointment index allows one row per order and purpose.
+    internal static IQueryable<SurveyAppointment> SelectCurrentAppointments(IQueryable<SurveyOrder> orders) =>
+        from order in orders
+        from appointment in order.Appointments
+        where appointment.Purpose == (order.Scope == ContractScope.V3
+            ? SurveyAppointmentPurpose.Capture
+            : (!order.RequiresBaselineMapping ||
+               (order.PostFlightSettlement ? order.FarmBaseMapVersionId.HasValue : order.PricingConfirmedAt.HasValue)
+                ? SurveyAppointmentPurpose.PaidService
+                : SurveyAppointmentPurpose.BaselineMapping))
+            && (appointment.Status == SurveyAppointmentStatus.Proposed ||
+                appointment.Status == SurveyAppointmentStatus.Confirmed ||
+                appointment.Status == SurveyAppointmentStatus.RescheduleRequested)
+        select appointment;
 
     private static void EnsureValidPage(PagedRequest page)
     {

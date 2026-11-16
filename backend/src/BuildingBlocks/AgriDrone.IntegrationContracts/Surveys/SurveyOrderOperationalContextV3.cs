@@ -48,4 +48,5 @@ public sealed record SurveyOrderOperationalContextV3(
     decimal? ApproximateAreaHa = null,
     double? SurveyRadiusMeters = null,
     SurveyScopeType ScopeType = SurveyScopeType.FarmWide,
-    IReadOnlyList<SurveyScopeZoneV3>? ScopeZones = null);
+    IReadOnlyList<SurveyScopeZoneV3>? ScopeZones = null,
+    bool PostFlightSettlement = false);

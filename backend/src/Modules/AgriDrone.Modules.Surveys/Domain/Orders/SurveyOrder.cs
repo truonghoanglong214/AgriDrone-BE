@@ -964,6 +964,14 @@ public sealed class SurveyOrder : AggregateRoot
     public void MarkBaselineCandidatesReady(DateTimeOffset occurredAt) =>
         TransitionTo(SurveyOrderStatus.AwaitingBaselineReview, occurredAt);
 
+    private bool IsPostFlightPlantHealthOrder =>
+        Scope == ContractScope.Legacy && PostFlightSettlement &&
+        BookedServiceType == SurveyServiceType.PlantHealth;
+
+    internal bool CanManagerSchedulePlantHealth =>
+        IsPostFlightPlantHealthOrder && FarmBaseMapVersionId.HasValue &&
+        ServiceReviewedAt is null;
+
     public void RecordBaselinePublication(
         Guid farmBaseMapVersionId,
         ConfirmedSurveyPoleCount confirmedPoleCount,
@@ -1002,7 +1010,11 @@ public sealed class SurveyOrder : AggregateRoot
         PoleCountEvidenceReference = null;
         PoleCountConfirmedBy = confirmedBy;
         PoleCountConfirmedAt = confirmedAt;
-        ApplyTransition(SurveyOrderStatus.AwaitingPricing, confirmedAt);
+        ApplyTransition(
+            IsPostFlightPlantHealthOrder && RequiresBaselineMapping
+                ? SurveyOrderStatus.AwaitingPaidAppointment
+                : SurveyOrderStatus.AwaitingPricing,
+            confirmedAt);
     }
 
     public void ConfirmPricing(

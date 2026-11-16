@@ -8,6 +8,39 @@ public sealed class PostFlightSettlementTests
     private static readonly DateTimeOffset Now = new(2026, 11, 13, 0, 0, 0, TimeSpan.Zero);
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ManagerSchedulesFollowUpWithoutOwnerConfirmation(bool depositPaidBeforeScheduling)
+    {
+        var order = Create(first: false);
+        var manager = Guid.NewGuid();
+        Assert.False(order.CanManagerSchedulePlantHealth);
+
+        order.VerifyBoundaryScopeAndCurrentInventory(Guid.NewGuid(), Guid.NewGuid(),
+            ConfirmedSurveyPoleCount.Create(20), manager, Now);
+        Assert.True(order.CanManagerSchedulePlantHealth);
+        if (depositPaidBeforeScheduling)
+            order.RecordFollowUpDepositConfirmed(Guid.NewGuid(), order.DepositAmount, Now);
+
+        var appointment = SurveyAppointment.Create(order.Id, SurveyAppointmentPurpose.PaidService,
+            1, null, manager, Now.AddHours(1), Now.AddHours(2), Now);
+        appointment.ConfirmBySystemManager(manager, Now);
+        order.MarkPaidAppointmentConfirmed(Now);
+
+        Assert.Equal(SurveyAppointmentStatus.Confirmed, appointment.Status);
+        Assert.Equal(manager, appointment.ConfirmedBySystemManagerId);
+        Assert.Null(appointment.ConfirmedByTenantOwnerId);
+        Assert.Null(order.FinalPrice);
+        if (!depositPaidBeforeScheduling)
+        {
+            Assert.Equal(SurveyOrderStatus.AwaitingBaselineDeposit, order.Status);
+            Assert.Throws<SurveyDomainException>(() => order.StartPaidService(Now));
+            order.RecordFollowUpDepositConfirmed(Guid.NewGuid(), order.DepositAmount, Now);
+        }
+        Assert.Equal(SurveyOrderStatus.ReadyForPaidService, order.Status);
+    }
+
+    [Theory]
     [InlineData(true, false)]
     [InlineData(true, true)]
     [InlineData(false, false)]

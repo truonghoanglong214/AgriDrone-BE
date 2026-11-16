@@ -261,7 +261,8 @@ internal sealed class SurveyOrderOperationalContextV3Query(
             approximateAreaHa,
             surveyRadiusMeters,
             scopeType,
-            scopeZones);
+            scopeZones,
+            order.PostFlightSettlement);
     }
 
     private static GeoJsonPolygonV3 ToGeoJson(
