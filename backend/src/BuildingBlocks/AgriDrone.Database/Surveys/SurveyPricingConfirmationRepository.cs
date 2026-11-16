@@ -81,23 +81,44 @@ internal sealed class SurveyPricingConfirmationRepository(
                 SurveyPricingError.InventoryOutsideApprovedScope());
         }
 
-        var prices = await ReadEffectivePricesAsync(
-            order.SurveyServiceId,
-            evaluatedAt,
-            cancellationToken);
-        if (prices.Count == 0)
+        int? mappingPoleCount = null;
+        if (order.UsesComponentPricing)
         {
-            return Result.Failure<SurveyPricingConfirmationState>(
-                SurveyPricingError.EffectivePriceNotFound());
+            var mappingInventory = await ReadInventoryAsync(order, map.Value.MapVersionId, cancellationToken, fullMap: true);
+            if (mappingInventory.EligibleActiveCount <= 0 ||
+                mappingInventory.TotalActiveCount != mappingInventory.EligibleActiveCount)
+                return Result.Failure<SurveyPricingConfirmationState>(SurveyPricingError.InventoryOutsideApprovedScope());
+            mappingPoleCount = mappingInventory.EligibleActiveCount;
         }
 
-        if (prices.Count > 1)
+        PriceSnapshot price;
+        if (order.PostFlightSettlement)
         {
-            return Result.Failure<SurveyPricingConfirmationState>(
-                SurveyPricingError.EffectivePriceAmbiguous());
+            if (order.ServiceReviewedAt is null || order.BookedServicePriceId is null || order.BookedPricePerPole is null)
+                return Result.Failure<SurveyPricingConfirmationState>(SurveyOrderError.InvalidTransition(
+                    "Final pricing requires Manager-reviewed post-flight results."));
+            price = new PriceSnapshot(order.BookedServicePriceId.Value, order.BookedPricePerPole.Value, "VND");
         }
+        else
+        {
+            var prices = await ReadEffectivePricesAsync(
+                order.SurveyServiceId,
+                evaluatedAt,
+                cancellationToken);
+            if (prices.Count == 0)
+            {
+                return Result.Failure<SurveyPricingConfirmationState>(
+                    SurveyPricingError.EffectivePriceNotFound());
+            }
 
-        var price = prices[0];
+            if (prices.Count > 1)
+            {
+                return Result.Failure<SurveyPricingConfirmationState>(
+                    SurveyPricingError.EffectivePriceAmbiguous());
+            }
+
+            price = prices[0];
+        }
         return Result.Success(new SurveyPricingConfirmationState(
             order,
             managerProfileId.Value,
@@ -106,7 +127,8 @@ internal sealed class SurveyPricingConfirmationRepository(
             inventory.EligibleActiveCount,
             price.PriceVersionId,
             price.PricePerPole,
-            price.Currency));
+            price.Currency,
+            mappingPoleCount));
     }
 
     private async Task<Guid?> ReadManagerAccessAsync(
@@ -196,7 +218,8 @@ internal sealed class SurveyPricingConfirmationRepository(
     private async Task<InventorySnapshot> ReadInventoryAsync(
         SurveyOrder order,
         Guid mapVersionId,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool fullMap = false)
     {
         await using var command = CreateCommand(
             """
@@ -259,7 +282,7 @@ internal sealed class SurveyPricingConfirmationRepository(
             Id("order_id", order.Id),
             new NpgsqlParameter(
                 "scope_type",
-                order.ScopeType == SurveyScopeType.FarmWide
+                fullMap || order.ScopeType == SurveyScopeType.FarmWide
                     ? "FARM_WIDE"
                     : "ZONES"));
         await using var reader = await command.ExecuteReaderAsync(

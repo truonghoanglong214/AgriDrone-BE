@@ -111,6 +111,8 @@ internal sealed class ProcessSurveyPaymentEventCommandHandler(
         var state = stateResult.Value;
         var payment = state.Payment;
         var order = state.Order;
+        if (order.Scope == ContractScope.V3)
+            return Result.Failure<ProcessSurveyPaymentEventResponse>(PaymentError.OrderNotReady());
         if (state.EventAlreadyProcessed)
         {
             return Result.Success(CreateResponse(
@@ -186,6 +188,11 @@ internal sealed class ProcessSurveyPaymentEventCommandHandler(
                 command,
                 payment,
                 order);
+        }
+
+        if (transitionApplied && order.Status == SurveyOrderStatus.Completed)
+        {
+            await outbox.AddPostFlightUnlockAsync(order, executionContext.CorrelationId, cancellationToken);
         }
         var paymentEvent = PaymentEvent.Create(
             payment.Id,
@@ -351,6 +358,8 @@ internal sealed class ProcessSurveyPaymentEventCommandHandler(
         }
         else
         {
+            if (order.PostFlightSettlement && order.ServiceReviewedAt is null)
+                return (false, "POST_FLIGHT_REVIEW_REQUIRED");
             if (order.DepositAmount > 0m && order.DepositPaymentStatus != SurveyPaymentStatus.Paid)
             {
                 payment.RequireAdjustment(command.OccurredAt);

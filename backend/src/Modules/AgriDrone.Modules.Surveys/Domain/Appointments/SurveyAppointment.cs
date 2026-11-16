@@ -11,6 +11,7 @@ public sealed class SurveyAppointment : Entity
             {
                 SurveyAppointmentStatus.Confirmed,
                 SurveyAppointmentStatus.RescheduleRequested,
+                SurveyAppointmentStatus.Superseded,
                 SurveyAppointmentStatus.Cancelled
             },
             [SurveyAppointmentStatus.Confirmed] = new HashSet<SurveyAppointmentStatus>
@@ -35,6 +36,7 @@ public sealed class SurveyAppointment : Entity
     public DateTimeOffset ProposedStartAt { get; private set; }
     public DateTimeOffset ProposedEndAt { get; private set; }
     public SurveyAppointmentStatus Status { get; private set; }
+    public Guid? ConfirmedBySystemManagerId { get; private set; }
     public Guid? ConfirmedByTenantOwnerId { get; private set; }
     public DateTimeOffset? ConfirmedAt { get; private set; }
     public string? RescheduleReason { get; private set; }
@@ -121,6 +123,26 @@ public sealed class SurveyAppointment : Entity
     public void Confirm(Guid tenantOwnerId, DateTimeOffset confirmedAt)
     {
         DomainGuard.NotEmpty(tenantOwnerId);
+        ConfirmWindow(confirmedAt);
+        ConfirmedByTenantOwnerId = tenantOwnerId;
+    }
+
+    internal void ConfirmBySystemManager(Guid systemManagerId, DateTimeOffset confirmedAt)
+    {
+        DomainGuard.NotEmpty(systemManagerId);
+        if (Purpose != SurveyAppointmentPurpose.PaidService)
+        {
+            throw new SurveyDomainException(
+                AppointmentDomainErrorCodes.InvalidTransition,
+                "Manager scheduling is only supported for paid-service appointments.");
+        }
+
+        ConfirmWindow(confirmedAt);
+        ConfirmedBySystemManagerId = systemManagerId;
+    }
+
+    private void ConfirmWindow(DateTimeOffset confirmedAt)
+    {
         DomainGuard.Utc(confirmedAt);
         if (confirmedAt >= ProposedEndAt)
         {
@@ -130,7 +152,6 @@ public sealed class SurveyAppointment : Entity
         }
 
         TransitionTo(SurveyAppointmentStatus.Confirmed, confirmedAt);
-        ConfirmedByTenantOwnerId = tenantOwnerId;
         ConfirmedAt = confirmedAt;
         RescheduleReason = null;
     }
@@ -146,6 +167,7 @@ public sealed class SurveyAppointment : Entity
         }
 
         TransitionTo(SurveyAppointmentStatus.RescheduleRequested, requestedAt);
+        ConfirmedBySystemManagerId = null;
         ConfirmedByTenantOwnerId = null;
         ConfirmedAt = null;
         RescheduleReason = reason.Trim();
@@ -160,6 +182,7 @@ public sealed class SurveyAppointment : Entity
     public void Cancel(DateTimeOffset cancelledAt)
     {
         TransitionTo(SurveyAppointmentStatus.Cancelled, cancelledAt);
+        ConfirmedBySystemManagerId = null;
         ConfirmedByTenantOwnerId = null;
         ConfirmedAt = null;
     }

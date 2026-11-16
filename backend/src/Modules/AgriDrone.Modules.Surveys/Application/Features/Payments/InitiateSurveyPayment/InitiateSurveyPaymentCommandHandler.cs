@@ -86,6 +86,12 @@ internal sealed class InitiateSurveyPaymentCommandHandler(
 
         var state = stateResult.Value;
         var order = state.Order;
+        if (order.Scope == ContractScope.V3 ||
+            (command.Purpose == PaymentPurpose.FinalBalance && order.PostFlightSettlement &&
+             order.ServiceReviewedAt is null))
+        {
+            return Result.Failure<InitiateSurveyPaymentResponse>(PaymentError.OrderNotReady());
+        }
         try
         {
             order.EnsureVersion(command.ExpectedOrderVersion);
@@ -155,6 +161,7 @@ internal sealed class InitiateSurveyPaymentCommandHandler(
                     or SurveyPaymentStatus.Processing or SurveyPaymentStatus.AdjustmentRequired)
                     return Result.Failure<InitiateSurveyPaymentResponse>(PaymentError.ActivePaymentExists());
                 order.MarkPaymentConfirmed(initiatedAt);
+                await outbox.AddPostFlightUnlockAsync(order, executionContext.CorrelationId, cancellationToken);
 
                 using var zeroData = JsonSerializer.SerializeToDocument(new
                 {

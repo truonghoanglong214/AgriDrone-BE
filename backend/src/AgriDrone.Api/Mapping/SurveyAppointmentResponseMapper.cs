@@ -134,7 +134,7 @@ internal static class SurveyAppointmentResponseMapper
             _ => status.ToString().ToUpperInvariant()
         };
 
-    private static string MapPurpose(SurveyAppointmentPurpose purpose) =>
+    internal static string MapPurpose(SurveyAppointmentPurpose purpose) =>
         purpose switch
         {
             SurveyAppointmentPurpose.BaselineMapping => "BASELINE_MAPPING",

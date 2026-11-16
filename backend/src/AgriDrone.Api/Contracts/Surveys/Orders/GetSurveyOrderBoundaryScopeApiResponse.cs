@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using AgriDrone.Api.Contracts.Farms;
 
 namespace AgriDrone.Api.Contracts.Surveys.Orders;
@@ -11,7 +12,9 @@ public sealed record GetSurveyOrderBoundaryScopeApiResponse(
     uint OrderVersion,
     bool RequiresBaselineMapping,
     SurveyOrderBoundaryApiResponse? CurrentApprovedBoundary,
-    IReadOnlyList<SurveyOrderZoneScopeApiResponse> Zones);
+    IReadOnlyList<SurveyOrderZoneScopeApiResponse> Zones,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)]
+    DateTimeOffset? ServiceReviewedAt = null);
 
 public sealed record SurveyOrderBoundaryApiResponse(
     Guid FarmBoundaryId,

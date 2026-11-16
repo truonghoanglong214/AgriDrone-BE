@@ -19,6 +19,8 @@ public sealed class SurveyServicePriceConfiguration : IEntityTypeConfiguration<S
                 table.HasCheckConstraint(
                     "ck_survey_service_prices_pricing_mode",
                     "(price_per_pole IS NOT NULL AND price_per_ha IS NULL) OR (price_per_pole IS NULL AND price_per_ha IS NOT NULL)");
+                table.HasCheckConstraint("ck_survey_service_prices_combo_components",
+                    "(mapping_price_per_pole IS NULL AND plant_health_price_per_pole IS NULL) OR (mapping_price_per_pole IS NOT NULL AND plant_health_price_per_pole IS NOT NULL AND mapping_price_per_pole > 0 AND plant_health_price_per_pole > 0 AND mapping_price_per_pole = trunc(mapping_price_per_pole) AND plant_health_price_per_pole = trunc(plant_health_price_per_pole) AND price_per_pole IS NOT NULL AND price_per_pole = mapping_price_per_pole + plant_health_price_per_pole)");
                 table.HasCheckConstraint("ck_survey_service_prices_currency", "currency ~ '^[A-Z]{3}$'");
                 table.HasCheckConstraint("ck_survey_service_prices_window", "effective_to IS NULL OR effective_to > effective_from");
                 table.HasCheckConstraint("ck_survey_service_prices_version", "version_number IS NULL OR version_number >= 1");
@@ -38,6 +40,8 @@ public sealed class SurveyServicePriceConfiguration : IEntityTypeConfiguration<S
             .HasColumnName("price_per_pole")
             .HasColumnType("numeric(18,2)")
             .HasPrecision(18, 2);
+        builder.Property(price => price.MappingPricePerPole).HasColumnName("mapping_price_per_pole").HasPrecision(18, 2);
+        builder.Property(price => price.PlantHealthPricePerPole).HasColumnName("plant_health_price_per_pole").HasPrecision(18, 2);
         builder.Property(price => price.PricePerHa).HasColumnName("price_per_ha").HasColumnType("numeric(18,2)").HasPrecision(18, 2);
         builder.Property(price => price.Currency).HasColumnName("currency").HasColumnType("character(3)").HasMaxLength(3).IsFixedLength().IsRequired();
         builder.Property(price => price.EffectiveFrom).HasColumnName("effective_from").HasColumnType("timestamp with time zone");

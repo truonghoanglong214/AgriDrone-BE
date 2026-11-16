@@ -21,4 +21,12 @@ public sealed record ConfirmSurveyOrderPoleCountResponse(
     SurveyOrderStatus OrderStatus,
     uint OrderVersion,
     DateTimeOffset ConfirmedAt,
-    decimal? RemainingAmount = null);
+    decimal? RemainingAmount = null,
+    int? ConfirmedMappingPoleCount = null,
+    int? ConfirmedPlantHealthPoleCount = null,
+    decimal? MappingPricePerPole = null,
+    decimal? PlantHealthPricePerPole = null,
+    decimal? MappingSubtotal = null,
+    decimal? PlantHealthSubtotal = null,
+    decimal? ComboDiscountPercentage = null,
+    decimal? ComboDiscountAmount = null);

@@ -142,6 +142,9 @@ public static class IntegrationEventDescriptors
             IntegrationSchemaVersions.V1,
             RequiresActorId: true);
 
+    public static IntegrationEventDescriptor<SurveyOrderPricingConfirmedV2> SurveyOrderPricingConfirmedV2 { get; } =
+        new(IntegrationEventTypes.SurveyOrderPricingConfirmedV2, IntegrationSchemaVersions.V2, RequiresActorId: true);
+
     public static IntegrationEventDescriptor<SurveyOrderPricingConfirmedV1>
         SurveyOrderPricingConfirmedV1 { get; } =
         new(

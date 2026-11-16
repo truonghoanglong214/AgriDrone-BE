@@ -40,28 +40,42 @@ internal sealed class SurveyApprovalPrerequisiteResolver(
             request.SurveyServiceId,
             cancellationToken);
         if (service is null ||
-            service.Status is not SurveyServiceStatus.Active and
-                not SurveyServiceStatus.Experimental)
+            service.Status != SurveyServiceStatus.Active ||
+            service.ServiceType == SurveyServiceType.HarvestReadiness ||
+            (service.Scope == ContractScope.Legacy &&
+             (service.ServiceType is null || service.PriceId is null || service.PricePerPole is null)))
         {
             return Result.Failure<SurveyApprovalPrerequisites>(
                 SurveyApprovalError.ServiceUnavailable());
         }
 
+        if (service.Scope == ContractScope.Legacy &&
+            (service.MappingPricePerPole is null || service.PlantHealthPricePerPole is null))
+            return Result.Failure<SurveyApprovalPrerequisites>(SurveyApprovalError.PolicyConfigurationMissing(
+                "Configure both MappingPricePerPole and PlantHealthPricePerPole before approving a new Combo Order."));
+
         // V3 commercial terms are resolved atomically from the pinned policy bundle.
         // Legacy Admin policies must never override or gate a V3 approval.
-        var applicableDeposit = SurveyOrder.DefaultBaselineDepositAmountVnd;
-        var applicableDiscount = SurveyOrder.DefaultComboDiscountPercentage;
+        var applicableDeposit = 0m;
+        var applicableDiscount = 0m;
         if (service.Scope == ContractScope.Legacy)
         {
             var activeDepositPolicy = depositPolicyRepository is null
                 ? null
                 : await depositPolicyRepository.GetCurrentAsync(cancellationToken);
-            applicableDeposit = activeDepositPolicy?.AmountVnd ?? applicableDeposit;
+            applicableDeposit = activeDepositPolicy?.AmountVnd ?? SurveyOrder.DefaultBaselineDepositAmountVnd;
 
+            if (applicableDeposit <= 0m)
+            {
+                return Result.Failure<SurveyApprovalPrerequisites>(AppError.Conflict(
+                    "SurveyDepositPolicy.PositiveDepositRequired",
+                    "A positive shared pre-flight deposit is required for a new post-flight order."));
+            }
+            // Both first and Follow-up Combo orders pin the current Admin policy at approval.
             var activeDiscountPolicy = comboDiscountPolicyRepository is null
                 ? null
                 : await comboDiscountPolicyRepository.GetCurrentAsync(cancellationToken);
-            applicableDiscount = activeDiscountPolicy?.DiscountPercentage ?? applicableDiscount;
+            applicableDiscount = activeDiscountPolicy?.DiscountPercentage ?? SurveyOrder.DefaultComboDiscountPercentage;
         }
 
         return request.Kind switch

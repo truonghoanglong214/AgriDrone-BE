@@ -85,7 +85,9 @@ internal sealed partial class PlantHealthReviewService
                     """).ToDictionaryAsync(p => p.PlantId, ct);
                 List<Guid> advanced = [];
                 var staged = 0;
-                foreach (var group in payload.Findings.GroupBy(f => f.PlantId).OrderBy(g => g.Key))
+                // Locked orders must not advance the Owner-visible latest projection during internal review.
+                foreach (var group in payload.Findings.Where(_ => !s.Order.PostFlightSettlement)
+                             .GroupBy(f => f.PlantId).OrderBy(g => g.Key))
                 {
                     var values = group.OrderBy(f => f.FindingId).ToArray();
                     if (current.TryGetValue(group.Key, out var latest))
@@ -111,14 +113,14 @@ internal sealed partial class PlantHealthReviewService
                 foreach (var zone in payload.DiseaseZones) s.Zones[zone.ZoneId].Publish(actor, s.Now);
                 s.Result.PublishReviewedPlantHealth(publication, request.ExpectedResultVersion);
                 s.Order.RecordPublishedPlantHealthComparison(comparison.PreviousOrderId, comparison.PolicyVersion, comparison.Reason);
-                s.Order.Complete(s.Now);
+                s.Order.RecordReviewedServicePublication(s.Now);
                 AddPublicationOutbox(s, payload);
                 _db.AddAuditLog(AuditLog.ForUserAction(s.Order.TenantId, s.Order.FarmId, actor, _execution.CorrelationId,
                     "SurveyResult", s.Result.Id, "PlantHealth.ResultPublished", null, JsonSerializer.SerializeToDocument(new
                     { publication.Id, publication.PublicationVersion, publication.BatchId, publication.ApprovalFingerprint,
                         publication.Fingerprint, payload.Conclusion, comparison, AdvancedPlantIds = advanced, OperationId = request.OperationId }), s.Now));
                 var output = new PublishPlantHealthSurveyResultResponse(request.OperationId, publication.Id, s.Result.Id, s.Batch.Id,
-                    version, "PUBLISHED", "COMPLETED", payload.ResultNature, payload.TeamLabelLimitation, payload.Conclusion,
+                    version, "PUBLISHED", s.Order.PostFlightSettlement ? "AWAITING_PRICING" : "COMPLETED", payload.ResultNature, payload.TeamLabelLimitation, payload.Conclusion,
                     payload.Findings.Count, payload.DiseaseZones.Count, advanced, actor, s.Now, publication.Fingerprint);
                 _db.HealthReviewOperations.Add(PlantHealthReviewOperation.Create(s.Order.TenantId, actor, request.OperationId,
                     s.Result.Id, s.Batch.Id, fingerprint, JsonSerializer.SerializeToDocument(output), s.Now));
@@ -198,6 +200,7 @@ internal sealed partial class PlantHealthReviewService
 
     private void AddPublicationOutbox(Session s, PlantHealthPreliminaryResultPublishedV1 payload)
     {
+        if (s.Order.PostFlightSettlement) return; // Settlement emits delivery events after payment, never during internal review.
         var outcome = IntegrationEventEnvelopeFactory.Create(IntegrationEventDescriptors.PlantHealthPreliminaryResultPublishedV1,
             Guid.CreateVersion7(), _execution.CorrelationId, s.Order.TenantId, payload.PublishedBy, payload.PublishedAt, payload,
             causationId: payload.CausationId);

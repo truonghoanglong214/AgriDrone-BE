@@ -3,4 +3,6 @@ namespace AgriDrone.Api.Contracts.Surveys.Catalogue;
 public sealed record CreateSurveyServicePriceRequest(
     decimal AmountPerPole,
     string Currency,
-    uint ExpectedServiceVersion);
+    uint ExpectedServiceVersion,
+    decimal? MappingPricePerPole = null,
+    decimal? PlantHealthPricePerPole = null);

@@ -216,7 +216,8 @@ internal sealed class SurveyOrderOperationalContextV3Query(
             HasApprovedBaselineRoute: hasApprovedBaselineRoute,
             IsBaselineRouteCurrent: isBaselineRouteCurrent,
             IsBaselineRouteWithinSafetyInset: isBaselineRouteWithinSafetyInset,
-            DepositPaymentStatus: order.DepositPaymentStatus);
+            DepositPaymentStatus: order.DepositPaymentStatus,
+            PostFlightSettlement: order.PostFlightSettlement);
 
         var decision = SurveyOrderReadinessPolicy.EvaluateCommercialReadiness(snapshot);
 
@@ -260,7 +261,8 @@ internal sealed class SurveyOrderOperationalContextV3Query(
             approximateAreaHa,
             surveyRadiusMeters,
             scopeType,
-            scopeZones);
+            scopeZones,
+            order.PostFlightSettlement);
     }
 
     private static GeoJsonPolygonV3 ToGeoJson(

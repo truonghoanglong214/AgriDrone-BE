@@ -65,6 +65,50 @@ public sealed class FarmBaseMapReadAccessTests
         Assert.Equal(0, preview.Calls);
     }
 
+    [Fact]
+    public async Task OwnerCannotReadOrSignPublishedMapUntilSourceOrderIsSettled()
+    {
+        await using var context = CreateDatabase();
+        var map = FarmBaseMapVersion.PrepareDraft(
+            new FarmBaseMapPublicationContext(Guid.NewGuid(), TenantId, FarmId, 1, sourceMissionId: Guid.NewGuid()),
+            DateTimeOffset.UtcNow);
+        map.Publish(ActorId, DateTimeOffset.UtcNow);
+        context.FarmBaseMapVersions.Add(map);
+        await context.SaveChangesAsync();
+        var access = new FarmBaseMapReadAccess(new Context(TenantId, ActorId), new EffectiveAccess(true), new ManagerAccess());
+        var preview = new UnusedPreview();
+
+        var result = await new GetFarmBaseMapDetailQueryHandler(context, access, preview)
+            .Handle(new GetFarmBaseMapDetailQuery(FarmId, map.Id), CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("FarmBaseMapVersion.PaymentRequired", result.Error.Code);
+        Assert.Equal(0, preview.Calls);
+    }
+
+    [Fact]
+    public async Task OwnerMapListOmitsUnsettledSourceOrdersBeforeReadingGeometryOrMedia()
+    {
+        await using var context = CreateDatabase();
+        var farm = Farm.Create(TenantId, "LOCKED", "Locked Farm", null, null, null, null,
+            GeneralStatus.Active, ActorId, DateTimeOffset.UtcNow);
+        context.Farms.Add(farm);
+        var map = FarmBaseMapVersion.PrepareDraft(
+            new FarmBaseMapPublicationContext(Guid.NewGuid(), TenantId, farm.Id, 1), DateTimeOffset.UtcNow);
+        map.Publish(ActorId, DateTimeOffset.UtcNow);
+        context.FarmBaseMapVersions.Add(map);
+        await context.SaveChangesAsync();
+        var access = new FarmBaseMapReadAccess(new Context(TenantId, ActorId), new EffectiveAccess(true), new ManagerAccess());
+        var preview = new UnusedPreview();
+
+        var result = await new GetFarmBaseMapsQueryHandler(context, access, preview)
+            .Handle(new GetFarmBaseMapsQuery(farm.Id), CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Empty(result.Value);
+        Assert.Equal(0, preview.Calls);
+    }
+
     private static FarmsDbContext CreateDatabase()
     {
         // Only these scalar fields are needed before the handlers reject access.
@@ -89,6 +133,8 @@ public sealed class FarmBaseMapReadAccessTests
 
     private sealed class UnusedPreview : IFarmBaseMapPreviewReader
     {
+        public Task<bool> CanOwnerReadAsync(Guid tenantId, Guid farmId, Guid sourceOrderId,
+            CancellationToken cancellationToken = default) => Task.FromResult(false);
         public int Calls { get; private set; }
         public Task<FarmBaseMapPreview?> GetAsync(Guid tenantId, Guid farmId, Guid missionId,
             CancellationToken cancellationToken = default)

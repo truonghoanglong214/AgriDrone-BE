@@ -71,6 +71,7 @@ internal sealed class SurveyOrderBoundaryQueries(
                     boundary.EvidenceReference,
                     boundary.ReviewedBy,
                     boundary.ReviewedAt),
-            zones);
+            zones,
+            order.ServiceReviewedAt);
     }
 }

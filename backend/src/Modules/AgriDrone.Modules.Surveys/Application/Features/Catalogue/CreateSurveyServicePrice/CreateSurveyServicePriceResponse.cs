@@ -8,4 +8,6 @@ public sealed record CreateSurveyServicePriceResponse(
     DateTimeOffset EffectiveFrom,
     Guid? ClosedPriceVersionId,
     uint ServiceVersion,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    decimal? MappingPricePerPole = null,
+    decimal? PlantHealthPricePerPole = null);

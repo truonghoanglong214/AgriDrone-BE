@@ -62,7 +62,9 @@ internal sealed class SurveyCatalogueQueries(SurveysDbContext context)
                 price.EffectiveFrom,
                 price.EffectiveTo,
                 price.CreatedBy,
-                price.CreatedAt))
+                price.CreatedAt,
+                price.MappingPricePerPole,
+                price.PlantHealthPricePerPole))
             .ToListAsync(cancellationToken);
 
         EnsureAtMostOneEffectivePrice(effectivePrices, evaluatedAt);
@@ -314,7 +316,9 @@ internal sealed class SurveyCatalogueQueries(SurveysDbContext context)
                 price.EffectiveFrom,
                 price.EffectiveTo,
                 price.CreatedBy,
-                price.CreatedAt))
+                price.CreatedAt,
+                price.MappingPricePerPole,
+                price.PlantHealthPricePerPole))
             .ToListAsync(cancellationToken);
 
         EnsureAtMostOneEffectivePrice(effectivePrices, evaluatedAt);
@@ -326,7 +330,7 @@ internal sealed class SurveyCatalogueQueries(SurveysDbContext context)
                 price.PricePerPole!.Value.Amount,
                 price.Currency,
                 price.EffectiveFrom,
-                price.EffectiveTo));
+                price.EffectiveTo, price.MappingPricePerPole, price.PlantHealthPricePerPole));
 
         return services.Select(service => new SurveyServiceCatalogueItem(
                 service.Id,
@@ -388,7 +392,9 @@ internal sealed class SurveyCatalogueQueries(SurveysDbContext context)
                 price.EffectiveFrom,
                 price.EffectiveTo,
                 price.CreatedBy,
-                price.CreatedAt))
+                price.CreatedAt,
+                price.MappingPricePerPole,
+                price.PlantHealthPricePerPole))
             .ToListAsync(cancellationToken);
 
         EnsureAtMostOneEffectivePrice(prices, evaluatedAt);
@@ -404,7 +410,7 @@ internal sealed class SurveyCatalogueQueries(SurveysDbContext context)
             price.PricePerPole!.Value.Amount,
             price.Currency,
             price.EffectiveFrom,
-            price.EffectiveTo);
+            price.EffectiveTo, price.MappingPricePerPole, price.PlantHealthPricePerPole);
     }
 
     public Task<bool> HasOverlappingPerPolePriceAsync(
@@ -457,7 +463,9 @@ internal sealed class SurveyCatalogueQueries(SurveysDbContext context)
                 price.EffectiveFrom,
                 price.EffectiveTo,
                 price.CreatedBy,
-                price.CreatedAt))
+                price.CreatedAt,
+                price.MappingPricePerPole,
+                price.PlantHealthPricePerPole))
             .ToListAsync(cancellationToken);
     }
 
@@ -471,7 +479,8 @@ internal sealed class SurveyCatalogueQueries(SurveysDbContext context)
             price.EffectiveFrom,
             price.EffectiveTo,
             price.CreatedBy,
-            price.CreatedAt);
+            price.CreatedAt,
+            price.MappingPricePerPole, price.PlantHealthPricePerPole);
 
     private static void EnsureAtMostOneEffectivePrice(
         IReadOnlyCollection<PriceRow> prices,
@@ -517,5 +526,7 @@ internal sealed class SurveyCatalogueQueries(SurveysDbContext context)
         DateTimeOffset EffectiveFrom,
         DateTimeOffset? EffectiveTo,
         Guid CreatedBy,
-        DateTimeOffset CreatedAt);
+        DateTimeOffset CreatedAt,
+        decimal? MappingPricePerPole = null,
+        decimal? PlantHealthPricePerPole = null);
 }

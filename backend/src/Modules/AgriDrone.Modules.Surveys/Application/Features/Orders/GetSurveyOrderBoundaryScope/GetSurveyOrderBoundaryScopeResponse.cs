@@ -12,7 +12,8 @@ public sealed record GetSurveyOrderBoundaryScopeResponse(
     uint OrderVersion,
     bool RequiresBaselineMapping,
     SurveyOrderBoundaryResponse? CurrentApprovedBoundary,
-    IReadOnlyList<SurveyOrderZoneScopeResponse> Zones);
+    IReadOnlyList<SurveyOrderZoneScopeResponse> Zones,
+    DateTimeOffset? ServiceReviewedAt = null);
 
 public sealed record SurveyOrderBoundaryResponse(
     Guid FarmBoundaryId,

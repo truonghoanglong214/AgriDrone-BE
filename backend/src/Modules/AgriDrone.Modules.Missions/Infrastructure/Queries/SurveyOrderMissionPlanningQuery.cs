@@ -74,14 +74,12 @@ internal sealed class SurveyOrderMissionPlanningQuery(
             source.RequestedMissionPurpose == selectedService.ToString();
         var ready = purposeMatches && source.IsReady && source.AppointmentStartAt.HasValue &&
                     source.AppointmentEndAt.HasValue;
-        var isBaselinePlanning = source.RequiresBaselineMapping &&
-                                 source.FarmBaseMapVersionId is null;
         var appointmentConfirmed = source.AppointmentStatus == "Confirmed" &&
                                    source.AppointmentStartAt.HasValue &&
                                    source.AppointmentEndAt.HasValue &&
                                    source.AppointmentEndAt.Value >
                                    source.AppointmentStartAt.Value;
-        var isPaid = isBaselinePlanning || source.RequiresBaselineMapping
+        var isPaid = source.PostFlightSettlement || source.RequiresBaselineMapping
             ? source.DepositPaymentStatus is "Confirmed" or "Paid"
             : source.PaymentStatus is "Confirmed" or "Paid";
         var canPlan = purposeMatches && appointmentConfirmed && isPaid;

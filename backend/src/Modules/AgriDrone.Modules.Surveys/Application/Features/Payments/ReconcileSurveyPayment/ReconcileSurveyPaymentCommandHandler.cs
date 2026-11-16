@@ -53,6 +53,10 @@ internal sealed class ReconcileSurveyPaymentCommandHandler(
                     var state = stateResult.Value;
                     var order = state.Order;
                     var payment = state.Payment;
+                    if (order.Scope == ContractScope.V3 ||
+                        (payment.Purpose == PaymentPurpose.FinalBalance && order.PostFlightSettlement &&
+                         order.ServiceReviewedAt is null))
+                        return Result.Failure<ReconcileSurveyPaymentResponse>(PaymentError.OrderNotReady());
                     var normalizedCurrency = command.Currency
                         .Trim()
                         .ToUpperInvariant();
@@ -103,6 +107,7 @@ internal sealed class ReconcileSurveyPaymentCommandHandler(
                         else
                         {
                             order.MarkPaymentConfirmed(reconciledAt);
+                            await outbox.AddPostFlightUnlockAsync(order, executionContext.CorrelationId, token);
                         }
                     }
                     catch (SurveyDomainException exception)

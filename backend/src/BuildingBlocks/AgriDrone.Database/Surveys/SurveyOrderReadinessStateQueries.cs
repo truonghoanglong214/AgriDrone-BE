@@ -27,6 +27,7 @@ internal sealed class SurveyOrderReadinessStateQueries(NpgsqlDataSource dataSour
         command.CommandText =
             """
             SELECT
+                survey_order.post_flight_settlement,
                 survey_order.tenant_id,
                 survey_order.farm_id,
                 survey_order.status::text,
@@ -314,7 +315,8 @@ internal sealed class SurveyOrderReadinessStateQueries(NpgsqlDataSource dataSour
                 "is_baseline_route_current")),
             reader.GetBoolean(reader.GetOrdinal(
                 "is_baseline_route_within_safety_inset")),
-            depositPaymentStatus);
+            depositPaymentStatus,
+            reader.GetBoolean(reader.GetOrdinal("post_flight_settlement")));
 
         return Result.Success(new SurveyOrderReadinessState(
             surveyOrderId,

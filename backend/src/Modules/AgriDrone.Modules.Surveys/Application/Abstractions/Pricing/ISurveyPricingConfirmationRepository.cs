@@ -20,4 +20,5 @@ public sealed record SurveyPricingConfirmationState(
     int AuthoritativeActivePoleCount,
     Guid SurveyServicePriceId,
     decimal PricePerPole,
-    string Currency);
+    string Currency,
+    int? AuthoritativeMappingPoleCount = null);

@@ -247,7 +247,8 @@ internal sealed class SurveyOrderOperationalContextV4Query(
             HasApprovedBaselineRoute: hasApprovedBaselineRoute,
             IsBaselineRouteCurrent: isBaselineRouteCurrent,
             IsBaselineRouteWithinSafetyInset: isBaselineRouteWithinSafetyInset,
-            DepositPaymentStatus: order.DepositPaymentStatus);
+            DepositPaymentStatus: order.DepositPaymentStatus,
+            PostFlightSettlement: order.PostFlightSettlement);
 
         var commercialDecision = SurveyOrderReadinessPolicy.EvaluateCommercialReadiness(commercialSnapshot);
 

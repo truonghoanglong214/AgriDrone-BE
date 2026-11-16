@@ -12,8 +12,10 @@ namespace AgriDrone.IntegrationTests;
 
 public sealed class FarmBaseMapPreviewQueryTests
 {
-    [Fact]
-    public async Task ExistingPreviewQueryTranslatesWithoutProcessingOrStorageAccess()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PreviewAndOwnerSettlementGateTranslateWithoutStorageAccess(bool ownerGate)
     {
         var builder = new NpgsqlDataSourceBuilder(
             "Host=127.0.0.1;Port=1;Database=query_translation_test;Username=test;Password=test");
@@ -27,7 +29,9 @@ public sealed class FarmBaseMapPreviewQueryTests
             NullLogger<FarmBaseMapPreviewReader>.Instance);
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            reader.GetAsync(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid()));
+            ownerGate
+                ? (Task)reader.CanOwnerReadAsync(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid())
+                : reader.GetAsync(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid()));
 
         Assert.Equal("Preview query translated; no database connection opened.", exception.Message);
     }

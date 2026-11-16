@@ -20,4 +20,5 @@ public sealed record AssignedSurveyOrderApiResponse(
     uint? CurrentAppointmentVersion,
     string? CurrentAppointmentStatus,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    string? CurrentAppointmentPurpose = null);

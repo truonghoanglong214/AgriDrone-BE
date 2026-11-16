@@ -134,7 +134,7 @@ internal sealed class ProposeSurveyAppointmentCommandHandler(
                     "A Baseline Mapping appointment can only be proposed while the order awaits that appointment."));
         }
 
-        if (command.Purpose == SurveyAppointmentPurpose.PaidService &&
+        if (command.Purpose == SurveyAppointmentPurpose.PaidService && !order.PostFlightSettlement &&
             (order.ConfirmedSurveyPoleCount is null ||
              order.PricePerPoleSnapshot is null ||
              order.FinalPrice is null ||
@@ -145,15 +145,27 @@ internal sealed class ProposeSurveyAppointmentCommandHandler(
         }
 
         if (command.Purpose == SurveyAppointmentPurpose.PaidService &&
-            order.Status != SurveyOrderStatus.AwaitingPaidAppointment)
+            order.Status != SurveyOrderStatus.AwaitingPaidAppointment &&
+            !(order.PostFlightSettlement && order.ServiceReviewedAt is null && order.Status == SurveyOrderStatus.AwaitingPricing))
         {
             return Result.Failure<ProposeSurveyAppointmentResponse>(
                 SurveyOrderError.InvalidTransition(
                     "A paid-service appointment can only be proposed after pole-count and pricing confirmation."));
         }
 
+        var managerSchedulesFlight = command.Purpose == SurveyAppointmentPurpose.PaidService &&
+                                     order.CanManagerSchedulePlantHealth;
+        if (managerSchedulesFlight && command.ProposedStartAt <= proposedAt)
+        {
+            return Result.Failure<ProposeSurveyAppointmentResponse>(SurveyAppointmentError.InvalidWindow());
+        }
+
         var current = state.CurrentAppointment;
         var latest = state.LatestAppointment;
+        var previousOrderStatus = order.Status;
+        var previousAppointmentStatus = current?.Status;
+        var managerCanTakeOverProposal = managerSchedulesFlight &&
+                                         current?.Status == SurveyAppointmentStatus.Proposed;
         if (current is null &&
             (command.ExpectedCurrentAppointmentId.HasValue ||
              command.ExpectedCurrentAppointmentVersion.HasValue))
@@ -163,7 +175,8 @@ internal sealed class ProposeSurveyAppointmentCommandHandler(
         }
 
         if (current is not null &&
-            current.Status != SurveyAppointmentStatus.RescheduleRequested)
+            current.Status != SurveyAppointmentStatus.RescheduleRequested &&
+            !managerCanTakeOverProposal)
         {
             return Result.Failure<ProposeSurveyAppointmentResponse>(
                 SurveyAppointmentError.ActiveAppointmentExists());
@@ -177,44 +190,60 @@ internal sealed class ProposeSurveyAppointmentCommandHandler(
                 SurveyAppointmentError.ExpectedCurrentAppointmentRequired());
         }
 
-        if (current is not null)
+        if (current is not null && current.Id != command.ExpectedCurrentAppointmentId)
         {
-            if (current.Id != command.ExpectedCurrentAppointmentId)
-            {
-                return Result.Failure<ProposeSurveyAppointmentResponse>(
-                    SurveyAppointmentError.VersionConflict());
-            }
-
-            try
-            {
-                current.EnsureVersion(
-                    command.ExpectedCurrentAppointmentVersion!.Value);
-                current.Supersede(proposedAt);
-            }
-            catch (SurveyDomainException exception)
-            {
-                return Result.Failure<ProposeSurveyAppointmentResponse>(
-                    SurveyAppointmentCommandSupport.MapDomainError(exception));
-            }
+            return Result.Failure<ProposeSurveyAppointmentResponse>(
+                SurveyAppointmentError.VersionConflict());
         }
 
-        var appointment = SurveyAppointment.Create(
-            order.Id,
-            command.Purpose,
-            latest is null ? 1 : checked(latest.RevisionNumber + 1),
-            latest?.Id,
-            actorId,
-            command.ProposedStartAt,
-            command.ProposedEndAt,
-            proposedAt);
-        repository.Add(appointment);
+        var reuseProposal = managerCanTakeOverProposal &&
+                            current!.ProposedStartAt == command.ProposedStartAt &&
+                            current.ProposedEndAt == command.ProposedEndAt;
+        SurveyAppointment appointment;
+        try
+        {
+            if (current is not null)
+            {
+                current.EnsureVersion(command.ExpectedCurrentAppointmentVersion!.Value);
+                if (!reuseProposal)
+                    current.Supersede(proposedAt);
+            }
+
+            appointment = reuseProposal ? current! : SurveyAppointment.Create(
+                order.Id,
+                command.Purpose,
+                latest is null ? 1 : checked(latest.RevisionNumber + 1),
+                latest?.Id,
+                actorId,
+                command.ProposedStartAt,
+                command.ProposedEndAt,
+                proposedAt);
+
+            if (managerSchedulesFlight)
+            {
+                appointment.ConfirmBySystemManager(actorId, proposedAt);
+                order.MarkPaidAppointmentConfirmed(proposedAt);
+            }
+        }
+        catch (SurveyDomainException exception)
+        {
+            return Result.Failure<ProposeSurveyAppointmentResponse>(
+                SurveyAppointmentCommandSupport.MapDomainError(exception));
+        }
+
+        if (!reuseProposal)
+        {
+            if (current is not null)
+                await unitOfWork.FlushAsync(cancellationToken);
+            repository.Add(appointment);
+        }
 
         using var oldData = JsonSerializer.SerializeToDocument(new
         {
-            orderStatus = order.Status.ToString(),
+            orderStatus = previousOrderStatus.ToString(),
             previousAppointmentId = current?.Id,
             previousRevisionNumber = current?.RevisionNumber,
-            previousStatus = current?.Status.ToString()
+            previousStatus = previousAppointmentStatus?.ToString()
         });
         using var newData = JsonSerializer.SerializeToDocument(new
         {
@@ -224,6 +253,10 @@ internal sealed class ProposeSurveyAppointmentCommandHandler(
                 appointment.Purpose),
             appointment.ProposedStartAt,
             appointment.ProposedEndAt,
+            appointmentStatus = appointment.Status.ToString(),
+            orderStatus = order.Status.ToString(),
+            appointment.ConfirmedBySystemManagerId,
+            appointment.ConfirmedAt,
             systemManagerProfileId = state.SystemManagerProfileId
         });
         auditWriter.AddUserAction(
@@ -234,13 +267,15 @@ internal sealed class ProposeSurveyAppointmentCommandHandler(
             executionContext.CorrelationId,
             nameof(SurveyAppointment),
             appointment.Id,
-            command.Purpose switch
-            {
-                SurveyAppointmentPurpose.BaselineMapping => "PROPOSE_BASELINE_APPOINTMENT",
-                SurveyAppointmentPurpose.PaidService => "PROPOSE_PAID_SERVICE_APPOINTMENT",
-                SurveyAppointmentPurpose.Capture => "PROPOSE_CAPTURE_APPOINTMENT",
-                _ => throw new InvalidOperationException("Unsupported appointment purpose.")
-            },
+            managerSchedulesFlight
+                ? "SCHEDULE_PLANT_HEALTH_APPOINTMENT"
+                : command.Purpose switch
+                {
+                    SurveyAppointmentPurpose.BaselineMapping => "PROPOSE_BASELINE_APPOINTMENT",
+                    SurveyAppointmentPurpose.PaidService => "PROPOSE_PAID_SERVICE_APPOINTMENT",
+                    SurveyAppointmentPurpose.Capture => "PROPOSE_CAPTURE_APPOINTMENT",
+                    _ => throw new InvalidOperationException("Unsupported appointment purpose.")
+                },
             oldData,
             newData,
             proposedAt);

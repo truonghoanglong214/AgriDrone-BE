@@ -15,8 +15,10 @@ public sealed class CreateSurveyServicePriceCommandHandlerTests
     private static readonly DateTimeOffset Now =
         new(2026, 10, 14, 2, 0, 0, TimeSpan.Zero);
 
-    [Fact]
-    public async Task ReplacementUsesServerTimeAndLeavesNewPriceOpen()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ReplacementUsesServerTimeAndLeavesNewPriceOpen(bool components)
     {
         var actorId = Guid.NewGuid();
         var service = SurveyService.Create(
@@ -56,7 +58,9 @@ public sealed class CreateSurveyServicePriceCommandHandlerTests
                 service.Id,
                 15_000m,
                 "VND",
-                ExpectedServiceVersion: 1),
+                ExpectedServiceVersion: 1,
+                MappingPricePerPole: components ? 10000m : null,
+                PlantHealthPricePerPole: components ? 5000m : null),
             CancellationToken.None);
 
         Assert.True(result.IsSuccess);
@@ -67,6 +71,10 @@ public sealed class CreateSurveyServicePriceCommandHandlerTests
         Assert.Equal(Now, newPrice.EffectiveFrom);
         Assert.Null(newPrice.EffectiveTo);
         Assert.Equal(15_000m, newPrice.PricePerPole!.Value.Amount);
+        Assert.Equal(components ? 10000m : (decimal?)null, newPrice.MappingPricePerPole);
+        Assert.Equal(components ? 5000m : (decimal?)null, newPrice.PlantHealthPricePerPole);
+        Assert.Equal(newPrice.MappingPricePerPole, result.Value.MappingPricePerPole);
+        Assert.Equal(newPrice.PlantHealthPricePerPole, result.Value.PlantHealthPricePerPole);
         Assert.Equal(Now, service.UpdatedAt);
         Assert.Equal(Now, catalogueQueries.EffectiveFrom);
         Assert.Null(catalogueQueries.EffectiveTo);

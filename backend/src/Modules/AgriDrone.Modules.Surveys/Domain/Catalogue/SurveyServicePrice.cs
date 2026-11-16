@@ -10,6 +10,8 @@ public sealed class SurveyServicePrice : Entity
     public int? VersionNumber { get; private set; }
     public Guid? PredecessorVersionId { get; private set; }
     public PricePerPole? PricePerPole { get; private set; }
+    public decimal? MappingPricePerPole { get; private set; }
+    public decimal? PlantHealthPricePerPole { get; private set; }
     public decimal? PricePerHa { get; private set; }
     public string Currency { get; private set; } = null!;
     public DateTimeOffset EffectiveFrom { get; private set; }
@@ -30,7 +32,9 @@ public sealed class SurveyServicePrice : Entity
         DateTimeOffset effectiveFrom,
         DateTimeOffset? effectiveTo,
         Guid createdBy,
-        DateTimeOffset createdAt)
+        DateTimeOffset createdAt,
+        decimal? mappingPricePerPole = null,
+        decimal? plantHealthPricePerPole = null)
     {
         DomainGuard.NotEmpty(surveyServiceId);
         DomainGuard.NotEmpty(createdBy);
@@ -55,6 +59,14 @@ public sealed class SurveyServicePrice : Entity
                 nameof(currency));
         }
 
+        if (mappingPricePerPole.HasValue != plantHealthPricePerPole.HasValue ||
+            (mappingPricePerPole.HasValue &&
+             (mappingPricePerPole <= 0m || plantHealthPricePerPole <= 0m ||
+              mappingPricePerPole != decimal.Truncate(mappingPricePerPole.Value) ||
+              plantHealthPricePerPole != decimal.Truncate(plantHealthPricePerPole!.Value) ||
+              mappingPricePerPole + plantHealthPricePerPole != pricePerPole.Amount)))
+            throw new ArgumentException("Combo prices require both positive whole-VND component rates; their sum must equal AmountPerPole.");
+
         var validatedPrice = global::AgriDrone.Modules.Surveys.Domain.PricePerPole
             .Create(pricePerPole.Amount);
 
@@ -63,6 +75,8 @@ public sealed class SurveyServicePrice : Entity
             Id = Guid.NewGuid(),
             SurveyServiceId = surveyServiceId,
             PricePerPole = validatedPrice,
+            MappingPricePerPole = mappingPricePerPole,
+            PlantHealthPricePerPole = plantHealthPricePerPole,
             PricePerHa = null,
             Currency = currency.Value,
             EffectiveFrom = effectiveFrom,
