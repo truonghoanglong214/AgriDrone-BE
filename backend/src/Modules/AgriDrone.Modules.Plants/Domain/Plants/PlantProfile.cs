@@ -1,4 +1,5 @@
 using AgriDrone.SharedKernel.Domain;
+using AgriDrone.SharedKernel.Domain.Spatial;
 using NetTopologySuite.Geometries;
 
 namespace AgriDrone.Modules.Plants.Domain.Plants;
@@ -60,10 +61,9 @@ public sealed class PlantProfile : AggregateRoot
         };
     }
 
-    public void Relocate(
+    public double Relocate(
         Point newLocation,
         Guid mapVersionId,
-        double distanceM,
         double matchingDistanceThresholdM,
         DateTimeOffset at)
     {
@@ -80,16 +80,20 @@ public sealed class PlantProfile : AggregateRoot
             throw new InvalidOperationException($"Cannot relocate plant profile in status {Status}.");
         }
 
-        if (distanceM > matchingDistanceThresholdM)
+        var measuredDistanceM = GeodesicSpatialCalculator.CalculateDistanceMeters(
+            CurrentLocation.Y, CurrentLocation.X,
+            newLocation.Y, newLocation.X);
+        if (measuredDistanceM > matchingDistanceThresholdM)
         {
             throw new InvalidOperationException(
-                $"Relocation distance {distanceM:F2}m exceeds matching threshold {matchingDistanceThresholdM:F2}m. " +
-                "A relocation beyond threshold must be handled as replacement or needs manual review.");
+                $"Relocation distance {measuredDistanceM:F2}m exceeds matching threshold {matchingDistanceThresholdM:F2}m. " +
+                "A relocation beyond threshold must be handled as replacement or rejected.");
         }
 
         CurrentLocation = (Point)newLocation.Copy();
         CurrentMapVersionId = mapVersionId;
         UpdatedAt = at;
+        return measuredDistanceM;
     }
 
     public PlantProfile ReplaceWithNewProfile(
@@ -97,10 +101,12 @@ public sealed class PlantProfile : AggregateRoot
         string newPoleIdentifier,
         Point newLocation,
         Guid mapVersionId,
+        Guid managerDecisionId,
         string reason,
         DateTimeOffset at)
     {
         DomainGuard.NotEmpty(newProfileId, nameof(newProfileId));
+        DomainGuard.NotEmpty(managerDecisionId, nameof(managerDecisionId));
         DomainGuard.Utc(at, nameof(at));
         DomainGuard.NotEmpty(mapVersionId, nameof(mapVersionId));
         ArgumentNullException.ThrowIfNull(newLocation, nameof(newLocation));
@@ -115,7 +121,7 @@ public sealed class PlantProfile : AggregateRoot
         }
 
         Status = PlantProfileStatus.Replaced;
-        ReplacementReason = reason.Trim();
+        ReplacementReason = $"Decision: {managerDecisionId} - {reason.Trim()}";
         UpdatedAt = at;
 
         return new PlantProfile

@@ -107,6 +107,7 @@ public static class DependencyInjection
             IntegrationConsumerNames.Be1BaselineMappingCandidatesReadyV3);
 
         services.AddScoped<IFarmBaseMapPublicationOrchestrator, FarmBaseMapPublicationOrchestrator>();
+        services.AddScoped<IOrderPoleEvidenceReader, OrderPoleEvidenceReader>();
 
         return services;
     }

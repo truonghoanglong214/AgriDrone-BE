@@ -35,6 +35,9 @@ public sealed class MappingPublicationDbContext(
     public DbSet<FarmBaseMapVersion> FarmBaseMapVersions =>
         Set<FarmBaseMapVersion>();
 
+    public DbSet<FarmBaselinePointer> FarmBaselinePointers =>
+        Set<FarmBaselinePointer>();
+
     public DbSet<ZoneMapVersion> ZoneMapVersions => Set<ZoneMapVersion>();
 
     public DbSet<MappingCandidateBatch> MappingCandidateBatches =>
@@ -49,12 +52,17 @@ public sealed class MappingPublicationDbContext(
 
     public DbSet<PlantProfile> PlantProfiles => Set<PlantProfile>();
 
+    public DbSet<PlantProfileObservation> PlantProfileObservations => Set<PlantProfileObservation>();
+
     public DbSet<PlantChangeEvent> PlantChangeEvents => Set<PlantChangeEvent>();
 
     public DbSet<PlantInventoryChangeReport> PlantInventoryChangeReports =>
         Set<PlantInventoryChangeReport>();
 
     public DbSet<SurveyOrder> SurveyOrders => Set<SurveyOrder>();
+
+    public DbSet<SurveyOrderPoleCountSnapshot> SurveyOrderPoleCountSnapshots =>
+        Set<SurveyOrderPoleCountSnapshot>();
 
     public DbSet<SpatialPolicy> SpatialPolicies => Set<SpatialPolicy>();
 
@@ -96,16 +104,19 @@ public sealed class MappingPublicationDbContext(
         modelBuilder.ApplyConfiguration(new FarmBoundaryConfiguration());
         modelBuilder.ApplyConfiguration(new BoundaryExceptionConfiguration());
         modelBuilder.ApplyConfiguration(new FarmBaseMapVersionConfiguration());
+        modelBuilder.ApplyConfiguration(new FarmBaselinePointerConfiguration());
         modelBuilder.ApplyConfiguration(new ZoneMapVersionConfiguration());
         modelBuilder.ApplyConfiguration(new MappingCandidateBatchConfiguration());
         modelBuilder.ApplyConfiguration(new MappingCandidateConfiguration());
         modelBuilder.ApplyConfiguration(new HealthLevelConfiguration());
         modelBuilder.ApplyConfiguration(new PlantConfiguration());
         modelBuilder.ApplyConfiguration(new PlantProfileConfiguration());
+        modelBuilder.ApplyConfiguration(new PlantProfileObservationConfiguration());
         modelBuilder.ApplyConfiguration(new PlantChangeEventConfiguration());
         modelBuilder.ApplyConfiguration(
             new PlantInventoryChangeReportConfiguration());
         modelBuilder.ApplyConfiguration(new SurveyOrderConfiguration());
+        modelBuilder.ApplyConfiguration(new SurveyOrderPoleCountSnapshotConfiguration());
         modelBuilder.ApplyConfiguration(new SpatialPolicyConfiguration());
         modelBuilder.ApplyConfiguration(new InboxMessageConfiguration());
         modelBuilder.ApplyConfiguration(new OutboxMessageConfiguration());

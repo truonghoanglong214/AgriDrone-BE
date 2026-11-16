@@ -136,6 +136,7 @@ public sealed class SurveyOrderConfiguration : IEntityTypeConfiguration<SurveyOr
         builder.Property(order => order.FarmBaseMapVersionId).HasColumnName("farm_base_map_version_id").HasColumnType("uuid");
         builder.Property(order => order.BaselineMapVersionId).HasColumnName("baseline_map_version_id").HasColumnType("uuid");
         builder.Property(order => order.VerifiedBillablePoleCount).HasColumnName("verified_billable_pole_count").HasColumnType("integer");
+        builder.Property(order => order.VerifiedPoleCountSnapshotId).HasColumnName("verified_pole_count_snapshot_id").HasColumnType("uuid");
         builder.Property(order => order.CountVerifiedBy).HasColumnName("count_verified_by").HasColumnType("uuid");
         builder.Property(order => order.CountVerifiedAt).HasColumnName("count_verified_at").HasColumnType("timestamp with time zone");
         builder.Property(order => order.BoundaryCaptureSessionId).HasColumnName("boundary_capture_session_id").HasColumnType("uuid");

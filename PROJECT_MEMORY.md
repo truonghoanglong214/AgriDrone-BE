@@ -56,23 +56,28 @@ AgriDrone là hệ thống quản lý và điều phối dịch vụ khảo sát
 
 ---
 
-## 4. Tóm tắt kết quả Phase V3-04 vừa hoàn thành
-- **Bản đồ số & Lineage (`FarmBaseMapVersion`)**:
+## 4. Tóm tắt kết quả Phase V3-04 hoàn thành & Remediation
+- **Bản đồ số & Lineage (`FarmBaseMapVersion` & `FarmBaselinePointer`)**:
   - Hỗ trợ First Order tạo Baseline nội bộ (`IsBaseline = true`, `PredecessorVersionId = null`, `BaselineMapVersionId = Id`).
   - Hỗ trợ Follow-up Order tạo phiên bản mới (`IsBaseline = false`, `PredecessorVersionId = latestMap.Id`, `BaselineMapVersionId = baselineMap.Id`), bảo toàn Baseline gốc.
-  - Phê duyệt nội bộ qua `ApproveInternalBaseMapCommand` và tích hợp tự động qua `FarmBaseMapPublicationOrchestrator`.
-- **Dung sai Không gian Động (`SpatialPolicy`)**:
-  - Entity `SpatialPolicy` lưu tại `survey.spatial_policies` với `StreamKey`, `VersionNumber`, `PredecessorVersionId`, `PolicyFingerprint` (SHA-256), `BoundaryToleranceM`, `MatchingDistanceThresholdM`, `RowBearingToleranceDeg`, `GridSpacingToleranceM`.
-  - Tích hợp `ISpatialPolicyRepository` vào dependency injection.
-- **Định danh Trụ/Cây Trồng Bất biến (`PlantProfile`)**:
-  - Entity `PlantProfile` lưu tại `plant.plant_profiles`, quản lý định danh vật lý bền vững (`PhysicalPoleIdentifier`, `BaselineLocation`, `CurrentLocation`, `Status`, `PredecessorProfileId`).
-  - Phân biệt giữa dịch chuyển toạ độ do sai số GPS/GNSS (`Relocate` trong ngưỡng tolerance) và thay thế trụ (`ReplaceWithNewProfile`), hủy trụ (`Retire`).
-  - `PlantChangeEvent` liên kết đầy đủ lineage metadata: `PlantProfileId`, `SourceSurveyOrderId`, `SpatialPolicyVersionId`, `ManagerDecisionId`.
-- **Chốt Số trụ Tính tiền (`VerifiedBillablePoleCount`)**:
-  - Mở rộng `SurveyOrder` với `VerifiedBillablePoleCount`, `CountVerifiedAt`, `CountVerifiedBy`, `BaselineMapVersionId`.
-  - Query PostGIS `ST_Within(p.current_location, b.boundary_geometry)` strictly lọc và chốt số lượng trụ nằm bên trong ranh giới trang trại, phục vụ lập hóa đơn thanh quyết toán.
-- **Database Migration**:
-  - Migration EF Core `V3_04MappingAndPlantIdentity` sạch 100%, đồng bộ model snapshot.
+  - Tách bạch hai giai đoạn: `ApproveInternal` (`InternalApproved`) chốt số trụ nội bộ ở V3-04; phát hành bản đồ cho khách hàng (`Published`) chỉ thực hiện ở V3-06.
+  - Bổ sung bảng con trỏ baseline `farm.farm_baseline_pointers` duy trì baseline hiện thời không phụ thuộc trạng thái publish.
+- **Dung sai Không gian Động (`SpatialPolicy` Fail-Closed)**:
+  - Entity `SpatialPolicy` với seed `DEFAULT` cố định, StreamKey chuẩn hóa chữ hoa, fingerprint SHA-256 tính theo invariant culture bao gồm cả 4 tham số dung sai.
+  - Fail-closed: truy vấn policy tại thời điểm khảo sát (`batch.ProducedAt`), trả `AppError.Conflict` nếu thiếu policy, tuyệt đối không fallback ngầm 1.5m.
+- **Định danh Trụ/Cây Trồng Bất biến (`PlantProfile` & `PlantProfileObservation`)**:
+  - Tính khoảng cách dịch chuyển toạ độ theo công thức geodesic (Haversine/Great-circle) chuẩn mét SRID 4326 trước khi mutate entity. Từ chối duyệt nếu vượt tolerance.
+  - Quan hệ 1-1 chặt chẽ: `Plant.PlantProfileId` đảm bảo mọi cây trong bản đồ đều liên kết với một profile.
+  - Decision `Replace` bắt buộc có `targetPlantId` và active profile, gán `PredecessorProfileId` và `ManagerDecisionId`.
+  - Decision `MatchExisting` ghi nhận quan sát định danh lại vào `plant.plant_profile_observations`.
+  - `PlantChangeEvent` bất biến với factory methods chuyên biệt, lưu vết đầy đủ lineage và evidence.
+- **Bằng chứng Chốt Số trụ Tính tiền Authoritative Snapshot & Ranh giới Module**:
+  - Bổ sung thực thể `survey.survey_order_pole_count_snapshots` lưu fingerprint SHA-256, revision tăng dần, trỏ predecessor snapshot.
+  - `SurveyOrder` giữ `VerifiedPoleCountSnapshotId` và `VerifiedBillablePoleCount`, được cập nhật an toàn qua `RecordVerifiedPoleCount(snapshot, expectedVersion)` với kiểm tra concurrency.
+  - Tách module Surveys khỏi schema Farms/Plants qua interface `IOrderPoleEvidenceReader` và implementation `OrderPoleEvidenceReader`.
+  - Kiểm tra quyền quản lý trang trại (`ISystemManagerAccessService`) trong `VerifyOrderBillablePolesCommandHandler`.
+- **Database Migrations**:
+  - `V3_04MappingAndPlantIdentity` và `V3_04MappingLineageAndEvidenceRemediation` sạch 100%, bổ sung enum value `INTERNAL_APPROVED`, seed default spatial policy, và SQL backfill tự động cho các bản đồ lịch sử.
 
 ---
 

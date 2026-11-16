@@ -65,7 +65,7 @@ namespace AgriDrone.Database.Migrations
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "disease_zone_status", new[] { "PROPOSED", "REVIEWED", "PUBLISHED", "REJECTED", "SUPERSEDED" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "drone_status", new[] { "AVAILABLE", "IN_MISSION", "MAINTENANCE", "INACTIVE", "RETIRED" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "farm_access_scope", new[] { "ALL_ZONES", "SELECTED_ZONES" });
-            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "farm_base_map_status", new[] { "DRAFT", "PUBLISHED", "SUPERSEDED" });
+            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "farm_base_map_status", new[] { "DRAFT", "INTERNAL_APPROVED", "PUBLISHED", "SUPERSEDED" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "farm_boundary_source", new[] { "APPLICANT", "TENANT_OWNER", "SYSTEM_MANAGER", "LEGACY_IMPORT" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "farm_boundary_status", new[] { "DRAFT", "APPROVED", "REJECTED", "SUPERSEDED" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "farm_member_role", new[] { "MANAGER", "WORKER" });
@@ -661,10 +661,52 @@ namespace AgriDrone.Database.Migrations
                         {
                             t.HasCheckConstraint("ck_farm_base_map_versions_baseline_lineage", "(is_baseline = true AND predecessor_version_id IS NULL) OR (is_baseline = false)");
 
-                            t.HasCheckConstraint("ck_farm_base_map_versions_publication", "(status = 'DRAFT'::system.farm_base_map_status AND published_by IS NULL AND published_at IS NULL) OR (status IN ('PUBLISHED'::system.farm_base_map_status, 'SUPERSEDED'::system.farm_base_map_status) AND published_by IS NOT NULL AND published_at IS NOT NULL)");
+                            t.HasCheckConstraint("ck_farm_base_map_versions_publication", "(status IN ('DRAFT'::system.farm_base_map_status, 'INTERNAL_APPROVED'::system.farm_base_map_status) AND published_by IS NULL AND published_at IS NULL) OR (status IN ('PUBLISHED'::system.farm_base_map_status, 'SUPERSEDED'::system.farm_base_map_status) AND published_by IS NOT NULL AND published_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_farm_base_map_versions_version_positive", "version_number >= 1");
                         });
+                });
+
+            modelBuilder.Entity("AgriDrone.Modules.Farms.Domain.Maps.FarmBaselinePointer", b =>
+                {
+                    b.Property<Guid>("FarmId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("farm_id");
+
+                    b.Property<Guid>("CurrentBaselineMapVersionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("current_baseline_map_version_id");
+
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("FarmId")
+                        .HasName("pk_farm_baseline_pointers");
+
+                    b.HasAlternateKey("FarmId", "TenantId")
+                        .HasName("uq_farm_baseline_pointers_farm_tenant");
+
+                    b.HasIndex("CurrentBaselineMapVersionId");
+
+                    b.ToTable("farm_baseline_pointers", "farm");
                 });
 
             modelBuilder.Entity("AgriDrone.Modules.Farms.Domain.Maps.Staging.MappingCandidate", b =>
@@ -5859,6 +5901,10 @@ namespace AgriDrone.Database.Migrations
                         .HasColumnType("character varying(50)")
                         .HasColumnName("plant_code");
 
+                    b.Property<Guid?>("PlantProfileId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("plant_profile_id");
+
                     b.Property<decimal?>("PositionConfidence")
                         .HasPrecision(5, 4)
                         .HasColumnType("numeric(5,4)")
@@ -5913,6 +5959,9 @@ namespace AgriDrone.Database.Migrations
                         .HasDatabaseName("ix_plants_location_gist");
 
                     NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("Location"), "gist");
+
+                    b.HasIndex("PlantProfileId")
+                        .HasDatabaseName("ix_plants_plant_profile");
 
                     b.HasIndex("ReplacedPlantId");
 
@@ -6047,6 +6096,67 @@ namespace AgriDrone.Database.Migrations
 
                             t.HasCheckConstraint("ck_plant_profiles_status", "status IN ('Active', 'NeedsReview', 'Retired', 'Replaced')");
                         });
+                });
+
+            modelBuilder.Entity("AgriDrone.Modules.Plants.Domain.Plants.PlantProfileObservation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<Guid?>("CandidateId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("candidate_id");
+
+                    b.Property<Guid>("FarmBaseMapVersionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("farm_base_map_version_id");
+
+                    b.Property<Guid>("FarmId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("farm_id");
+
+                    b.Property<DateTimeOffset>("ObservedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("observed_at");
+
+                    b.Property<Guid>("ObservedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("observed_by");
+
+                    b.Property<double>("ObservedDistanceM")
+                        .HasColumnType("double precision")
+                        .HasColumnName("observed_distance_m");
+
+                    b.Property<Point>("ObservedLocation")
+                        .IsRequired()
+                        .HasColumnType("geometry(Point,4326)")
+                        .HasColumnName("observed_location");
+
+                    b.Property<Guid>("PlantProfileId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("plant_profile_id");
+
+                    b.Property<Guid>("SurveyOrderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("survey_order_id");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_plant_profile_observations");
+
+                    b.HasIndex("PlantProfileId")
+                        .HasDatabaseName("ix_plant_profile_observations_profile");
+
+                    b.HasIndex("FarmId", "SurveyOrderId")
+                        .HasDatabaseName("ix_plant_profile_observations_farm_order");
+
+                    b.ToTable("plant_profile_observations", "plant");
                 });
 
             modelBuilder.Entity("AgriDrone.Modules.Plants.Domain.Recommendations.TreatmentRecommendation", b =>
@@ -10181,6 +10291,10 @@ namespace AgriDrone.Database.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("verified_billable_pole_count");
 
+                    b.Property<Guid?>("VerifiedPoleCountSnapshotId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("verified_pole_count_snapshot_id");
+
                     b.Property<uint>("Version")
                         .IsConcurrencyToken()
                         .ValueGeneratedOnAddOrUpdate()
@@ -10428,6 +10542,96 @@ namespace AgriDrone.Database.Migrations
                             t.HasCheckConstraint("ck_order_commercial_snapshots_price", "price_per_pole > 0 AND price_per_pole = FLOOR(price_per_pole)");
 
                             t.HasCheckConstraint("ck_order_commercial_snapshots_reschedules", "allowed_free_no_show_reschedules >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.SurveyOrderPoleCountSnapshot", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid?>("CaptureAttemptId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("capture_attempt_id");
+
+                    b.Property<string>("EvidenceFingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("evidence_fingerprint");
+
+                    b.Property<Guid>("FarmBaseMapVersionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("farm_base_map_version_id");
+
+                    b.Property<Guid>("FarmBoundaryVersionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("farm_boundary_version_id");
+
+                    b.Property<Guid>("FarmId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("farm_id");
+
+                    b.Property<Guid?>("MappingCandidateBatchId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("mapping_candidate_batch_id");
+
+                    b.Property<Guid?>("MissionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("mission_id");
+
+                    b.Property<Guid?>("PredecessorSnapshotId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("predecessor_snapshot_id");
+
+                    b.Property<int>("RevisionNumber")
+                        .HasColumnType("integer")
+                        .HasColumnName("revision_number");
+
+                    b.Property<Guid>("SpatialPolicyVersionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("spatial_policy_version_id");
+
+                    b.Property<Guid>("SurveyOrderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("survey_order_id");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTimeOffset>("VerifiedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("verified_at");
+
+                    b.Property<int>("VerifiedBillablePoleCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("verified_billable_pole_count");
+
+                    b.Property<Guid>("VerifiedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("verified_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_survey_order_pole_count_snapshots");
+
+                    b.HasIndex("FarmId")
+                        .HasDatabaseName("ix_survey_order_pole_count_snapshots_farm");
+
+                    b.HasIndex("MappingCandidateBatchId")
+                        .HasDatabaseName("ix_survey_order_pole_count_snapshots_batch");
+
+                    b.HasIndex("SurveyOrderId", "RevisionNumber")
+                        .IsUnique()
+                        .HasDatabaseName("uq_survey_order_pole_count_snapshots_order_revision");
+
+                    b.ToTable("survey_order_pole_count_snapshots", "survey", t =>
+                        {
+                            t.HasCheckConstraint("ck_survey_order_pole_count_snapshots_count", "verified_billable_pole_count >= 0");
+
+                            t.HasCheckConstraint("ck_survey_order_pole_count_snapshots_rev", "revision_number >= 1");
                         });
                 });
 
@@ -11974,6 +12178,24 @@ namespace AgriDrone.Database.Migrations
                         .HasConstraintName("fk_farm_base_map_versions_orders_same_tenant_farm");
                 });
 
+            modelBuilder.Entity("AgriDrone.Modules.Farms.Domain.Maps.FarmBaselinePointer", b =>
+                {
+                    b.HasOne("AgriDrone.Modules.Farms.Domain.Maps.FarmBaseMapVersion", null)
+                        .WithMany()
+                        .HasForeignKey("CurrentBaselineMapVersionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_farm_baseline_pointers_map_version");
+
+                    b.HasOne("AgriDrone.Modules.Farms.Domain.Farms.Farm", null)
+                        .WithMany()
+                        .HasForeignKey("FarmId", "TenantId")
+                        .HasPrincipalKey("Id", "TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_farm_baseline_pointers_farms");
+                });
+
             modelBuilder.Entity("AgriDrone.Modules.Farms.Domain.Maps.Staging.MappingCandidate", b =>
                 {
                     b.HasOne("AgriDrone.Modules.Farms.Domain.Maps.Staging.MappingCandidateBatch", "Batch")
@@ -13235,6 +13457,16 @@ namespace AgriDrone.Database.Migrations
                         .HasForeignKey("PredecessorProfileId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("fk_plant_profiles_predecessor");
+                });
+
+            modelBuilder.Entity("AgriDrone.Modules.Plants.Domain.Plants.PlantProfileObservation", b =>
+                {
+                    b.HasOne("AgriDrone.Modules.Plants.Domain.Plants.PlantProfile", null)
+                        .WithMany()
+                        .HasForeignKey("PlantProfileId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_plant_profile_observations_profile");
                 });
 
             modelBuilder.Entity("AgriDrone.Modules.Plants.Domain.Recommendations.TreatmentRecommendation", b =>

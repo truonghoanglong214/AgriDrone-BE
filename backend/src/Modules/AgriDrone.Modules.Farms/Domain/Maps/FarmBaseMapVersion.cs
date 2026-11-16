@@ -37,15 +37,97 @@ public sealed class FarmBaseMapVersion : AggregateRoot
         ArgumentNullException.ThrowIfNull(context);
         DomainGuard.Utc(createdAt);
 
+        var mapId = Guid.NewGuid();
+        return new FarmBaseMapVersion
+        {
+            Id = mapId,
+            TenantId = context.TenantId,
+            FarmId = context.FarmId,
+            VersionNumber = context.VersionNumber,
+            PredecessorVersionId = context.PredecessorVersionId,
+            IsBaseline = context.IsBaseline,
+            BaselineMapVersionId = context.BaselineMapVersionId ?? (context.IsBaseline ? mapId : null),
+            SourceSurveyOrderId = context.SourceSurveyOrderId,
+            SourceMissionGroupId = context.SourceMissionGroupId,
+            SourceMissionId = context.SourceMissionId,
+            FarmBoundaryVersionId = context.FarmBoundaryVersionId,
+            HandoffId = context.HandoffId,
+            GridBearingDeg = context.GridBearingDeg,
+            RowSpacingM = context.RowSpacingM,
+            PlantSpacingM = context.PlantSpacingM,
+            Status = FarmBaseMapStatus.Draft,
+            CreatedAt = createdAt,
+            UpdatedAt = createdAt
+        };
+    }
+
+    public static FarmBaseMapVersion CreateFirstBaseline(
+        FarmBaseMapPublicationContext context,
+        DateTimeOffset createdAt)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        DomainGuard.Utc(createdAt);
+
+        var mapId = Guid.NewGuid();
+        return new FarmBaseMapVersion
+        {
+            Id = mapId,
+            TenantId = context.TenantId,
+            FarmId = context.FarmId,
+            VersionNumber = context.VersionNumber > 0 ? context.VersionNumber : 1,
+            PredecessorVersionId = null,
+            IsBaseline = true,
+            BaselineMapVersionId = mapId,
+            SourceSurveyOrderId = context.SourceSurveyOrderId,
+            SourceMissionGroupId = context.SourceMissionGroupId,
+            SourceMissionId = context.SourceMissionId,
+            FarmBoundaryVersionId = context.FarmBoundaryVersionId,
+            HandoffId = context.HandoffId,
+            GridBearingDeg = context.GridBearingDeg,
+            RowSpacingM = context.RowSpacingM,
+            PlantSpacingM = context.PlantSpacingM,
+            Status = FarmBaseMapStatus.Draft,
+            CreatedAt = createdAt,
+            UpdatedAt = createdAt
+        };
+    }
+
+    public static FarmBaseMapVersion CreateFollowUp(
+        FarmBaseMapPublicationContext context,
+        FarmBaseMapVersion predecessor,
+        FarmBaseMapVersion baseline,
+        DateTimeOffset createdAt)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(predecessor);
+        ArgumentNullException.ThrowIfNull(baseline);
+        DomainGuard.Utc(createdAt);
+
+        if (predecessor.FarmId != context.FarmId || predecessor.TenantId != context.TenantId)
+        {
+            throw new InvalidOperationException("Predecessor map must belong to the same farm and tenant.");
+        }
+
+        if (baseline.FarmId != context.FarmId || baseline.TenantId != context.TenantId || !baseline.IsBaseline)
+        {
+            throw new InvalidOperationException("Baseline map must be an active baseline for the same farm and tenant.");
+        }
+
+        if (context.VersionNumber <= predecessor.VersionNumber)
+        {
+            throw new InvalidOperationException(
+                $"Follow-up version number {context.VersionNumber} must be strictly greater than predecessor version {predecessor.VersionNumber}.");
+        }
+
         return new FarmBaseMapVersion
         {
             Id = Guid.NewGuid(),
             TenantId = context.TenantId,
             FarmId = context.FarmId,
             VersionNumber = context.VersionNumber,
-            PredecessorVersionId = context.PredecessorVersionId,
-            IsBaseline = context.IsBaseline,
-            BaselineMapVersionId = context.BaselineMapVersionId,
+            PredecessorVersionId = predecessor.Id,
+            IsBaseline = false,
+            BaselineMapVersionId = baseline.Id,
             SourceSurveyOrderId = context.SourceSurveyOrderId,
             SourceMissionGroupId = context.SourceMissionGroupId,
             SourceMissionId = context.SourceMissionId,
@@ -65,17 +147,28 @@ public sealed class FarmBaseMapVersion : AggregateRoot
         DomainGuard.NotEmpty(approvedBy);
         DomainGuard.Utc(approvedAt);
 
+        if (Status != FarmBaseMapStatus.Draft)
+        {
+            throw new InvalidOperationException($"Only draft maps can be approved internally. Current status: {Status}");
+        }
+
         ApprovedInternalBy = approvedBy;
         ApprovedInternalAt = approvedAt;
+        Status = FarmBaseMapStatus.InternalApproved;
         UpdatedAt = approvedAt;
         Version++;
     }
 
-    public void SetLineage(
-        bool isBaseline,
-        Guid? predecessorVersionId,
-        Guid? baselineMapVersionId)
+    public void SetLineage(bool isBaseline, Guid? predecessorVersionId, Guid? baselineMapVersionId) =>
+        ConfigureLineage(isBaseline, predecessorVersionId, baselineMapVersionId);
+
+    public void ConfigureLineage(bool isBaseline, Guid? predecessorVersionId, Guid? baselineMapVersionId)
     {
+        if (ApprovedInternalAt.HasValue)
+        {
+            throw new InvalidOperationException("Cannot modify map lineage after internal approval.");
+        }
+
         if (isBaseline && predecessorVersionId.HasValue)
         {
             throw new InvalidOperationException("A baseline farm base map cannot have a predecessor version.");
@@ -86,7 +179,7 @@ public sealed class FarmBaseMapVersion : AggregateRoot
 
         IsBaseline = isBaseline;
         PredecessorVersionId = predecessorVersionId;
-        BaselineMapVersionId = baselineMapVersionId;
+        BaselineMapVersionId = baselineMapVersionId ?? (isBaseline ? Id : null);
     }
 
     public void SetPublicationProvenance(
@@ -108,9 +201,9 @@ public sealed class FarmBaseMapVersion : AggregateRoot
         DomainGuard.NotEmpty(publishedBy);
         DomainGuard.Utc(publishedAt);
 
-        if (Status != FarmBaseMapStatus.Draft)
+        if (Status is not (FarmBaseMapStatus.Draft or FarmBaseMapStatus.InternalApproved))
         {
-            throw new InvalidOperationException("Only a draft farm base map can be published.");
+            throw new InvalidOperationException($"Cannot publish farm base map in status '{Status}'. Must be Draft or InternalApproved.");
         }
 
         PublishedBy = publishedBy;

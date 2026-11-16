@@ -17,7 +17,7 @@ public sealed class FarmBaseMapVersionConfiguration : IEntityTypeConfiguration<F
                 table.HasCheckConstraint("ck_farm_base_map_versions_version_positive", "version_number >= 1");
                 table.HasCheckConstraint(
                     "ck_farm_base_map_versions_publication",
-                    "(status = 'DRAFT'::system.farm_base_map_status AND published_by IS NULL AND published_at IS NULL) OR " +
+                    "(status IN ('DRAFT'::system.farm_base_map_status, 'INTERNAL_APPROVED'::system.farm_base_map_status) AND published_by IS NULL AND published_at IS NULL) OR " +
                     "(status IN ('PUBLISHED'::system.farm_base_map_status, 'SUPERSEDED'::system.farm_base_map_status) AND published_by IS NOT NULL AND published_at IS NOT NULL)");
                 table.HasCheckConstraint(
                     "ck_farm_base_map_versions_baseline_lineage",

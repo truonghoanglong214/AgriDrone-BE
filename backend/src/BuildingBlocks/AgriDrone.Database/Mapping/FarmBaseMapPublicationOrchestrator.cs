@@ -5,12 +5,14 @@ using AgriDrone.Modules.Farms.Application.Abstractions.Maps;
 using AgriDrone.Modules.Farms.Application.Services;
 using AgriDrone.Modules.Farms.Domain.Maps;
 using AgriDrone.Modules.Farms.Domain.Maps.Staging;
+using AgriDrone.Modules.Plants.Domain.Changes;
 using AgriDrone.Modules.Plants.Domain.Mapping;
 using AgriDrone.Modules.Plants.Domain.Plants;
 using AgriDrone.Modules.Surveys.Domain;
 using AgriDrone.SharedInfrastructure.Auditing;
 using AgriDrone.SharedInfrastructure.Messaging.Outbox;
 using AgriDrone.SharedKernel.Application;
+using AgriDrone.SharedKernel.Domain.Spatial;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using NetTopologySuite.Geometries;
@@ -48,7 +50,7 @@ internal sealed class FarmBaseMapPublicationOrchestrator(
                 if (draft.Status != FarmBaseMapStatus.Draft)
                 {
                     return Result.Failure<FarmBaseMapPublishedResult>(
-                        AppError.Conflict("FarmBaseMapDraft.InvalidStatus", $"Only draft base maps can be published; current status is '{draft.Status}'."));
+                        AppError.Conflict("FarmBaseMapDraft.InvalidStatus", $"Only draft base maps can be approved internally; current status is '{draft.Status}'."));
                 }
 
                 var batch = await dbContext.MappingCandidateBatches
@@ -69,7 +71,7 @@ internal sealed class FarmBaseMapPublicationOrchestrator(
                 {
                     var errorMessages = string.Join("; ", validation.Issues.Where(i => i.Severity == "Error").Select(i => i.Message));
                     return Result.Failure<FarmBaseMapPublishedResult>(
-                        AppError.Validation("MappingCandidateBatch.ValidationFailed", $"Cannot publish base map due to validation errors: {errorMessages}"));
+                        AppError.Validation("MappingCandidateBatch.ValidationFailed", $"Cannot approve base map due to validation errors: {errorMessages}"));
                 }
 
                 if (validation.ConfirmedPublishablePoleCount <= 0)
@@ -77,7 +79,7 @@ internal sealed class FarmBaseMapPublicationOrchestrator(
                     return Result.Failure<FarmBaseMapPublishedResult>(
                         AppError.Validation(
                             "FarmBaseMapDraft.NoPublishablePoles",
-                            "At least one candidate must have an accepted review decision (CreateNew, MatchExisting, Relocate, Replace) to publish."));
+                            "At least one candidate must have an accepted review decision (CreateNew, MatchExisting, Relocate, Replace) to approve."));
                 }
 
                 var order = await dbContext.SurveyOrders
@@ -92,7 +94,7 @@ internal sealed class FarmBaseMapPublicationOrchestrator(
                 if (order.Status != SurveyOrderStatus.AwaitingBaselineReview)
                 {
                     return Result.Failure<FarmBaseMapPublishedResult>(
-                        AppError.Conflict("SurveyOrder.InvalidStatus", $"Survey order {order.Id} is in status '{order.Status}' and cannot record baseline publication."));
+                        AppError.Conflict("SurveyOrder.InvalidStatus", $"Survey order {order.Id} is in status '{order.Status}' and cannot record baseline review approval."));
                 }
 
                 if (batch.Candidates.Any(c => c.ReviewDecision == MappingCandidateReviewDecision.Pending))
@@ -100,8 +102,25 @@ internal sealed class FarmBaseMapPublicationOrchestrator(
                     return Result.Failure<FarmBaseMapPublishedResult>(
                         AppError.Conflict(
                             "MappingCandidateBatch.PendingReviewRemaining",
-                            "Cannot publish farm base map while candidates remain in Pending review decision."));
+                            "Cannot approve farm base map while candidates remain in Pending review decision."));
                 }
+
+                var effectivePolicy = await dbContext.SpatialPolicies
+                    .Where(p => p.StreamKey == "DEFAULT" &&
+                                p.EffectiveFrom <= batch.ProducedAt &&
+                                (p.EffectiveTo == null || p.EffectiveTo > batch.ProducedAt))
+                    .OrderByDescending(p => p.VersionNumber)
+                    .FirstOrDefaultAsync(ct);
+
+                if (effectivePolicy is null)
+                {
+                    return Result.Failure<FarmBaseMapPublishedResult>(
+                        AppError.Conflict(
+                            "SpatialPolicy.NotFound",
+                            "No effective spatial policy exists for the survey capture time."));
+                }
+
+                var matchingThresholdM = effectivePolicy.MatchingDistanceThresholdM;
 
                 var now = timeProvider.GetUtcNow();
                 if (order.UpdatedAt != default && now < order.UpdatedAt)
@@ -109,52 +128,43 @@ internal sealed class FarmBaseMapPublicationOrchestrator(
                     now = order.UpdatedAt.AddMilliseconds(1);
                 }
 
-                // Supersede existing published farm base map versions to respect partial unique index
-                var existingPublishedMaps = await dbContext.FarmBaseMapVersions
-                    .Where(v => v.FarmId == farmId && v.Status == FarmBaseMapStatus.Published)
-                    .ToListAsync(ct);
-
-                foreach (var prevMap in existingPublishedMaps)
-                {
-                    prevMap.Supersede(now);
-                }
-
-                // Determine baseline lineage
-                var existingBaselineMap = await dbContext.FarmBaseMapVersions
-                    .Where(v => v.FarmId == farmId && v.IsBaseline)
-                    .FirstOrDefaultAsync(ct);
-
-                var latestPublishedMap = existingPublishedMaps
-                    .OrderByDescending(v => v.VersionNumber)
-                    .FirstOrDefault();
+                var baselinePointer = await dbContext.FarmBaselinePointers
+                    .SingleOrDefaultAsync(p => p.FarmId == farmId, ct);
 
                 Guid baselineMapVersionId;
-                if (existingBaselineMap is null)
+                if (baselinePointer is null)
                 {
                     // First order creates baseline
-                    draft.ApproveInternal(actorId, now);
-                    draft.SetLineage(isBaseline: true, predecessorVersionId: null, baselineMapVersionId: draft.Id);
+                    draft.ConfigureLineage(
+                        isBaseline: true,
+                        predecessorVersionId: null,
+                        baselineMapVersionId: draft.Id);
+
                     baselineMapVersionId = draft.Id;
+
+                    var newPointer = FarmBaselinePointer.Create(
+                        tenantId: order.TenantId,
+                        farmId: farmId,
+                        baselineMapVersionId: draft.Id,
+                        actorId: actorId,
+                        at: now);
+                    dbContext.FarmBaselinePointers.Add(newPointer);
                 }
                 else
                 {
                     // Follow-up order references existing baseline
-                    draft.ApproveInternal(actorId, now);
-                    draft.SetLineage(
+                    var latestInternalApprovedMap = await dbContext.FarmBaseMapVersions
+                        .Where(v => v.FarmId == farmId && v.Status == FarmBaseMapStatus.InternalApproved)
+                        .OrderByDescending(v => v.VersionNumber)
+                        .FirstOrDefaultAsync(ct);
+
+                    draft.ConfigureLineage(
                         isBaseline: false,
-                        predecessorVersionId: latestPublishedMap?.Id ?? existingBaselineMap.Id,
-                        baselineMapVersionId: existingBaselineMap.Id);
-                    baselineMapVersionId = existingBaselineMap.Id;
+                        predecessorVersionId: latestInternalApprovedMap?.Id ?? baselinePointer.CurrentBaselineMapVersionId,
+                        baselineMapVersionId: baselinePointer.CurrentBaselineMapVersionId);
+
+                    baselineMapVersionId = baselinePointer.CurrentBaselineMapVersionId;
                 }
-
-                var effectivePolicy = await dbContext.SpatialPolicies
-                    .Where(p => p.StreamKey == "DEFAULT" &&
-                                p.EffectiveFrom <= now &&
-                                (p.EffectiveTo == null || p.EffectiveTo > now))
-                    .OrderByDescending(p => p.VersionNumber)
-                    .FirstOrDefaultAsync(ct);
-
-                var matchingThresholdM = effectivePolicy?.MatchingDistanceThresholdM ?? 1.5;
 
                 var defaultHealth = await dbContext.HealthLevels
                     .Where(h => h.IsActive && h.Code == "UNKNOWN")
@@ -173,7 +183,9 @@ internal sealed class FarmBaseMapPublicationOrchestrator(
                                                  or MappingCandidateReviewDecision.Relocate
                                                  or MappingCandidateReviewDecision.Replace)
                     .ToList();
+
                 var plantMappings = new List<PublishedPlantMappingV3>();
+                var candidateToProfileMap = new Dictionary<Guid, Guid>();
 
                 foreach (var c in publishableCandidates)
                 {
@@ -203,6 +215,27 @@ internal sealed class FarmBaseMapPublicationOrchestrator(
                                     $"Target plant {targetPlantId.Value} for candidate {c.CandidateId} was not found."));
                         }
 
+                        var profile = await dbContext.PlantProfiles
+                            .FirstOrDefaultAsync(p => p.FarmId == farmId &&
+                                (p.Id == existingPlant.PlantProfileId || p.PhysicalPoleIdentifier == existingPlant.PlantCode) &&
+                                p.Status == PlantProfileStatus.Active, ct);
+
+                        if (profile is null)
+                        {
+                            var newProfileId = Guid.NewGuid();
+                            profile = PlantProfile.Create(
+                                id: newProfileId,
+                                tenantId: order.TenantId,
+                                farmId: farmId,
+                                physicalPoleIdentifier: existingPlant.PlantCode,
+                                baselineLocation: existingPlant.Location ?? pos,
+                                baselineMapVersionId: draft.Id,
+                                createdAt: now);
+                            dbContext.PlantProfiles.Add(profile);
+                        }
+
+                        existingPlant.LinkPlantProfile(profile.Id);
+
                         existingPlant.ApplyPublishedFarmMapPosition(
                             farmBaseMapVersionId: draft.Id,
                             location: existingPlant.Location ?? pos,
@@ -213,12 +246,22 @@ internal sealed class FarmBaseMapPublicationOrchestrator(
                             mappedAt: now);
 
                         var targetLocation = existingPlant.Location ?? pos;
-                        var profile = await dbContext.PlantProfiles
-                            .FirstOrDefaultAsync(p => p.FarmId == farmId && p.PhysicalPoleIdentifier == existingPlant.PlantCode && p.Status == PlantProfileStatus.Active, ct);
-                        if (profile is not null)
-                        {
-                            profile.Relocate(targetLocation, draft.Id, 0, matchingThresholdM, now);
-                        }
+
+                        var observation = PlantProfileObservation.Record(
+                            id: Guid.NewGuid(),
+                            plantProfileId: profile.Id,
+                            tenantId: order.TenantId,
+                            farmId: farmId,
+                            surveyOrderId: order.Id,
+                            farmBaseMapVersionId: draft.Id,
+                            observedLocation: targetLocation,
+                            observedDistanceM: 0.0,
+                            candidateId: c.CandidateId,
+                            observedBy: actorId,
+                            observedAt: now);
+                        dbContext.PlantProfileObservations.Add(observation);
+
+                        candidateToProfileMap[c.CandidateId] = profile.Id;
 
                         plantMappings.Add(new PublishedPlantMappingV3(
                             PlantId: existingPlant.Id,
@@ -251,9 +294,38 @@ internal sealed class FarmBaseMapPublicationOrchestrator(
                                     $"Target plant {targetPlantId.Value} for candidate {c.CandidateId} was not found."));
                         }
 
+                        var profile = await dbContext.PlantProfiles
+                            .FirstOrDefaultAsync(p => p.FarmId == farmId &&
+                                (p.Id == existingPlant.PlantProfileId || p.PhysicalPoleIdentifier == existingPlant.PlantCode) &&
+                                p.Status == PlantProfileStatus.Active, ct);
+
+                        if (profile is null)
+                        {
+                            return Result.Failure<FarmBaseMapPublishedResult>(
+                                AppError.NotFound(
+                                    "PlantProfile.NotFound",
+                                    $"Active plant profile for plant {targetPlantId.Value} was not found."));
+                        }
+
                         var oldLocation = existingPlant.Location;
                         var oldRow = existingPlant.RowIndex;
                         var oldCol = existingPlant.ColumnIndex;
+
+                        var distanceM = oldLocation != null
+                            ? GeodesicSpatialCalculator.CalculateDistanceMeters(
+                                oldLocation.Y, oldLocation.X,
+                                pos.Y, pos.X)
+                            : 0.0;
+
+                        if (distanceM > matchingThresholdM)
+                        {
+                            return Result.Failure<FarmBaseMapPublishedResult>(
+                                AppError.Conflict(
+                                    "MappingCandidate.RelocationExceedsTolerance",
+                                    $"Candidate {c.CandidateId} relocation distance ({distanceM:F2}m) exceeds spatial policy threshold ({matchingThresholdM:F2}m)."));
+                        }
+
+                        profile.Relocate(pos, draft.Id, matchingThresholdM, now);
 
                         existingPlant.ApplyPublishedFarmMapPosition(
                             farmBaseMapVersionId: draft.Id,
@@ -263,26 +335,17 @@ internal sealed class FarmBaseMapPublicationOrchestrator(
                             locationAccuracyM: 0.1m,
                             positionConfidence: c.PositionConfidence,
                             mappedAt: now);
+                        existingPlant.LinkPlantProfile(profile.Id);
 
-                        var distanceM = oldLocation != null ? (double)pos.Distance(oldLocation) * 111_000 : 0.0;
-                        var profile = await dbContext.PlantProfiles
-                            .FirstOrDefaultAsync(p => p.FarmId == farmId && p.PhysicalPoleIdentifier == existingPlant.PlantCode && p.Status == PlantProfileStatus.Active, ct);
-                        if (profile is not null)
-                        {
-                            if (distanceM <= matchingThresholdM)
-                            {
-                                profile.Relocate(pos, draft.Id, distanceM, matchingThresholdM, now);
-                            }
-                            else
-                            {
-                                profile.MarkNeedsReview($"Relocation distance {distanceM:F2}m exceeds threshold {matchingThresholdM:F2}m", now);
-                            }
-                        }
-
-                        var changeEvt = PlantChangeEvent.MappingPositionChanged(
+                        var changeEvt = PlantChangeEvent.Relocated(
                             farmId: farmId,
+                            plantProfileId: profile.Id,
+                            sourceSurveyOrderId: order.Id,
                             missionId: batch.MissionId,
                             plantId: existingPlant.Id,
+                            farmBaseMapVersionId: draft.Id,
+                            spatialPolicyVersionId: effectivePolicy.Id,
+                            managerDecisionId: c.Id,
                             oldLocation: oldLocation,
                             newLocation: pos,
                             oldRowIndex: oldRow,
@@ -292,8 +355,9 @@ internal sealed class FarmBaseMapPublicationOrchestrator(
                             lifecycleStatus: existingPlant.LifecycleStatus,
                             actorId: actorId,
                             createdAt: now);
-                        changeEvt.SetLineageMetadata(profile?.Id, order.Id, effectivePolicy?.Id, null);
                         dbContext.PlantChangeEvents.Add(changeEvt);
+
+                        candidateToProfileMap[c.CandidateId] = profile.Id;
 
                         plantMappings.Add(new PublishedPlantMappingV3(
                             PlantId: existingPlant.Id,
@@ -307,37 +371,58 @@ internal sealed class FarmBaseMapPublicationOrchestrator(
                     else if (c.ReviewDecision == MappingCandidateReviewDecision.Replace)
                     {
                         var targetPlantId = c.CorrectedMatchedPlantId ?? c.ProposedMatchedPlantId;
-                        PlantProfile? newProfile = null;
-                        if (targetPlantId.HasValue)
+                        if (!targetPlantId.HasValue)
                         {
-                            var oldPlant = await dbContext.Plants
-                                .SingleOrDefaultAsync(p => p.Id == targetPlantId.Value, ct);
-                            if (oldPlant is not null)
-                            {
-                                oldPlant.Retire(PlantLifecycleStatus.Removed, now);
-                                var oldProfile = await dbContext.PlantProfiles
-                                    .FirstOrDefaultAsync(p => p.FarmId == farmId && p.PhysicalPoleIdentifier == oldPlant.PlantCode && p.Status == PlantProfileStatus.Active, ct);
-                                if (oldProfile is not null)
-                                {
-                                    newProfile = oldProfile.ReplaceWithNewProfile(
-                                        Guid.NewGuid(),
-                                        $"P-{farmId.ToString()[..4]}-{row:D3}-{col:D3}-{Guid.NewGuid().ToString()[..4]}",
-                                        pos,
-                                        draft.Id,
-                                        "Replaced during base map publication",
-                                        now);
-                                    dbContext.PlantProfiles.Add(newProfile);
-                                }
-                            }
+                            return Result.Failure<FarmBaseMapPublishedResult>(
+                                AppError.Validation(
+                                    "MappingCandidate.MissingReplacePlantId",
+                                    $"Candidate {c.CandidateId} has Replace decision but lacks target plant ID."));
                         }
 
-                        var plantId = Guid.NewGuid();
-                        var plantCode = newProfile?.PhysicalPoleIdentifier ?? $"P-{farmId.ToString()[..4]}-{row:D3}-{col:D3}-{plantId.ToString()[..4]}";
+                        var oldPlant = await dbContext.Plants
+                            .SingleOrDefaultAsync(p => p.Id == targetPlantId.Value, ct);
 
-                        var plant = Plant.CreateFromFarmMapping(
-                            id: plantId,
+                        if (oldPlant is null)
+                        {
+                            return Result.Failure<FarmBaseMapPublishedResult>(
+                                AppError.NotFound(
+                                    "Plant.NotFound",
+                                    $"Target plant {targetPlantId.Value} for replacement was not found."));
+                        }
+
+                        var oldProfile = await dbContext.PlantProfiles
+                            .FirstOrDefaultAsync(p => p.FarmId == farmId &&
+                                (p.Id == oldPlant.PlantProfileId || p.PhysicalPoleIdentifier == oldPlant.PlantCode) &&
+                                p.Status == PlantProfileStatus.Active, ct);
+
+                        if (oldProfile is null)
+                        {
+                            return Result.Failure<FarmBaseMapPublishedResult>(
+                                AppError.NotFound(
+                                    "PlantProfile.NotFound",
+                                    $"Active plant profile for target plant {targetPlantId.Value} was not found."));
+                        }
+
+                        oldPlant.Retire(PlantLifecycleStatus.Removed, now);
+
+                        var newPlantId = Guid.NewGuid();
+                        var newProfileId = Guid.NewGuid();
+                        var poleCode = $"P-{farmId.ToString()[..4]}-{row:D3}-{col:D3}-{newProfileId.ToString()[..4]}";
+
+                        var newProfile = oldProfile.ReplaceWithNewProfile(
+                            newProfileId: newProfileId,
+                            newPoleIdentifier: poleCode,
+                            newLocation: pos,
+                            mapVersionId: draft.Id,
+                            managerDecisionId: c.Id,
+                            reason: "Replaced during base map internal review",
+                            at: now);
+                        dbContext.PlantProfiles.Add(newProfile);
+
+                        var newPlant = Plant.CreateFromFarmMapping(
+                            id: newPlantId,
                             farmId: farmId,
-                            plantCode: plantCode,
+                            plantCode: poleCode,
                             location: pos,
                             farmBaseMapVersionId: draft.Id,
                             rowIndex: row,
@@ -347,41 +432,34 @@ internal sealed class FarmBaseMapPublicationOrchestrator(
                             healthLevelId: healthId,
                             sourceMissionId: batch.MissionId,
                             mappedAt: now);
+                        newPlant.LinkPlantProfile(newProfile.Id);
+                        newPlant.LinkReplacedPlant(oldPlant.Id);
+                        dbContext.Plants.Add(newPlant);
 
-                        if (targetPlantId.HasValue)
-                        {
-                            plant.LinkReplacedPlant(targetPlantId.Value);
-                        }
-
-                        dbContext.Plants.Add(plant);
-
-                        if (newProfile is null)
-                        {
-                            newProfile = PlantProfile.Create(
-                                Guid.NewGuid(),
-                                order.TenantId,
-                                farmId,
-                                plantCode,
-                                pos,
-                                baselineMapVersionId,
-                                now);
-                            dbContext.PlantProfiles.Add(newProfile);
-                        }
-
-                        var changeEvt = PlantChangeEvent.MappingCreated(
-                            farmId,
-                            batch.MissionId,
-                            plantId,
-                            pos,
-                            row,
-                            col,
-                            actorId,
-                            now);
-                        changeEvt.SetLineageMetadata(newProfile.Id, order.Id, effectivePolicy?.Id, null);
+                        var changeEvt = PlantChangeEvent.Replaced(
+                            farmId: farmId,
+                            plantProfileId: newProfile.Id,
+                            predecessorPlantProfileId: oldProfile.Id,
+                            sourceSurveyOrderId: order.Id,
+                            missionId: batch.MissionId,
+                            plantId: newPlant.Id,
+                            farmBaseMapVersionId: draft.Id,
+                            spatialPolicyVersionId: effectivePolicy.Id,
+                            managerDecisionId: c.Id,
+                            oldLocation: oldPlant.Location,
+                            newLocation: pos,
+                            oldRowIndex: oldPlant.RowIndex,
+                            newRowIndex: row,
+                            oldColumnIndex: oldPlant.ColumnIndex,
+                            newColumnIndex: col,
+                            actorId: actorId,
+                            createdAt: now);
                         dbContext.PlantChangeEvents.Add(changeEvt);
 
+                        candidateToProfileMap[c.CandidateId] = newProfile.Id;
+
                         plantMappings.Add(new PublishedPlantMappingV3(
-                            PlantId: plantId,
+                            PlantId: newPlant.Id,
                             SourceCandidateId: c.CandidateId,
                             Position: new GeoJsonPointV3("Point", [pos.X, pos.Y]),
                             RowIndex: row,
@@ -392,6 +470,7 @@ internal sealed class FarmBaseMapPublicationOrchestrator(
                     else // CreateNew
                     {
                         var plantId = Guid.NewGuid();
+                        var profileId = Guid.NewGuid();
                         var plantCode = $"P-{farmId.ToString()[..4]}-{row:D3}-{col:D3}-{plantId.ToString()[..4]}";
 
                         var plant = Plant.CreateFromFarmMapping(
@@ -408,29 +487,35 @@ internal sealed class FarmBaseMapPublicationOrchestrator(
                             sourceMissionId: batch.MissionId,
                             mappedAt: now);
 
-                        dbContext.Plants.Add(plant);
-
                         var newProfile = PlantProfile.Create(
-                            Guid.NewGuid(),
-                            order.TenantId,
-                            farmId,
-                            plantCode,
-                            pos,
-                            baselineMapVersionId,
-                            now);
+                            id: profileId,
+                            tenantId: order.TenantId,
+                            farmId: farmId,
+                            physicalPoleIdentifier: plantCode,
+                            baselineLocation: pos,
+                            baselineMapVersionId: draft.Id,
+                            createdAt: now);
+
+                        plant.LinkPlantProfile(newProfile.Id);
+                        dbContext.Plants.Add(plant);
                         dbContext.PlantProfiles.Add(newProfile);
 
-                        var changeEvt = PlantChangeEvent.MappingCreated(
-                            farmId,
-                            batch.MissionId,
-                            plantId,
-                            pos,
-                            row,
-                            col,
-                            actorId,
-                            now);
-                        changeEvt.SetLineageMetadata(newProfile.Id, order.Id, effectivePolicy?.Id, null);
+                        var changeEvt = PlantChangeEvent.CreatedWithLineage(
+                            farmId: farmId,
+                            plantProfileId: newProfile.Id,
+                            sourceSurveyOrderId: order.Id,
+                            missionId: batch.MissionId,
+                            plantId: plant.Id,
+                            farmBaseMapVersionId: draft.Id,
+                            spatialPolicyVersionId: effectivePolicy.Id,
+                            location: pos,
+                            rowIndex: row,
+                            columnIndex: col,
+                            actorId: actorId,
+                            createdAt: now);
                         dbContext.PlantChangeEvents.Add(changeEvt);
+
+                        candidateToProfileMap[c.CandidateId] = newProfile.Id;
 
                         plantMappings.Add(new PublishedPlantMappingV3(
                             PlantId: plantId,
@@ -443,9 +528,51 @@ internal sealed class FarmBaseMapPublicationOrchestrator(
                     }
                 }
 
-                draft.Publish(actorId, now);
+                // Internal Approval transition (Status becomes InternalApproved, NOT Published)
+                draft.ApproveInternal(actorId, now);
 
-                batch.Approve(actorId, "Farm base map published with reviewed plant identities", now);
+                batch.Approve(actorId, "Farm base map approved internally with reviewed plant identities", now);
+
+                // Authoritative Billable Poles Count
+                var billableProfiles = new HashSet<Guid>();
+                foreach (var c in publishableCandidates)
+                {
+                    var pos = c.CorrectedPosition ?? c.OriginalPosition;
+                    if (boundary != null && boundary.Geometry.Contains(pos))
+                    {
+                        if (candidateToProfileMap.TryGetValue(c.CandidateId, out var profileId))
+                        {
+                            billableProfiles.Add(profileId);
+                        }
+                    }
+                }
+                var billableCount = billableProfiles.Count;
+
+                var latestSnapshot = await dbContext.SurveyOrderPoleCountSnapshots
+                    .Where(s => s.SurveyOrderId == order.Id)
+                    .OrderByDescending(s => s.RevisionNumber)
+                    .FirstOrDefaultAsync(ct);
+
+                var nextRevision = (latestSnapshot?.RevisionNumber ?? 0) + 1;
+
+                var snapshot = SurveyOrderPoleCountSnapshot.Create(
+                    id: Guid.NewGuid(),
+                    surveyOrderId: order.Id,
+                    tenantId: order.TenantId,
+                    farmId: order.FarmId,
+                    missionId: batch.MissionId,
+                    captureAttemptId: null,
+                    farmBaseMapVersionId: draft.Id,
+                    farmBoundaryVersionId: batch.FarmBoundaryVersionId,
+                    mappingCandidateBatchId: batch.Id,
+                    spatialPolicyVersionId: effectivePolicy.Id,
+                    verifiedBillablePoleCount: billableCount,
+                    verifiedBy: actorId,
+                    verifiedAt: now,
+                    revisionNumber: nextRevision,
+                    predecessorSnapshotId: latestSnapshot?.Id ?? order.VerifiedPoleCountSnapshotId);
+
+                dbContext.SurveyOrderPoleCountSnapshots.Add(snapshot);
 
                 var confirmedCount = ConfirmedSurveyPoleCount.Create(validation.ConfirmedPublishablePoleCount);
                 order.RecordBaselinePublication(
@@ -455,19 +582,8 @@ internal sealed class FarmBaseMapPublicationOrchestrator(
                     confirmedAt: now,
                     farmBoundaryVersionId: batch.FarmBoundaryVersionId);
 
-                order.SetBaselineMapVersion(baselineMapVersionId);
-
-                // Calculate billable poles within boundary
-                var billableCount = 0;
-                foreach (var c in publishableCandidates)
-                {
-                    var pos = c.CorrectedPosition ?? c.OriginalPosition;
-                    if (boundary != null && boundary.Geometry.Contains(pos))
-                    {
-                        billableCount++;
-                    }
-                }
-                order.RecordVerifiedBillablePoleCount(billableCount, actorId, now);
+                order.SetBaselineMapVersion(baselineMapVersionId, order.Version, now);
+                order.RecordVerifiedPoleCount(snapshot, order.Version);
 
                 var publishedEvent = new FarmBaseMapPublishedV3(
                     CausationId: Guid.NewGuid(),
@@ -506,7 +622,9 @@ internal sealed class FarmBaseMapPublicationOrchestrator(
                     draft.Id,
                     draft.VersionNumber,
                     validation.ConfirmedPublishablePoleCount,
-                    PublishedAt = now
+                    VerifiedBillablePoleCount = billableCount,
+                    SnapshotId = snapshot.Id,
+                    ApprovedAt = now
                 }));
 
                 auditWriter.AddUserAction(
@@ -517,7 +635,7 @@ internal sealed class FarmBaseMapPublicationOrchestrator(
                     correlationId: envelope.CorrelationId,
                     entityType: "FarmBaseMapVersion",
                     entityId: draft.Id,
-                    action: "PUBLISH",
+                    action: "INTERNAL_APPROVE",
                     oldData: null,
                     newData: auditDoc,
                     createdAt: now);
@@ -533,7 +651,7 @@ internal sealed class FarmBaseMapPublicationOrchestrator(
         }
         catch (DbUpdateException ex)
         {
-            logger.LogError(ex, "Database update error while publishing farm base map for farm {FarmId}, draft {DraftId}: {Message} -> {InnerMessage}",
+            logger.LogError(ex, "Database update error while approving farm base map for farm {FarmId}, draft {DraftId}: {Message} -> {InnerMessage}",
                 farmId, draftId, ex.Message, ex.InnerException?.Message);
             return Result.Failure<FarmBaseMapPublishedResult>(
                 AppError.Conflict(
@@ -542,18 +660,18 @@ internal sealed class FarmBaseMapPublicationOrchestrator(
         }
         catch (SurveyDomainException ex)
         {
-            logger.LogWarning(ex, "Domain rule violation publishing farm base map for farm {FarmId}, draft {DraftId}: {Code} - {Message}",
+            logger.LogWarning(ex, "Domain rule violation approving farm base map for farm {FarmId}, draft {DraftId}: {Code} - {Message}",
                 farmId, draftId, ex.Code, ex.Message);
             return Result.Failure<FarmBaseMapPublishedResult>(
                 AppError.Conflict(ex.Code, ex.Message));
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Unexpected error publishing farm base map for farm {FarmId}, draft {DraftId}", farmId, draftId);
+            logger.LogError(ex, "Unexpected error approving farm base map for farm {FarmId}, draft {DraftId}", farmId, draftId);
             return Result.Failure<FarmBaseMapPublishedResult>(
                 AppError.Failure(
                     "FarmBaseMapPublication.Failed",
-                    $"Publication failed: {ex.Message}"));
+                    $"Approval failed: {ex.Message}"));
         }
     }
 }

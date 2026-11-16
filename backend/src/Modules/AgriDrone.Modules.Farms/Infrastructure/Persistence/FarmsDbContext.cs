@@ -28,6 +28,8 @@ internal sealed class FarmsDbContext(DbContextOptions<FarmsDbContext> options)
 
     public DbSet<FarmBaseMapVersion> FarmBaseMapVersions => Set<FarmBaseMapVersion>();
 
+    public DbSet<FarmBaselinePointer> FarmBaselinePointers => Set<FarmBaselinePointer>();
+
     public DbSet<MappingCandidateBatch> MappingCandidateBatches => Set<MappingCandidateBatch>();
 
     public DbSet<MappingCandidate> MappingCandidates => Set<MappingCandidate>();

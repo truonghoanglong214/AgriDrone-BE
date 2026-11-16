@@ -1,6 +1,8 @@
+using AgriDrone.Modules.Surveys.Application.Abstractions.Orders;
 using AgriDrone.Modules.Surveys.Domain;
 using AgriDrone.Modules.Surveys.Infrastructure.Persistence;
 using AgriDrone.SharedKernel.Application;
+using AgriDrone.SharedKernel.Application.Abstractions.Authorization;
 using AgriDrone.SharedKernel.Application.Abstractions.Execution;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -9,6 +11,8 @@ namespace AgriDrone.Modules.Surveys.Application.Features.Orders.VerifyOrderBilla
 
 internal sealed class VerifyOrderBillablePolesCommandHandler(
     SurveysDbContext dbContext,
+    IOrderPoleEvidenceReader evidenceReader,
+    ISystemManagerAccessService managerAccessService,
     IExecutionContext executionContext,
     TimeProvider timeProvider)
     : IRequestHandler<VerifyOrderBillablePolesCommand, Result<int>>
@@ -32,45 +36,51 @@ internal sealed class VerifyOrderBillablePolesCommandHandler(
                 AppError.NotFound("SurveyOrder.NotFound", "Survey order not found."));
         }
 
-        if (order.FarmBoundaryVersionId is null)
+        var access = await managerAccessService.ResolveFarmAccessAsync(order.FarmId, cancellationToken);
+        if (!access.IsAllowed)
         {
             return Result.Failure<int>(
-                AppError.Conflict("SurveyOrder.MissingBoundary", "Cannot verify billable poles without an approved farm boundary."));
+                AppError.Forbidden("Access.Denied", "Current manager does not have access to this farm."));
         }
 
+        var evidenceResult = await evidenceReader.ReadEvidenceForOrderAsync(order.Id, cancellationToken);
+        if (evidenceResult.IsFailure)
+        {
+            return Result.Failure<int>(evidenceResult.Error);
+        }
+
+        var evidence = evidenceResult.Value;
         var now = timeProvider.GetUtcNow();
 
-        // Query verified poles inside the approved farm boundary using PostGIS ST_Within
-        // strictly excluding poles located on or outside the boundary.
-        var connection = dbContext.Database.GetDbConnection();
-        await dbContext.Database.OpenConnectionAsync(cancellationToken);
+        var latestSnapshot = await dbContext.SurveyOrderPoleCountSnapshots
+            .Where(s => s.SurveyOrderId == order.Id)
+            .OrderByDescending(s => s.RevisionNumber)
+            .FirstOrDefaultAsync(cancellationToken);
 
-        await using var cmd = connection.CreateCommand();
-        cmd.CommandText = @"
-            SELECT COUNT(*)::int
-            FROM plant.plant_profiles p
-            INNER JOIN farm.farm_boundaries b ON b.id = @boundaryId
-            WHERE p.farm_id = @farmId
-              AND p.status = 'Active'
-              AND ST_Within(p.current_location, b.boundary_geometry);";
+        var nextRevision = (latestSnapshot?.RevisionNumber ?? 0) + 1;
 
-        var paramBoundary = cmd.CreateParameter();
-        paramBoundary.ParameterName = "@boundaryId";
-        paramBoundary.Value = order.FarmBoundaryVersionId.Value;
-        cmd.Parameters.Add(paramBoundary);
+        var snapshot = SurveyOrderPoleCountSnapshot.Create(
+            id: Guid.NewGuid(),
+            surveyOrderId: order.Id,
+            tenantId: order.TenantId,
+            farmId: order.FarmId,
+            missionId: evidence.MissionId,
+            captureAttemptId: evidence.CaptureAttemptId,
+            farmBaseMapVersionId: evidence.FarmBaseMapVersionId,
+            farmBoundaryVersionId: evidence.FarmBoundaryVersionId,
+            mappingCandidateBatchId: evidence.MappingCandidateBatchId,
+            spatialPolicyVersionId: evidence.SpatialPolicyVersionId,
+            verifiedBillablePoleCount: evidence.BillablePoleCount,
+            verifiedBy: actorId,
+            verifiedAt: now,
+            revisionNumber: nextRevision,
+            predecessorSnapshotId: latestSnapshot?.Id ?? order.VerifiedPoleCountSnapshotId);
 
-        var paramFarm = cmd.CreateParameter();
-        paramFarm.ParameterName = "@farmId";
-        paramFarm.Value = order.FarmId;
-        cmd.Parameters.Add(paramFarm);
-
-        var billableCountObj = await cmd.ExecuteScalarAsync(cancellationToken);
-        var billableCount = Convert.ToInt32(billableCountObj, System.Globalization.CultureInfo.InvariantCulture);
-
-        order.RecordVerifiedBillablePoleCount(billableCount, actorId, now);
+        dbContext.SurveyOrderPoleCountSnapshots.Add(snapshot);
+        order.RecordVerifiedPoleCount(snapshot, order.Version);
 
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        return Result.Success(billableCount);
+        return Result.Success(snapshot.VerifiedBillablePoleCount);
     }
 }

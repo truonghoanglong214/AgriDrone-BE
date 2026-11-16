@@ -162,6 +162,7 @@ public sealed class SurveyOrder : AggregateRoot
     public Guid? FarmBoundaryVersionId { get; private set; }
     public Guid? FarmBaseMapVersionId { get; private set; }
     public Guid? BaselineMapVersionId { get; private set; }
+    public Guid? VerifiedPoleCountSnapshotId { get; private set; }
     public int? VerifiedBillablePoleCount { get; private set; }
     public Guid? CountVerifiedBy { get; private set; }
     public DateTimeOffset? CountVerifiedAt { get; private set; }
@@ -730,31 +731,56 @@ public sealed class SurveyOrder : AggregateRoot
         Version++;
     }
 
-    public void RecordVerifiedBillablePoleCount(
-        int count,
-        Guid verifiedBy,
-        DateTimeOffset verifiedAt)
+    public void RecordVerifiedPoleCount(
+        SurveyOrderPoleCountSnapshot snapshot,
+        uint expectedVersion)
     {
-        DomainGuard.NotEmpty(verifiedBy, nameof(verifiedBy));
-        DomainGuard.Utc(verifiedAt, nameof(verifiedAt));
-        SurveyTransitionGuard.EnsureTimestamp(verifiedAt, UpdatedAt);
+        ArgumentNullException.ThrowIfNull(snapshot);
+        DomainGuard.Utc(snapshot.VerifiedAt, nameof(snapshot.VerifiedAt));
+        SurveyTransitionGuard.EnsureTimestamp(snapshot.VerifiedAt, UpdatedAt);
 
-        if (count < 0)
+        if (Version != expectedVersion)
         {
-            throw new ArgumentOutOfRangeException(nameof(count), "Verified billable pole count cannot be negative.");
+            throw new InvalidOperationException(
+                $"Optimistic concurrency violation: order version is {Version}, expected {expectedVersion}.");
         }
 
-        VerifiedBillablePoleCount = count;
-        CountVerifiedBy = verifiedBy;
-        CountVerifiedAt = verifiedAt;
-        UpdatedAt = verifiedAt;
+        if (snapshot.SurveyOrderId != Id)
+        {
+            throw new InvalidOperationException("Pole count snapshot does not belong to this survey order.");
+        }
+
+        if (snapshot.FarmId != FarmId)
+        {
+            throw new InvalidOperationException("Pole count snapshot does not belong to this farm.");
+        }
+
+        VerifiedPoleCountSnapshotId = snapshot.Id;
+        VerifiedBillablePoleCount = snapshot.VerifiedBillablePoleCount;
+        CountVerifiedBy = snapshot.VerifiedBy;
+        CountVerifiedAt = snapshot.VerifiedAt;
+        UpdatedAt = snapshot.VerifiedAt;
         Version++;
     }
 
-    public void SetBaselineMapVersion(Guid baselineMapVersionId)
+    public void SetBaselineMapVersion(
+        Guid baselineMapVersionId,
+        uint expectedVersion,
+        DateTimeOffset occurredAt)
     {
         DomainGuard.NotEmpty(baselineMapVersionId, nameof(baselineMapVersionId));
+        DomainGuard.Utc(occurredAt, nameof(occurredAt));
+        SurveyTransitionGuard.EnsureTimestamp(occurredAt, UpdatedAt);
+
+        if (Version != expectedVersion)
+        {
+            throw new InvalidOperationException(
+                $"Optimistic concurrency violation: order version is {Version}, expected {expectedVersion}.");
+        }
+
         BaselineMapVersionId = baselineMapVersionId;
+        UpdatedAt = occurredAt;
+        Version++;
     }
 
     public void MarkBaselineAppointmentConfirmed(DateTimeOffset occurredAt)

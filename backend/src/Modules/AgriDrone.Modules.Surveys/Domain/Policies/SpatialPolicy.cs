@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using AgriDrone.SharedKernel.Domain;
@@ -6,6 +7,9 @@ namespace AgriDrone.Modules.Surveys.Domain;
 
 public sealed class SpatialPolicy : Entity
 {
+    public static readonly Guid DefaultPolicyId = Guid.Parse("00000000-0000-0000-0000-000000000001");
+    public const string DefaultStreamKey = "DEFAULT";
+
     private SpatialPolicy() { }
 
     public string StreamKey { get; private set; } = null!;
@@ -22,6 +26,25 @@ public sealed class SpatialPolicy : Entity
     public DateTimeOffset CreatedAt { get; private set; }
     public string ReasonCode { get; private set; } = null!;
     public string? EvidenceReference { get; private set; }
+
+    public static SpatialPolicy CreateDefault(DateTimeOffset effectiveFrom, Guid createdBy)
+    {
+        return Create(
+            DefaultPolicyId,
+            DefaultStreamKey,
+            versionNumber: 1,
+            predecessorVersionId: null,
+            boundaryToleranceM: 2.0,
+            matchingDistanceThresholdM: 1.5,
+            rowBearingToleranceDeg: 15.0,
+            gridSpacingToleranceM: 0.5,
+            effectiveFrom: effectiveFrom,
+            effectiveTo: null,
+            createdBy: createdBy,
+            createdAt: effectiveFrom,
+            reasonCode: "INITIAL_DEFAULT_POLICY",
+            evidenceReference: "System initialization default");
+    }
 
     public static SpatialPolicy Create(
         Guid id,
@@ -43,7 +66,7 @@ public sealed class SpatialPolicy : Entity
         DomainGuard.NotEmpty(createdBy, nameof(createdBy));
         DomainGuard.Utc(createdAt, nameof(createdAt));
 
-        var normalizedStreamKey = PolicyValidationGuard.NormalizeRequired(streamKey, 100, nameof(streamKey));
+        var normalizedStreamKey = PolicyValidationGuard.NormalizeRequired(streamKey, 100, nameof(streamKey)).ToUpperInvariant();
         PolicyValidationGuard.ValidateVersionAndPredecessor(id, versionNumber, predecessorVersionId);
         PolicyValidationGuard.ValidateEffectiveWindow(effectiveFrom, effectiveTo);
 
@@ -70,7 +93,17 @@ public sealed class SpatialPolicy : Entity
         var normalizedReasonCode = PolicyValidationGuard.NormalizeRequired(reasonCode, 100, nameof(reasonCode));
         var normalizedEvidence = PolicyValidationGuard.NormalizeOptional(evidenceReference, 500, nameof(evidenceReference));
 
-        var fingerprintInput = $"{normalizedStreamKey}|{versionNumber}|{boundaryToleranceM:F2}|{matchingDistanceThresholdM:F2}|{rowBearingToleranceDeg:F1}|{gridSpacingToleranceM:F2}|{effectiveFrom:O}";
+        var fingerprintInput = string.Format(
+            CultureInfo.InvariantCulture,
+            "{0}|{1}|{2:F4}|{3:F4}|{4:F4}|{5:F4}|{6:O}|{7}",
+            normalizedStreamKey,
+            versionNumber,
+            boundaryToleranceM,
+            matchingDistanceThresholdM,
+            rowBearingToleranceDeg,
+            gridSpacingToleranceM,
+            effectiveFrom,
+            predecessorVersionId?.ToString() ?? "ROOT");
         var fingerprint = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(fingerprintInput))).ToLowerInvariant();
 
         return new SpatialPolicy

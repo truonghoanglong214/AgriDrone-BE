@@ -119,6 +119,10 @@ public sealed class PlantConfiguration : IEntityTypeConfiguration<Plant>
             .HasColumnName("replaced_plant_id")
             .HasColumnType("uuid");
 
+        builder.Property(plant => plant.PlantProfileId)
+            .HasColumnName("plant_profile_id")
+            .HasColumnType("uuid");
+
         builder.Property(plant => plant.CreatedAt)
             .HasColumnName("created_at")
             .HasColumnType("timestamp with time zone")
@@ -150,6 +154,9 @@ public sealed class PlantConfiguration : IEntityTypeConfiguration<Plant>
 
         builder.HasIndex(plant => plant.FarmBaseMapVersionId)
             .HasDatabaseName("ix_plants_farm_base_map_version");
+
+        builder.HasIndex(plant => plant.PlantProfileId)
+            .HasDatabaseName("ix_plants_plant_profile");
 
         builder.HasIndex(plant => new
         {

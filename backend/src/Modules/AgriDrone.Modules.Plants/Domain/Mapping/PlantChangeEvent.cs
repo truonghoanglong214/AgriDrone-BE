@@ -281,6 +281,143 @@ public sealed class PlantChangeEvent : Entity
             actorId,
             createdAt);
 
+    public static PlantChangeEvent CreatedWithLineage(
+        Guid farmId,
+        Guid plantProfileId,
+        Guid sourceSurveyOrderId,
+        Guid? missionId,
+        Guid plantId,
+        Guid farmBaseMapVersionId,
+        Guid spatialPolicyVersionId,
+        Point location,
+        int rowIndex,
+        int columnIndex,
+        Guid actorId,
+        DateTimeOffset createdAt)
+    {
+        DomainGuard.NotEmpty(plantProfileId);
+        DomainGuard.NotEmpty(sourceSurveyOrderId);
+        DomainGuard.NotEmpty(farmBaseMapVersionId);
+        DomainGuard.NotEmpty(spatialPolicyVersionId);
+
+        var evt = Create(
+            farmId,
+            missionId,
+            plantId,
+            PlantChangeType.NewPlant,
+            oldLocation: null,
+            location,
+            oldRowIndex: null,
+            rowIndex,
+            oldColumnIndex: null,
+            columnIndex,
+            oldLifecycleStatus: null,
+            actorId,
+            createdAt);
+
+        evt.FarmBaseMapVersionId = farmBaseMapVersionId;
+        evt.PlantProfileId = plantProfileId;
+        evt.SourceSurveyOrderId = sourceSurveyOrderId;
+        evt.SpatialPolicyVersionId = spatialPolicyVersionId;
+        return evt;
+    }
+
+    public static PlantChangeEvent Relocated(
+        Guid farmId,
+        Guid plantProfileId,
+        Guid sourceSurveyOrderId,
+        Guid? missionId,
+        Guid plantId,
+        Guid farmBaseMapVersionId,
+        Guid spatialPolicyVersionId,
+        Guid? managerDecisionId,
+        Point? oldLocation,
+        Point newLocation,
+        int? oldRowIndex,
+        int newRowIndex,
+        int? oldColumnIndex,
+        int newColumnIndex,
+        PlantLifecycleStatus lifecycleStatus,
+        Guid actorId,
+        DateTimeOffset createdAt)
+    {
+        DomainGuard.NotEmpty(plantProfileId);
+        DomainGuard.NotEmpty(sourceSurveyOrderId);
+        DomainGuard.NotEmpty(farmBaseMapVersionId);
+        DomainGuard.NotEmpty(spatialPolicyVersionId);
+
+        var evt = Create(
+            farmId,
+            missionId,
+            plantId,
+            PlantChangeType.MappingDifference,
+            oldLocation,
+            newLocation,
+            oldRowIndex,
+            newRowIndex,
+            oldColumnIndex,
+            newColumnIndex,
+            lifecycleStatus,
+            actorId,
+            createdAt);
+
+        evt.FarmBaseMapVersionId = farmBaseMapVersionId;
+        evt.PlantProfileId = plantProfileId;
+        evt.SourceSurveyOrderId = sourceSurveyOrderId;
+        evt.SpatialPolicyVersionId = spatialPolicyVersionId;
+        evt.ManagerDecisionId = managerDecisionId;
+        return evt;
+    }
+
+    public static PlantChangeEvent Replaced(
+        Guid farmId,
+        Guid plantProfileId,
+        Guid predecessorPlantProfileId,
+        Guid sourceSurveyOrderId,
+        Guid? missionId,
+        Guid plantId,
+        Guid farmBaseMapVersionId,
+        Guid spatialPolicyVersionId,
+        Guid managerDecisionId,
+        Point? oldLocation,
+        Point newLocation,
+        int? oldRowIndex,
+        int newRowIndex,
+        int? oldColumnIndex,
+        int newColumnIndex,
+        Guid actorId,
+        DateTimeOffset createdAt)
+    {
+        DomainGuard.NotEmpty(plantProfileId);
+        DomainGuard.NotEmpty(predecessorPlantProfileId);
+        DomainGuard.NotEmpty(sourceSurveyOrderId);
+        DomainGuard.NotEmpty(farmBaseMapVersionId);
+        DomainGuard.NotEmpty(spatialPolicyVersionId);
+        DomainGuard.NotEmpty(managerDecisionId);
+
+        var evt = Create(
+            farmId,
+            missionId,
+            plantId,
+            PlantChangeType.MappingDifference,
+            oldLocation,
+            newLocation,
+            oldRowIndex,
+            newRowIndex,
+            oldColumnIndex,
+            newColumnIndex,
+            PlantLifecycleStatus.Active,
+            actorId,
+            createdAt);
+
+        evt.FarmBaseMapVersionId = farmBaseMapVersionId;
+        evt.PlantProfileId = plantProfileId;
+        evt.SourceSurveyOrderId = sourceSurveyOrderId;
+        evt.SpatialPolicyVersionId = spatialPolicyVersionId;
+        evt.ManagerDecisionId = managerDecisionId;
+        return evt;
+    }
+
     public static PlantChangeEvent MappingPositionChanged(
         Guid farmId,
         Guid missionId,
@@ -355,7 +492,7 @@ public sealed class PlantChangeEvent : Entity
 
     private static PlantChangeEvent Create(
         Guid farmId,
-        Guid missionId,
+        Guid? missionId,
         Guid plantId,
         PlantChangeType changeType,
         Point? oldLocation,
@@ -369,7 +506,7 @@ public sealed class PlantChangeEvent : Entity
         DateTimeOffset createdAt)
     {
         DomainGuard.NotEmpty(farmId);
-        DomainGuard.NotEmpty(missionId);
+        if (missionId.HasValue) DomainGuard.NotEmpty(missionId.Value);
         DomainGuard.NotEmpty(plantId);
         DomainGuard.NotEmpty(actorId);
         EnsureLocation(newLocation, nameof(newLocation));
