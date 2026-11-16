@@ -28,7 +28,7 @@ AgriDrone là hệ thống quản lý và điều phối dịch vụ khảo sát
 | **V3-01** | Policy model, contracts, scope separation | **[x] Done** | Tách MAP/COMBO, First/Follow-up |
 | **V3-02** | Catalogue, shared deposit, approval snapshots | **[x] Done** | Published price revisions, deposit policies |
 | **V3-03** | Capture execution, funding, re-flight, cancellation | **[x] Done (Code)** | Hoàn thành `03A` → `03H-2` (Commit `16210b3`), `03H-3` handoff |
-| **V3-04** | **Mapping, Plant Identity & Spatial Lineage** | **[x] Done (Code)** | **Hoàn thành Task 1-7 (Migration `V3_04MappingAndPlantIdentity`)** |
+| **V3-04** | **Mapping, Plant Identity & Spatial Lineage** | **[x] Done (Code)** | **Hoàn thành Task 1-7 & Remediation (Commit 381f6ff), Merge main (5eb06de)** |
 | **V3-05** | **Combo review, invoice finalization, pole count** | **[→] NEXT** | **Đang chuẩn bị triển khai** (Xem mục 5) |
 | **V3-06** | Settlement, atomic release, customer notice | **[ ] Planned** | Release proof, financial facts |
 | **V3-07** | Owner portal, media viewer, comparison | **[ ] Planned** | Historical comparison UI |
