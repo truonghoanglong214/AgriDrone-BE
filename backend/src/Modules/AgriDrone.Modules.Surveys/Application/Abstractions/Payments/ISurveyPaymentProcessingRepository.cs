@@ -49,6 +49,7 @@ public interface ISurveyPaymentProcessingRepository
     void AddEvent(PaymentEvent paymentEvent);
     void AddFundingReceipt(SurveyFundingReceipt receipt);
     void AddFundingAllocation(SurveyFundingAllocation allocation);
+    void AddFundingReversal(SurveyFundingReversal reversal);
     void AddRefundObligation(SurveyRefundObligation obligation);
     void AddPriceAdjustment(PriceAdjustment adjustment);
 }

@@ -10,7 +10,6 @@ internal sealed class ActiveCaptureAssignmentGuard(AgriDroneSchemaDbContext db) 
     public async Task<bool> HasInFlightCaptureAsync(
         Guid tenantId,
         Guid farmId,
-        Guid managerUserId,
         CancellationToken cancellationToken = default)
     {
         var hasInFlightAttempt = await db.Set<CaptureAttempt>()

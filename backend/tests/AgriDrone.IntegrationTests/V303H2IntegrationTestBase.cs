@@ -2,6 +2,7 @@ using System.Data;
 using System.Text.Json;
 using AgriDrone.Database;
 using AgriDrone.Database.Surveys;
+using AgriDrone.Modules.Missions.Application.Abstractions.Media;
 using AgriDrone.IntegrationContracts.Surveys;
 using AgriDrone.Modules.Missions.Domain.Media;
 using AgriDrone.Modules.Missions.Domain.Missions;
@@ -52,7 +53,8 @@ public abstract class V303H2IntegrationTestBase : IAsyncLifetime
 
     protected static ISurveyCaptureExecutionCoordinator CreateCoordinator(
         AgriDroneSchemaDbContext context,
-        ISurveyCaptureExecutionProbe? probe = null)
+        ISurveyCaptureExecutionProbe? probe = null,
+        IObjectStorage? objectStorage = null)
     {
         var clock = TimeProvider.System;
         return new SurveyCaptureExecutionCoordinator(
@@ -61,7 +63,8 @@ public abstract class V303H2IntegrationTestBase : IAsyncLifetime
             new OutboxMessageFactory(
                 new SystemTextJsonIntegrationMessageSerializer(),
                 clock),
-            probe);
+            probe,
+            objectStorage);
     }
 
     public sealed class TestExecutionContext(Guid actorId, Guid? tenantId = null) : AgriDrone.SharedKernel.Application.Abstractions.Execution.IExecutionContext
@@ -120,21 +123,29 @@ public abstract class V303H2IntegrationTestBase : IAsyncLifetime
         }
     }
 
-    public sealed class BarrierCaptureProbe(int participants) : ISurveyCaptureExecutionProbe, IDisposable
+    public sealed class BarrierCaptureProbe(
+        int participants,
+        SurveyCaptureCheckpoint target = SurveyCaptureCheckpoint.BeforeOrderLock)
+        : ISurveyCaptureExecutionProbe, IDisposable
     {
         private readonly Barrier _barrier = new(participants);
 
         public ValueTask HitAsync(SurveyCaptureCheckpoint checkpoint, CancellationToken cancellationToken = default)
         {
-            if (checkpoint == SurveyCaptureCheckpoint.BeforeOrderLock)
+            if (checkpoint == target)
             {
-                if (!_barrier.SignalAndWait(TimeSpan.FromSeconds(15), cancellationToken))
-                {
-                    throw new TimeoutException("Race barrier timed out at BeforeOrderLock.");
-                }
+                SignalAndWait(cancellationToken);
             }
 
             return ValueTask.CompletedTask;
+        }
+
+        public void SignalAndWait(CancellationToken cancellationToken = default)
+        {
+            if (!_barrier.SignalAndWait(TimeSpan.FromSeconds(15), cancellationToken))
+            {
+                throw new TimeoutException($"Race barrier timed out at {target}.");
+            }
         }
 
         public void Dispose() => _barrier.Dispose();
@@ -146,13 +157,17 @@ public abstract class V303H2IntegrationTestBase : IAsyncLifetime
         bool isAssignedManager = true,
         bool isSatisfiedDeposit = true,
         bool hasConfirmedAppointment = true,
-        string serviceCode = "COMBO")
+        string serviceCode = "COMBO",
+        bool isFollowUp = false)
     {
         var tenantId = Guid.NewGuid();
         var farmId = Guid.NewGuid();
         var droneId = Guid.NewGuid();
         var orderId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
+        var previousRequestId = Guid.NewGuid();
+        var previousOrderId = Guid.NewGuid();
+        var farmBaseMapVersionId = Guid.NewGuid();
         var managerUserId = Guid.NewGuid();
         var ownerUserId = Guid.NewGuid();
         var adminUserId = Guid.NewGuid();
@@ -222,7 +237,9 @@ public abstract class V303H2IntegrationTestBase : IAsyncLifetime
         var droneCode = $"DRN-{droneId:N}"[..15];
         var registrationNumber = $"VN-{droneId:N}"[..8].ToUpperInvariant();
         var requestNumber = $"REQ-{requestId:N}"[..15];
+        var previousRequestNumber = $"REQ-{previousRequestId:N}"[..15];
         var idempotencyKey = $"IDEM-{requestId:N}"[..15];
+        var previousIdempotencyKey = $"IDEM-{previousRequestId:N}"[..15];
         var orderNumber = $"ORD-{orderId:N}"[..15];
         var orderStatusSql = ToDbEnumString(initialStatus);
 
@@ -295,6 +312,53 @@ public abstract class V303H2IntegrationTestBase : IAsyncLifetime
                 """);
         }
 
+        if (isFollowUp)
+        {
+            await ExecuteAsync(connection, $$"""
+                -- Released-baseline fixture for a Follow-up Order. The release proof itself
+                -- remains an explicit test fixture until V3-06 provides the production store.
+                INSERT INTO survey.survey_requests
+                  (id, request_number, kind, tenant_id, farm_id, requested_by_user_id,
+                   survey_service_id, caller_scope, idempotency_key, applicant_name,
+                   applicant_email, applicant_phone, farm_name, farm_address,
+                   approximate_area_ha, map_location, status)
+                VALUES
+                  ('{{previousRequestId}}', '{{previousRequestNumber}}', 'EXISTING_FARM_SURVEY', '{{tenantId}}', '{{farmId}}', '{{ownerUserId}}',
+                   '{{serviceId}}', 'tenant:{{tenantId}}', '{{previousIdempotencyKey}}', 'Previous Applicant',
+                   'owner@test.local', '0900000000', 'Test Farm', 'Address',
+                   1.0000, ST_SetSRID(ST_MakePoint(106.5, 10.5), 4326), 'APPROVED');
+
+                INSERT INTO survey.survey_orders
+                  (id, order_number, tenant_id, farm_id, survey_request_id,
+                   survey_service_id, scope, requires_baseline_mapping, status,
+                   deposit_amount, deposit_payment_status, deposit_obligation_id,
+                   business_policy_version_id, created_at, updated_at)
+                VALUES
+                  ('{{previousOrderId}}', 'ORD-{{previousOrderId:N}}', '{{tenantId}}', '{{farmId}}', '{{previousRequestId}}',
+                   '{{serviceId}}', 'V3'::system.contract_scope, TRUE, 'COMPLETED'::system.survey_order_status,
+                   100000, 'PAID'::system.survey_payment_status, NULL,
+                   '{{policyVersionId}}', NOW() - INTERVAL '30 days', NOW() - INTERVAL '20 days');
+
+                INSERT INTO farm.farm_base_map_versions
+                  (id, tenant_id, farm_id, version_number, source_survey_order_id,
+                   status, published_by, published_at)
+                VALUES
+                  ('{{farmBaseMapVersionId}}', '{{tenantId}}', '{{farmId}}', 1, '{{previousOrderId}}',
+                   'PUBLISHED', '{{adminUserId}}', NOW() - INTERVAL '20 days');
+
+                INSERT INTO survey.survey_results
+                  (id, survey_order_id, tenant_id, farm_id, service_type, status, provenance,
+                   reviewed_by, reviewed_at, published_by, published_at)
+                VALUES
+                  ('{{Guid.NewGuid()}}', '{{previousOrderId}}', '{{tenantId}}', '{{farmId}}', 'PLANT_HEALTH', 'PUBLISHED', jsonb_build_object(),
+                   '{{adminUserId}}', NOW() - INTERVAL '20 days', '{{adminUserId}}', NOW() - INTERVAL '20 days');
+                """);
+        }
+
+        var requiresBaselineMappingSql = isFollowUp ? "FALSE" : "TRUE";
+        var previousCompatibleOrderSql = isFollowUp ? $"'{previousOrderId}'" : "NULL";
+        var farmBaseMapVersionSql = isFollowUp ? $"'{farmBaseMapVersionId}'" : "NULL";
+
         await ExecuteAsync(connection, $$"""
             -- Survey Request
             INSERT INTO survey.survey_requests
@@ -313,12 +377,13 @@ public abstract class V303H2IntegrationTestBase : IAsyncLifetime
               (id, order_number, tenant_id, farm_id, survey_request_id,
                survey_service_id, scope, requires_baseline_mapping, status,
                deposit_amount, deposit_payment_status, deposit_obligation_id,
-               business_policy_version_id, created_at, updated_at)
+                business_policy_version_id, previous_compatible_order_id,
+                farm_base_map_version_id, created_at, updated_at)
             VALUES
               ('{{orderId}}', '{{orderNumber}}', '{{tenantId}}', '{{farmId}}', '{{requestId}}',
-               '{{serviceId}}', 'V3'::system.contract_scope, FALSE, '{{orderStatusSql}}'::system.survey_order_status,
+                '{{serviceId}}', 'V3'::system.contract_scope, {{requiresBaselineMappingSql}}, '{{orderStatusSql}}'::system.survey_order_status,
                100000, '{{depositPaymentStatusSql}}'::system.survey_payment_status, '{{obligationId}}',
-               '{{policyVersionId}}', NOW(), NOW());
+                '{{policyVersionId}}', {{previousCompatibleOrderSql}}, {{farmBaseMapVersionSql}}, NOW() - INTERVAL '1 minute', NOW() - INTERVAL '1 minute');
 
             -- Commercial Snapshot
             INSERT INTO survey.order_commercial_snapshots

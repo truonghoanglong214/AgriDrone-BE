@@ -13,6 +13,7 @@
     <ProjectReference Include="..\..\src\Modules\AgriDrone.Modules.Missions\AgriDrone.Modules.Missions.csproj" />
     <ProjectReference Include="..\..\src\Modules\AgriDrone.Modules.Notifications\AgriDrone.Modules.Notifications.csproj" />
     <ProjectReference Include="..\..\src\Modules\AgriDrone.Modules.Surveys\AgriDrone.Modules.Surveys.csproj" />
+    <ProjectReference Include="..\..\src\Integrations\AgriDrone.Integrations.Media\AgriDrone.Integrations.Media.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -22,5 +23,11 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\src\AgriDrone.Api\appsettings.json"
+          Link="production-appsettings.json"
+          CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

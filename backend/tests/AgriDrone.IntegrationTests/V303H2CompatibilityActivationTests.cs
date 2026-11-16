@@ -78,9 +78,42 @@ public sealed class V303H2CompatibilityActivationTests : V303H2IntegrationTestBa
         {
             await conn.OpenAsync();
             var newDepositPolicyId = Guid.NewGuid();
+            var newBusinessPolicyVersionId = Guid.NewGuid();
+            var activationDecisionId = Guid.NewGuid();
             await ExecuteAsync(conn, $"""
                 INSERT INTO survey.v3_survey_deposit_policies (id, version_number, amount, currency, effective_from, created_by, created_at, reason_code)
                 VALUES ('{newDepositPolicyId}', 2, 200000, 'VND', NOW(), '{seeded.AdminUserId}', NOW(), 'V2_INCREASE');
+
+                INSERT INTO survey.business_policy_versions
+                  (id, stream_key, version_number, survey_deposit_policy_id,
+                   claim_policy_id, cancellation_policy_id, service_revision_ids,
+                   pricing_currency, policy_fingerprint, effective_from,
+                   created_by, created_at, reason_code)
+                SELECT '{newBusinessPolicyVersionId}', stream_key, 2, '{newDepositPolicyId}',
+                       claim_policy_id, cancellation_policy_id, service_revision_ids,
+                       pricing_currency, 'policy-v2-{newBusinessPolicyVersionId:N}', NOW(),
+                       '{seeded.AdminUserId}', NOW(), 'V2_INCREASE'
+                FROM survey.business_policy_versions
+                WHERE id = '{seeded.PolicyVersionId}';
+
+                INSERT INTO survey.business_policy_activation
+                  (id, active_business_policy_version_id, public_intake_enabled,
+                   capture_enabled, release_enabled, last_decision_id,
+                   activated_at, activated_by, reason_code, evidence_reference)
+                VALUES
+                  ('{BusinessPolicyActivation.SingletonId}', '{newBusinessPolicyVersionId}', FALSE,
+                   FALSE, FALSE, '{activationDecisionId}', NOW(),
+                   '{seeded.AdminUserId}', 'TEST_V2_ACTIVATION', '03H2 pinned-policy test')
+                ON CONFLICT (id) DO UPDATE
+                SET active_business_policy_version_id = EXCLUDED.active_business_policy_version_id,
+                    public_intake_enabled = FALSE,
+                    capture_enabled = FALSE,
+                    release_enabled = FALSE,
+                    last_decision_id = EXCLUDED.last_decision_id,
+                    activated_at = EXCLUDED.activated_at,
+                    activated_by = EXCLUDED.activated_by,
+                    reason_code = EXCLUDED.reason_code,
+                    evidence_reference = EXCLUDED.evidence_reference;
                 """);
         }
 
@@ -93,15 +126,30 @@ public sealed class V303H2CompatibilityActivationTests : V303H2IntegrationTestBa
 
             Assert.Equal(1, verifiedSnapshot.DepositVersionNumber);
             Assert.Equal(100000m, verifiedSnapshot.DepositAmount);
+            var currentActivation = await verifyCtx.Set<BusinessPolicyActivation>()
+                .AsNoTracking()
+                .SingleAsync(a => a.Id == BusinessPolicyActivation.SingletonId);
+            Assert.NotEqual(seeded.PolicyVersionId, currentActivation.ActiveBusinessPolicyVersionId);
+            Assert.False(currentActivation.PublicIntakeEnabled);
         }
 
-        // 4. Verify public configuration flags in appsettings.json remain strictly OFF
+        // 4. The production file is required test input. Missing the file must fail the
+        // test instead of silently defaulting the value to false.
         var config = new ConfigurationBuilder()
-            .AddJsonFile("appsettings.json", optional: true)
+            .SetBasePath(AppContext.BaseDirectory)
+            .AddJsonFile("production-appsettings.json", optional: false)
             .Build();
 
         var surveyPaymentsEnabled = config.GetValue<bool>("SurveyPayments:Enabled");
         Assert.False(surveyPaymentsEnabled, "SurveyPayments:Enabled must remain false in production configuration!");
+
+        // Public intake is a durable activation decision, not an appsettings flag.
+        // Missing activation is fail-closed; a present activation must also remain off.
+        var activation = await context.Set<BusinessPolicyActivation>()
+            .AsNoTracking()
+            .SingleOrDefaultAsync(a => a.Id == BusinessPolicyActivation.SingletonId);
+        Assert.True(activation is null || !activation.PublicIntakeEnabled,
+            "PublicIntakeEnabled must remain false until the end-to-end release gate is accepted.");
     }
 
     [Fact]

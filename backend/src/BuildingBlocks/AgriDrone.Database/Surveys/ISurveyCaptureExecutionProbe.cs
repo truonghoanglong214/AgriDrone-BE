@@ -6,7 +6,8 @@ public enum SurveyCaptureCheckpoint
     AfterAttemptAndMissionTracked,
     AfterStateTransitionsTracked,
     AfterAuditAndOutboxTracked,
-    AfterSaveBeforeCommit
+    AfterSaveBeforeCommit,
+    BeforeAssignmentLock
 }
 
 public interface ISurveyCaptureExecutionProbe

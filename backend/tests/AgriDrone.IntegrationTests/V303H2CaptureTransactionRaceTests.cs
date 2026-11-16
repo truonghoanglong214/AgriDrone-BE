@@ -4,6 +4,7 @@ using AgriDrone.Database.Surveys;
 using AgriDrone.IntegrationContracts.Messaging;
 using AgriDrone.IntegrationContracts.Surveys;
 using AgriDrone.Modules.Identity.Application.Features.SystemManagers;
+using AgriDrone.Modules.Identity.Domain.SystemManagers;
 using AgriDrone.Modules.Identity.Infrastructure.Persistence;
 using AgriDrone.Modules.Identity.Infrastructure.Repositories;
 using AgriDrone.Modules.Missions.Application.Features.Drones.ChangeDroneStatus;
@@ -151,10 +152,36 @@ public sealed class V303H2CaptureTransactionRaceTests : V303H2IntegrationTestBas
             "Preflight pass", seeded.ManagerUserId, DateTimeOffset.UtcNow);
         await context.SaveChangesAsync();
 
-        // 1. If drone goes into Maintenance first
-        var drone = await context.Set<Drone>().SingleAsync(d => d.Id == seeded.DroneId);
-        drone.SendToMaintenance(DateTimeOffset.UtcNow);
-        await context.SaveChangesAsync();
+        // The real maintenance writer must observe the scheduled capture Mission and
+        // fail before it can make the drone unavailable.
+        var missionsDataSourceBuilder = new NpgsqlDataSourceBuilder(BuildConnectionString(DatabaseName));
+        PostgreSqlEnumMappings.ConfigureDataSource(missionsDataSourceBuilder);
+        await using var missionsDataSource = missionsDataSourceBuilder.Build();
+        var missionsOptions = new DbContextOptionsBuilder<MissionsDbContext>()
+            .UseNpgsql(missionsDataSource, npgsql =>
+            {
+                npgsql.UseNetTopologySuite();
+                PostgreSqlEnumMappings.ConfigureOptions(npgsql);
+            })
+            .Options;
+        await using var missionsContext = new MissionsDbContext(missionsOptions);
+        var maintenanceHandler = new ChangeDroneStatusCommandHandler(
+            new DroneRepository(missionsContext),
+            new DroneMaintenanceRepository(missionsContext),
+            new AuditWriter(),
+            new TestExecutionContext(seeded.AdminUserId),
+            TimeProvider.System,
+            missionsContext);
+        var maintenanceResult = await maintenanceHandler.Handle(
+            new ChangeDroneStatusCommand(
+                seeded.DroneId,
+                DroneStatus.Maintenance,
+                null,
+                null,
+                "Scheduled maintenance"),
+            CancellationToken.None);
+        Assert.True(maintenanceResult.IsFailure);
+        Assert.Equal("Drone.HasBlockingMission", maintenanceResult.Error.Code);
 
         var orderVerStart = await GetOrderVersionAsync(DatabaseName, seeded.OrderId);
         var startRes = await coordinator.StartFlightAsync(new StartCaptureFlightRequest(
@@ -168,9 +195,7 @@ public sealed class V303H2CaptureTransactionRaceTests : V303H2IntegrationTestBas
             Guid.NewGuid(),
             "start-fp"));
 
-        // Must reject because drone is in maintenance
-        Assert.False(startRes.Success);
-        Assert.Contains("PREFLIGHT_OR_DRONE_NOT_READY", startRes.ErrorCode);
+        Assert.True(startRes.Success, startRes.ErrorMessage);
     }
 
     [Fact]
@@ -198,9 +223,9 @@ public sealed class V303H2CaptureTransactionRaceTests : V303H2IntegrationTestBas
             "Preflight pass", seeded.ManagerUserId, DateTimeOffset.UtcNow);
         await context.SaveChangesAsync();
 
-        // Start capture flight
+        // Prepare both real writers with the same pre-race state.
         var orderVerStart = await GetOrderVersionAsync(DatabaseName, seeded.OrderId);
-        var startRes = await coordinator.StartFlightAsync(new StartCaptureFlightRequest(
+        var startRequest = new StartCaptureFlightRequest(
             seeded.OrderId,
             orderVerStart,
             prepRes.AttemptId,
@@ -209,33 +234,58 @@ public sealed class V303H2CaptureTransactionRaceTests : V303H2IntegrationTestBas
             seeded.ManagerUserId,
             Guid.NewGuid(),
             Guid.NewGuid(),
-            "start-fp"));
-        Assert.True(startRes.Success, startRes.ErrorMessage);
+            "start-fp");
 
-        // Attempting to end primary manager assignment while capture is InFlight must be blocked by IActiveCaptureAssignmentGuard
-        var identityOptions = new DbContextOptionsBuilder<IdentityDbContext>()
-            .UseNpgsql(BuildConnectionString(DatabaseName))
-            .Options;
-        await using var identityContext = new IdentityDbContext(identityOptions);
-        var assignmentRepo = new FarmManagerAssignmentRepository(identityContext);
-        var guard = new ActiveCaptureAssignmentGuard(context);
-        var execContext = new TestExecutionContext(seeded.AdminUserId);
+        using var barrier = new BarrierCaptureProbe(
+            2,
+            SurveyCaptureCheckpoint.BeforeAssignmentLock);
 
-        var revokeHandler = new EndPrimaryFarmManagerAssignmentCommandHandler(
-            assignmentRepo,
-            identityContext,
-            new AuditWriter(),
-            new NoopAuditLogSink(),
-            execContext,
-            TimeProvider.System,
-            guard);
+        var startTask = Task.Run(async () =>
+        {
+            await using var startContext = CreateContext(DatabaseName);
+            var startCoordinator = CreateCoordinator(startContext, barrier);
+            return await startCoordinator.StartFlightAsync(startRequest);
+        });
 
-        var revokeRes = await revokeHandler.Handle(
-            new EndPrimaryFarmManagerAssignmentCommand(seeded.FarmId, "Admin reassignment", 1),
-            CancellationToken.None);
+        var revokeTask = Task.Run(async () =>
+        {
+            var identityOptions = new DbContextOptionsBuilder<IdentityDbContext>()
+                .UseNpgsql(BuildConnectionString(DatabaseName))
+                .Options;
+            await using var identityContext = new IdentityDbContext(identityOptions);
+            await using var guardContext = CreateContext(DatabaseName);
+            IFarmManagerAssignmentRepository assignmentRepo = new BarrierAssignmentRepository(
+                new FarmManagerAssignmentRepository(identityContext),
+                barrier);
+            var revokeHandler = new EndPrimaryFarmManagerAssignmentCommandHandler(
+                assignmentRepo,
+                identityContext,
+                new AuditWriter(),
+                new NoopAuditLogSink(),
+                new TestExecutionContext(seeded.AdminUserId),
+                TimeProvider.System,
+                new ActiveCaptureAssignmentGuard(guardContext));
+            return await revokeHandler.Handle(
+                new EndPrimaryFarmManagerAssignmentCommand(seeded.FarmId, "Admin reassignment", 1),
+                CancellationToken.None);
+        });
 
-        Assert.True(revokeRes.IsFailure);
-        Assert.Equal("ACTIVE_CAPTURE_IN_FLIGHT", revokeRes.Error.Code);
+        await Task.WhenAll(startTask, revokeTask);
+        var startRes = await startTask;
+        var revokeRes = await revokeTask;
+
+        Assert.True(startRes.Success ^ revokeRes.IsSuccess,
+            $"Exactly one writer must win. Start={startRes.ErrorCode}; Revoke={revokeRes.Error.Code}");
+        if (startRes.Success)
+        {
+            Assert.True(revokeRes.IsFailure);
+            Assert.Equal("ACTIVE_CAPTURE_IN_FLIGHT", revokeRes.Error.Code);
+        }
+        else
+        {
+            Assert.True(revokeRes.IsSuccess);
+            Assert.Equal("MANAGER_FORBIDDEN", startRes.ErrorCode);
+        }
     }
 
     [Theory]
@@ -430,17 +480,18 @@ public sealed class V303H2CaptureTransactionRaceTests : V303H2IntegrationTestBas
             Guid.NewGuid(),
             "reflight-fp-2");
 
+        using var reflightBarrier = new BarrierCaptureProbe(2);
         var task1 = Task.Run(async () =>
         {
             await using var ctx = CreateContext(DatabaseName);
-            var coord = CreateCoordinator(ctx);
+            var coord = CreateCoordinator(ctx, reflightBarrier);
             return await coord.CreateQualityReflightAsync(reflightReq1);
         });
 
         var task2 = Task.Run(async () =>
         {
             await using var ctx = CreateContext(DatabaseName);
-            var coord = CreateCoordinator(ctx);
+            var coord = CreateCoordinator(ctx, reflightBarrier);
             return await coord.CreateQualityReflightAsync(reflightReq2);
         });
 
@@ -469,5 +520,40 @@ public sealed class V303H2CaptureTransactionRaceTests : V303H2IntegrationTestBas
         var obligationCount = await verifyContext.Set<SurveyDepositObligation>()
             .CountAsync(o => o.SurveyOrderId == seeded.OrderId);
         Assert.Equal(1, obligationCount);
+
+        // Same operation key is an idempotent acknowledgement replay, not a third attempt.
+        var winningRequest = res1.Success ? reflightReq1 : reflightReq2;
+        await using var replayContext = CreateContext(DatabaseName);
+        var replayCoordinator = CreateCoordinator(replayContext);
+        var replay = await replayCoordinator.CreateQualityReflightAsync(winningRequest);
+        Assert.True(replay.Success, replay.ErrorMessage);
+        Assert.Equal(successor.Id, replay.SuccessorAttemptId);
+        Assert.Equal(2, await replayContext.Set<CaptureAttempt>()
+            .CountAsync(value => value.OrderId == seeded.OrderId));
+    }
+
+    private sealed class BarrierAssignmentRepository(
+        IFarmManagerAssignmentRepository inner,
+        BarrierCaptureProbe barrier) : IFarmManagerAssignmentRepository
+    {
+        public Task<FarmManagerAssignment?> GetActiveByFarmIdAsync(
+            Guid farmId,
+            CancellationToken cancellationToken = default) =>
+            inner.GetActiveByFarmIdAsync(farmId, cancellationToken);
+
+        public Task<FarmManagerAssignment?> GetActiveByFarmIdForUpdateAsync(
+            Guid farmId,
+            CancellationToken cancellationToken = default)
+        {
+            barrier.SignalAndWait(cancellationToken);
+            return inner.GetActiveByFarmIdForUpdateAsync(farmId, cancellationToken);
+        }
+
+        public Task<IReadOnlyCollection<FarmManagerAssignment>> GetActiveByProfileIdAsync(
+            Guid profileId,
+            CancellationToken cancellationToken = default) =>
+            inner.GetActiveByProfileIdAsync(profileId, cancellationToken);
+
+        public void Add(FarmManagerAssignment assignment) => inner.Add(assignment);
     }
 }

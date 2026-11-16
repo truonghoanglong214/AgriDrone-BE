@@ -30,7 +30,17 @@ internal sealed class EndPrimaryFarmManagerAssignmentCommandHandler(
             return Result.Failure(AuthenticationError.CurrentUserRequired());
         }
 
-        var assignment = await assignmentRepository.GetActiveByFarmIdAsync(
+        return await unitOfWork.ExecuteInTransactionAsync(
+            token => HandleInTransactionAsync(request, actorId, token),
+            cancellationToken);
+    }
+
+    private async Task<Result> HandleInTransactionAsync(
+        EndPrimaryFarmManagerAssignmentCommand request,
+        Guid actorId,
+        CancellationToken cancellationToken)
+    {
+        var assignment = await assignmentRepository.GetActiveByFarmIdForUpdateAsync(
             request.FarmId,
             cancellationToken);
         if (assignment is null)
@@ -47,7 +57,6 @@ internal sealed class EndPrimaryFarmManagerAssignmentCommandHandler(
             await activeCaptureGuard.HasInFlightCaptureAsync(
                 assignment.TenantId,
                 assignment.FarmId,
-                assignment.SystemManagerProfileId,
                 cancellationToken))
         {
             return Result.Failure(AppError.Conflict(

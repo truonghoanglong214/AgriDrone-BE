@@ -238,6 +238,7 @@ public sealed class SurveyPaymentHandlerRegressionTests
         public void AddEvent(PaymentEvent value) { }
         public void AddFundingReceipt(SurveyFundingReceipt value) => throw new NotSupportedException();
         public void AddFundingAllocation(SurveyFundingAllocation value) => throw new NotSupportedException();
+        public void AddFundingReversal(SurveyFundingReversal value) => throw new NotSupportedException();
         public void AddRefundObligation(SurveyRefundObligation value) => throw new NotSupportedException();
         public void AddPriceAdjustment(PriceAdjustment value) => throw new NotSupportedException();
     }

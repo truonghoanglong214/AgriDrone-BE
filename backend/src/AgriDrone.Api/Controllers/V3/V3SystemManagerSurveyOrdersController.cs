@@ -97,6 +97,35 @@ public sealed class V3SystemManagerSurveyOrdersController(
             StatusCodes.Status201Created, result.ErrorCode, result.ErrorMessage);
     }
 
+    [HttpPost("{orderId:guid}/capture-appointments/no-show")]
+    public async Task<IResult> RecordCaptureNoShow(
+        [FromRoute] Guid orderId,
+        [FromBody] RecordV3CaptureNoShowRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!TryGetActor(out var actorId)) return Results.Forbid();
+        var result = await captureCoordinator.RecordNoShowAsync(
+            new RecordCaptureNoShowRequest(
+                orderId,
+                request.ExpectedOrderVersion!.Value,
+                request.AppointmentId!.Value,
+                request.ExpectedAppointmentVersion!.Value,
+                actorId,
+                request.OccurredAt!.Value,
+                request.Reason,
+                request.EvidenceReference,
+                executionContext.CorrelationId,
+                request.OperationId!.Value,
+                request.PayloadFingerprint),
+            cancellationToken);
+        return CoordinatorResult(
+            result.Success,
+            result,
+            StatusCodes.Status201Created,
+            result.ErrorCode,
+            result.ErrorMessage);
+    }
+
     [HttpPost("{orderId:guid}/capture-attempts/{attemptId:guid}/start")]
     public async Task<IResult> StartCaptureFlight(
         [FromRoute] Guid orderId,

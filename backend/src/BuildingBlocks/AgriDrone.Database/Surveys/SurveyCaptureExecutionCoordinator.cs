@@ -7,6 +7,7 @@ using AgriDrone.IntegrationContracts.Surveys;
 using AgriDrone.IntegrationContracts.Messaging;
 using AgriDrone.Modules.Identity.Domain.SystemManagers;
 using AgriDrone.Modules.Missions.Domain.Drones;
+using AgriDrone.Modules.Missions.Application.Abstractions.Media;
 using AgriDrone.Modules.Missions.Domain.Missions;
 using AgriDrone.Modules.Missions.Domain.Media;
 using AgriDrone.Modules.Surveys.Domain;
@@ -23,9 +24,11 @@ internal sealed class SurveyCaptureExecutionCoordinator(
     AgriDroneSchemaDbContext db,
     TimeProvider clock,
     OutboxMessageFactory outboxFactory,
-    ISurveyCaptureExecutionProbe? probe = null) : ISurveyCaptureExecutionCoordinator
+    ISurveyCaptureExecutionProbe? probe = null,
+    IObjectStorage? objectStorage = null) : ISurveyCaptureExecutionCoordinator
 {
     private readonly ISurveyCaptureExecutionProbe _probe = probe ?? new NoopSurveyCaptureExecutionProbe();
+    private readonly IObjectStorage? _objectStorage = objectStorage;
     public Task<PrepareCaptureAttemptResult> PrepareAttemptAsync(
         PrepareCaptureAttemptRequest request,
         CancellationToken cancellationToken = default) => ExecuteAsync(
@@ -90,6 +93,14 @@ internal sealed class SurveyCaptureExecutionCoordinator(
                 return PrepareFailure(
                     "ORDER_NOT_READY",
                     "The V3 Order is not at the expected ReadyForCapture version.");
+            }
+            if (!order.RequiresBaselineMapping &&
+                (!order.PreviousCompatibleOrderId.HasValue ||
+                 !order.FarmBaseMapVersionId.HasValue))
+            {
+                return PrepareFailure(
+                    "FOLLOW_UP_BASELINE_NOT_PINNED",
+                    "A Follow-up Order requires its released baseline Order and exact baseline version.");
             }
             if (request.DroneId is not Guid droneId || droneId == Guid.Empty)
             {
@@ -701,6 +712,7 @@ internal sealed class SurveyCaptureExecutionCoordinator(
                 .Select(value => new
                 {
                     value.MediaId,
+                    value.Media.Url,
                     value.Media.Checksum,
                     value.Media.FileSizeBytes,
                     Role = value.MediaRole.ToString()
@@ -714,6 +726,19 @@ internal sealed class SurveyCaptureExecutionCoordinator(
                 return ManifestFailure(
                     "CAPTURE_MEDIA_INCOMPLETE",
                     "Every frozen input file requires an immutable SHA-256 checksum and positive size.");
+            }
+            if (_objectStorage is not null)
+            {
+                foreach (var file in files)
+                {
+                    var stored = await _objectStorage.GetInfoAsync(file.Url, token);
+                    if (stored is null || stored.FileSizeBytes != file.FileSizeBytes)
+                    {
+                        return ManifestFailure(
+                            "CAPTURE_MEDIA_OBJECT_MISMATCH",
+                            "Every frozen media record must resolve to an object with the same immutable size.");
+                    }
+                }
             }
 
             var canonical = string.Join(
@@ -1241,6 +1266,149 @@ internal sealed class SurveyCaptureExecutionCoordinator(
         exception => CancelException(request.OrderId, exception),
         cancellationToken);
 
+    public Task<RecordCaptureNoShowResult> RecordNoShowAsync(
+        RecordCaptureNoShowRequest request,
+        CancellationToken cancellationToken = default) => ExecuteAsync(
+        async token =>
+        {
+            if (!await LockOrderAsync(request.OrderId, token))
+            {
+                return NoShowFailure(request, "ORDER_NOT_FOUND", "The Survey Order was not found.");
+            }
+
+            var replay = await db.Set<SurveyAppointmentNoShow>()
+                .AsNoTracking()
+                .SingleOrDefaultAsync(value => value.OperationId == request.OperationId, token);
+            if (replay is not null)
+            {
+                if (replay.SurveyOrderId != request.OrderId ||
+                    replay.SurveyAppointmentId != request.AppointmentId ||
+                    !string.Equals(replay.PayloadFingerprint, request.PayloadFingerprint, StringComparison.Ordinal))
+                {
+                    return NoShowFailure(request, "OPERATION_CONFLICT", "The operation ID was already used with a different payload.");
+                }
+
+                var replayOrder = await db.Set<SurveyOrder>().AsNoTracking()
+                    .SingleAsync(value => value.Id == replay.SurveyOrderId, token);
+                var replayAppointment = await db.Set<SurveyAppointment>().AsNoTracking()
+                    .SingleAsync(value => value.Id == replay.SurveyAppointmentId, token);
+                return new RecordCaptureNoShowResult(
+                    true,
+                    replay.SurveyOrderId,
+                    replay.SurveyAppointmentId,
+                    replay.Id,
+                    replay.OccurrenceIndex,
+                    replay.Disposition.ToString(),
+                    replayOrder.Status.ToString(),
+                    replayAppointment.Status.ToString());
+            }
+
+            var order = await db.Set<SurveyOrder>()
+                .SingleOrDefaultAsync(value => value.Id == request.OrderId, token);
+            if (order is null ||
+                order.Scope != ContractScope.V3 ||
+                order.Status != SurveyOrderStatus.ReadyForCapture ||
+                order.Version != request.ExpectedOrderVersion)
+            {
+                return NoShowFailure(request, "ORDER_NOT_READY", "The V3 Order is not at the expected ReadyForCapture version.");
+            }
+            if (!await IsAssignedManagerAsync(order.TenantId, order.FarmId, request.ActorId, token))
+            {
+                return NoShowFailure(request, "MANAGER_FORBIDDEN", "Only the active assigned Manager can record operational no-show evidence.");
+            }
+
+            var appointment = await db.Set<SurveyAppointment>()
+                .SingleOrDefaultAsync(value =>
+                    value.Id == request.AppointmentId &&
+                    value.SurveyOrderId == order.Id &&
+                    value.Purpose == SurveyAppointmentPurpose.Capture,
+                    token);
+            if (appointment is null ||
+                appointment.Status != SurveyAppointmentStatus.Confirmed ||
+                appointment.Version != request.ExpectedAppointmentVersion)
+            {
+                return NoShowFailure(request, "APPOINTMENT_VERSION_CONFLICT", "The confirmed Capture appointment is missing or changed.");
+            }
+            var recordedAt = clock.GetUtcNow();
+            if (request.OccurredAt.Offset != TimeSpan.Zero ||
+                request.OccurredAt < appointment.ProposedStartAt ||
+                request.OccurredAt > recordedAt)
+            {
+                return NoShowFailure(request, "NO_SHOW_TIME_INVALID", "No-show evidence can only be recorded in UTC after the appointment starts.");
+            }
+
+            var snapshot = await db.Set<SurveyOrderCommercialSnapshot>()
+                .AsNoTracking()
+                .SingleOrDefaultAsync(value => value.SurveyOrderId == order.Id, token);
+            if (snapshot is null)
+            {
+                return NoShowFailure(request, "COMMERCIAL_SNAPSHOT_MISSING", "The pinned cancellation policy snapshot is required.");
+            }
+
+            var occurrenceIndex = await db.Set<SurveyAppointmentNoShow>()
+                .CountAsync(value => value.SurveyOrderId == order.Id, token) + 1;
+            var disposition = occurrenceIndex <= snapshot.AllowedFreeNoShowReschedules
+                ? SurveyNoShowDisposition.FreeReschedule
+                : SurveyNoShowDisposition.AdminReviewRequired;
+            var noShow = SurveyAppointmentNoShow.Create(
+                Guid.CreateVersion7(),
+                order.Id,
+                appointment.Id,
+                occurrenceIndex,
+                disposition,
+                request.ActorId,
+                request.Reason,
+                request.EvidenceReference,
+                request.OperationId,
+                request.PayloadFingerprint,
+                request.OccurredAt,
+                recordedAt);
+
+            appointment.RequestReschedule(
+                disposition == SurveyNoShowDisposition.FreeReschedule
+                    ? $"NO_SHOW_FREE_RESCHEDULE: {request.Reason}"
+                    : $"NO_SHOW_ADMIN_REVIEW_REQUIRED: {request.Reason}",
+                request.OccurredAt);
+            order.TransitionToAwaitingAppointmentV3(request.OccurredAt);
+            db.Set<SurveyAppointmentNoShow>().Add(noShow);
+            AddCaptureEvidence(
+                order,
+                request.ActorId,
+                request.CorrelationId,
+                disposition == SurveyNoShowDisposition.FreeReschedule
+                    ? "NO_SHOW_FREE_RESCHEDULE_RECORDED"
+                    : "NO_SHOW_ADMIN_REVIEW_REQUIRED",
+                request.OccurredAt);
+            await db.SaveChangesAsync(token);
+
+            return new RecordCaptureNoShowResult(
+                true,
+                order.Id,
+                appointment.Id,
+                noShow.Id,
+                occurrenceIndex,
+                disposition.ToString(),
+                order.Status.ToString(),
+                appointment.Status.ToString());
+        },
+        exception => NoShowFailure(request, "NO_SHOW_CONFLICT", exception.Message),
+        cancellationToken);
+
+    private static RecordCaptureNoShowResult NoShowFailure(
+        RecordCaptureNoShowRequest request,
+        string code,
+        string message) => new(
+        false,
+        request.OrderId,
+        request.AppointmentId,
+        Guid.Empty,
+        0,
+        string.Empty,
+        string.Empty,
+        string.Empty,
+        code,
+        message);
+
     private void AddCaptureEvidence(
         SurveyOrder order,
         Guid actorId,
@@ -1386,23 +1554,23 @@ internal sealed class SurveyCaptureExecutionCoordinator(
     {
         if (db.Database.IsRelational())
         {
-            var assignmentId = await db.Set<FarmManagerAssignment>()
-                .Where(value =>
-                    value.TenantId == tenantId &&
-                    value.FarmId == farmId &&
-                    value.EndedAt == null &&
-                    value.SystemManagerProfile.UserId == actorId &&
-                    value.SystemManagerProfile.Status == SystemManagerProfileStatus.Active)
-                .Select(value => (Guid?)value.Id)
-                .FirstOrDefaultAsync(token);
-
-            if (!assignmentId.HasValue || assignmentId.Value == Guid.Empty)
-            {
-                return false;
-            }
-
-            await LockRowAsync("SELECT id FROM identity.farm_manager_assignments WHERE id = @id FOR SHARE", assignmentId.Value, token);
-            return true;
+            await _probe.HitAsync(SurveyCaptureCheckpoint.BeforeAssignmentLock, token);
+            await using var command = CreateCommand("""
+                SELECT assignment.id
+                FROM identity.farm_manager_assignments AS assignment
+                INNER JOIN identity.system_manager_profiles AS profile
+                    ON profile.id = assignment.system_manager_profile_id
+                WHERE assignment.tenant_id = @tenant_id
+                  AND assignment.farm_id = @farm_id
+                  AND assignment.ended_at IS NULL
+                  AND profile.user_id = @actor_id
+                  AND profile.status = 'ACTIVE'::system.system_manager_profile_status
+                FOR SHARE OF assignment
+                """);
+            command.Parameters.Add(new NpgsqlParameter("tenant_id", tenantId));
+            command.Parameters.Add(new NpgsqlParameter("farm_id", farmId));
+            command.Parameters.Add(new NpgsqlParameter("actor_id", actorId));
+            return await command.ExecuteScalarAsync(token) is Guid;
         }
 
         return await db.Set<FarmManagerAssignment>()

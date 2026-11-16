@@ -186,6 +186,31 @@ public record CancelCaptureOrderResult(
     string? ErrorCode = null,
     string? ErrorMessage = null);
 
+public record RecordCaptureNoShowRequest(
+    Guid OrderId,
+    uint ExpectedOrderVersion,
+    Guid AppointmentId,
+    uint ExpectedAppointmentVersion,
+    Guid ActorId,
+    DateTimeOffset OccurredAt,
+    string Reason,
+    string EvidenceReference,
+    Guid CorrelationId,
+    Guid OperationId,
+    string PayloadFingerprint);
+
+public record RecordCaptureNoShowResult(
+    bool Success,
+    Guid OrderId,
+    Guid AppointmentId,
+    Guid NoShowId,
+    int OccurrenceIndex,
+    string Disposition,
+    string OrderStatus,
+    string AppointmentStatus,
+    string? ErrorCode = null,
+    string? ErrorMessage = null);
+
 public interface ISurveyCaptureExecutionCoordinator
 {
     Task<PrepareCaptureAttemptResult> PrepareAttemptAsync(
@@ -218,5 +243,9 @@ public interface ISurveyCaptureExecutionCoordinator
 
     Task<CancelCaptureOrderResult> CancelOrderAsync(
         CancelCaptureOrderRequest request,
+        CancellationToken cancellationToken = default);
+
+    Task<RecordCaptureNoShowResult> RecordNoShowAsync(
+        RecordCaptureNoShowRequest request,
         CancellationToken cancellationToken = default);
 }

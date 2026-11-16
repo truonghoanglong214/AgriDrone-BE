@@ -1,6 +1,9 @@
 using System.Text.Json;
+using System.Security.Cryptography;
 using AgriDrone.Database.Surveys;
+using AgriDrone.Integrations.Media;
 using AgriDrone.IntegrationContracts.Surveys;
+using AgriDrone.Modules.Missions.Application.Abstractions.Media;
 using AgriDrone.Modules.Missions.Application.Abstractions.Missions;
 using AgriDrone.Modules.Missions.Application.Features.Media.ResetMissionUpload;
 using AgriDrone.Modules.Missions.Application.Features.Missions.RescheduleOrderMission;
@@ -13,6 +16,9 @@ using AgriDrone.SharedKernel.Application.Abstractions.Authorization;
 using AgriDrone.SharedKernel.Application.Abstractions.Execution;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
+using Minio;
+using Minio.DataModel.Args;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace AgriDrone.IntegrationTests;
@@ -229,19 +235,34 @@ public sealed class V303H2MediaSecurityAcceptanceTests : V303H2IntegrationTestBa
         context.Set<CaptureInputManifest>().Remove(fakeManifest);
         await context.SaveChangesAsync();
 
-        // 3. Positive test: Add real MediaAsset and MissionMedia with 64-char hex SHA-256 and positive size
+        // 3. Positive test: upload a real object to MinIO, then persist the finalized
+        // metadata produced by that object.
         var assetId = Guid.NewGuid();
-        var rawChecksum = new string('a', 64);
+        var objectBytes = System.Text.Encoding.UTF8.GetBytes(
+            $"03H2 immutable capture object {prepRes.AttemptId:D}");
+        var rawChecksum = Convert.ToHexString(SHA256.HashData(objectBytes)).ToLowerInvariant();
+        var bucket = "agridrone-h2";
+        var objectName = $"captures/{prepRes.AttemptId:D}/image-001.jpg";
+        var objectStorage = new TestObjectStorage();
+        var storageUri = $"minio://{bucket}/{objectName}";
+        await using (var content = new MemoryStream(objectBytes, writable: false))
+        {
+            await objectStorage.UploadAsync(
+                storageUri,
+                content,
+                objectBytes.LongLength,
+                "image/jpeg");
+        }
         var asset = MediaAsset.Create(
             assetId,
             seeded.TenantId,
             seeded.FarmId,
             "minio",
-            $"captures/{prepRes.AttemptId}/image-001.jpg",
-            $"s3://agridrone-test/captures/{prepRes.AttemptId}/image-001.jpg",
+            objectName,
+            storageUri,
             MediaType.Image,
             "image/jpeg",
-            1048576,
+            objectBytes.LongLength,
             rawChecksum,
             seeded.ManagerUserId,
             now);
@@ -261,8 +282,9 @@ public sealed class V303H2MediaSecurityAcceptanceTests : V303H2IntegrationTestBa
         var opId = Guid.NewGuid();
         var fp = "freeze-valid-fp";
         var orderVerValidFreeze = await GetOrderVersionAsync(DatabaseName, seeded.OrderId);
+        var storageCoordinator = CreateCoordinator(context, objectStorage: objectStorage);
 
-        var validFreezeRes = await coordinator.FreezeInputManifestAsync(new FreezeCaptureInputManifestRequest(
+        var validFreezeRes = await storageCoordinator.FreezeInputManifestAsync(new FreezeCaptureInputManifestRequest(
             seeded.OrderId,
             orderVerValidFreeze,
             prepRes.AttemptId,
@@ -275,11 +297,11 @@ public sealed class V303H2MediaSecurityAcceptanceTests : V303H2IntegrationTestBa
 
         Assert.True(validFreezeRes.Success, validFreezeRes.ErrorMessage);
         Assert.Equal(1, validFreezeRes.TotalFileCount);
-        Assert.Equal(1048576, validFreezeRes.TotalSizeBytes);
+        Assert.Equal(objectBytes.LongLength, validFreezeRes.TotalSizeBytes);
         Assert.Equal(64, validFreezeRes.ManifestFingerprint.Length);
 
         // 4. Idempotent replay with same operationId and payload returns the exact same manifest
-        var replayRes = await coordinator.FreezeInputManifestAsync(new FreezeCaptureInputManifestRequest(
+        var replayRes = await storageCoordinator.FreezeInputManifestAsync(new FreezeCaptureInputManifestRequest(
             seeded.OrderId,
             orderVerValidFreeze,
             prepRes.AttemptId,
@@ -294,7 +316,7 @@ public sealed class V303H2MediaSecurityAcceptanceTests : V303H2IntegrationTestBa
         Assert.Equal(validFreezeRes.ManifestId, replayRes.ManifestId);
 
         // 5. Replay with different payload returns OPERATION_CONFLICT
-        var conflictOpRes = await coordinator.FreezeInputManifestAsync(new FreezeCaptureInputManifestRequest(
+        var conflictOpRes = await storageCoordinator.FreezeInputManifestAsync(new FreezeCaptureInputManifestRequest(
             seeded.OrderId,
             orderVerValidFreeze,
             prepRes.AttemptId,
@@ -479,5 +501,56 @@ public sealed class V303H2MediaSecurityAcceptanceTests : V303H2IntegrationTestBa
             Task.FromResult<IReadOnlyList<DroneMission>>([mission]);
 
         public void Add(DroneMission droneMission) { }
+    }
+
+    private sealed class TestObjectStorage : IObjectStorage, IObjectStorageWriter
+    {
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte[]> _storage = new();
+
+        public Task UploadAsync(string storageUri, Stream content, long length, string mimeType, CancellationToken cancellationToken = default)
+        {
+            using var ms = new MemoryStream();
+            content.CopyTo(ms);
+            _storage[storageUri] = ms.ToArray();
+            return Task.CompletedTask;
+        }
+
+        public Task<StoredObjectInfo?> GetInfoAsync(string storageUri, CancellationToken cancellationToken = default)
+        {
+            if (_storage.TryGetValue(storageUri, out var bytes))
+            {
+                return Task.FromResult<StoredObjectInfo?>(new StoredObjectInfo(
+                    storageUri,
+                    "minio",
+                    storageUri,
+                    "image/jpeg",
+                    bytes.LongLength,
+                    "SHA256",
+                    null));
+            }
+            return Task.FromResult<StoredObjectInfo?>(null);
+        }
+
+        public Task<ObjectUploadSession> CreateUploadSessionAsync(ObjectUploadRequest request, CancellationToken cancellationToken = default)
+            => Task.FromResult(new ObjectUploadSession($"minio://test/{request.ObjectName}", new Uri($"http://127.0.0.1:59000/test/{request.ObjectName}"), DateTimeOffset.UtcNow.AddHours(1)));
+
+        public Task ReadAsync(string storageUri, Func<Stream, CancellationToken, Task> reader, CancellationToken cancellationToken = default)
+        {
+            if (_storage.TryGetValue(storageUri, out var bytes))
+            {
+                using var ms = new MemoryStream(bytes);
+                return reader(ms, cancellationToken);
+            }
+            throw new FileNotFoundException(storageUri);
+        }
+
+        public Task<Uri> CreateDownloadUriAsync(string storageUri, TimeSpan lifetime, CancellationToken cancellationToken = default)
+            => Task.FromResult(new Uri($"http://127.0.0.1:59000/download/{storageUri}"));
+
+        public Task DeleteAsync(string storageUri, CancellationToken cancellationToken = default)
+        {
+            _storage.TryRemove(storageUri, out _);
+            return Task.CompletedTask;
+        }
     }
 }

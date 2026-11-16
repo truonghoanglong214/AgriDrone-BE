@@ -366,6 +366,13 @@ internal sealed class SurveyPaymentProcessingRepository(
         context.SurveyFundingAllocations.Add(allocation);
     }
 
+    public void AddFundingReversal(SurveyFundingReversal reversal)
+    {
+        ArgumentNullException.ThrowIfNull(reversal);
+        context.EnsureTransaction();
+        context.SurveyFundingReversals.Add(reversal);
+    }
+
     public void AddRefundObligation(SurveyRefundObligation obligation)
     {
         ArgumentNullException.ThrowIfNull(obligation);

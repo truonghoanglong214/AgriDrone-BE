@@ -1,6 +1,6 @@
 # BE1 — V3 Business Rebaseline và .NET Implementation Plan
 
-Ngày cập nhật: **2026-11-15**. Business policy **Approved**; V3-01 **DesignLocked / SourceAuditComplete**; V3-02 **Implementation present / lock + public rate-limit remediation applied / DB acceptance pending**; V3-03 **source implementation complete through 03H-1, 03B persistence accepted, 03H-2 coordinator, post-write rollback & deterministic race acceptance verified (24/24 integration tests pass across 6 suites)**. Build và full Unit/Architecture/Integration suites pass; prerequisite V3-02 DB acceptance vẫn theo dõi độc lập. Follow-up production chờ release proof V3-06 và public activation vẫn tắt.
+Ngày cập nhật: **2026-11-16**. Business policy **Approved**; V3-01 **DesignLocked / SourceAuditComplete**; V3-02 **Implementation present / lock + public rate-limit remediation applied / DB acceptance pending**; V3-03 **source implementation complete through 03H-1, 03B persistence accepted, 03H-2 InProgress pending complete real-path/race/object-storage/broker evidence and V3-02 prerequisites**. Build, Unit/Architecture và model-drift verification pass tại checkpoint audit; public activation vẫn tắt. Follow-up production chờ release proof V3-06.
 
 Sources: [proposal v3](Be-Plan-v3.md), [approved rules](Business-Rules-v3.md), [BE1 use cases](BE1-Use-Case-Specification.md), [BE2 use cases](BE2-Use-Case-Specification.md), [ADR 0018](../docs/adr/0018-v3-paid-map-combo-business-policy.md).
 

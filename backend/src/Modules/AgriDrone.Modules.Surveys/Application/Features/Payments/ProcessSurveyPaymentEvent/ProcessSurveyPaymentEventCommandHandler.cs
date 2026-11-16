@@ -175,7 +175,10 @@ internal sealed class ProcessSurveyPaymentEventCommandHandler(
         {
             (transitionApplied, disposition) = ApplyOrderDepositNonReceiptEvent(
                 command,
-                payment);
+                payment,
+                order,
+                state.DepositObligation,
+                repository);
         }
         else
         {
@@ -498,7 +501,10 @@ internal sealed class ProcessSurveyPaymentEventCommandHandler(
 
     private static (bool Applied, string Disposition) ApplyOrderDepositNonReceiptEvent(
         ProcessSurveyPaymentEventCommand command,
-        SurveyPayment payment)
+        SurveyPayment payment,
+        SurveyOrder order,
+        SurveyDepositObligation? obligation,
+        ISurveyPaymentProcessingRepository repository)
     {
         if (command.OccurredAt < payment.UpdatedAt)
         {
@@ -520,12 +526,64 @@ internal sealed class ProcessSurveyPaymentEventCommandHandler(
             return (true, "APPLIED");
         }
 
-        // Refund/chargeback handling requires the cancellation/refund obligation
-        // transaction introduced by V3-03G; never reopen or mutate readiness here.
-        return (false, eventType is SurveyPaymentCommandSupport.RefundedEvent or
-            SurveyPaymentCommandSupport.ChargebackEvent
-            ? "REFUND_REQUIRES_OBLIGATION_WORKFLOW"
-            : "IGNORED_CURRENT_STATE");
+        if (eventType is not (SurveyPaymentCommandSupport.RefundedEvent or
+            SurveyPaymentCommandSupport.ChargebackEvent))
+        {
+            return (false, "IGNORED_CURRENT_STATE");
+        }
+        if (obligation is null ||
+            payment.DepositObligationId != obligation.Id ||
+            obligation.SurveyOrderId != order.Id)
+        {
+            return (false, "DEPOSIT_OBLIGATION_NOT_FOUND");
+        }
+        if (payment.Status is not (
+            SurveyPaymentStatus.Paid or
+            SurveyPaymentStatus.AdjustmentRequired))
+        {
+            return (false, "IGNORED_CURRENT_STATE");
+        }
+        if (!string.Equals(command.Currency.Trim(), obligation.Currency, StringComparison.Ordinal) ||
+            command.Amount <= 0m ||
+            decimal.Floor(command.Amount) != command.Amount)
+        {
+            return (false, "AMOUNT_OR_CURRENCY_MISMATCH");
+        }
+
+        var reversedAmount = Math.Min(command.Amount, obligation.AllocatedAmount);
+        if (reversedAmount <= 0m)
+        {
+            return (false, "NO_ALLOCATED_FUNDING_TO_REVERSE");
+        }
+
+        var effectiveAt = EffectiveEventTime(command, payment);
+        payment.Refund(effectiveAt);
+        obligation.ReverseAllocation(reversedAmount, effectiveAt);
+        repository.AddFundingReversal(SurveyFundingReversal.Create(
+            Guid.CreateVersion7(),
+            payment.Id,
+            order.Id,
+            obligation.Id,
+            payment.Provider,
+            command.ProviderEventId,
+            command.EventType,
+            reversedAmount,
+            obligation.Currency,
+            command.OccurredAt,
+            command.ReceivedAt));
+
+        if (order.Status is SurveyOrderStatus.ReadyForCapture or
+            SurveyOrderStatus.AwaitingReflightDecision)
+        {
+            order.TransitionToAwaitingDepositV3(effectiveAt);
+            return (true, eventType == SurveyPaymentCommandSupport.ChargebackEvent
+                ? "CHARGEBACK_REVERSED_CAPTURE_READINESS"
+                : "REFUND_REVERSED_CAPTURE_READINESS");
+        }
+
+        return (true, order.Status == SurveyOrderStatus.Capturing
+            ? "FUNDING_REVERSAL_RECORDED_AFTER_CAPTURE_START"
+            : "FUNDING_REVERSAL_RECORDED");
     }
 
     private static DateTimeOffset EffectiveEventTime(

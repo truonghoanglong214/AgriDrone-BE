@@ -49,6 +49,16 @@ public sealed record StartV3CaptureFlightRequest(
     [param: Required] Guid? OperationId,
     [param: Required, StringLength(128, MinimumLength = 1)] string PayloadFingerprint);
 
+public sealed record RecordV3CaptureNoShowRequest(
+    [param: Required] Guid? AppointmentId,
+    [param: Required] uint? ExpectedOrderVersion,
+    [param: Required] uint? ExpectedAppointmentVersion,
+    [param: Required] DateTimeOffset? OccurredAt,
+    [param: Required, StringLength(500, MinimumLength = 1)] string Reason,
+    [param: Required, StringLength(500, MinimumLength = 1)] string EvidenceReference,
+    [param: Required] Guid? OperationId,
+    [param: Required, StringLength(128, MinimumLength = 1)] string PayloadFingerprint);
+
 public sealed record EndV3CaptureFlightRequest(
     [param: Required] uint? ExpectedOrderVersion,
     [param: Required] uint? ExpectedAttemptVersion,

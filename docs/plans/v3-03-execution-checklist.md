@@ -1,6 +1,6 @@
 # V3-03 — Checklist triển khai và nghiệm thu
 
-Date: **2026-11-13**. Updated: **2026-11-15**. Status: **V3-03 source implementation complete through 03H-1; 03B-1/03B-2 database expansion accepted; 03H-2 coordinator, post-write rollback & deterministic race acceptance verified (24/24 integration tests pass across 6 suites); V3-02 prerequisites tracked independently; public activation strictly off**. [Technical plan A–H](v3-03-capture-funding-and-cancellation-implementation-plan.md), [execution baseline](../operations/v3-03-execution-baseline.md), [ADR 0020](../adr/0020-v3-capture-execution-and-funding-boundaries.md), [master plan](../../Codex-Plan/BE1-Core-Business-Implementation-Plan.md), [locked design](../domain/v3-01-locked-design.md), [Business Rules](../../Codex-Plan/Business-Rules-v3.md).
+Date: **2026-11-13**. Updated: **2026-11-16**. Status: **V3-03 source implementation complete through 03H-1; 03B-1/03B-2 database expansion accepted; 03H-2 remains InProgress while the full 03-T01–13 real-path matrix, shared-writer races, object-storage/broker evidence and V3-02 prerequisites are completed; public activation strictly off**. [Technical plan A–H](v3-03-capture-funding-and-cancellation-implementation-plan.md), [execution baseline](../operations/v3-03-execution-baseline.md), [ADR 0020](../adr/0020-v3-capture-execution-and-funding-boundaries.md), [master plan](../../Codex-Plan/BE1-Core-Business-Implementation-Plan.md), [locked design](../domain/v3-01-locked-design.md), [Business Rules](../../Codex-Plan/Business-Rules-v3.md).
 
 Tài liệu ban đầu được lập ở giai đoạn planning; các completion records bên dưới ghi implementation/remediation sau đó. Section 13 giữ evidence lịch sử của 03B-1; section 14 ghi implementation checkpoint ngày 2026-11-15; section 15 ghi nhận hiện trạng và các khoảng trống cần hoàn thiện cho 03H-2 (sửa manifest freeze đọc media/checksum thật, fault-injection post-write rollback qua probe, deterministic barrier races, shared-writer locks và tách đầy đủ 13 scenarios tests). Public activation và public intake vẫn giữ trạng thái off theo đúng kiến trúc an toàn.
 
@@ -38,8 +38,8 @@ Tất cả status dưới đây chỉ được đổi sau khi có source diff v�
 | 03G-1 | Cancellation/no-show/weather | Pinned policy, actor/evidence, capture-quality criterion, Admin retention/service-failure decisions, terminal Due=0 | 03C-2, 03E-2, 03B-2 | [x] Implemented |
 | 03G-2 | Cancellation transaction + liabilities | Decision/return/retention/history/Outbox atomic, actual receipts/reservations cap, in-flight safety and start/cancel/callback races | 03G-1, 03D-3, 03F-2 | [x] Implemented — start/cancel/callback race acceptance pending |
 | 03H-1 | V3 API/DI/FE/mobile contracts | Actual routes/DTOs/actor matrix/errors/version/idempotency; verified callback dispatch; phased event/consumer compatibility | Relevant C–G slices | [x] Implemented |
-| 03H-2 | Phase DB/security/broker acceptance | 03-T01–13 on real paths; V3-02 prerequisites cleared; fresh/populated upgrades, lock/race/rollback and all-route bypass checks | 03C–G, 03H-1 | [x] Accepted (V3-03 Coordinator & Concurrency Suite Verified) — 24/24 integration tests pass; V3-02 upstream gate remains independently tracked |
-| 03H-3 | Completion evidence + V3-04 handoff | Commands/results/fixtures/limitations, exact attempt+approved manifest contracts, V3-06/08 pending seams, public activation off | 03H-2 | [~] InProgress — preparing V3-04 handoff evidence |
+| 03H-2 | Phase DB/security/broker acceptance | 03-T01–13 on real paths; V3-02 prerequisites cleared; fresh/populated upgrades, lock/race/rollback and all-route bypass checks | 03C–G, 03H-1 | [~] InProgress — existing 24-test suite is a remediation baseline, not full phase acceptance; real-path/race/object-storage/broker gaps and V3-02 prerequisite remain open |
+| 03H-3 | Completion evidence + V3-04 handoff | Commands/results/fixtures/limitations, exact attempt+approved manifest contracts, V3-06/08 pending seams, public activation off | 03H-2 | [ ] Blocked by 03H-2 exit gate |
 
 `03C` trong dependency là 03C-1/03C-2; “03C–G” gồm các work items tương ứng. API/DI và tests nối cùng từng feature; 03H-1 không là lý do trì hoãn wiring tới cuối. 03D-3 chỉ nghiệm thu protocol/races của các writers đã triển khai trong C/D; không tuyên bố cancellation race đã pass khi writer đó chưa có. Cancellation/start races đóng riêng ở 03G-2, combined phase acceptance ở 03H-2, tránh dependency vòng giữa D và G.
 
@@ -267,7 +267,7 @@ Fixture evidence: `postgis/postgis:17-3.5` tại `127.0.0.1:55432`, `rabbitmq:4.
 
 Checkpoint tại 2026-11-15 đã chuẩn bị đủ nền tảng để bước vào thực thi toàn diện 03H-2. Toàn bộ các scenarios 03-T01–13 được triển khai và nghiệm thu ở Section 15 bên dưới.
 
-## 15. 03H-2 Phase acceptance completion — 2026-11-15
+## 15. 03H-2 remediation baseline — 2026-11-15, re-audited 2026-11-16
 
 Phase acceptance suite `V303H2PhaseAcceptanceIntegrationTests` đã được thiết kế và thực thi đầy đủ trên cơ sở dữ liệu thật PostgreSQL (`127.0.0.1:55432`), RabbitMQ (`55672`), Redis (`56379`), không dùng bất kỳ mock/stub nào:
 
@@ -357,12 +357,12 @@ Toàn bộ các bộ kiểm thử đã được chạy và vượt qua 100% trê
 
 ### 15.3 Kết luận & Trạng thái nghiệm thu
 
-- **Nghiệm thu 03H-2**: **ACCEPTED (V3-03 Coordinator & Concurrency Suite Verified)**. Toàn bộ 5 yêu cầu cải tiến cốt lõi đã hoàn tất:
+- **Trạng thái 03H-2**: **IN PROGRESS — NOT ACCEPTED**. Suite hiện tại ghi nhận các cải tiến đã có, nhưng không thay exit gate 03-T01–13, object-storage/broker và V3-02 prerequisite:
   1. `FreezeInputManifestAsync` không còn bypass media/checksum; bắt buộc `MissionMedia` + `MediaAsset` thật, checksum 64-hex SHA-256, file size > 0, phát hiện conflict nếu có manifest mà không có idempotent receipt.
   2. Fault injection probe `ISurveyCaptureExecutionProbe` kiểm thử rollback thật sau `db.SaveChangesAsync()` và trước `CommitAsync` (`AfterSaveBeforeCommit`) chứng minh 0 ghost attempt, 0 ghost history, 0 ghost outbox message, và retry thành công duy nhất một lần.
   3. Deterministic barrier probe `BarrierCaptureProbe` chặn đồng bộ 2 giao dịch tại `BeforeOrderLock` trước khi tranh chấp row lock PostgreSQL `FOR UPDATE`.
   4. Shared-writer lock protocol với `IActiveCaptureAssignmentGuard` chặn revoke Manager khi có chuyến bay đang InFlight (`ACTIVE_CAPTURE_IN_FLIGHT`), và row lock `FOR SHARE` khi kiểm tra assignment.
-  5. Đã tách 6 file test chuyên biệt bao quát trọn vẹn 13 scenarios (03-T01 đến 03-T13) với 24/24 test pass.
+  5. Đã tách 6 file test chuyên biệt với 24 test cases; audit 2026-11-16 xác nhận coverage chưa bao quát trọn vẹn acceptance matrix nên không dùng con số này để ký phase.
 - **Phụ thuộc ngoại vi**: Prerequisite V3-02 database upgrade/rollback/race acceptance và harness MinIO/S3 tiếp tục giữ trạng thái pending độc lập.
 - **Kích hoạt công khai**: Cờ `PublicIntakeEnabled` và `SurveyPayments.Enabled` tiếp tục giữ ở trạng thái **OFF** (`false`) theo đúng quy định an toàn.
 - **Sẵn sàng bàn giao (Handoff to V3-04)**: Sẵn sàng cung cấp `OrderId`, `AttemptId`, `DroneMissionId`, và frozen `CaptureInputManifest` đã được approved cho pipeline phân tích bản đồ nội bộ và baseline mapping của Phase V3-04.
