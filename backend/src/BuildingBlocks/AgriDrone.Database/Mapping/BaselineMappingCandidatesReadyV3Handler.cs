@@ -169,6 +169,20 @@ internal sealed class BaselineMappingCandidatesReadyV3Handler(
             }
         }
 
+        var effectivePolicy = await context.SpatialPolicies
+            .Where(p => p.StreamKey == "DEFAULT" &&
+                        p.EffectiveFrom <= producedAt &&
+                        (p.EffectiveTo == null || p.EffectiveTo > producedAt))
+            .OrderByDescending(p => p.VersionNumber)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (effectivePolicy is null)
+        {
+            return InboxHandlerResult.PermanentFailure(
+                "SpatialPolicy.NotFound",
+                "No effective spatial policy exists for the survey capture time.");
+        }
+
         var maxVersionNumber = await context.FarmBaseMapVersions
             .Where(v => v.FarmId == payload.FarmId)
             .Select(v => (int?)v.VersionNumber)
@@ -188,12 +202,13 @@ internal sealed class BaselineMappingCandidatesReadyV3Handler(
             rowSpacingM: payload.RowSpacingM,
             plantSpacingM: payload.PlantSpacingM);
 
-        var draftBaseMap = FarmBaseMapVersion.PrepareDraft(mapContext, producedAt);
+        var draftBaseMap = FarmBaseMapVersion.CreateFirstBaseline(mapContext, producedAt);
         context.FarmBaseMapVersions.Add(draftBaseMap);
 
         var batchId = Guid.NewGuid();
         var batch = MappingCandidateBatch.Create(
             id: batchId,
+            mappingKind: MappingKind.FirstBaseline,
             handoffId: handoffId,
             tenantId: order.TenantId,
             farmId: payload.FarmId,
@@ -211,6 +226,12 @@ internal sealed class BaselineMappingCandidatesReadyV3Handler(
             algorithmVersion: payload.AlgorithmVersion,
             boundaryPolicyVersion: payload.BoundaryPolicyVersion,
             producedAt: producedAt,
+            spatialPolicyVersionId: effectivePolicy.Id,
+            spatialPolicyFingerprint: effectivePolicy.PolicyFingerprint,
+            boundaryToleranceM: effectivePolicy.BoundaryToleranceM,
+            matchingDistanceThresholdM: effectivePolicy.MatchingDistanceThresholdM,
+            rowBearingToleranceDeg: effectivePolicy.RowBearingToleranceDeg,
+            gridSpacingToleranceM: effectivePolicy.GridSpacingToleranceM,
             createdAt: producedAt);
 
         context.MappingCandidateBatches.Add(batch);

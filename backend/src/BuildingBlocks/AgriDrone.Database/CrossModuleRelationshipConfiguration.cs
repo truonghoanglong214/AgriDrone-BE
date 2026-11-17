@@ -1,6 +1,7 @@
 using AgriDrone.Modules.Farms.Domain.Farms;
 using AgriDrone.Modules.Farms.Domain.Boundaries;
 using AgriDrone.Modules.Farms.Domain.Maps;
+using AgriDrone.Modules.Farms.Domain.Maps.Staging;
 using AgriDrone.Modules.Farms.Domain.Zones;
 using AgriDrone.Modules.Identity.Domain.FarmMemberships;
 using AgriDrone.Modules.Identity.Domain.Tenants;
@@ -361,6 +362,22 @@ internal static class CrossModuleRelationshipConfiguration
             .HasForeignKey(changeEvent => changeEvent.ReviewedBy)
             .OnDelete(DeleteBehavior.SetNull)
             .HasConstraintName("fk_plant_change_events_users_reviewed_by");
+
+        modelBuilder.Entity<PlantProfileObservation>()
+            .HasOne<SurveyOrder>()
+            .WithMany()
+            .HasForeignKey(obs => new { obs.SurveyOrderId, obs.TenantId, obs.FarmId })
+            .HasPrincipalKey(order => new { order.Id, order.TenantId, order.FarmId })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_plant_profile_observations_survey_order");
+
+        modelBuilder.Entity<PlantProfileObservation>()
+            .HasOne<FarmBaseMapVersion>()
+            .WithMany()
+            .HasForeignKey(obs => new { obs.FarmBaseMapVersionId, obs.TenantId, obs.FarmId })
+            .HasPrincipalKey(map => new { map.Id, map.TenantId, map.FarmId })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_plant_profile_observations_base_map_version");
 
         ConfigurePlantInventoryChangeReports(modelBuilder);
 
@@ -1157,5 +1174,59 @@ internal static class CrossModuleRelationshipConfiguration
             .HasPrincipalKey(result => new { result.Id, result.SurveyOrderId, result.FarmId })
             .OnDelete(DeleteBehavior.Restrict)
             .HasConstraintName("fk_plant_scans_results_same_order_farm");
+
+        modelBuilder.Entity<SurveyOrder>()
+            .HasOne<SurveyOrderPoleCountSnapshot>()
+            .WithMany()
+            .HasForeignKey(order => order.VerifiedPoleCountSnapshotId)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_survey_orders_pole_count_snapshot");
+
+        modelBuilder.Entity<SurveyOrderPoleCountSnapshot>()
+            .HasOne<SurveyOrder>()
+            .WithMany()
+            .HasForeignKey(s => new { s.SurveyOrderId, s.TenantId, s.FarmId })
+            .HasPrincipalKey(o => new { o.Id, o.TenantId, o.FarmId })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_survey_order_pole_count_snapshots_order");
+
+        modelBuilder.Entity<SurveyOrderPoleCountSnapshot>()
+            .HasOne<FarmBaseMapVersion>()
+            .WithMany()
+            .HasForeignKey(s => new { s.FarmBaseMapVersionId, s.TenantId, s.FarmId })
+            .HasPrincipalKey(m => new { m.Id, m.TenantId, m.FarmId })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_survey_order_pole_count_snapshots_base_map");
+
+        modelBuilder.Entity<SurveyOrderPoleCountSnapshot>()
+            .HasOne<FarmBoundary>()
+            .WithMany()
+            .HasForeignKey(s => new { s.FarmBoundaryVersionId, s.TenantId, s.FarmId })
+            .HasPrincipalKey(b => new { b.Id, b.TenantId, b.FarmId })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_survey_order_pole_count_snapshots_boundary");
+
+        modelBuilder.Entity<SurveyOrderPoleCountSnapshot>()
+            .HasOne<SpatialPolicy>()
+            .WithMany()
+            .HasForeignKey(s => s.SpatialPolicyVersionId)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_survey_order_pole_count_snapshots_spatial_policy");
+
+        modelBuilder.Entity<SurveyOrderPoleCountSnapshotItem>()
+            .HasOne<MappingCandidateBatch>()
+            .WithMany()
+            .HasForeignKey(i => new { i.MappingCandidateBatchId, i.TenantId, i.FarmId })
+            .HasPrincipalKey(b => new { b.Id, b.TenantId, b.FarmId })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_survey_order_pole_count_snapshot_items_batch");
+
+        modelBuilder.Entity<SurveyOrderPoleCountSnapshotItem>()
+            .HasOne<MappingCandidate>()
+            .WithMany()
+            .HasForeignKey(i => new { i.MappingCandidateId, i.MappingCandidateBatchId })
+            .HasPrincipalKey(c => new { c.Id, c.BatchId })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_survey_order_pole_count_snapshot_items_candidate");
     }
 }

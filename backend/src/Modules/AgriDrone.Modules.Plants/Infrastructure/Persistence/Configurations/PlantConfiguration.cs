@@ -192,5 +192,12 @@ public sealed class PlantConfiguration : IEntityTypeConfiguration<Plant>
             .HasForeignKey(plant => plant.ReplacedPlantId)
             .OnDelete(DeleteBehavior.SetNull)
             .HasConstraintName("fk_plants_replaced_plant_id");
+
+        builder.HasOne<PlantProfile>()
+            .WithMany()
+            .HasForeignKey(plant => new { plant.PlantProfileId, plant.FarmId })
+            .HasPrincipalKey(profile => new { profile.Id, profile.FarmId })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_plants_plant_profile_same_farm");
     }
 }

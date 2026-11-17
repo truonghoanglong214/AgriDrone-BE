@@ -934,6 +934,75 @@ public sealed class DroneMission : AggregateRoot
         UpdatedAt = publishedAt;
         return true;
     }
+
+    public bool ApplyInternallyApprovedFarmBaseMap(
+        Guid surveyOrderId,
+        Guid approvalId,
+        Guid farmBaseMapVersionId,
+        DateTimeOffset approvedAt)
+    {
+        DomainGuard.NotEmpty(surveyOrderId);
+        DomainGuard.NotEmpty(approvalId);
+        DomainGuard.NotEmpty(farmBaseMapVersionId);
+        DomainGuard.Utc(approvedAt);
+
+        if (SurveyOrderId != surveyOrderId)
+        {
+            throw new InvalidOperationException(
+                "The approved base map belongs to a different Survey Order.");
+        }
+
+        if (Purpose == global::AgriDrone.Modules.Missions.Domain.Missions.MissionPurpose.BaselineMapping)
+        {
+            if (PublishedMapVersionId == farmBaseMapVersionId &&
+                MappingApprovalId == approvalId &&
+                Status == MissionStatus.Completed)
+            {
+                return false;
+            }
+
+            if (Status != MissionStatus.AwaitingReview ||
+                ProcessingStatus != ProcessingStatus.ReviewRequired)
+            {
+                throw new InvalidOperationException(
+                    "Only a baseline mission awaiting review can accept an internally approved farm base map.");
+            }
+
+            PublishedMapVersionId = farmBaseMapVersionId;
+            MappingApprovalId = approvalId;
+            MapPublishedAt = approvedAt;
+            Status = MissionStatus.Completed;
+            ProcessingStatus = ProcessingStatus.Completed;
+            UpdatedAt = approvedAt;
+            return true;
+        }
+
+        if (RequiresBaselineCompletion)
+        {
+            if (SourceMapVersionId == farmBaseMapVersionId && !RequiresBaselineCompletion)
+            {
+                return false;
+            }
+
+            SourceMapVersionId = farmBaseMapVersionId;
+            RequiresBaselineCompletion = false;
+            UpdatedAt = approvedAt;
+            return true;
+        }
+
+        // For follow-up technical mapping mission: mark completed
+        if (Status == MissionStatus.AwaitingReview && ProcessingStatus == ProcessingStatus.ReviewRequired)
+        {
+            PublishedMapVersionId = farmBaseMapVersionId;
+            MappingApprovalId = approvalId;
+            Status = MissionStatus.Completed;
+            ProcessingStatus = ProcessingStatus.Completed;
+            UpdatedAt = approvedAt;
+            return true;
+        }
+
+        return false;
+    }
     public bool ApplyHealthReviewState(
     Guid handoffId,
     long reviewVersion,

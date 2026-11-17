@@ -6,8 +6,6 @@ namespace AgriDrone.Modules.Farms.Application.Services;
 
 public sealed class BaselineMappingBatchValidator : IBaselineMappingBatchValidator
 {
-    private const double DuplicateDistanceThresholdMeters = 0.3;
-    private const double GridCellSizeMeters = 0.5;
     private const double EarthRadiusMeters = 6371000.0;
     private const double MetersPerDegreeLat = 111139.0;
 
@@ -131,8 +129,9 @@ public sealed class BaselineMappingBatchValidator : IBaselineMappingBatchValidat
             }
         }
 
-        // 3. Minimum distance duplicate check using Spatial Grid Bucketing: O(N)
-        ValidateMinimumDistancesSpatialBucketing(activeCandidates, issues);
+        // 3. Minimum distance duplicate check using Spatial Grid Bucketing: O(N) using batch frozen tolerance
+        var duplicateThreshold = batch.GridSpacingToleranceM > 0 ? batch.GridSpacingToleranceM : 0.5;
+        ValidateMinimumDistancesSpatialBucketing(activeCandidates, duplicateThreshold, issues);
 
         var total = candidates.Count;
         var accepted = candidates.Count(c => c.ReviewDecision is MappingCandidateReviewDecision.CreateNew or MappingCandidateReviewDecision.MatchExisting);
@@ -164,10 +163,12 @@ public sealed class BaselineMappingBatchValidator : IBaselineMappingBatchValidat
 
     private static void ValidateMinimumDistancesSpatialBucketing(
         List<MappingCandidate> activeCandidates,
+        double duplicateThresholdMeters,
         List<MappingBatchValidationIssue> issues)
     {
         if (activeCandidates.Count <= 1) return;
 
+        var cellSizeMeters = duplicateThresholdMeters;
         // Reference latitude for longitude distance projection
         var avgLat = activeCandidates.Average(c => (c.CorrectedPosition ?? c.OriginalPosition).Y);
         var radLat = avgLat * Math.PI / 180.0;
@@ -178,8 +179,8 @@ public sealed class BaselineMappingBatchValidator : IBaselineMappingBatchValidat
         foreach (var c in activeCandidates)
         {
             var pos = c.CorrectedPosition ?? c.OriginalPosition;
-            var cellX = (int)Math.Floor((pos.X * metersPerDegreeLon) / GridCellSizeMeters);
-            var cellY = (int)Math.Floor((pos.Y * MetersPerDegreeLat) / GridCellSizeMeters);
+            var cellX = (int)Math.Floor((pos.X * metersPerDegreeLon) / cellSizeMeters);
+            var cellY = (int)Math.Floor((pos.Y * MetersPerDegreeLat) / cellSizeMeters);
 
             var key = (cellX, cellY);
             if (!buckets.TryGetValue(key, out var list))
@@ -199,12 +200,12 @@ public sealed class BaselineMappingBatchValidator : IBaselineMappingBatchValidat
                         foreach (var other in neighborList)
                         {
                             var dist = DistanceMeters(pos, other.Pos);
-                            if (dist < DuplicateDistanceThresholdMeters)
+                            if (dist < duplicateThresholdMeters)
                             {
                                 issues.Add(new MappingBatchValidationIssue(
                                     c.CandidateId,
                                     "DuplicateCandidatePosition",
-                                    $"Candidates {c.CandidateId} and {other.CandidateId} are too close ({dist:F2}m < {DuplicateDistanceThresholdMeters}m).",
+                                    $"Candidates {c.CandidateId} and {other.CandidateId} are too close ({dist:F2}m < {duplicateThresholdMeters:F2}m).",
                                     "Error"));
                                 reported = true;
                                 break;

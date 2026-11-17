@@ -1,7 +1,7 @@
 using AgriDrone.Api.Contracts.Farms;
 using AgriDrone.Modules.Farms.Application.Abstractions.Maps;
+using AgriDrone.Modules.Farms.Application.Features.Maps.ApproveFarmBaseMapInternally;
 using AgriDrone.Modules.Farms.Application.Features.Maps.GetFarmBaseMapDraft;
-using AgriDrone.Modules.Farms.Application.Features.Maps.PublishFarmBaseMap;
 using AgriDrone.Modules.Farms.Application.Features.Maps.ReviewMappingCandidate;
 using AgriDrone.Modules.Farms.Application.Features.Maps.ReviewMappingCandidatesBatch;
 using AgriDrone.Modules.Farms.Application.Features.Maps.ValidateFarmBaseMapDraft;
@@ -183,20 +183,20 @@ public sealed class SystemManagerFarmBaseMapsController(ISender sender) : Contro
     /// <summary>
     /// Phát hành bản đồ Farm Base Map chính thức, cấp phát Persistent Plant Identity và chuyển SurveyOrder sang AwaitingPricing.
     /// </summary>
-    [HttpPost("{draftId:guid}/publish")]
-    [ProducesResponseType<FarmBaseMapPublishedResult>(StatusCodes.Status200OK)]
+    [HttpPost("{draftId:guid}/approve-internal")]
+    [ProducesResponseType<FarmBaseMapInternallyApprovedResult>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
-    public async Task<IResult> PublishDraft(
+    public async Task<IResult> ApproveDraftInternal(
         [FromRoute] Guid farmId,
         [FromRoute] Guid draftId,
         CancellationToken cancellationToken)
     {
         var result = await sender.Send(
-            new PublishFarmBaseMapCommand(farmId, draftId),
+            new ApproveFarmBaseMapInternallyCommand(farmId, draftId),
             cancellationToken);
 
         return result.ToHttpResult(HttpContext, Results.Ok);

@@ -19,6 +19,8 @@ public sealed class SurveyOrderPoleCountSnapshotConfiguration
             });
 
         builder.HasKey(s => s.Id).HasName("pk_survey_order_pole_count_snapshots");
+        builder.HasAlternateKey(s => new { s.Id, s.TenantId, s.FarmId }).HasName("uq_survey_order_pole_count_snapshots_id_tenant_farm");
+
         builder.Property(s => s.Id).HasColumnName("id").HasColumnType("uuid");
         builder.Property(s => s.SurveyOrderId).HasColumnName("survey_order_id").HasColumnType("uuid").IsRequired();
         builder.Property(s => s.TenantId).HasColumnName("tenant_id").HasColumnType("uuid").IsRequired();
@@ -40,10 +42,20 @@ public sealed class SurveyOrderPoleCountSnapshotConfiguration
             .IsUnique()
             .HasDatabaseName("uq_survey_order_pole_count_snapshots_order_revision");
 
+        builder.HasIndex(s => new { s.SurveyOrderId, s.EvidenceFingerprint })
+            .IsUnique()
+            .HasDatabaseName("uq_survey_order_pole_count_snapshots_order_fingerprint");
+
         builder.HasIndex(s => s.FarmId)
             .HasDatabaseName("ix_survey_order_pole_count_snapshots_farm");
 
         builder.HasIndex(s => s.MappingCandidateBatchId)
             .HasDatabaseName("ix_survey_order_pole_count_snapshots_batch");
+
+        builder.HasMany(s => s.Items)
+            .WithOne()
+            .HasForeignKey(i => i.SnapshotId)
+            .OnDelete(DeleteBehavior.Cascade)
+            .HasConstraintName("fk_survey_order_pole_count_snapshot_items_snapshot");
     }
 }

@@ -106,7 +106,13 @@ public static class DependencyInjection
         services.AddIntegrationConsumer<BaselineMappingCandidatesReadyV3Processor>(
             IntegrationConsumerNames.Be1BaselineMappingCandidatesReadyV3);
 
-        services.AddScoped<IFarmBaseMapPublicationOrchestrator, FarmBaseMapPublicationOrchestrator>();
+        services.AddScoped<
+            IIntegrationMessageHandler<MappingCandidatesReadyV4>,
+            MappingCandidatesReadyV4Handler>();
+        services.AddIntegrationConsumer<MappingCandidatesReadyV4Processor>(
+            IntegrationConsumerNames.Be1MappingCandidatesReadyV4);
+
+        services.AddScoped<IFarmBaseMapInternalApprovalOrchestrator, FarmBaseMapInternalApprovalOrchestrator>();
         services.AddScoped<IOrderPoleEvidenceReader, OrderPoleEvidenceReader>();
 
         return services;

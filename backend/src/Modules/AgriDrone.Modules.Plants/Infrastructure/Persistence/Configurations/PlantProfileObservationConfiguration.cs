@@ -8,7 +8,13 @@ public sealed class PlantProfileObservationConfiguration : IEntityTypeConfigurat
 {
     public void Configure(EntityTypeBuilder<PlantProfileObservation> builder)
     {
-        builder.ToTable("plant_profile_observations", "plant");
+        builder.ToTable(
+            "plant_profile_observations",
+            "plant",
+            table =>
+            {
+                table.HasCheckConstraint("ck_plant_profile_observations_distance", "observed_distance_m >= 0");
+            });
 
         builder.HasKey(o => o.Id).HasName("pk_plant_profile_observations");
 
@@ -23,6 +29,7 @@ public sealed class PlantProfileObservationConfiguration : IEntityTypeConfigurat
         builder.Property(o => o.FarmId).HasColumnName("farm_id").HasColumnType("uuid").IsRequired();
         builder.Property(o => o.SurveyOrderId).HasColumnName("survey_order_id").HasColumnType("uuid").IsRequired();
         builder.Property(o => o.FarmBaseMapVersionId).HasColumnName("farm_base_map_version_id").HasColumnType("uuid").IsRequired();
+        builder.Property(o => o.MappingCandidateBatchId).HasColumnName("mapping_candidate_batch_id").HasColumnType("uuid");
         builder.Property(o => o.ObservedLocation).HasColumnName("observed_location").HasColumnType("geometry(Point,4326)").IsRequired();
         builder.Property(o => o.ObservedDistanceM).HasColumnName("observed_distance_m").HasColumnType("double precision").IsRequired();
         builder.Property(o => o.CandidateId).HasColumnName("candidate_id").HasColumnType("uuid");
@@ -34,8 +41,9 @@ public sealed class PlantProfileObservationConfiguration : IEntityTypeConfigurat
 
         builder.HasOne<PlantProfile>()
             .WithMany()
-            .HasForeignKey(o => o.PlantProfileId)
-            .OnDelete(DeleteBehavior.Cascade)
-            .HasConstraintName("fk_plant_profile_observations_profile");
+            .HasForeignKey(o => new { o.PlantProfileId, o.TenantId, o.FarmId })
+            .HasPrincipalKey(p => new { p.Id, p.TenantId, p.FarmId })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_plant_profile_observations_profile_same_scope");
     }
 }

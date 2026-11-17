@@ -11,8 +11,11 @@ public sealed class FarmBaselinePointerConfiguration : IEntityTypeConfiguration<
     {
         builder.ToTable("farm_baseline_pointers", "farm");
 
-        builder.HasKey(p => p.FarmId).HasName("pk_farm_baseline_pointers");
-        builder.HasAlternateKey(p => new { p.FarmId, p.TenantId }).HasName("uq_farm_baseline_pointers_farm_tenant");
+        builder.HasKey(p => p.Id).HasName("pk_farm_baseline_pointers");
+        builder.Property(p => p.Id).HasColumnName("id").HasColumnType("uuid");
+
+        builder.HasIndex(p => p.FarmId).IsUnique().HasDatabaseName("uq_farm_baseline_pointers_farm");
+        builder.HasIndex(p => new { p.TenantId, p.FarmId }).IsUnique().HasDatabaseName("uq_farm_baseline_pointers_tenant_farm");
 
         builder.Property(p => p.FarmId).HasColumnName("farm_id").HasColumnType("uuid");
         builder.Property(p => p.TenantId).HasColumnName("tenant_id").HasColumnType("uuid");
@@ -30,7 +33,8 @@ public sealed class FarmBaselinePointerConfiguration : IEntityTypeConfiguration<
 
         builder.HasOne<FarmBaseMapVersion>()
             .WithMany()
-            .HasForeignKey(p => p.CurrentBaselineMapVersionId)
+            .HasForeignKey(p => new { p.CurrentBaselineMapVersionId, p.TenantId, p.FarmId })
+            .HasPrincipalKey(m => new { m.Id, m.TenantId, m.FarmId })
             .OnDelete(DeleteBehavior.Restrict)
             .HasConstraintName("fk_farm_baseline_pointers_map_version");
     }

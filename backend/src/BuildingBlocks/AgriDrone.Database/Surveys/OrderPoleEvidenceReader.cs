@@ -101,16 +101,6 @@ public sealed class OrderPoleEvidenceReader(
                 .Count();
         }
 
-        if (billableCount == 0)
-        {
-            billableCount = batch.Candidates
-                .Where(c => c.ReviewDecision is MappingCandidateReviewDecision.CreateNew
-                                             or MappingCandidateReviewDecision.MatchExisting
-                                             or MappingCandidateReviewDecision.Relocate
-                                             or MappingCandidateReviewDecision.Replace)
-                .Count(c => boundary.Geometry.Contains(c.CorrectedPosition ?? c.OriginalPosition));
-        }
-
         return Result.Success(new OrderPoleEvidence(
             SurveyOrderId: order.Id,
             TenantId: order.TenantId,

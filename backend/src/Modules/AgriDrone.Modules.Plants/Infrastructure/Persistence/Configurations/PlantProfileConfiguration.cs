@@ -24,6 +24,8 @@ public sealed class PlantProfileConfiguration : IEntityTypeConfiguration<PlantPr
             });
 
         builder.HasKey(p => p.Id).HasName("pk_plant_profiles");
+        builder.HasAlternateKey(p => new { p.Id, p.FarmId }).HasName("uq_plant_profiles_id_farm");
+        builder.HasAlternateKey(p => new { p.Id, p.TenantId, p.FarmId }).HasName("uq_plant_profiles_id_tenant_farm");
 
         builder.Property(p => p.Id)
             .HasColumnName("id")

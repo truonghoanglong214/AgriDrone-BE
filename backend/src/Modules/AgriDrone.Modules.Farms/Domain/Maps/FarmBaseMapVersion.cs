@@ -30,37 +30,6 @@ public sealed class FarmBaseMapVersion : AggregateRoot
     public DateTimeOffset UpdatedAt { get; private set; }
     public ICollection<ZoneMapVersion> ZoneMapVersions { get; private set; } = [];
 
-    public static FarmBaseMapVersion PrepareDraft(
-        FarmBaseMapPublicationContext context,
-        DateTimeOffset createdAt)
-    {
-        ArgumentNullException.ThrowIfNull(context);
-        DomainGuard.Utc(createdAt);
-
-        var mapId = Guid.NewGuid();
-        return new FarmBaseMapVersion
-        {
-            Id = mapId,
-            TenantId = context.TenantId,
-            FarmId = context.FarmId,
-            VersionNumber = context.VersionNumber,
-            PredecessorVersionId = context.PredecessorVersionId,
-            IsBaseline = context.IsBaseline,
-            BaselineMapVersionId = context.BaselineMapVersionId ?? (context.IsBaseline ? mapId : null),
-            SourceSurveyOrderId = context.SourceSurveyOrderId,
-            SourceMissionGroupId = context.SourceMissionGroupId,
-            SourceMissionId = context.SourceMissionId,
-            FarmBoundaryVersionId = context.FarmBoundaryVersionId,
-            HandoffId = context.HandoffId,
-            GridBearingDeg = context.GridBearingDeg,
-            RowSpacingM = context.RowSpacingM,
-            PlantSpacingM = context.PlantSpacingM,
-            Status = FarmBaseMapStatus.Draft,
-            CreatedAt = createdAt,
-            UpdatedAt = createdAt
-        };
-    }
-
     public static FarmBaseMapVersion CreateFirstBaseline(
         FarmBaseMapPublicationContext context,
         DateTimeOffset createdAt)
@@ -157,29 +126,6 @@ public sealed class FarmBaseMapVersion : AggregateRoot
         Status = FarmBaseMapStatus.InternalApproved;
         UpdatedAt = approvedAt;
         Version++;
-    }
-
-    public void SetLineage(bool isBaseline, Guid? predecessorVersionId, Guid? baselineMapVersionId) =>
-        ConfigureLineage(isBaseline, predecessorVersionId, baselineMapVersionId);
-
-    public void ConfigureLineage(bool isBaseline, Guid? predecessorVersionId, Guid? baselineMapVersionId)
-    {
-        if (ApprovedInternalAt.HasValue)
-        {
-            throw new InvalidOperationException("Cannot modify map lineage after internal approval.");
-        }
-
-        if (isBaseline && predecessorVersionId.HasValue)
-        {
-            throw new InvalidOperationException("A baseline farm base map cannot have a predecessor version.");
-        }
-
-        if (predecessorVersionId.HasValue) DomainGuard.NotEmpty(predecessorVersionId.Value);
-        if (baselineMapVersionId.HasValue) DomainGuard.NotEmpty(baselineMapVersionId.Value);
-
-        IsBaseline = isBaseline;
-        PredecessorVersionId = predecessorVersionId;
-        BaselineMapVersionId = baselineMapVersionId ?? (isBaseline ? Id : null);
     }
 
     public void SetPublicationProvenance(

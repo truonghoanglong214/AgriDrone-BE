@@ -1,3 +1,4 @@
+using AgriDrone.IntegrationContracts.Mapping;
 using AgriDrone.SharedKernel.Domain;
 
 namespace AgriDrone.Modules.Farms.Domain.Maps.Staging;
@@ -8,6 +9,7 @@ public sealed class MappingCandidateBatch : AggregateRoot
 
     private MappingCandidateBatch() { }
 
+    public MappingKind MappingKind { get; private set; }
     public Guid HandoffId { get; private set; }
     public Guid TenantId { get; private set; }
     public Guid FarmId { get; private set; }
@@ -25,6 +27,12 @@ public sealed class MappingCandidateBatch : AggregateRoot
     public string AlgorithmVersion { get; private set; } = string.Empty;
     public string BoundaryPolicyVersion { get; private set; } = string.Empty;
     public DateTimeOffset ProducedAt { get; private set; }
+    public Guid SpatialPolicyVersionId { get; private set; }
+    public string SpatialPolicyFingerprint { get; private set; } = string.Empty;
+    public double BoundaryToleranceM { get; private set; }
+    public double MatchingDistanceThresholdM { get; private set; }
+    public double RowBearingToleranceDeg { get; private set; }
+    public double GridSpacingToleranceM { get; private set; }
     public MappingCandidateBatchStatus Status { get; private set; }
     public Guid? ReviewedBy { get; private set; }
     public DateTimeOffset? ReviewedAt { get; private set; }
@@ -37,6 +45,7 @@ public sealed class MappingCandidateBatch : AggregateRoot
 
     public static MappingCandidateBatch Create(
         Guid id,
+        MappingKind mappingKind,
         Guid handoffId,
         Guid tenantId,
         Guid farmId,
@@ -54,6 +63,12 @@ public sealed class MappingCandidateBatch : AggregateRoot
         string algorithmVersion,
         string boundaryPolicyVersion,
         DateTimeOffset producedAt,
+        Guid spatialPolicyVersionId,
+        string spatialPolicyFingerprint,
+        double boundaryToleranceM,
+        double matchingDistanceThresholdM,
+        double rowBearingToleranceDeg,
+        double gridSpacingToleranceM,
         DateTimeOffset createdAt)
     {
         DomainGuard.NotEmpty(id);
@@ -65,16 +80,23 @@ public sealed class MappingCandidateBatch : AggregateRoot
         DomainGuard.NotEmpty(farmBoundaryVersionId);
         DomainGuard.NotEmpty(jobId);
         DomainGuard.NotEmpty(modelVersionId);
+        DomainGuard.NotEmpty(spatialPolicyVersionId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(spatialPolicyFingerprint);
         DomainGuard.Utc(producedAt);
         DomainGuard.Utc(createdAt);
         ArgumentOutOfRangeException.ThrowIfNegative(gridBearingDeg);
         ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(gridBearingDeg, 360);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(rowSpacingM);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(plantSpacingM);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(boundaryToleranceM);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(matchingDistanceThresholdM);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(rowBearingToleranceDeg);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(gridSpacingToleranceM);
 
         return new MappingCandidateBatch
         {
             Id = id,
+            MappingKind = mappingKind,
             HandoffId = handoffId,
             TenantId = tenantId,
             FarmId = farmId,
@@ -92,6 +114,12 @@ public sealed class MappingCandidateBatch : AggregateRoot
             AlgorithmVersion = algorithmVersion?.Trim() ?? string.Empty,
             BoundaryPolicyVersion = boundaryPolicyVersion?.Trim() ?? string.Empty,
             ProducedAt = producedAt,
+            SpatialPolicyVersionId = spatialPolicyVersionId,
+            SpatialPolicyFingerprint = spatialPolicyFingerprint.Trim(),
+            BoundaryToleranceM = boundaryToleranceM,
+            MatchingDistanceThresholdM = matchingDistanceThresholdM,
+            RowBearingToleranceDeg = rowBearingToleranceDeg,
+            GridSpacingToleranceM = gridSpacingToleranceM,
             Status = MappingCandidateBatchStatus.PendingReview,
             CreatedAt = createdAt,
             UpdatedAt = createdAt
@@ -168,17 +196,17 @@ public sealed class MappingCandidateBatch : AggregateRoot
         Version++;
     }
 
-    public void MarkPublished(DateTimeOffset publishedAt)
+    public void MarkApplied(DateTimeOffset appliedAt)
     {
-        DomainGuard.Utc(publishedAt);
+        DomainGuard.Utc(appliedAt);
 
         if (Status != MappingCandidateBatchStatus.Approved)
         {
-            throw new InvalidOperationException($"Only an approved batch can be published. Current status: '{Status}'.");
+            throw new InvalidOperationException($"Only an approved batch can be marked as applied. Current status: '{Status}'.");
         }
 
-        Status = MappingCandidateBatchStatus.Published;
-        UpdatedAt = publishedAt;
+        Status = MappingCandidateBatchStatus.Applied;
+        UpdatedAt = appliedAt;
         Version++;
     }
 }

@@ -28,8 +28,8 @@ AgriDrone là hệ thống quản lý và điều phối dịch vụ khảo sát
 | **V3-01** | Policy model, contracts, scope separation | **[x] Done** | Tách MAP/COMBO, First/Follow-up |
 | **V3-02** | Catalogue, shared deposit, approval snapshots | **[x] Done** | Published price revisions, deposit policies |
 | **V3-03** | Capture execution, funding, re-flight, cancellation | **[x] Done (Code)** | Hoàn thành `03A` → `03H-2` (Commit `16210b3`), `03H-3` handoff |
-| **V3-04** | **Mapping, Plant Identity & Spatial Lineage** | **[x] Done (Code)** | **Hoàn thành Task 1-7 & Remediation (Commit 381f6ff), Merge main (5eb06de)** |
-| **V3-05** | **Combo review, invoice finalization, pole count** | **[→] NEXT** | **Đang chuẩn bị triển khai** (Xem mục 5) |
+| **V3-04** | **Mapping, Plant Identity & Spatial Lineage** | **[x] Done (Remediated)** | **Canonical Remediation theo `2026-11-16-v3-04-comprehensive-remediation.md` hoàn thành xuất sắc** |
+| **V3-05** | **Combo review, invoice finalization, pole count** | **[ ] Planned** | Sẵn sàng triển khai dựa trên Authoritative `VerifiedBillablePoleCount` từ V3-04 |
 | **V3-06** | Settlement, atomic release, customer notice | **[ ] Planned** | Release proof, financial facts |
 | **V3-07** | Owner portal, media viewer, comparison | **[ ] Planned** | Historical comparison UI |
 | **V3-08** | Claims, refund execution, post-release correction | **[ ] Planned** | Transfer proofs, complaint window |
@@ -56,28 +56,33 @@ AgriDrone là hệ thống quản lý và điều phối dịch vụ khảo sát
 
 ---
 
-## 4. Tóm tắt kết quả Phase V3-04 hoàn thành & Remediation
-- **Bản đồ số & Lineage (`FarmBaseMapVersion` & `FarmBaselinePointer`)**:
-  - Hỗ trợ First Order tạo Baseline nội bộ (`IsBaseline = true`, `PredecessorVersionId = null`, `BaselineMapVersionId = Id`).
-  - Hỗ trợ Follow-up Order tạo phiên bản mới (`IsBaseline = false`, `PredecessorVersionId = latestMap.Id`, `BaselineMapVersionId = baselineMap.Id`), bảo toàn Baseline gốc.
-  - Tách bạch hai giai đoạn: `ApproveInternal` (`InternalApproved`) chốt số trụ nội bộ ở V3-04; phát hành bản đồ cho khách hàng (`Published`) chỉ thực hiện ở V3-06.
-  - Bổ sung bảng con trỏ baseline `farm.farm_baseline_pointers` duy trì baseline hiện thời không phụ thuộc trạng thái publish.
+## 4. Tóm tắt kết quả Phase V3-04 hoàn thành (Canonical Remediation)
+- **Pipeline Duy Nhất Phê Duyệt Kỹ Thuật Nội Bộ (Zero "Published" Semantics)**:
+  - Loại bỏ hoàn toàn các đường bypass: `PublishFarmBaseMapCommand`, `ApproveInternalBaseMapCommand`, `VerifyOrderBillablePolesCommand`, `IFarmBaseMapPublicationOrchestrator`.
+  - Luồng chuẩn hóa duy nhất: Ingestion (`MappingCandidatesReadyV4`) → Manager review → `ApproveFarmBaseMapInternallyCommand` → `FarmBaseMapInternalApprovalOrchestrator` → Đóng băng bằng chứng `SurveyOrderPoleCountSnapshot` & `SurveyOrderPoleCountSnapshotItem` → Cập nhật `SurveyOrder` → Phát sự kiện Outbox `FarmBaseMapInternallyApprovedV1` → Missions consumer (`FarmBaseMapInternallyApprovedV1Handler`) hoàn tất technical mapping flight mission.
+  - Tách bạch tuyệt đối: V3-04 chỉ duyệt kỹ thuật nội bộ (`InternalApproved`); phát hành cho khách hàng (`Published`) thuộc phạm vi V3-06.
+- **Bản đồ số & Lineage Bất biến (`FarmBaseMapVersion` & `FarmBaselinePointer`)**:
+  - Không còn setter lineage public; lineage được cố định bất biến ngay khi ingest qua factory `CreateFirstBaseline` và `CreateFollowUp`.
+  - Hỗ trợ Follow-up Order tạo phiên bản mới kế thừa `BaselineMapVersionId` từ baseline pointer và trỏ `PredecessorVersionId` vào bản đồ trước đó, bảo toàn Baseline gốc.
+  - Chống race condition tạo song song 2 baseline bằng row lock PostgreSQL `FOR UPDATE` trên `farm.farms` và DB unique constraint `uq_farm_baseline_pointers_farm`.
 - **Dung sai Không gian Động (`SpatialPolicy` Fail-Closed)**:
   - Entity `SpatialPolicy` với seed `DEFAULT` cố định, StreamKey chuẩn hóa chữ hoa, fingerprint SHA-256 tính theo invariant culture bao gồm cả 4 tham số dung sai.
-  - Fail-closed: truy vấn policy tại thời điểm khảo sát (`batch.ProducedAt`), trả `AppError.Conflict` nếu thiếu policy, tuyệt đối không fallback ngầm 1.5m.
-- **Định danh Trụ/Cây Trồng Bất biến (`PlantProfile` & `PlantProfileObservation`)**:
+  - Fail-closed: truy vấn policy tại thời điểm khảo sát (`batch.ProducedAt`), trả `AppError.Conflict` nếu thiếu policy, tuyệt đối không fallback ngầm 1.5m. Toàn bộ 4 tham số tolerance được snapshot vào `MappingCandidateBatch`.
+- **Định danh Trụ/Cây Trồng Bất biến (`PlantProfile` & `PlantChangeEvent`)**:
   - Tính khoảng cách dịch chuyển toạ độ theo công thức geodesic (Haversine/Great-circle) chuẩn mét SRID 4326 trước khi mutate entity. Từ chối duyệt nếu vượt tolerance.
   - Quan hệ 1-1 chặt chẽ: `Plant.PlantProfileId` đảm bảo mọi cây trong bản đồ đều liên kết với một profile.
-  - Decision `Replace` bắt buộc có `targetPlantId` và active profile, gán `PredecessorProfileId` và `ManagerDecisionId`.
+  - Decision `Replace` bắt buộc có active profile, tạo profile thay thế kế thừa predecessor và ghi nhận `ManagerDecisionId`, retire cây cũ sang `Removed`.
   - Decision `MatchExisting` ghi nhận quan sát định danh lại vào `plant.plant_profile_observations`.
-  - `PlantChangeEvent` bất biến với factory methods chuyên biệt, lưu vết đầy đủ lineage và evidence.
-- **Bằng chứng Chốt Số trụ Tính tiền Authoritative Snapshot & Ranh giới Module**:
-  - Bổ sung thực thể `survey.survey_order_pole_count_snapshots` lưu fingerprint SHA-256, revision tăng dần, trỏ predecessor snapshot.
-  - `SurveyOrder` giữ `VerifiedPoleCountSnapshotId` và `VerifiedBillablePoleCount`, được cập nhật an toàn qua `RecordVerifiedPoleCount(snapshot, expectedVersion)` với kiểm tra concurrency.
-  - Tách module Surveys khỏi schema Farms/Plants qua interface `IOrderPoleEvidenceReader` và implementation `OrderPoleEvidenceReader`.
-  - Kiểm tra quyền quản lý trang trại (`ISystemManagerAccessService`) trong `VerifyOrderBillablePolesCommandHandler`.
-- **Database Migrations**:
-  - `V3_04MappingAndPlantIdentity` và `V3_04MappingLineageAndEvidenceRemediation` sạch 100%, bổ sung enum value `INTERNAL_APPROVED`, seed default spatial policy, và SQL backfill tự động cho các bản đồ lịch sử.
+  - `PlantChangeEvent` bất biến với factory methods chuyên biệt (`CreatedWithLineage`, `Relocated`, `Replaced`), lưu vết đầy đủ lineage và evidence.
+- **Bằng chứng Chốt Số trụ Tính tiền Authoritative Snapshot (`SurveyOrderPoleCountSnapshot`)**:
+  - Bổ sung bảng con chi tiết `survey.survey_order_pole_count_snapshot_items` lưu vết từng candidate được review.
+  - Fingerprint SHA-256 canonical (xác định, không chứa runtime timestamp/actor/random IDs).
+  - Đếm `COUNT(DISTINCT resultant_plant_profile_id)` nằm strictly trong ranh giới PostGIS (`ST_Within`).
+  - Hỗ trợ 0 trụ hợp lệ (valid zero count), loại bỏ fallback `billableCount == 0`.
+  - `SurveyOrder` lưu `VerifiedPoleCountSnapshotId` và `VerifiedBillablePoleCount`, được cập nhật an toàn qua hai domain methods riêng biệt: `RecordInitialMapApproval` và `RecordFollowUpMapSnapshot`.
+- **Database Migrations & Constraints Toàn Vẹn**:
+  - Migration `20261117050302_V3_04CanonicalRemediationFinal` bổ sung enum value `INTERNAL_APPROVED` (`suppressTransaction: true`), tạo bảng snapshot items, backfill status `Published` → `Applied`, và seed DEFAULT `SpatialPolicy` 15 cột.
+  - Ràng buộc composite unique keys / FKs ngăn chặn liên kết chéo giữa tenants, farms và batches.
 
 ---
 

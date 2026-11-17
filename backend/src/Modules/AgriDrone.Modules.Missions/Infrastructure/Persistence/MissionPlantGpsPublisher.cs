@@ -28,8 +28,7 @@ internal sealed class MissionPlantGpsPublisher(
                 cancellationToken);
         if (existingMessage is not null)
         {
-            return existingMessage.EventType ==
-                   IntegrationEventTypes.BaselineMappingCandidatesReadyV3
+            return existingMessage.EventType is IntegrationEventTypes.MappingCandidatesReadyV4 or IntegrationEventTypes.BaselineMappingCandidatesReadyV3
                 ? new MissionPlantGpsPublishResult(
                     MissionPlantGpsPublishStatus.Queued, idempotencyKey)
                 : new MissionPlantGpsPublishResult(
@@ -48,12 +47,38 @@ internal sealed class MissionPlantGpsPublisher(
         }
 
         if (mission.SurveyOrderId is null ||
-            mission.SurveyOrderId != request.SurveyOrderId ||
-            mission.Purpose != MissionPurpose.BaselineMapping)
+            mission.SurveyOrderId != request.SurveyOrderId)
         {
             return new MissionPlantGpsPublishResult(
                 MissionPlantGpsPublishStatus.Conflict,
-                Errors: ["Payload survey order does not match a baseline mapping mission."]);
+                Errors: ["Payload survey order does not match the mission context."]);
+        }
+
+        var captureAttemptId = request.CaptureAttemptId ?? mission.CaptureAttemptId;
+        if (!captureAttemptId.HasValue || captureAttemptId.Value == Guid.Empty)
+        {
+            return new MissionPlantGpsPublishResult(
+                MissionPlantGpsPublishStatus.Conflict,
+                Errors: ["Mission must be associated with a valid CaptureAttempt before publishing mapping candidates."]);
+        }
+
+        var farmBoundaryVersionId = request.FarmBoundaryVersionId ?? mission.FarmBoundaryVersionId;
+        if (!farmBoundaryVersionId.HasValue || farmBoundaryVersionId.Value == Guid.Empty)
+        {
+            return new MissionPlantGpsPublishResult(
+                MissionPlantGpsPublishStatus.Conflict,
+                Errors: ["Mission must be associated with a valid FarmBoundaryVersion before publishing mapping candidates."]);
+        }
+
+        var determinedKind = mission.Purpose == MissionPurpose.BaselineMapping
+            ? MappingKind.FirstBaseline
+            : MappingKind.FollowUpSnapshot;
+
+        if (request.MappingKind.HasValue && request.MappingKind.Value != determinedKind)
+        {
+            return new MissionPlantGpsPublishResult(
+                MissionPlantGpsPublishStatus.Conflict,
+                Errors: [$"Requested MappingKind '{request.MappingKind.Value}' conflicts with mission purpose '{mission.Purpose}'."]);
         }
 
         if (request.Candidates is null || request.Candidates.Count == 0)
@@ -134,14 +159,28 @@ internal sealed class MissionPlantGpsPublisher(
                 Status: candidate.Status,
                 Source: candidate.Source);
         }).ToArray();
-        var enrichedPayload = new BaselineMappingCandidatesReadyV3(
+        var handoffId = request.HandoffId ?? Guid.NewGuid();
+        var jobId = request.JobId ?? Guid.NewGuid();
+        var modelVersionId = request.ModelVersionId ?? Guid.NewGuid();
+        var expectedCurrentMapId = request.ExpectedCurrentFarmBaseMapVersionId ?? mission.SourceMapVersionId;
+
+        var enrichedPayload = new MappingCandidatesReadyV4(
+            determinedKind,
             request.SurveyOrderId,
             missionId,
+            captureAttemptId.Value,
             farmId,
+            farmBoundaryVersionId.Value,
+            handoffId,
+            jobId,
+            modelVersionId,
+            expectedCurrentMapId,
+            occurredAt,
             request.GridBearingDeg,
             request.RowSpacingM,
             request.PlantSpacingM,
-            candidates);
+            candidates,
+            CausationId: correlationId);
 
         var validationErrors = V3BusinessContractValidators.Validate(enrichedPayload);
         if (validationErrors.Count != 0)
@@ -152,7 +191,7 @@ internal sealed class MissionPlantGpsPublisher(
         }
 
         var envelope = IntegrationEventEnvelopeFactory.Create(
-            IntegrationEventDescriptors.BaselineMappingCandidatesReadyV3,
+            IntegrationEventDescriptors.MappingCandidatesReadyV4,
             idempotencyKey,
             correlationId,
             tenantId,
@@ -161,7 +200,7 @@ internal sealed class MissionPlantGpsPublisher(
             enrichedPayload);
         db.OutboxMessages.Add(outboxMessageFactory.Create(
             envelope,
-            IntegrationEventTypes.BaselineMappingCandidatesReadyV3,
+            IntegrationEventTypes.MappingCandidatesReadyV4,
             missionId.ToString("D")));
         await db.SaveChangesAsync(cancellationToken);
 

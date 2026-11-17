@@ -44,8 +44,14 @@ namespace AgriDrone.IntegrationContracts.Messaging
         public const string BaselineMappingCandidatesReadyV3 =
             "mapping.baseline-candidates-ready.v3";
 
+        public const string MappingCandidatesReadyV4 =
+            "mapping.candidates-ready.v4";
+
         public const string FarmBaseMapPublishedV3 =
             "mapping.farm-base-map-published.v3";
+
+        public const string FarmBaseMapInternallyApprovedV1 =
+            "farm.base-map.internally-approved.v1";
 
         public const string PlantHealthAnalysisReadyV3 =
             "health.analysis-ready.v3";

@@ -59,6 +59,7 @@ internal sealed class SurveysDbContext(DbContextOptions<SurveysDbContext> option
     public DbSet<CaptureInputApproval> CaptureInputApprovals => Set<CaptureInputApproval>();
     public DbSet<SpatialPolicy> SpatialPolicies => Set<SpatialPolicy>();
     public DbSet<SurveyOrderPoleCountSnapshot> SurveyOrderPoleCountSnapshots => Set<SurveyOrderPoleCountSnapshot>();
+    public DbSet<SurveyOrderPoleCountSnapshotItem> SurveyOrderPoleCountSnapshotItems => Set<SurveyOrderPoleCountSnapshotItem>();
     public DbSet<SurveyDepositObligation> SurveyDepositObligations => Set<SurveyDepositObligation>();
     public DbSet<SurveyFundingReceipt> SurveyFundingReceipts => Set<SurveyFundingReceipt>();
     public DbSet<SurveyFundingAllocation> SurveyFundingAllocations => Set<SurveyFundingAllocation>();

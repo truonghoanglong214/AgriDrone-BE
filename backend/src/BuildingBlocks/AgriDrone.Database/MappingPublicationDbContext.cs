@@ -64,6 +64,9 @@ public sealed class MappingPublicationDbContext(
     public DbSet<SurveyOrderPoleCountSnapshot> SurveyOrderPoleCountSnapshots =>
         Set<SurveyOrderPoleCountSnapshot>();
 
+    public DbSet<SurveyOrderPoleCountSnapshotItem> SurveyOrderPoleCountSnapshotItems =>
+        Set<SurveyOrderPoleCountSnapshotItem>();
+
     public DbSet<SpatialPolicy> SpatialPolicies => Set<SpatialPolicy>();
 
     public DbSet<InboxMessage> InboxMessages => Set<InboxMessage>();
