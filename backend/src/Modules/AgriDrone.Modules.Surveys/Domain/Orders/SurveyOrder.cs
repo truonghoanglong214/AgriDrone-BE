@@ -935,12 +935,11 @@ public sealed class SurveyOrder : AggregateRoot
             throw new InvalidOperationException("Pole count snapshot boundary version does not match survey order boundary version.");
         }
 
-        if (BaselineMapVersionId.HasValue && BaselineMapVersionId.Value != pinnedBaselineMapVersionId)
+        if (!BaselineMapVersionId.HasValue || BaselineMapVersionId.Value != pinnedBaselineMapVersionId)
         {
-            throw new InvalidOperationException("Pinned baseline map version does not match the survey order baseline map version.");
+            throw new InvalidOperationException("Survey order must have BaselineMapVersionId already pinned and matching the pinned baseline map version.");
         }
 
-        BaselineMapVersionId ??= pinnedBaselineMapVersionId;
         FarmBaseMapVersionId = snapshot.FarmBaseMapVersionId;
         FarmBoundaryVersionId ??= snapshot.FarmBoundaryVersionId;
         VerifiedPoleCountSnapshotId = snapshot.Id;

@@ -147,9 +147,9 @@ public sealed class FarmBaseMapVersion : AggregateRoot
         DomainGuard.NotEmpty(publishedBy);
         DomainGuard.Utc(publishedAt);
 
-        if (Status is not (FarmBaseMapStatus.Draft or FarmBaseMapStatus.InternalApproved))
+        if (Status != FarmBaseMapStatus.InternalApproved)
         {
-            throw new InvalidOperationException($"Cannot publish farm base map in status '{Status}'. Must be Draft or InternalApproved.");
+            throw new InvalidOperationException($"Cannot publish farm base map in status '{Status}'. Must be InternalApproved.");
         }
 
         PublishedBy = publishedBy;

@@ -177,6 +177,11 @@ public sealed class PlantConfiguration : IEntityTypeConfiguration<Plant>
         builder.HasIndex(plant => new { plant.FarmId, plant.LifecycleStatus })
             .HasDatabaseName("ix_plants_farm_lifecycle");
 
+        builder.HasIndex(plant => new { plant.FarmId, plant.PlantProfileId })
+            .HasDatabaseName("uq_plants_farm_plant_profile")
+            .HasFilter("plant_profile_id IS NOT NULL")
+            .IsUnique();
+
         builder.HasIndex(plant => plant.Location)
             .HasDatabaseName("ix_plants_location_gist")
             .HasMethod("gist");

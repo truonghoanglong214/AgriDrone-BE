@@ -161,7 +161,7 @@ public sealed class SystemManagerFarmBaseMapsController(ISender sender) : Contro
     }
 
     /// <summary>
-    /// Chạy authoritative validator kiểm tra toàn bộ batch trước khi phát hành bản đồ chính thức.
+    /// Chạy authoritative validator kiểm tra toàn bộ batch trước khi phê duyệt nội bộ bản đồ khảo sát.
     /// </summary>
     [HttpPost("{draftId:guid}/validate")]
     [ProducesResponseType<BaselineMappingBatchValidationResult>(StatusCodes.Status200OK)]
@@ -181,7 +181,7 @@ public sealed class SystemManagerFarmBaseMapsController(ISender sender) : Contro
     }
 
     /// <summary>
-    /// Phát hành bản đồ Farm Base Map chính thức, cấp phát Persistent Plant Identity và chuyển SurveyOrder sang AwaitingPricing.
+    /// Phê duyệt nội bộ bản đồ khảo sát (Internal Approval), chốt Persistent Plant Identity và chuyển SurveyOrder sang AwaitingPricing.
     /// </summary>
     [HttpPost("{draftId:guid}/approve-internal")]
     [ProducesResponseType<FarmBaseMapInternallyApprovedResult>(StatusCodes.Status200OK)]

@@ -2,7 +2,18 @@ namespace AgriDrone.Api.Contracts.Missions;
 
 public sealed record ReplaceMissionPlantGpsRequest(
     IReadOnlyList<MissionPlantGpsItem> Trees,
+    MappingProcessingCompletionRequest Processing,
     IReadOnlyList<MissionPlantGpsBoundaryPoint>? Boundary = null);
+
+public sealed record MappingProcessingCompletionRequest(
+    Guid ClientOperationId,
+    Guid ModelVersionId,
+    int SourceVersion,
+    double GridBearingDeg,
+    double RowSpacingM,
+    double PlantSpacingM,
+    string AlgorithmVersion,
+    DateTimeOffset StartedAt);
 
 public sealed record MissionPlantGpsBoundaryPoint(
     decimal Longitude,

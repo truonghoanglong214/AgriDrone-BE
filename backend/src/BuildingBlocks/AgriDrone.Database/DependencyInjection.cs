@@ -101,12 +101,6 @@ public static class DependencyInjection
             IntegrationConsumerNames.Be1MappingCandidatesApprovedV1);
 
         services.AddScoped<
-            IIntegrationMessageHandler<BaselineMappingCandidatesReadyV3>,
-            BaselineMappingCandidatesReadyV3Handler>();
-        services.AddIntegrationConsumer<BaselineMappingCandidatesReadyV3Processor>(
-            IntegrationConsumerNames.Be1BaselineMappingCandidatesReadyV3);
-
-        services.AddScoped<
             IIntegrationMessageHandler<MappingCandidatesReadyV4>,
             MappingCandidatesReadyV4Handler>();
         services.AddIntegrationConsumer<MappingCandidatesReadyV4Processor>(

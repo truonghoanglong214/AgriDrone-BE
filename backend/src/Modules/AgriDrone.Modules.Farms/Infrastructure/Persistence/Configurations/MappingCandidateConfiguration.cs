@@ -38,7 +38,7 @@ public sealed class MappingCandidateConfiguration : IEntityTypeConfiguration<Map
         builder.Property(c => c.SourceObservationId)
             .HasColumnName("source_observation_id")
             .HasColumnType("uuid")
-            .IsRequired();
+            .IsRequired(false);
 
         builder.Property(c => c.EvidenceMediaAssetIds)
             .HasColumnName("evidence_media_asset_ids")

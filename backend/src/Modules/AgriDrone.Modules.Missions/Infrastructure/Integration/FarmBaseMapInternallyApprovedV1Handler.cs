@@ -47,56 +47,78 @@ internal sealed class FarmBaseMapInternallyApprovedV1Handler(
 
         if (sourceMission.TenantId != envelope.TenantId ||
             sourceMission.FarmId != payload.FarmId ||
-            sourceMission.SurveyOrderId != payload.SurveyOrderId)
+            sourceMission.SurveyOrderId != payload.SurveyOrderId ||
+            sourceMission.CaptureAttemptId != payload.CaptureAttemptId ||
+            sourceMission.FarmBoundaryVersionId != payload.FarmBoundaryVersionId)
         {
             return InboxHandlerResult.PermanentFailure(
                 "FarmBaseMapInternallyApprovedV1.MissionContextMismatch",
                 "FarmBaseMapInternallyApprovedV1 does not match the source mission context.");
         }
 
-        var updatedMissions = 0;
-        try
+        var isPurposeValid = payload.MappingKind switch
         {
-            if (sourceMission.ApplyInternallyApprovedFarmBaseMap(
+            MappingKind.FirstBaseline => sourceMission.Purpose == MissionPurpose.BaselineMapping,
+            MappingKind.FollowUpSnapshot => sourceMission.Purpose is
+                MissionPurpose.PlantHealth or MissionPurpose.HarvestReadiness,
+            _ => false
+        };
+
+        if (!isPurposeValid)
+        {
+            return InboxHandlerResult.PermanentFailure(
+                "FarmBaseMapInternallyApprovedV1.MappingKindMismatch",
+                $"MappingKind '{payload.MappingKind}' does not match source mission purpose '{sourceMission.Purpose}'.");
+        }
+
+        var outcome = sourceMission.ApplyInternallyApprovedFarmBaseMap(
+            payload.SurveyOrderId,
+            payload.ApprovalId,
+            payload.FarmBaseMapVersionId,
+            payload.ApprovedAt);
+
+        if (outcome == DroneMissionApprovalOutcome.Conflict)
+        {
+            return InboxHandlerResult.PermanentFailure(
+                "FarmBaseMapInternallyApprovedV1.MissionStateConflict",
+                "Source mission cannot accept internal approval in its current state.");
+        }
+
+        var updatedMissions = outcome == DroneMissionApprovalOutcome.Applied ? 1 : 0;
+
+        if (payload.MappingKind == MappingKind.FirstBaseline)
+        {
+            var dependentMissions = await context.DroneMissions
+                .Where(m => m.SurveyOrderId == payload.SurveyOrderId &&
+                            m.TenantId == envelope.TenantId &&
+                            m.FarmId == payload.FarmId &&
+                            m.RequiresBaselineCompletion &&
+                            m.Id != sourceMission.Id)
+                .ToListAsync(cancellationToken);
+
+            foreach (var dep in dependentMissions)
+            {
+                var depOutcome = dep.ApplyInternallyApprovedFarmBaseMap(
                     payload.SurveyOrderId,
                     payload.ApprovalId,
                     payload.FarmBaseMapVersionId,
-                    payload.ApprovedAt))
-            {
-                updatedMissions++;
-            }
+                    payload.ApprovedAt);
 
-            if (payload.MappingKind == MappingKind.FirstBaseline)
-            {
-                var dependentMissions = await context.DroneMissions
-                    .Where(m => m.SurveyOrderId == payload.SurveyOrderId &&
-                                m.TenantId == envelope.TenantId &&
-                                m.FarmId == payload.FarmId &&
-                                m.RequiresBaselineCompletion &&
-                                m.Id != sourceMission.Id)
-                    .ToListAsync(cancellationToken);
-
-                foreach (var dep in dependentMissions)
+                if (depOutcome == DroneMissionApprovalOutcome.Conflict)
                 {
-                    if (dep.ApplyInternallyApprovedFarmBaseMap(
-                            payload.SurveyOrderId,
-                            payload.ApprovalId,
-                            payload.FarmBaseMapVersionId,
-                            payload.ApprovedAt))
-                    {
-                        updatedMissions++;
-                    }
+                    return InboxHandlerResult.PermanentFailure(
+                        "FarmBaseMapInternallyApprovedV1.DependentMissionConflict",
+                        $"Dependent mission '{dep.Id}' cannot accept baseline completion in its current state.");
+                }
+
+                if (depOutcome == DroneMissionApprovalOutcome.Applied)
+                {
+                    updatedMissions++;
                 }
             }
+        }
 
-            await context.SaveChangesAsync(cancellationToken);
-        }
-        catch (InvalidOperationException exception)
-        {
-            return InboxHandlerResult.PermanentFailure(
-                "FarmBaseMapInternallyApprovedV1.MissionStateInvalid",
-                exception.Message);
-        }
+        await context.SaveChangesAsync(cancellationToken);
 
         return InboxHandlerResult.Completed(JsonSerializer.Serialize(new
         {

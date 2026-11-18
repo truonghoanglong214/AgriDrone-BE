@@ -16,7 +16,7 @@ public sealed record MappingCandidatesReadyV4(
     double RowSpacingM,
     double PlantSpacingM,
     IReadOnlyList<MappingCandidateV3> Candidates,
-    string ModelVersion = "yolo-v8",
-    string AlgorithmVersion = "orchard-grid-v1",
-    string BoundaryPolicyVersion = "v1",
+    string ModelVersion,
+    string AlgorithmVersion,
+    string? BoundaryPolicyVersion = null,
     Guid? CausationId = null);

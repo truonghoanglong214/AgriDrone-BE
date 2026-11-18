@@ -11,6 +11,9 @@ using AgriDrone.Modules.Plants.Domain.Plants;
 using AgriDrone.Modules.Plants.Infrastructure.Persistence.Configurations;
 using AgriDrone.Modules.Surveys.Domain;
 using AgriDrone.Modules.Surveys.Infrastructure.Persistence.Configurations;
+using AgriDrone.Modules.Missions.Domain.Missions;
+using AgriDrone.Modules.Missions.Domain.Processing;
+using AgriDrone.Modules.Missions.Infrastructure.Persistence.Configurations;
 using AgriDrone.Database.Mapping;
 using AgriDrone.SharedInfrastructure.Auditing;
 using AgriDrone.SharedInfrastructure.Messaging.Persistence;
@@ -60,6 +63,14 @@ public sealed class MappingPublicationDbContext(
         Set<PlantInventoryChangeReport>();
 
     public DbSet<SurveyOrder> SurveyOrders => Set<SurveyOrder>();
+
+    public DbSet<CaptureAttempt> CaptureAttempts => Set<CaptureAttempt>();
+
+    public DbSet<DroneMission> DroneMissions => Set<DroneMission>();
+
+    public DbSet<AiProcessingJob> AiProcessingJobs => Set<AiProcessingJob>();
+
+    public DbSet<AiModelVersion> AiModelVersions => Set<AiModelVersion>();
 
     public DbSet<SurveyOrderPoleCountSnapshot> SurveyOrderPoleCountSnapshots =>
         Set<SurveyOrderPoleCountSnapshot>();
@@ -119,6 +130,8 @@ public sealed class MappingPublicationDbContext(
         modelBuilder.ApplyConfiguration(
             new PlantInventoryChangeReportConfiguration());
         modelBuilder.ApplyConfiguration(new SurveyOrderConfiguration());
+        modelBuilder.ApplyConfiguration(new CaptureAttemptConfiguration());
+        modelBuilder.ApplyConfiguration(new DroneMissionConfiguration());
         modelBuilder.ApplyConfiguration(new SurveyOrderPoleCountSnapshotConfiguration());
         modelBuilder.ApplyConfiguration(new SpatialPolicyConfiguration());
         modelBuilder.ApplyConfiguration(new InboxMessageConfiguration());

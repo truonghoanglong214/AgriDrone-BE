@@ -27,5 +27,20 @@ public static class GeodesicSpatialCalculator
         return EarthRadiusMeters * c;
     }
 
+    public static double CalculateInitialBearingDegrees(double lat1, double lon1, double lat2, double lon2)
+    {
+        var rLat1 = DegreesToRadians(lat1);
+        var rLon1 = DegreesToRadians(lon1);
+        var rLat2 = DegreesToRadians(lat2);
+        var rLon2 = DegreesToRadians(lon2);
+
+        var dLon = rLon2 - rLon1;
+        var y = Math.Sin(dLon) * Math.Cos(rLat2);
+        var x = Math.Cos(rLat1) * Math.Sin(rLat2) - Math.Sin(rLat1) * Math.Cos(rLat2) * Math.Cos(dLon);
+        var initialBearing = Math.Atan2(y, x);
+        return (RadiansToDegrees(initialBearing) + 360.0) % 360.0;
+    }
+
     private static double DegreesToRadians(double degrees) => degrees * Math.PI / 180.0;
+    private static double RadiansToDegrees(double radians) => radians * 180.0 / Math.PI;
 }

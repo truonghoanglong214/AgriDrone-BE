@@ -9,7 +9,16 @@ public sealed class SurveyOrderPoleCountSnapshotItemConfiguration
 {
     public void Configure(EntityTypeBuilder<SurveyOrderPoleCountSnapshotItem> builder)
     {
-        builder.ToTable("survey_order_pole_count_snapshot_items", "survey");
+        builder.ToTable(
+            "survey_order_pole_count_snapshot_items",
+            "survey",
+            table =>
+            {
+                table.HasCheckConstraint(
+                    "ck_survey_order_pole_count_snapshot_items_acceptance",
+                    "(is_accepted = TRUE AND plant_profile_id IS NOT NULL AND exclusion_reason IS NULL) OR " +
+                    "(is_accepted = FALSE AND plant_profile_id IS NULL AND exclusion_reason IS NOT NULL AND btrim(exclusion_reason) <> '')");
+            });
 
         builder.HasKey(i => i.Id).HasName("pk_survey_order_pole_count_snapshot_items");
         builder.Property(i => i.Id).HasColumnName("id").HasColumnType("uuid");
@@ -18,12 +27,19 @@ public sealed class SurveyOrderPoleCountSnapshotItemConfiguration
         builder.Property(i => i.FarmId).HasColumnName("farm_id").HasColumnType("uuid").IsRequired();
         builder.Property(i => i.MappingCandidateBatchId).HasColumnName("mapping_candidate_batch_id").HasColumnType("uuid").IsRequired();
         builder.Property(i => i.MappingCandidateId).HasColumnName("mapping_candidate_id").HasColumnType("uuid").IsRequired();
+        builder.Property(i => i.SourceCandidateId).HasColumnName("source_candidate_id").HasColumnType("uuid").IsRequired();
         builder.Property(i => i.PlantProfileId).HasColumnName("plant_profile_id").HasColumnType("uuid");
         builder.Property(i => i.EffectivePosition).HasColumnName("effective_position").HasColumnType("geometry(Point, 4326)").IsRequired();
         builder.Property(i => i.ReviewDecision).HasColumnName("review_decision").HasMaxLength(50).IsRequired();
         builder.Property(i => i.IsAccepted).HasColumnName("is_accepted").HasColumnType("boolean").IsRequired();
         builder.Property(i => i.IsStrictlyInBoundary).HasColumnName("is_strictly_in_boundary").HasColumnType("boolean").IsRequired();
         builder.Property(i => i.ExclusionReason).HasColumnName("exclusion_reason").HasMaxLength(500);
+
+        builder.Property(i => i.TargetPlantId).HasColumnName("target_plant_id").HasColumnType("uuid");
+        builder.Property(i => i.TargetPlantProfileId).HasColumnName("target_plant_profile_id").HasColumnType("uuid");
+        builder.Property(i => i.PreviousPosition).HasColumnName("previous_position").HasColumnType("geometry(Point, 4326)");
+        builder.Property(i => i.EffectiveRowIndex).HasColumnName("effective_row_index").HasColumnType("integer");
+        builder.Property(i => i.EffectiveColumnIndex).HasColumnName("effective_column_index").HasColumnType("integer");
 
         builder.HasIndex(i => new { i.SnapshotId, i.MappingCandidateId })
             .IsUnique()

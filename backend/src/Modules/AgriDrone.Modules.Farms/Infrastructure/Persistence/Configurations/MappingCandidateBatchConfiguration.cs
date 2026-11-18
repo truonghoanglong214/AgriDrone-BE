@@ -51,6 +51,11 @@ public sealed class MappingCandidateBatchConfiguration : IEntityTypeConfiguratio
             .HasColumnType("uuid")
             .IsRequired();
 
+        builder.Property(b => b.CaptureAttemptId)
+            .HasColumnName("capture_attempt_id")
+            .HasColumnType("uuid")
+            .IsRequired();
+
         builder.Property(b => b.FarmBoundaryVersionId)
             .HasColumnName("farm_boundary_version_id")
             .HasColumnType("uuid")
@@ -82,6 +87,11 @@ public sealed class MappingCandidateBatchConfiguration : IEntityTypeConfiguratio
         builder.Property(b => b.JobId)
             .HasColumnName("job_id")
             .HasColumnType("uuid")
+            .IsRequired();
+
+        builder.Property(b => b.PayloadFingerprint)
+            .HasColumnName("payload_fingerprint")
+            .HasMaxLength(64)
             .IsRequired();
 
         builder.Property(b => b.ModelVersionId)
@@ -178,6 +188,9 @@ public sealed class MappingCandidateBatchConfiguration : IEntityTypeConfiguratio
 
         builder.HasIndex(b => new { b.FarmId, b.SurveyOrderId })
             .HasDatabaseName("ix_mapping_candidate_batches_farm_order");
+
+        builder.HasIndex(b => new { b.CaptureAttemptId, b.MissionId })
+            .HasDatabaseName("ix_mapping_candidate_batches_capture_attempt_mission");
 
         builder.HasOne<Farm>()
             .WithMany()

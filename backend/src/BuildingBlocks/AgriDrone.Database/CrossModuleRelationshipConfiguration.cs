@@ -1228,5 +1228,37 @@ internal static class CrossModuleRelationshipConfiguration
             .HasPrincipalKey(c => new { c.Id, c.BatchId })
             .OnDelete(DeleteBehavior.Restrict)
             .HasConstraintName("fk_survey_order_pole_count_snapshot_items_candidate");
+
+        modelBuilder.Entity<SurveyOrderPoleCountSnapshotItem>()
+            .HasOne<PlantProfile>()
+            .WithMany()
+            .HasForeignKey(i => new { i.PlantProfileId, i.TenantId, i.FarmId })
+            .HasPrincipalKey(p => new { p.Id, p.TenantId, p.FarmId })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_survey_order_pole_count_snapshot_items_profile");
+
+        modelBuilder.Entity<SurveyOrderPoleCountSnapshotItem>()
+            .HasOne<PlantProfile>()
+            .WithMany()
+            .HasForeignKey(i => new { i.TargetPlantProfileId, i.TenantId, i.FarmId })
+            .HasPrincipalKey(p => new { p.Id, p.TenantId, p.FarmId })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_survey_order_pole_count_snapshot_items_target_profile");
+
+        modelBuilder.Entity<SurveyOrderPoleCountSnapshot>()
+            .HasOne<MappingCandidateBatch>()
+            .WithMany()
+            .HasForeignKey(s => new { s.MappingCandidateBatchId, s.TenantId, s.FarmId })
+            .HasPrincipalKey(b => new { b.Id, b.TenantId, b.FarmId })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_survey_order_pole_count_snapshots_batch_same_tenant_farm");
+
+        modelBuilder.Entity<PlantProfileObservation>()
+            .HasOne<MappingCandidate>()
+            .WithMany()
+            .HasForeignKey(o => new { o.CandidateId, o.MappingCandidateBatchId })
+            .HasPrincipalKey(c => new { c.Id, c.BatchId })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_plant_profile_observations_candidate");
     }
 }

@@ -37,18 +37,4 @@ public sealed class FarmBaselinePointer : AggregateRoot
         };
     }
 
-    public void UpdateBaseline(
-        Guid newBaselineMapVersionId,
-        Guid actorId,
-        DateTimeOffset at)
-    {
-        DomainGuard.NotEmpty(newBaselineMapVersionId, nameof(newBaselineMapVersionId));
-        DomainGuard.NotEmpty(actorId, nameof(actorId));
-        DomainGuard.Utc(at, nameof(at));
-
-        CurrentBaselineMapVersionId = newBaselineMapVersionId;
-        UpdatedBy = actorId;
-        UpdatedAt = at;
-        Version++;
-    }
 }

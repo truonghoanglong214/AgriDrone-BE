@@ -313,6 +313,14 @@ public sealed class DroneMissionConfiguration : IEntityTypeConfiguration<DroneMi
             .HasColumnName("source_map_version_id")
             .HasColumnType("uuid");
 
+        builder.Property(mission => mission.InternallyApprovedMapVersionId)
+            .HasColumnName("internally_approved_map_version_id")
+            .HasColumnType("uuid");
+
+        builder.Property(mission => mission.MapInternallyApprovedAt)
+            .HasColumnName("map_internally_approved_at")
+            .HasColumnType("timestamp with time zone");
+
         builder.Property(mission => mission.PublishedMapVersionId)
             .HasColumnName("published_map_version_id")
             .HasColumnType("uuid");

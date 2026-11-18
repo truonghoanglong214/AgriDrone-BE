@@ -12,7 +12,7 @@ namespace AgriDrone.Database.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.Sql("ALTER TYPE system.farm_base_map_status ADD VALUE IF NOT EXISTS 'INTERNAL_APPROVED' BEFORE 'PUBLISHED';");
+            migrationBuilder.Sql("ALTER TYPE system.farm_base_map_status ADD VALUE IF NOT EXISTS 'INTERNAL_APPROVED' BEFORE 'PUBLISHED';", suppressTransaction: true);
 
             migrationBuilder.DropCheckConstraint(
                 name: "ck_farm_base_map_versions_publication",
@@ -199,8 +199,7 @@ namespace AgriDrone.Database.Migrations
                     current_baseline_map_version_id = table.Column<Guid>(type: "uuid", nullable: false),
                     updated_by = table.Column<Guid>(type: "uuid", nullable: false),
                     updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
-                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false),
-                    Id = table.Column<Guid>(type: "uuid", nullable: false)
+                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false)
                 },
                 constraints: table =>
                 {
@@ -330,29 +329,41 @@ namespace AgriDrone.Database.Migrations
                 unique: true);
 
             migrationBuilder.Sql(@"
-                INSERT INTO survey.spatial_policies (
-                    id, stream_key, version_number,
-                    boundary_proximity_threshold_m, matching_distance_threshold_m,
-                    row_bearing_tolerance_deg, grid_spacing_tolerance_m,
-                    effective_from, effective_to,
-                    created_at, created_by, fingerprint
-                )
-                SELECT
-                    '00000000-0000-0000-0000-000000000001'::uuid,
-                    'DEFAULT',
-                    1,
-                    1.0,
-                    1.5,
-                    15.0,
-                    0.5,
-                    '2026-01-01 00:00:00+00'::timestamptz,
-                    NULL,
-                    '2026-01-01 00:00:00+00'::timestamptz,
-                    '00000000-0000-0000-0000-000000000001'::uuid,
-                    'SP-DEFAULT-v1-B1.00-M1.50-R15.00-G0.50'
-                WHERE NOT EXISTS (
-                    SELECT 1 FROM survey.spatial_policies WHERE id = '00000000-0000-0000-0000-000000000001'::uuid
-                );");
+INSERT INTO survey.spatial_policies (
+    id,
+    stream_key,
+    version_number,
+    predecessor_version_id,
+    boundary_tolerance_m,
+    matching_distance_threshold_m,
+    row_bearing_tolerance_deg,
+    grid_spacing_tolerance_m,
+    policy_fingerprint,
+    effective_from,
+    effective_to,
+    created_by,
+    created_at,
+    reason_code,
+    evidence_reference
+)
+VALUES (
+    '00000000-0000-0000-0000-000000000001',
+    'DEFAULT',
+    1,
+    NULL,
+    2.0,
+    1.5,
+    15.0,
+    0.5,
+    '317f7abead50264ef86b76f3d6be8a4d781262da5e7911e06be8d95f859a5e61',
+    '2026-01-01 00:00:00+00',
+    NULL,
+    '00000000-0000-0000-0000-000000000001',
+    '2026-01-01 00:00:00+00',
+    'INITIAL_DEFAULT_POLICY',
+    'System initialization default'
+)
+ON CONFLICT (id) DO NOTHING;");
 
             migrationBuilder.Sql(@"
                 -- Backfill baseline maps: for farms with maps, mark earliest map as baseline

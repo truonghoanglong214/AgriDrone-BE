@@ -290,6 +290,35 @@ ON CONFLICT (id) DO NOTHING;");
                 nullable: false,
                 defaultValue: new Guid("00000000-0000-0000-0000-000000000000"));
 
+            migrationBuilder.AddColumn<Guid>(
+                name: "capture_attempt_id",
+                schema: "farm",
+                table: "mapping_candidate_batches",
+                type: "uuid",
+                nullable: true);
+
+            migrationBuilder.AddColumn<string>(
+                name: "payload_fingerprint",
+                schema: "farm",
+                table: "mapping_candidate_batches",
+                type: "character varying(64)",
+                maxLength: 64,
+                nullable: true);
+
+            migrationBuilder.AddColumn<Guid>(
+                name: "internally_approved_map_version_id",
+                schema: "mission",
+                table: "drone_missions",
+                type: "uuid",
+                nullable: true);
+
+            migrationBuilder.AddColumn<DateTimeOffset>(
+                name: "map_internally_approved_at",
+                schema: "mission",
+                table: "drone_missions",
+                type: "timestamp with time zone",
+                nullable: true);
+
             migrationBuilder.AddUniqueConstraint(
                 name: "uq_survey_order_pole_count_snapshots_id_tenant_farm",
                 schema: "survey",
@@ -337,16 +366,39 @@ ON CONFLICT (id) DO NOTHING;");
                     farm_id = table.Column<Guid>(type: "uuid", nullable: false),
                     mapping_candidate_batch_id = table.Column<Guid>(type: "uuid", nullable: false),
                     mapping_candidate_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    source_candidate_id = table.Column<Guid>(type: "uuid", nullable: false),
                     plant_profile_id = table.Column<Guid>(type: "uuid", nullable: true),
+                    target_plant_id = table.Column<Guid>(type: "uuid", nullable: true),
+                    target_plant_profile_id = table.Column<Guid>(type: "uuid", nullable: true),
                     effective_position = table.Column<Point>(type: "geometry(Point, 4326)", nullable: false),
+                    previous_position = table.Column<Point>(type: "geometry(Point, 4326)", nullable: true),
                     review_decision = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
                     is_accepted = table.Column<bool>(type: "boolean", nullable: false),
                     is_strictly_in_boundary = table.Column<bool>(type: "boolean", nullable: false),
-                    exclusion_reason = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true)
+                    exclusion_reason = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
+                    effective_row_index = table.Column<int>(type: "integer", nullable: true),
+                    effective_column_index = table.Column<int>(type: "integer", nullable: true)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("pk_survey_order_pole_count_snapshot_items", x => x.id);
+                    table.CheckConstraint(
+                        "ck_survey_order_pole_count_snapshot_items_acceptance",
+                        "(is_accepted = TRUE AND plant_profile_id IS NOT NULL AND exclusion_reason IS NULL) OR (is_accepted = FALSE AND plant_profile_id IS NULL AND exclusion_reason IS NOT NULL AND btrim(exclusion_reason) <> '')");
+                    table.ForeignKey(
+                        name: "fk_survey_order_pole_count_snapshot_items_target_profile",
+                        columns: x => new { x.target_plant_profile_id, x.tenant_id, x.farm_id },
+                        principalSchema: "plant",
+                        principalTable: "plant_profiles",
+                        principalColumns: new[] { "id", "tenant_id", "farm_id" },
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "fk_survey_order_pole_count_snapshot_items_profile",
+                        columns: x => new { x.plant_profile_id, x.tenant_id, x.farm_id },
+                        principalSchema: "plant",
+                        principalTable: "plant_profiles",
+                        principalColumns: new[] { "id", "tenant_id", "farm_id" },
+                        onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
                         name: "fk_survey_order_pole_count_snapshot_items_batch",
                         columns: x => new { x.mapping_candidate_batch_id, x.tenant_id, x.farm_id },
@@ -363,11 +415,11 @@ ON CONFLICT (id) DO NOTHING;");
                         onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
                         name: "fk_survey_order_pole_count_snapshot_items_snapshot",
-                        column: x => x.snapshot_id,
+                        columns: x => new { x.snapshot_id, x.tenant_id, x.farm_id },
                         principalSchema: "survey",
                         principalTable: "survey_order_pole_count_snapshots",
-                        principalColumn: "id",
-                        onDelete: ReferentialAction.Cascade);
+                        principalColumns: new[] { "id", "tenant_id", "farm_id" },
+                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.AddCheckConstraint(
@@ -640,11 +692,304 @@ ON CONFLICT (id) DO NOTHING;");
                 principalTable: "survey_order_pole_count_snapshots",
                 principalColumn: "id",
                 onDelete: ReferentialAction.Restrict);
+
+            // 12C. Backfill mapping_candidate_batches
+            migrationBuilder.Sql(@"
+DO $$
+DECLARE
+    v_missing_attempts int;
+    v_invalid_mapping_kinds int;
+    v_invalid_data int;
+BEGIN
+    -- 1. Backfill capture_attempt_id bằng exact join
+    UPDATE farm.mapping_candidate_batches b
+    SET capture_attempt_id = ca.id
+    FROM survey.capture_attempts ca
+    WHERE ca.order_id = b.survey_order_id
+      AND ca.mission_id = b.mission_id
+      AND ca.tenant_id = b.tenant_id
+      AND ca.farm_id = b.farm_id
+      AND b.capture_attempt_id IS NULL;
+
+    UPDATE farm.mapping_candidate_batches b
+    SET payload_fingerprint = encode(
+        digest(concat_ws('|', b.handoff_id::text, b.survey_order_id::text,
+            b.mission_id::text, b.capture_attempt_id::text, b.job_id::text), 'sha256'),
+        'hex')
+    WHERE b.payload_fingerprint IS NULL;
+
+    SELECT COUNT(*) INTO v_missing_attempts
+    FROM farm.mapping_candidate_batches
+    WHERE capture_attempt_id IS NULL;
+
+    IF v_missing_attempts > 0 THEN
+        RAISE EXCEPTION 'V3_04 Migration: Found % batches without matching capture attempt.', v_missing_attempts;
+    END IF;
+
+    -- 2. Backfill mapping_kind
+    UPDATE farm.mapping_candidate_batches b
+    SET mapping_kind = CASE
+        WHEN so.requires_baseline = true AND mv.is_baseline = true THEN 'FirstBaseline'
+        WHEN so.requires_baseline = false AND mv.is_baseline = false THEN 'FollowUpSnapshot'
+        ELSE NULL
+    END
+    FROM survey.survey_orders so
+    LEFT JOIN farm.farm_base_map_versions mv ON mv.id = b.farm_base_map_version_id
+    WHERE so.id = b.survey_order_id
+      AND (b.mapping_kind IS NULL OR b.mapping_kind = '');
+
+    SELECT COUNT(*) INTO v_invalid_mapping_kinds
+    FROM farm.mapping_candidate_batches
+    WHERE mapping_kind IS NULL OR mapping_kind NOT IN ('FirstBaseline', 'FollowUpSnapshot');
+
+    IF v_invalid_mapping_kinds > 0 THEN
+        RAISE EXCEPTION 'V3_04 Migration: Found % batches with invalid or indeterminate mapping kind.', v_invalid_mapping_kinds;
+    END IF;
+
+    -- 3. Backfill policy bằng lateral join policy có hiệu lực tại produced_at trong stream DEFAULT
+    UPDATE farm.mapping_candidate_batches b
+    SET spatial_policy_version_id = p.id,
+        spatial_policy_fingerprint = p.policy_fingerprint,
+        boundary_tolerance_m = p.boundary_tolerance_m,
+        matching_distance_threshold_m = p.matching_distance_threshold_m,
+        row_bearing_tolerance_deg = p.row_bearing_tolerance_deg,
+        grid_spacing_tolerance_m = p.grid_spacing_tolerance_m
+    FROM LATERAL (
+        SELECT id, policy_fingerprint, boundary_tolerance_m, matching_distance_threshold_m, row_bearing_tolerance_deg, grid_spacing_tolerance_m
+        FROM survey.spatial_policies sp
+        WHERE sp.stream_key = 'DEFAULT'
+          AND sp.effective_from <= b.produced_at
+          AND (sp.effective_to IS NULL OR sp.effective_to > b.produced_at)
+        ORDER BY sp.version_number DESC
+        LIMIT 1
+    ) p
+    WHERE b.spatial_policy_version_id IS NULL
+       OR b.spatial_policy_version_id = '00000000-0000-0000-0000-000000000000'::uuid;
+
+    -- 4. Validate
+    SELECT COUNT(*) INTO v_invalid_data
+    FROM farm.mapping_candidate_batches
+    WHERE spatial_policy_version_id IS NULL
+       OR spatial_policy_version_id = '00000000-0000-0000-0000-000000000000'::uuid
+       OR boundary_tolerance_m <= 0
+       OR matching_distance_threshold_m <= 0
+       OR row_bearing_tolerance_deg <= 0
+       OR grid_spacing_tolerance_m <= 0
+       OR length(spatial_policy_fingerprint) <> 64;
+
+    IF v_invalid_data > 0 THEN
+        RAISE EXCEPTION 'V3_04 Migration: Found % batches with invalid policy or tolerance values.', v_invalid_data;
+    END IF;
+END $$;
+");
+
+            migrationBuilder.AlterColumn<Guid>(
+                name: "capture_attempt_id",
+                schema: "farm",
+                table: "mapping_candidate_batches",
+                type: "uuid",
+                nullable: false);
+
+            migrationBuilder.AlterColumn<string>(
+                name: "payload_fingerprint",
+                schema: "farm",
+                table: "mapping_candidate_batches",
+                type: "character varying(64)",
+                maxLength: 64,
+                nullable: false,
+                oldClrType: typeof(string),
+                oldType: "character varying(64)",
+                oldMaxLength: 64,
+                oldNullable: true);
+
+            migrationBuilder.CreateIndex(
+                name: "ix_mapping_candidate_batches_capture_attempt_mission",
+                schema: "farm",
+                table: "mapping_candidate_batches",
+                columns: new[] { "capture_attempt_id", "mission_id" });
+
+            // 12D. Duplicate guards and farm_baseline_pointers
+            migrationBuilder.Sql(@"
+DO $$
+DECLARE
+    v_dup_baselines int;
+    v_dup_plants int;
+BEGIN
+    SELECT COUNT(*) INTO v_dup_baselines
+    FROM (
+        SELECT farm_id
+        FROM farm.farm_base_map_versions
+        WHERE is_baseline = true
+        GROUP BY farm_id
+        HAVING COUNT(*) > 1
+    ) dup;
+
+    IF v_dup_baselines > 0 THEN
+        RAISE EXCEPTION 'V3_04 Migration: Found % farms with multiple baseline maps.', v_dup_baselines;
+    END IF;
+
+    SELECT COUNT(*) INTO v_dup_plants
+    FROM (
+        SELECT farm_id, plant_profile_id
+        FROM plant.plants
+        WHERE plant_profile_id IS NOT NULL
+        GROUP BY farm_id, plant_profile_id
+        HAVING COUNT(*) > 1
+    ) dup_p;
+
+    IF v_dup_plants > 0 THEN
+        RAISE EXCEPTION 'V3_04 Migration: Found % duplicate plant-profile pairings.', v_dup_plants;
+    END IF;
+
+    INSERT INTO farm.farm_baseline_pointers (
+        id, farm_id, tenant_id, current_baseline_map_version_id, updated_by, updated_at
+    )
+    SELECT
+        m.farm_id,
+        m.farm_id,
+        m.tenant_id,
+        m.id,
+        COALESCE(m.approved_internal_by, m.published_by, '00000000-0000-0000-0000-000000000001'::uuid),
+        m.created_at
+    FROM farm.farm_base_map_versions m
+    WHERE m.is_baseline = true
+      AND m.status IN ('INTERNAL_APPROVED'::system.farm_base_map_status, 'PUBLISHED'::system.farm_base_map_status)
+    ON CONFLICT (id) DO NOTHING;
+END $$;
+");
+
+            migrationBuilder.DropCheckConstraint(
+                name: "ck_farm_base_map_versions_baseline_lineage",
+                schema: "farm",
+                table: "farm_base_map_versions");
+
+            migrationBuilder.AddCheckConstraint(
+                name: "ck_farm_base_map_versions_baseline_lineage",
+                schema: "farm",
+                table: "farm_base_map_versions",
+                sql: "((is_baseline = TRUE AND version_number = 1 AND predecessor_version_id IS NULL AND baseline_map_version_id = id) OR (is_baseline = FALSE AND version_number > 1 AND predecessor_version_id IS NOT NULL AND baseline_map_version_id IS NOT NULL AND baseline_map_version_id <> id))");
+
+            migrationBuilder.CreateIndex(
+                name: "uq_farm_base_map_versions_one_baseline",
+                schema: "farm",
+                table: "farm_base_map_versions",
+                columns: new[] { "tenant_id", "farm_id" },
+                unique: true,
+                filter: "is_baseline = TRUE");
+
+            migrationBuilder.CreateIndex(
+                name: "uq_farm_base_map_versions_one_draft",
+                schema: "farm",
+                table: "farm_base_map_versions",
+                columns: new[] { "tenant_id", "farm_id" },
+                unique: true,
+                filter: "status = 'DRAFT'::system.farm_base_map_status");
+
+            migrationBuilder.CreateIndex(
+                name: "uq_farm_base_map_versions_tenant_farm_version",
+                schema: "farm",
+                table: "farm_base_map_versions",
+                columns: new[] { "tenant_id", "farm_id", "version_number" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "uq_plants_farm_profile",
+                schema: "plant",
+                table: "plants",
+                columns: new[] { "farm_id", "plant_profile_id" },
+                unique: true,
+                filter: "plant_profile_id IS NOT NULL");
+
+            migrationBuilder.AddForeignKey(
+                name: "fk_survey_order_pole_count_snapshots_batch",
+                schema: "survey",
+                table: "survey_order_pole_count_snapshots",
+                columns: new[] { "mapping_candidate_batch_id", "tenant_id", "farm_id" },
+                principalSchema: "farm",
+                principalTable: "mapping_candidate_batches",
+                principalColumns: new[] { "id", "tenant_id", "farm_id" },
+                onDelete: ReferentialAction.Restrict);
+
+            migrationBuilder.AddForeignKey(
+                name: "fk_plant_profile_observations_candidate",
+                schema: "plant",
+                table: "plant_profile_observations",
+                columns: new[] { "mapping_candidate_id", "mapping_candidate_batch_id" },
+                principalSchema: "farm",
+                principalTable: "mapping_candidates",
+                principalColumns: new[] { "id", "batch_id" },
+                onDelete: ReferentialAction.Restrict);
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.DropForeignKey(
+                name: "fk_survey_order_pole_count_snapshots_batch",
+                schema: "survey",
+                table: "survey_order_pole_count_snapshots");
+
+            migrationBuilder.DropForeignKey(
+                name: "fk_plant_profile_observations_candidate",
+                schema: "plant",
+                table: "plant_profile_observations");
+
+            migrationBuilder.DropIndex(
+                name: "uq_plants_farm_profile",
+                schema: "plant",
+                table: "plants");
+
+            migrationBuilder.DropIndex(
+                name: "uq_farm_base_map_versions_tenant_farm_version",
+                schema: "farm",
+                table: "farm_base_map_versions");
+
+            migrationBuilder.DropIndex(
+                name: "uq_farm_base_map_versions_one_draft",
+                schema: "farm",
+                table: "farm_base_map_versions");
+
+            migrationBuilder.DropIndex(
+                name: "uq_farm_base_map_versions_one_baseline",
+                schema: "farm",
+                table: "farm_base_map_versions");
+
+            migrationBuilder.DropCheckConstraint(
+                name: "ck_farm_base_map_versions_baseline_lineage",
+                schema: "farm",
+                table: "farm_base_map_versions");
+
+            migrationBuilder.AddCheckConstraint(
+                name: "ck_farm_base_map_versions_baseline_lineage",
+                schema: "farm",
+                table: "farm_base_map_versions",
+                sql: "(is_baseline = true AND predecessor_version_id IS NULL) OR (is_baseline = false)");
+
+            migrationBuilder.DropIndex(
+                name: "ix_mapping_candidate_batches_capture_attempt_mission",
+                schema: "farm",
+                table: "mapping_candidate_batches");
+
+            migrationBuilder.DropColumn(
+                name: "capture_attempt_id",
+                schema: "farm",
+                table: "mapping_candidate_batches");
+
+            migrationBuilder.DropColumn(
+                name: "payload_fingerprint",
+                schema: "farm",
+                table: "mapping_candidate_batches");
+
+            migrationBuilder.DropColumn(
+                name: "internally_approved_map_version_id",
+                schema: "mission",
+                table: "drone_missions");
+
+            migrationBuilder.DropColumn(
+                name: "map_internally_approved_at",
+                schema: "mission",
+                table: "drone_missions");
+
             migrationBuilder.DropForeignKey(
                 name: "fk_farm_baseline_pointers_map_version",
                 schema: "farm",

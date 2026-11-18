@@ -1,5 +1,6 @@
 using AgriDrone.Modules.Farms.Domain.Boundaries;
 using AgriDrone.Modules.Farms.Domain.Maps.Staging;
+using AgriDrone.SharedKernel.Domain.Spatial;
 using NetTopologySuite.Geometries;
 
 namespace AgriDrone.Modules.Farms.Application.Services;
@@ -18,6 +19,19 @@ public sealed class BaselineMappingBatchValidator : IBaselineMappingBatchValidat
         var issues = new List<MappingBatchValidationIssue>();
         var candidates = batch.Candidates.ToList();
         var boundaryPoly = boundary?.Geometry;
+
+        // Tolerance validation: fail if any tolerance is <= 0
+        if (batch.BoundaryToleranceM <= 0 ||
+            batch.MatchingDistanceThresholdM <= 0 ||
+            batch.RowBearingToleranceDeg <= 0 ||
+            batch.GridSpacingToleranceM <= 0)
+        {
+            issues.Add(new MappingBatchValidationIssue(
+                batch.Id,
+                "InvalidSpatialPolicyTolerances",
+                "Spatial policy tolerances must all be strictly positive.",
+                "Error"));
+        }
 
         // 1. Candidate validation (Boundary, Decision, Target Plant, Pending checks)
         foreach (var c in candidates)
@@ -129,9 +143,11 @@ public sealed class BaselineMappingBatchValidator : IBaselineMappingBatchValidat
             }
         }
 
-        // 3. Minimum distance duplicate check using Spatial Grid Bucketing: O(N) using batch frozen tolerance
-        var duplicateThreshold = batch.GridSpacingToleranceM > 0 ? batch.GridSpacingToleranceM : 0.5;
-        ValidateMinimumDistancesSpatialBucketing(activeCandidates, duplicateThreshold, issues);
+        // 3. Grid structure checks (Plant spacing, Row spacing, Row bearing)
+        ValidateGridGeometry(batch, activeCandidates, issues);
+
+        // 4. Duplicate position check (identical GPS coordinates within 0.1m)
+        ValidateMinimumDistancesSpatialBucketing(activeCandidates, 0.1, issues);
 
         var total = candidates.Count;
         var accepted = candidates.Count(c => c.ReviewDecision is MappingCandidateReviewDecision.CreateNew or MappingCandidateReviewDecision.MatchExisting);
@@ -140,7 +156,6 @@ public sealed class BaselineMappingBatchValidator : IBaselineMappingBatchValidat
         var replaced = candidates.Count(c => c.ReviewDecision == MappingCandidateReviewDecision.Replace);
         var pending = candidates.Count(c => c.ReviewDecision == MappingCandidateReviewDecision.Pending);
 
-        // Confirmed poles that will be published (strictly terminal accepted decisions)
         var confirmedPublishable = candidates.Count(c =>
             c.ReviewDecision is MappingCandidateReviewDecision.CreateNew
                 or MappingCandidateReviewDecision.MatchExisting
@@ -161,6 +176,105 @@ public sealed class BaselineMappingBatchValidator : IBaselineMappingBatchValidat
             Issues: issues);
     }
 
+    private static void ValidateGridGeometry(
+        MappingCandidateBatch batch,
+        List<MappingCandidate> activeCandidates,
+        List<MappingBatchValidationIssue> issues)
+    {
+        var candidatesWithGrid = activeCandidates
+            .Select(c => new
+            {
+                Candidate = c,
+                Row = c.CorrectedRowIndex ?? c.ProposedRowIndex,
+                Col = c.CorrectedColumnIndex ?? c.ProposedColumnIndex,
+                Pos = c.CorrectedPosition ?? c.OriginalPosition
+            })
+            .Where(x => x.Row.HasValue && x.Col.HasValue)
+            .ToList();
+
+        var pairCount = 0;
+
+        // Group by Row -> validate PlantSpacing and RowBearing along adjacent columns
+        var byRow = candidatesWithGrid.GroupBy(x => x.Row!.Value);
+        foreach (var rowGroup in byRow)
+        {
+            var orderedCols = rowGroup.OrderBy(x => x.Col!.Value).ToList();
+            for (var i = 0; i < orderedCols.Count - 1; i++)
+            {
+                var cur = orderedCols[i];
+                var next = orderedCols[i + 1];
+                var colDelta = next.Col!.Value - cur.Col!.Value;
+                if (colDelta <= 0) continue;
+
+                pairCount++;
+                var measuredDist = GeodesicSpatialCalculator.CalculateDistanceMeters(
+                    cur.Pos.Y, cur.Pos.X, next.Pos.Y, next.Pos.X);
+                var expectedDist = colDelta * batch.PlantSpacingM;
+
+                if (Math.Abs(measuredDist - expectedDist) > batch.GridSpacingToleranceM * colDelta)
+                {
+                    issues.Add(new MappingBatchValidationIssue(
+                        next.Candidate.CandidateId,
+                        "PlantSpacingToleranceExceeded",
+                        $"Candidate {next.Candidate.CandidateId} distance to previous column in row {rowGroup.Key} is {measuredDist:F2}m (expected ~{expectedDist:F2}m, tolerance +/-{batch.GridSpacingToleranceM:F2}m).",
+                        "Error"));
+                }
+
+                // Row bearing check between adjacent columns in the row
+                var bearing = GeodesicSpatialCalculator.CalculateInitialBearingDegrees(
+                    cur.Pos.Y, cur.Pos.X, next.Pos.Y, next.Pos.X);
+                var diff = Math.Abs((bearing - batch.GridBearingDeg + 180) % 180);
+                if (diff > 90) diff = 180 - diff;
+
+                if (diff > batch.RowBearingToleranceDeg)
+                {
+                    issues.Add(new MappingBatchValidationIssue(
+                        next.Candidate.CandidateId,
+                        "RowBearingToleranceExceeded",
+                        $"Row {rowGroup.Key} bearing between col {cur.Col} and {next.Col} is {bearing:F1} deg (expected ~{batch.GridBearingDeg:F1} deg, tolerance +/-{batch.RowBearingToleranceDeg:F1} deg).",
+                        "Error"));
+                }
+            }
+        }
+
+        // Group by Col -> validate RowSpacing along adjacent rows
+        var byCol = candidatesWithGrid.GroupBy(x => x.Col!.Value);
+        foreach (var colGroup in byCol)
+        {
+            var orderedRows = colGroup.OrderBy(x => x.Row!.Value).ToList();
+            for (var i = 0; i < orderedRows.Count - 1; i++)
+            {
+                var cur = orderedRows[i];
+                var next = orderedRows[i + 1];
+                var rowDelta = next.Row!.Value - cur.Row!.Value;
+                if (rowDelta <= 0) continue;
+
+                pairCount++;
+                var measuredDist = GeodesicSpatialCalculator.CalculateDistanceMeters(
+                    cur.Pos.Y, cur.Pos.X, next.Pos.Y, next.Pos.X);
+                var expectedDist = rowDelta * batch.RowSpacingM;
+
+                if (Math.Abs(measuredDist - expectedDist) > batch.GridSpacingToleranceM * rowDelta)
+                {
+                    issues.Add(new MappingBatchValidationIssue(
+                        next.Candidate.CandidateId,
+                        "RowSpacingToleranceExceeded",
+                        $"Candidate {next.Candidate.CandidateId} distance to previous row in column {colGroup.Key} is {measuredDist:F2}m (expected ~{expectedDist:F2}m, tolerance +/-{batch.GridSpacingToleranceM:F2}m).",
+                        "Error"));
+                }
+            }
+        }
+
+        if (pairCount == 0 && activeCandidates.Count > 0)
+        {
+            issues.Add(new MappingBatchValidationIssue(
+                batch.Id,
+                "InsufficientGridEvidence",
+                "Farm active candidate count or distribution provides no adjacent grid pairs to evaluate spacing and bearing.",
+                "Info"));
+        }
+    }
+
     private static void ValidateMinimumDistancesSpatialBucketing(
         List<MappingCandidate> activeCandidates,
         double duplicateThresholdMeters,
@@ -169,7 +283,6 @@ public sealed class BaselineMappingBatchValidator : IBaselineMappingBatchValidat
         if (activeCandidates.Count <= 1) return;
 
         var cellSizeMeters = duplicateThresholdMeters;
-        // Reference latitude for longitude distance projection
         var avgLat = activeCandidates.Average(c => (c.CorrectedPosition ?? c.OriginalPosition).Y);
         var radLat = avgLat * Math.PI / 180.0;
         var metersPerDegreeLon = EarthRadiusMeters * Math.Cos(radLat) * (Math.PI / 180.0);
@@ -189,7 +302,6 @@ public sealed class BaselineMappingBatchValidator : IBaselineMappingBatchValidat
                 buckets[key] = list;
             }
 
-            // Check neighbor cells (-1, 0, 1 in both dimensions)
             var reported = false;
             for (var dx = -1; dx <= 1 && !reported; dx++)
             {
@@ -221,15 +333,6 @@ public sealed class BaselineMappingBatchValidator : IBaselineMappingBatchValidat
 
     public static double DistanceMeters(Point p1, Point p2)
     {
-        var lat1 = p1.Y * Math.PI / 180.0;
-        var lat2 = p2.Y * Math.PI / 180.0;
-        var dLat = (p2.Y - p1.Y) * Math.PI / 180.0;
-        var dLon = (p2.X - p1.X) * Math.PI / 180.0;
-
-        var a = Math.Sin(dLat / 2) * Math.Sin(dLat / 2) +
-                Math.Cos(lat1) * Math.Cos(lat2) *
-                Math.Sin(dLon / 2) * Math.Sin(dLon / 2);
-        var c = 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
-        return EarthRadiusMeters * c;
+        return GeodesicSpatialCalculator.CalculateDistanceMeters(p1.Y, p1.X, p2.Y, p2.X);
     }
 }

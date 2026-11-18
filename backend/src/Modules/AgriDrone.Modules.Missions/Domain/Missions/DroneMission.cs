@@ -114,6 +114,10 @@ public sealed class DroneMission : AggregateRoot
 
     public DateTimeOffset UpdatedAt { get; private set; }
 
+    public Guid? InternallyApprovedMapVersionId { get; private set; }
+
+    public DateTimeOffset? MapInternallyApprovedAt { get; private set; }
+
     public Guid? PublishedMapVersionId { get; private set; }
 
     public Guid? MappingApprovalId { get; private set; }
@@ -935,7 +939,7 @@ public sealed class DroneMission : AggregateRoot
         return true;
     }
 
-    public bool ApplyInternallyApprovedFarmBaseMap(
+    public DroneMissionApprovalOutcome ApplyInternallyApprovedFarmBaseMap(
         Guid surveyOrderId,
         Guid approvalId,
         Guid farmBaseMapVersionId,
@@ -948,60 +952,85 @@ public sealed class DroneMission : AggregateRoot
 
         if (SurveyOrderId != surveyOrderId)
         {
-            throw new InvalidOperationException(
-                "The approved base map belongs to a different Survey Order.");
+            return DroneMissionApprovalOutcome.Conflict;
         }
 
         if (Purpose == global::AgriDrone.Modules.Missions.Domain.Missions.MissionPurpose.BaselineMapping)
         {
-            if (PublishedMapVersionId == farmBaseMapVersionId &&
+            if (InternallyApprovedMapVersionId == farmBaseMapVersionId &&
                 MappingApprovalId == approvalId &&
                 Status == MissionStatus.Completed)
             {
-                return false;
+                return DroneMissionApprovalOutcome.NoChange;
+            }
+
+            if (InternallyApprovedMapVersionId.HasValue &&
+                (InternallyApprovedMapVersionId != farmBaseMapVersionId || MappingApprovalId != approvalId))
+            {
+                return DroneMissionApprovalOutcome.Conflict;
             }
 
             if (Status != MissionStatus.AwaitingReview ||
                 ProcessingStatus != ProcessingStatus.ReviewRequired)
             {
-                throw new InvalidOperationException(
-                    "Only a baseline mission awaiting review can accept an internally approved farm base map.");
+                return DroneMissionApprovalOutcome.Conflict;
             }
 
-            PublishedMapVersionId = farmBaseMapVersionId;
+            InternallyApprovedMapVersionId = farmBaseMapVersionId;
             MappingApprovalId = approvalId;
-            MapPublishedAt = approvedAt;
+            MapInternallyApprovedAt = approvedAt;
             Status = MissionStatus.Completed;
             ProcessingStatus = ProcessingStatus.Completed;
             UpdatedAt = approvedAt;
-            return true;
+            return DroneMissionApprovalOutcome.Applied;
+        }
+
+        if (!RequiresBaselineCompletion &&
+            SourceMapVersionId == farmBaseMapVersionId &&
+            !InternallyApprovedMapVersionId.HasValue)
+        {
+            return DroneMissionApprovalOutcome.NoChange;
         }
 
         if (RequiresBaselineCompletion)
         {
-            if (SourceMapVersionId == farmBaseMapVersionId && !RequiresBaselineCompletion)
+            if (SourceMapVersionId.HasValue && SourceMapVersionId != farmBaseMapVersionId)
             {
-                return false;
+                return DroneMissionApprovalOutcome.Conflict;
             }
 
             SourceMapVersionId = farmBaseMapVersionId;
             RequiresBaselineCompletion = false;
             UpdatedAt = approvedAt;
-            return true;
+            return DroneMissionApprovalOutcome.Applied;
+        }
+
+        if (InternallyApprovedMapVersionId == farmBaseMapVersionId &&
+            MappingApprovalId == approvalId &&
+            Status == MissionStatus.Completed)
+        {
+            return DroneMissionApprovalOutcome.NoChange;
+        }
+
+        if (InternallyApprovedMapVersionId.HasValue &&
+            (InternallyApprovedMapVersionId != farmBaseMapVersionId || MappingApprovalId != approvalId))
+        {
+            return DroneMissionApprovalOutcome.Conflict;
         }
 
         // For follow-up technical mapping mission: mark completed
         if (Status == MissionStatus.AwaitingReview && ProcessingStatus == ProcessingStatus.ReviewRequired)
         {
-            PublishedMapVersionId = farmBaseMapVersionId;
+            InternallyApprovedMapVersionId = farmBaseMapVersionId;
             MappingApprovalId = approvalId;
+            MapInternallyApprovedAt = approvedAt;
             Status = MissionStatus.Completed;
             ProcessingStatus = ProcessingStatus.Completed;
             UpdatedAt = approvedAt;
-            return true;
+            return DroneMissionApprovalOutcome.Applied;
         }
 
-        return false;
+        return DroneMissionApprovalOutcome.Conflict;
     }
     public bool ApplyHealthReviewState(
     Guid handoffId,

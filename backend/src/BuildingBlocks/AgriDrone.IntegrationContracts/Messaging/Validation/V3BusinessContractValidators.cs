@@ -40,7 +40,7 @@ public static class V3BusinessContractValidators
             "ExpectedCurrentFarmBaseMapVersionId", errors);
         RequiredText(payload.ModelVersion, "ModelVersion", errors);
         RequiredText(payload.AlgorithmVersion, "AlgorithmVersion", errors);
-        RequiredText(payload.BoundaryPolicyVersion, "BoundaryPolicyVersion", errors);
+        OptionalText(payload.BoundaryPolicyVersion, "BoundaryPolicyVersion", errors);
         if (payload.ProducedAt.HasValue)
         {
             Utc(payload.ProducedAt.Value, "ProducedAt", errors);
@@ -59,6 +59,10 @@ public static class V3BusinessContractValidators
             .Where(candidate => candidate.CandidateId.HasValue && candidate.CandidateId.Value != Guid.Empty)
             .Select(candidate => candidate.CandidateId!.Value)
             .ToList();
+        if (providedCandidateIds.Count != payload.Candidates.Count)
+        {
+            errors.Add("CandidateId is required for every V4 mapping candidate.");
+        }
         Unique(providedCandidateIds, "CandidateId", errors);
 
         var candidateCount = payload.Candidates.Count;
@@ -67,7 +71,7 @@ public static class V3BusinessContractValidators
 
         foreach (var candidate in payload.Candidates)
         {
-            OptionalId(candidate.CandidateId, "CandidateId", errors);
+            RequiredId(candidate.CandidateId ?? Guid.Empty, "CandidateId", errors);
             OptionalId(candidate.SourceObservationId, "SourceObservationId", errors);
             if (candidate.EvidenceMediaAssetIds is not null)
             {
@@ -171,7 +175,7 @@ public static class V3BusinessContractValidators
             "ExpectedCurrentFarmBaseMapVersionId", errors);
         RequiredText(payload.ModelVersion, "ModelVersion", errors);
         RequiredText(payload.AlgorithmVersion, "AlgorithmVersion", errors);
-        RequiredText(payload.BoundaryPolicyVersion, "BoundaryPolicyVersion", errors);
+        OptionalText(payload.BoundaryPolicyVersion, "BoundaryPolicyVersion", errors);
         Utc(payload.ProducedAt, "ProducedAt", errors);
         Bearing(payload.GridBearingDeg, "GridBearingDeg", errors);
         PositiveMeasurement(payload.RowSpacingM, "RowSpacingM", errors);
@@ -702,6 +706,15 @@ public static class V3BusinessContractValidators
         if (string.IsNullOrWhiteSpace(value))
         {
             errors.Add($"{name} is required.");
+        }
+    }
+
+    private static void OptionalText(string? value, string name,
+        List<string> errors)
+    {
+        if (value is not null && string.IsNullOrWhiteSpace(value))
+        {
+            errors.Add($"{name} cannot be whitespace when provided.");
         }
     }
 

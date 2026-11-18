@@ -25,11 +25,11 @@ public sealed class SurveyOrderPoleCountSnapshotConfiguration
         builder.Property(s => s.SurveyOrderId).HasColumnName("survey_order_id").HasColumnType("uuid").IsRequired();
         builder.Property(s => s.TenantId).HasColumnName("tenant_id").HasColumnType("uuid").IsRequired();
         builder.Property(s => s.FarmId).HasColumnName("farm_id").HasColumnType("uuid").IsRequired();
-        builder.Property(s => s.MissionId).HasColumnName("mission_id").HasColumnType("uuid");
-        builder.Property(s => s.CaptureAttemptId).HasColumnName("capture_attempt_id").HasColumnType("uuid");
+        builder.Property(s => s.MissionId).HasColumnName("mission_id").HasColumnType("uuid").IsRequired();
+        builder.Property(s => s.CaptureAttemptId).HasColumnName("capture_attempt_id").HasColumnType("uuid").IsRequired();
         builder.Property(s => s.FarmBaseMapVersionId).HasColumnName("farm_base_map_version_id").HasColumnType("uuid").IsRequired();
         builder.Property(s => s.FarmBoundaryVersionId).HasColumnName("farm_boundary_version_id").HasColumnType("uuid").IsRequired();
-        builder.Property(s => s.MappingCandidateBatchId).HasColumnName("mapping_candidate_batch_id").HasColumnType("uuid");
+        builder.Property(s => s.MappingCandidateBatchId).HasColumnName("mapping_candidate_batch_id").HasColumnType("uuid").IsRequired();
         builder.Property(s => s.SpatialPolicyVersionId).HasColumnName("spatial_policy_version_id").HasColumnType("uuid").IsRequired();
         builder.Property(s => s.VerifiedBillablePoleCount).HasColumnName("verified_billable_pole_count").HasColumnType("integer").IsRequired();
         builder.Property(s => s.VerifiedBy).HasColumnName("verified_by").HasColumnType("uuid").IsRequired();
@@ -54,8 +54,9 @@ public sealed class SurveyOrderPoleCountSnapshotConfiguration
 
         builder.HasMany(s => s.Items)
             .WithOne()
-            .HasForeignKey(i => i.SnapshotId)
-            .OnDelete(DeleteBehavior.Cascade)
+            .HasForeignKey(i => new { i.SnapshotId, i.TenantId, i.FarmId })
+            .HasPrincipalKey(s => new { s.Id, s.TenantId, s.FarmId })
+            .OnDelete(DeleteBehavior.Restrict)
             .HasConstraintName("fk_survey_order_pole_count_snapshot_items_snapshot");
     }
 }

@@ -1,21 +1,23 @@
 using System.Text.Json;
 using AgriDrone.IntegrationContracts.Mapping;
 using AgriDrone.IntegrationContracts.Messaging;
-using AgriDrone.IntegrationContracts.Plants;
 using AgriDrone.Modules.Farms.Application.Abstractions.Maps;
+using AgriDrone.Modules.Farms.Application.Features.Maps.ApproveFarmBaseMapInternally;
 using AgriDrone.Modules.Farms.Application.Services;
 using AgriDrone.Modules.Farms.Domain.Boundaries;
 using AgriDrone.Modules.Farms.Domain.Maps;
 using AgriDrone.Modules.Farms.Domain.Maps.Staging;
+using AgriDrone.Modules.Plants.Application.Abstractions.Queries;
+using AgriDrone.Modules.Plants.Domain.Changes;
 using AgriDrone.Modules.Plants.Domain.Mapping;
 using AgriDrone.Modules.Plants.Domain.Plants;
 using AgriDrone.Modules.Surveys.Domain;
+using AgriDrone.IntegrationContracts.Plants;
 using AgriDrone.SharedInfrastructure.Auditing;
 using AgriDrone.SharedInfrastructure.Messaging.Outbox;
 using AgriDrone.SharedKernel.Application;
 using AgriDrone.SharedKernel.Domain.Spatial;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 using NetTopologySuite.Geometries;
 
 namespace AgriDrone.Database.Mapping;
@@ -23,36 +25,50 @@ namespace AgriDrone.Database.Mapping;
 internal sealed class FarmBaseMapInternalApprovalOrchestrator(
     MappingPublicationDbContext dbContext,
     IBaselineMappingBatchValidator validator,
+    IHealthLevelReferenceQuery healthLevelReferenceQuery,
     OutboxMessageFactory outboxMessageFactory,
     IAuditWriter auditWriter,
-    IHealthLevelReferenceQuery healthLevelReferenceQuery,
-    TimeProvider timeProvider,
-    ILogger<FarmBaseMapInternalApprovalOrchestrator> logger)
-    : IFarmBaseMapInternalApprovalOrchestrator
+    TimeProvider timeProvider) : IFarmBaseMapInternalApprovalOrchestrator
 {
     public async Task<Result<FarmBaseMapInternallyApprovedResult>> ApproveInternalAsync(
         Guid farmId,
         Guid draftId,
         Guid actorId,
-        CancellationToken cancellationToken)
+        CancellationToken ct)
     {
-        try
+        return await dbContext.ExecuteInTransactionAsync(async transactionToken =>
         {
-            return await dbContext.ExecuteInTransactionAsync(async ct =>
+            try
             {
-                // Lock farm row FOR UPDATE
+                var draftContext = await dbContext.FarmBaseMapVersions
+                    .AsNoTracking()
+                    .Where(m => m.Id == draftId && m.FarmId == farmId)
+                    .Select(m => new { m.TenantId, m.FarmId })
+                    .SingleOrDefaultAsync(transactionToken);
+
+                if (draftContext is null)
+                {
+                    return Result.Failure<FarmBaseMapInternallyApprovedResult>(
+                        AppError.NotFound("FarmBaseMapDraft.NotFound", "Farm base map draft not found."));
+                }
+
+                // The draft supplies the tenant scope; the tenant-scoped farm lock serializes approvals.
                 var farm = await dbContext.Farms
-                    .FromSqlInterpolated($"SELECT * FROM farm.farms WHERE id = {farmId} FOR UPDATE")
-                    .SingleOrDefaultAsync(ct);
+                    .FromSqlInterpolated($"SELECT * FROM farm.farms WHERE id = {farmId} AND tenant_id = {draftContext.TenantId} FOR UPDATE")
+                    .SingleOrDefaultAsync(transactionToken);
 
                 if (farm is null)
                 {
                     return Result.Failure<FarmBaseMapInternallyApprovedResult>(
-                        AppError.NotFound("Farm.NotFound", "Farm not found."));
+                        AppError.NotFound("Farm.NotFound", $"Farm with ID '{farmId}' not found."));
                 }
 
                 var draft = await dbContext.FarmBaseMapVersions
-                    .SingleOrDefaultAsync(m => m.Id == draftId && m.FarmId == farmId, ct);
+                    .SingleOrDefaultAsync(
+                        m => m.Id == draftId &&
+                             m.TenantId == draftContext.TenantId &&
+                             m.FarmId == draftContext.FarmId,
+                        transactionToken);
 
                 if (draft is null)
                 {
@@ -60,24 +76,71 @@ internal sealed class FarmBaseMapInternalApprovalOrchestrator(
                         AppError.NotFound("FarmBaseMapDraft.NotFound", "Farm base map draft not found."));
                 }
 
-                // Idempotency: if already approved internally, load existing snapshot and return same result
+                // Idempotency: if already approved, return previous result
                 if (draft.Status == FarmBaseMapStatus.InternalApproved)
                 {
                     var existingSnapshot = await dbContext.SurveyOrderPoleCountSnapshots
-                        .SingleOrDefaultAsync(s => s.FarmBaseMapVersionId == draft.Id, ct);
-
-                    if (existingSnapshot is not null)
+                        .Include(s => s.Items)
+                        .SingleOrDefaultAsync(
+                            s => s.FarmBaseMapVersionId == draft.Id &&
+                                 s.TenantId == draft.TenantId &&
+                                 s.FarmId == draft.FarmId,
+                            transactionToken);
+                    var existingBatch = await dbContext.MappingCandidateBatches
+                        .AsNoTracking()
+                        .SingleOrDefaultAsync(
+                            b => b.FarmBaseMapVersionId == draft.Id &&
+                                 b.TenantId == draft.TenantId &&
+                                 b.FarmId == draft.FarmId,
+                            transactionToken);
+                    if (existingSnapshot is not null &&
+                        existingBatch is not null &&
+                        draft.ApprovedInternalAt is { } approvedAt &&
+                        draft.SourceMissionId is { } sourceMissionId &&
+                        existingSnapshot.SurveyOrderId == draft.SourceSurveyOrderId &&
+                        existingSnapshot.MissionId == sourceMissionId &&
+                        existingSnapshot.CaptureAttemptId == existingBatch.CaptureAttemptId &&
+                        existingSnapshot.FarmBoundaryVersionId == existingBatch.FarmBoundaryVersionId &&
+                        existingSnapshot.MappingCandidateBatchId == existingBatch.Id &&
+                        existingSnapshot.SpatialPolicyVersionId == existingBatch.SpatialPolicyVersionId)
                     {
+                        var recomputedFingerprint = SurveyOrderPoleCountSnapshot.ComputeEvidenceFingerprint(
+                            tenantId: existingSnapshot.TenantId,
+                            surveyOrderId: existingSnapshot.SurveyOrderId,
+                            farmId: existingSnapshot.FarmId,
+                            missionId: existingSnapshot.MissionId,
+                            captureAttemptId: existingSnapshot.CaptureAttemptId,
+                            farmBaseMapVersionId: existingSnapshot.FarmBaseMapVersionId,
+                            farmBoundaryVersionId: existingSnapshot.FarmBoundaryVersionId,
+                            mappingCandidateBatchId: existingSnapshot.MappingCandidateBatchId,
+                            spatialPolicyFingerprint: existingBatch.SpatialPolicyFingerprint,
+                            items: existingSnapshot.Items);
+                        if (!string.Equals(
+                                recomputedFingerprint,
+                                existingSnapshot.EvidenceFingerprint,
+                                StringComparison.Ordinal))
+                        {
+                            return Result.Failure<FarmBaseMapInternallyApprovedResult>(
+                                AppError.Conflict(
+                                    "FarmBaseMapDraft.IdempotencyConflict",
+                                    "The approved map snapshot no longer matches its immutable approval evidence."));
+                        }
+
                         return Result.Success(new FarmBaseMapInternallyApprovedResult(
-                            draft.Id,
-                            draft.VersionNumber,
-                            existingSnapshot.SurveyOrderId,
-                            farmId,
-                            existingSnapshot.VerifiedBillablePoleCount,
-                            existingSnapshot.Id,
-                            existingSnapshot.EvidenceFingerprint,
-                            draft.ApprovedInternalAt ?? existingSnapshot.VerifiedAt));
+                            FarmBaseMapVersionId: draft.Id,
+                            VersionNumber: draft.VersionNumber,
+                            SurveyOrderId: draft.SourceSurveyOrderId,
+                            FarmId: farmId,
+                            VerifiedBillablePoleCount: existingSnapshot.VerifiedBillablePoleCount,
+                            PoleCountSnapshotId: existingSnapshot.Id,
+                            EvidenceFingerprint: existingSnapshot.EvidenceFingerprint,
+                            ApprovedAt: approvedAt));
                     }
+
+                    return Result.Failure<FarmBaseMapInternallyApprovedResult>(
+                        AppError.Conflict(
+                            "FarmBaseMapDraft.IdempotencyConflict",
+                            $"Base map '{draft.Id}' is already approved internally but its batch/snapshot context is incomplete or inconsistent."));
                 }
 
                 if (draft.Status != FarmBaseMapStatus.Draft)
@@ -90,7 +153,11 @@ internal sealed class FarmBaseMapInternalApprovalOrchestrator(
 
                 var batch = await dbContext.MappingCandidateBatches
                     .Include(b => b.Candidates)
-                    .SingleOrDefaultAsync(b => b.FarmBaseMapVersionId == draftId, ct);
+                    .SingleOrDefaultAsync(
+                        b => b.FarmBaseMapVersionId == draftId &&
+                             b.TenantId == draft.TenantId &&
+                             b.FarmId == draft.FarmId,
+                        transactionToken);
 
                 if (batch is null)
                 {
@@ -115,7 +182,11 @@ internal sealed class FarmBaseMapInternalApprovalOrchestrator(
                 }
 
                 var boundary = await dbContext.FarmBoundaries
-                    .SingleOrDefaultAsync(b => b.Id == batch.FarmBoundaryVersionId, ct);
+                    .SingleOrDefaultAsync(
+                        b => b.Id == batch.FarmBoundaryVersionId &&
+                             b.TenantId == draft.TenantId &&
+                             b.FarmId == draft.FarmId,
+                        transactionToken);
 
                 if (boundary is null)
                 {
@@ -134,7 +205,11 @@ internal sealed class FarmBaseMapInternalApprovalOrchestrator(
                 }
 
                 var order = await dbContext.SurveyOrders
-                    .SingleOrDefaultAsync(o => o.Id == draft.SourceSurveyOrderId, ct);
+                    .SingleOrDefaultAsync(
+                        o => o.Id == draft.SourceSurveyOrderId &&
+                             o.TenantId == draft.TenantId &&
+                             o.FarmId == draft.FarmId,
+                        transactionToken);
 
                 if (order is null)
                 {
@@ -144,6 +219,15 @@ internal sealed class FarmBaseMapInternalApprovalOrchestrator(
 
                 if (batch.MappingKind == MappingKind.FirstBaseline)
                 {
+                    if (!draft.IsBaseline || draft.VersionNumber != 1 ||
+                        draft.PredecessorVersionId.HasValue || draft.BaselineMapVersionId != draft.Id)
+                    {
+                        return Result.Failure<FarmBaseMapInternallyApprovedResult>(
+                            AppError.Conflict(
+                                "FarmBaseMapDraft.InvalidBaselineLineage",
+                                "First-baseline approval requires a version-1 self-referencing baseline map."));
+                    }
+
                     if (!order.RequiresBaselineMapping)
                     {
                         return Result.Failure<FarmBaseMapInternallyApprovedResult>(
@@ -162,12 +246,22 @@ internal sealed class FarmBaseMapInternalApprovalOrchestrator(
                 }
                 else if (batch.MappingKind == MappingKind.FollowUpSnapshot)
                 {
+                    if (draft.IsBaseline || !draft.BaselineMapVersionId.HasValue ||
+                        !draft.PredecessorVersionId.HasValue ||
+                        draft.PredecessorVersionId != batch.ExpectedCurrentFarmBaseMapVersionId)
+                    {
+                        return Result.Failure<FarmBaseMapInternallyApprovedResult>(
+                            AppError.Conflict(
+                                "FarmBaseMapDraft.InvalidFollowUpLineage",
+                                "Follow-up approval requires the pinned baseline and exact expected predecessor."));
+                    }
+
                     if (order.RequiresBaselineMapping)
                     {
                         return Result.Failure<FarmBaseMapInternallyApprovedResult>(
                             AppError.Conflict(
                                 "SurveyOrder.RequiresBaselineMapping",
-                                $"Survey order {order.Id} requires baseline mapping but follow-up snapshot was provided."));
+                                $"Survey order {order.Id} requires baseline mapping but follow-up snapshot mapping was provided."));
                     }
 
                     if (order.Status != SurveyOrderStatus.Processing)
@@ -179,9 +273,12 @@ internal sealed class FarmBaseMapInternalApprovalOrchestrator(
                     }
                 }
 
-                // Check for unresolved boundary exceptions
+                // Check for unresolved boundary exceptions scoped to tenant, farm, order, mission, boundary
                 var hasUnresolvedBoundaryExceptions = await dbContext.BoundaryExceptions.AnyAsync(
-                    e => e.FarmId == farmId &&
+                    e => e.TenantId == order.TenantId &&
+                         e.FarmId == farmId &&
+                         e.SurveyOrderId == order.Id &&
+                         e.MissionId == draft.SourceMissionId &&
                          e.FarmBoundaryVersionId == boundary.Id &&
                          e.State != BoundaryExceptionState.Resolved, ct);
 
@@ -190,11 +287,15 @@ internal sealed class FarmBaseMapInternalApprovalOrchestrator(
                     return Result.Failure<FarmBaseMapInternallyApprovedResult>(
                         AppError.Conflict(
                             "BoundaryException.Unresolved",
-                            "Unresolved boundary exceptions exist for this boundary version. All exceptions must be resolved before internal approval."));
+                            "Unresolved boundary exceptions exist for this mission and boundary version. All exceptions must be resolved before internal approval."));
                 }
 
                 var now = timeProvider.GetUtcNow();
                 var snapshotId = Guid.NewGuid();
+                var approvalId = Guid.NewGuid();
+                var missionId = batch.MissionId;
+                var captureAttemptId = batch.CaptureAttemptId;
+
                 var unknownHealthLevelId = await healthLevelReferenceQuery.GetActiveUnknownIdAsync(ct);
                 if (!unknownHealthLevelId.HasValue)
                 {
@@ -205,8 +306,12 @@ internal sealed class FarmBaseMapInternalApprovalOrchestrator(
                 }
                 var defaultHealthLevelId = unknownHealthLevelId.Value;
 
-                // Load active profiles & plants for farm
-                var activeProfiles = await dbContext.PlantProfiles
+                // Load active plants and profiles separately by their canonical primary keys
+                var activePlantsById = await dbContext.Plants
+                    .Where(p => p.FarmId == farmId && p.LifecycleStatus == PlantLifecycleStatus.Active)
+                    .ToDictionaryAsync(p => p.Id, ct);
+
+                var activeProfilesById = await dbContext.PlantProfiles
                     .Where(p => p.FarmId == farmId && p.TenantId == order.TenantId && p.Status == PlantProfileStatus.Active)
                     .ToDictionaryAsync(p => p.Id, ct);
 
@@ -215,14 +320,143 @@ internal sealed class FarmBaseMapInternalApprovalOrchestrator(
                     .ToDictionaryAsync(p => p.PlantProfileId!.Value, ct);
 
                 var snapshotItems = new List<SurveyOrderPoleCountSnapshotItem>();
+                var profilesToAdd = new List<PlantProfile>();
+                var plantsToAdd = new List<Plant>();
+                var eventsToAdd = new List<PlantChangeEvent>();
+                var observationsToAdd = new List<PlantProfileObservation>();
+
                 var orderedCandidates = batch.Candidates.OrderBy(c => c.Id).ToList();
+
+                var targetedPlantIds = new HashSet<Guid>();
+                foreach (var candidate in orderedCandidates)
+                {
+                    if (candidate.ReviewDecision == MappingCandidateReviewDecision.Pending)
+                    {
+                        return Result.Failure<FarmBaseMapInternallyApprovedResult>(
+                            AppError.Validation("MappingCandidate.Pending", $"Candidate {candidate.Id} is still pending review."));
+                    }
+
+                    if (candidate.ReviewDecision == MappingCandidateReviewDecision.Reject)
+                    {
+                        continue;
+                    }
+
+                    if (candidate.ReviewDecision == MappingCandidateReviewDecision.CreateNew)
+                    {
+                        if (string.IsNullOrWhiteSpace(candidate.TreeId) ||
+                            (candidate.CorrectedRowIndex ?? candidate.ProposedRowIndex) is not { } row || row < 1 ||
+                            (candidate.CorrectedColumnIndex ?? candidate.ProposedColumnIndex) is not { } column || column < 1)
+                        {
+                            return Result.Failure<FarmBaseMapInternallyApprovedResult>(
+                                AppError.Validation(
+                                    "MappingCandidate.InvalidCreateEvidence",
+                                    $"Candidate {candidate.Id} requires TreeId and reviewed row/column >= 1."));
+                        }
+
+                        continue;
+                    }
+
+                    var targetPlantId = candidate.CorrectedMatchedPlantId ?? candidate.ProposedMatchedPlantId;
+                    if (!targetPlantId.HasValue ||
+                        !targetedPlantIds.Add(targetPlantId.Value) ||
+                        !activePlantsById.TryGetValue(targetPlantId.Value, out var targetPlant) ||
+                        !targetPlant.PlantProfileId.HasValue ||
+                        !activeProfilesById.TryGetValue(targetPlant.PlantProfileId.Value, out var targetProfile))
+                    {
+                        return Result.Failure<FarmBaseMapInternallyApprovedResult>(
+                            AppError.Validation(
+                                "MappingCandidate.InvalidTarget",
+                                $"Candidate {candidate.Id} must reference one unique active target plant/profile in this farm."));
+                    }
+
+                    var effectivePosition = candidate.CorrectedPosition ?? candidate.OriginalPosition;
+                    var targetDistanceM = GeodesicSpatialCalculator.CalculateDistanceMeters(
+                        targetProfile.CurrentLocation.Y,
+                        targetProfile.CurrentLocation.X,
+                        effectivePosition.Y,
+                        effectivePosition.X);
+                    if (targetDistanceM > batch.MatchingDistanceThresholdM)
+                    {
+                        return Result.Failure<FarmBaseMapInternallyApprovedResult>(
+                            AppError.Validation(
+                                "MappingCandidate.DistanceThresholdExceeded",
+                                $"Candidate {candidate.Id} is {targetDistanceM:F2}m from its target, above {batch.MatchingDistanceThresholdM:F2}m."));
+                    }
+
+                    if (candidate.ReviewDecision is MappingCandidateReviewDecision.Relocate or MappingCandidateReviewDecision.Replace)
+                    {
+                        if ((candidate.CorrectedRowIndex ?? candidate.ProposedRowIndex) is not { } row || row < 1 ||
+                            (candidate.CorrectedColumnIndex ?? candidate.ProposedColumnIndex) is not { } column || column < 1 ||
+                            candidate.ReviewDecision == MappingCandidateReviewDecision.Replace && string.IsNullOrWhiteSpace(candidate.TreeId))
+                        {
+                            return Result.Failure<FarmBaseMapInternallyApprovedResult>(
+                                AppError.Validation(
+                                    "MappingCandidate.InvalidMutationEvidence",
+                                    $"Candidate {candidate.Id} requires reviewed row/column >= 1 and Replace also requires TreeId."));
+                        }
+                    }
+                }
 
                 foreach (var c in orderedCandidates)
                 {
                     var effectivePos = c.CorrectedPosition ?? c.OriginalPosition;
-                    // Strict boundary check: Point must be strictly inside (interior)
-                    var isStrictlyInBoundary = boundary.Geometry.Covers(effectivePos) &&
-                                               !boundary.Geometry.Boundary.Intersects(effectivePos);
+                    var isStrictlyInBoundary = await dbContext.Database.SqlQuery<bool>($"""
+                        SELECT ST_Within(
+                            ST_SetSRID(ST_MakePoint({effectivePos.X}, {effectivePos.Y}), 4326),
+                            geometry) AS "Value"
+                        FROM farm.farm_boundaries
+                        WHERE id = {boundary.Id}
+                          AND farm_id = {farmId}
+                          AND tenant_id = {order.TenantId}
+                        """).SingleAsync(transactionToken);
+
+                    if (!isStrictlyInBoundary && c.ReviewDecision != MappingCandidateReviewDecision.Reject)
+                    {
+                        Guid? excludedTargetPlantId = null;
+                        Guid? excludedTargetProfileId = null;
+                        Point? excludedPreviousPosition = null;
+
+                        if (c.ReviewDecision is MappingCandidateReviewDecision.MatchExisting or
+                            MappingCandidateReviewDecision.Relocate or MappingCandidateReviewDecision.Replace)
+                        {
+                            excludedTargetPlantId = c.CorrectedMatchedPlantId ?? c.ProposedMatchedPlantId;
+                            if (!excludedTargetPlantId.HasValue ||
+                                !activePlantsById.TryGetValue(excludedTargetPlantId.Value, out var excludedTargetPlant) ||
+                                !excludedTargetPlant.PlantProfileId.HasValue ||
+                                !activeProfilesById.TryGetValue(excludedTargetPlant.PlantProfileId.Value, out var excludedTargetProfile))
+                            {
+                                return Result.Failure<FarmBaseMapInternallyApprovedResult>(
+                                    AppError.Validation(
+                                        "MappingCandidate.InvalidExcludedTarget",
+                                        $"Candidate {c.Id} does not reference an active target plant/profile in this farm."));
+                            }
+
+                            excludedTargetProfileId = excludedTargetProfile.Id;
+                            if (c.ReviewDecision is MappingCandidateReviewDecision.Relocate or MappingCandidateReviewDecision.Replace)
+                            {
+                                excludedPreviousPosition = excludedTargetProfile.CurrentLocation;
+                            }
+                        }
+
+                        snapshotItems.Add(SurveyOrderPoleCountSnapshotItem.Create(
+                            id: Guid.NewGuid(),
+                            snapshotId: snapshotId,
+                            tenantId: order.TenantId,
+                            farmId: farmId,
+                            mappingCandidateBatchId: batch.Id,
+                            mappingCandidateId: c.Id,
+                            sourceCandidateId: c.CandidateId,
+                            plantProfileId: null,
+                            effectivePosition: effectivePos,
+                            reviewDecision: c.ReviewDecision.ToString(),
+                            isAccepted: false,
+                            isStrictlyInBoundary: false,
+                            exclusionReason: "Candidate position is outside or on the strict farm boundary.",
+                            targetPlantId: excludedTargetPlantId,
+                            targetPlantProfileId: excludedTargetProfileId,
+                            previousPosition: excludedPreviousPosition));
+                        continue;
+                    }
 
                     Guid? resultantProfileId = null;
                     bool isAccepted;
@@ -233,6 +467,21 @@ internal sealed class FarmBaseMapInternalApprovalOrchestrator(
                         case MappingCandidateReviewDecision.Reject:
                             isAccepted = false;
                             exclusionReason = c.ReviewReason ?? "Reviewer rejected candidate.";
+
+                            snapshotItems.Add(SurveyOrderPoleCountSnapshotItem.Create(
+                                id: Guid.NewGuid(),
+                                snapshotId: snapshotId,
+                                tenantId: order.TenantId,
+                                farmId: farmId,
+                                mappingCandidateBatchId: batch.Id,
+                                mappingCandidateId: c.Id,
+                                sourceCandidateId: c.CandidateId,
+                                plantProfileId: null,
+                                effectivePosition: effectivePos,
+                                reviewDecision: "Reject",
+                                isAccepted: false,
+                                isStrictlyInBoundary: isStrictlyInBoundary,
+                                exclusionReason: exclusionReason));
                             break;
 
                         case MappingCandidateReviewDecision.CreateNew:
@@ -240,33 +489,65 @@ internal sealed class FarmBaseMapInternalApprovalOrchestrator(
                             {
                                 isAccepted = false;
                                 exclusionReason = "Candidate position is outside or on the strict farm boundary.";
+
+                                snapshotItems.Add(SurveyOrderPoleCountSnapshotItem.Create(
+                                    id: Guid.NewGuid(),
+                                    snapshotId: snapshotId,
+                                    tenantId: order.TenantId,
+                                    farmId: farmId,
+                                    mappingCandidateBatchId: batch.Id,
+                                    mappingCandidateId: c.Id,
+                                    sourceCandidateId: c.CandidateId,
+                                    plantProfileId: null,
+                                    effectivePosition: effectivePos,
+                                    reviewDecision: "CreateNew",
+                                    isAccepted: false,
+                                    isStrictlyInBoundary: isStrictlyInBoundary,
+                                    exclusionReason: exclusionReason));
                             }
                             else
                             {
+                                if (string.IsNullOrWhiteSpace(c.TreeId))
+                                {
+                                    return Result.Failure<FarmBaseMapInternallyApprovedResult>(
+                                        AppError.Validation(
+                                            "MappingCandidate.MissingTreeId",
+                                            $"Candidate {c.Id} is missing required TreeId."));
+                                }
+
+                                var createRow = c.CorrectedRowIndex ?? c.ProposedRowIndex;
+                                var createCol = c.CorrectedColumnIndex ?? c.ProposedColumnIndex;
+                                if (!createRow.HasValue || createRow.Value < 1 ||
+                                    !createCol.HasValue || createCol.Value < 1)
+                                {
+                                    return Result.Failure<FarmBaseMapInternallyApprovedResult>(
+                                        AppError.Validation(
+                                            "MappingCandidate.InvalidGridIndices",
+                                            $"Candidate {c.Id} must have valid Row and Column indices >= 1 for CreateNew."));
+                                }
+
+                                var poleIdentifier = c.TreeId.Trim();
                                 var newProfile = PlantProfile.Create(
                                     id: Guid.NewGuid(),
                                     tenantId: order.TenantId,
                                     farmId: farmId,
-                                    physicalPoleIdentifier: c.TreeId ?? $"POLE-{c.Id.ToString()[..8].ToUpperInvariant()}",
+                                    physicalPoleIdentifier: poleIdentifier,
                                     baselineLocation: effectivePos,
                                     baselineMapVersionId: draft.Id,
                                     createdAt: now);
 
-                                var createRow = Math.Max(1, c.CorrectedRowIndex ?? c.ProposedRowIndex ?? 1);
-                                var createCol = Math.Max(1, c.CorrectedColumnIndex ?? c.ProposedColumnIndex ?? 1);
-
                                 var newPlant = Plant.CreateFromFarmMapping(
                                     id: Guid.NewGuid(),
                                     farmId: farmId,
-                                    plantCode: c.TreeId ?? $"P-{c.Id.ToString()[..8].ToUpperInvariant()}",
+                                    plantCode: poleIdentifier,
                                     location: effectivePos,
                                     farmBaseMapVersionId: draft.Id,
-                                    rowIndex: createRow,
-                                    columnIndex: createCol,
+                                    rowIndex: createRow.Value,
+                                    columnIndex: createCol.Value,
                                     locationAccuracyM: null,
                                     positionConfidence: c.PositionConfidence,
                                     healthLevelId: defaultHealthLevelId,
-                                    sourceMissionId: draft.SourceMissionId ?? Guid.Empty,
+                                    sourceMissionId: missionId,
                                     mappedAt: now);
 
                                 newPlant.LinkPlantProfile(newProfile.Id);
@@ -275,36 +556,65 @@ internal sealed class FarmBaseMapInternalApprovalOrchestrator(
                                     farmId: farmId,
                                     plantProfileId: newProfile.Id,
                                     sourceSurveyOrderId: order.Id,
-                                    missionId: draft.SourceMissionId,
+                                    missionId: missionId,
                                     plantId: newPlant.Id,
                                     farmBaseMapVersionId: draft.Id,
                                     spatialPolicyVersionId: batch.SpatialPolicyVersionId,
                                     location: effectivePos,
-                                    rowIndex: createRow,
-                                    columnIndex: createCol,
+                                    rowIndex: createRow.Value,
+                                    columnIndex: createCol.Value,
                                     actorId: actorId,
                                     createdAt: now);
 
-                                dbContext.PlantProfiles.Add(newProfile);
-                                dbContext.Plants.Add(newPlant);
-                                dbContext.PlantChangeEvents.Add(changeEvent);
+                                profilesToAdd.Add(newProfile);
+                                plantsToAdd.Add(newPlant);
+                                eventsToAdd.Add(changeEvent);
 
-                                activeProfiles[newProfile.Id] = newProfile;
+                                activeProfilesById[newProfile.Id] = newProfile;
+                                activePlantsById[newPlant.Id] = newPlant;
                                 activePlantsByProfile[newProfile.Id] = newPlant;
 
                                 isAccepted = true;
                                 resultantProfileId = newProfile.Id;
+
+                                snapshotItems.Add(SurveyOrderPoleCountSnapshotItem.Create(
+                                    id: Guid.NewGuid(),
+                                    snapshotId: snapshotId,
+                                    tenantId: order.TenantId,
+                                    farmId: farmId,
+                                    mappingCandidateBatchId: batch.Id,
+                                    mappingCandidateId: c.Id,
+                                    sourceCandidateId: c.CandidateId,
+                                    plantProfileId: resultantProfileId,
+                                    effectivePosition: effectivePos,
+                                    reviewDecision: "CreateNew",
+                                    isAccepted: true,
+                                    isStrictlyInBoundary: true,
+                                    exclusionReason: null,
+                                    targetPlantId: null,
+                                    targetPlantProfileId: null,
+                                    previousPosition: null,
+                                    effectiveRowIndex: createRow.Value,
+                                    effectiveColumnIndex: createCol.Value));
                             }
                             break;
 
                         case MappingCandidateReviewDecision.MatchExisting:
-                            var matchTargetId = c.CorrectedMatchedPlantId ?? c.ProposedMatchedPlantId;
-                            if (!matchTargetId.HasValue || !activeProfiles.TryGetValue(matchTargetId.Value, out var matchProfile))
+                            var targetPlantIdForMatch = c.CorrectedMatchedPlantId ?? c.ProposedMatchedPlantId;
+                            if (!targetPlantIdForMatch.HasValue || !activePlantsById.TryGetValue(targetPlantIdForMatch.Value, out var targetPlantForMatch))
+                            {
+                                return Result.Failure<FarmBaseMapInternallyApprovedResult>(
+                                    AppError.Validation(
+                                        "MappingCandidate.TargetPlantNotFound",
+                                        $"Candidate {c.Id} references target plant '{targetPlantIdForMatch}' which was not found in farm."));
+                            }
+
+                            if (!targetPlantForMatch.PlantProfileId.HasValue || !activeProfilesById.TryGetValue(targetPlantForMatch.PlantProfileId.Value, out var matchProfile))
                             {
                                 return Result.Failure<FarmBaseMapInternallyApprovedResult>(
                                     AppError.Validation(
                                         "MappingCandidate.TargetProfileNotFound",
-                                        $"Candidate {c.Id} references target profile '{matchTargetId}' which was not found or is inactive."));
+                                        $"Plant '{targetPlantForMatch.Id}' has no active profile or profile was not found."));
                             }
 
                             var matchDistanceM = GeodesicSpatialCalculator.CalculateDistanceMeters(
@@ -334,7 +644,7 @@ internal sealed class FarmBaseMapInternalApprovalOrchestrator(
                                 matchDistanceM,
                                 now,
                                 actorId);
-                            dbContext.PlantProfileObservations.Add(matchObservation);
+                            observationsToAdd.Add(matchObservation);
 
                             if (!isStrictlyInBoundary)
                             {
@@ -346,75 +656,88 @@ internal sealed class FarmBaseMapInternalApprovalOrchestrator(
                                 isAccepted = true;
                                 resultantProfileId = matchProfile.Id;
                             }
+
+                            snapshotItems.Add(SurveyOrderPoleCountSnapshotItem.Create(
+                                id: Guid.NewGuid(),
+                                snapshotId: snapshotId,
+                                tenantId: order.TenantId,
+                                farmId: farmId,
+                                mappingCandidateBatchId: batch.Id,
+                                mappingCandidateId: c.Id,
+                                sourceCandidateId: c.CandidateId,
+                                plantProfileId: resultantProfileId,
+                                effectivePosition: effectivePos,
+                                reviewDecision: "MatchExisting",
+                                isAccepted: isAccepted,
+                                isStrictlyInBoundary: isStrictlyInBoundary,
+                                exclusionReason: exclusionReason,
+                                targetPlantId: targetPlantForMatch.Id,
+                                targetPlantProfileId: matchProfile.Id,
+                                previousPosition: null,
+                                effectiveRowIndex: targetPlantForMatch.RowIndex,
+                                effectiveColumnIndex: targetPlantForMatch.ColumnIndex));
                             break;
 
                         case MappingCandidateReviewDecision.Relocate:
-                            var relocateTargetId = c.CorrectedMatchedPlantId ?? c.ProposedMatchedPlantId;
-                            if (!relocateTargetId.HasValue || !activeProfiles.TryGetValue(relocateTargetId.Value, out var relocateProfile))
+                            var targetPlantIdForRelocate = c.CorrectedMatchedPlantId ?? c.ProposedMatchedPlantId;
+                            if (!targetPlantIdForRelocate.HasValue || !activePlantsById.TryGetValue(targetPlantIdForRelocate.Value, out var targetPlantForRelocate))
+                            {
+                                return Result.Failure<FarmBaseMapInternallyApprovedResult>(
+                                    AppError.Validation(
+                                        "MappingCandidate.TargetPlantNotFound",
+                                        $"Candidate {c.Id} references target plant '{targetPlantIdForRelocate}' which was not found in farm."));
+                            }
+
+                            if (!targetPlantForRelocate.PlantProfileId.HasValue || !activeProfilesById.TryGetValue(targetPlantForRelocate.PlantProfileId.Value, out var relocateProfile))
                             {
                                 return Result.Failure<FarmBaseMapInternallyApprovedResult>(
                                     AppError.Validation(
                                         "MappingCandidate.TargetProfileNotFound",
-                                        $"Candidate {c.Id} references target profile '{relocateTargetId}' which was not found or is inactive."));
+                                        $"Plant '{targetPlantForRelocate.Id}' has no active profile or profile was not found."));
                             }
 
                             var oldLocation = relocateProfile.CurrentLocation;
                             var relocateDistanceM = relocateProfile.Relocate(effectivePos, draft.Id, batch.MatchingDistanceThresholdM, now);
 
-                            activePlantsByProfile.TryGetValue(relocateProfile.Id, out var existingPlant);
-                            var effectiveRelocateRow = Math.Max(1, c.CorrectedRowIndex ?? c.ProposedRowIndex ?? existingPlant?.RowIndex ?? 1);
-                            var effectiveRelocateCol = Math.Max(1, c.CorrectedColumnIndex ?? c.ProposedColumnIndex ?? existingPlant?.ColumnIndex ?? 1);
+                            var effectiveRelocateRow = c.CorrectedRowIndex ?? c.ProposedRowIndex;
+                            var effectiveRelocateCol = c.CorrectedColumnIndex ?? c.ProposedColumnIndex;
+                            if (!effectiveRelocateRow.HasValue || effectiveRelocateRow.Value < 1 ||
+                                !effectiveRelocateCol.HasValue || effectiveRelocateCol.Value < 1)
+                            {
+                                return Result.Failure<FarmBaseMapInternallyApprovedResult>(
+                                    AppError.Validation(
+                                        "MappingCandidate.InvalidGridIndices",
+                                        $"Candidate {c.Id} must have valid Row and Column indices >= 1 for Relocate."));
+                            }
 
-                            if (existingPlant is null)
-                            {
-                                existingPlant = Plant.CreateFromFarmMapping(
-                                    id: Guid.NewGuid(),
-                                    farmId: farmId,
-                                    plantCode: c.TreeId ?? $"P-{c.Id.ToString()[..8].ToUpperInvariant()}",
-                                    location: effectivePos,
-                                    farmBaseMapVersionId: draft.Id,
-                                    rowIndex: effectiveRelocateRow,
-                                    columnIndex: effectiveRelocateCol,
-                                    locationAccuracyM: null,
-                                    positionConfidence: c.PositionConfidence,
-                                    healthLevelId: defaultHealthLevelId,
-                                    sourceMissionId: draft.SourceMissionId ?? Guid.Empty,
-                                    mappedAt: now);
-                                existingPlant.LinkPlantProfile(relocateProfile.Id);
-                                dbContext.Plants.Add(existingPlant);
-                                activePlantsByProfile[relocateProfile.Id] = existingPlant;
-                            }
-                            else
-                            {
-                                existingPlant.ApplyPublishedFarmMapPosition(
-                                    draft.Id,
-                                    effectivePos,
-                                    effectiveRelocateRow,
-                                    effectiveRelocateCol,
-                                    locationAccuracyM: null,
-                                    positionConfidence: c.PositionConfidence,
-                                    mappedAt: now);
-                            }
+                            targetPlantForRelocate.ApplyPublishedFarmMapPosition(
+                                draft.Id,
+                                effectivePos,
+                                effectiveRelocateRow.Value,
+                                effectiveRelocateCol.Value,
+                                locationAccuracyM: null,
+                                positionConfidence: c.PositionConfidence,
+                                mappedAt: now);
 
                             var relocateChangeEvent = PlantChangeEvent.Relocated(
                                 farmId: farmId,
                                 plantProfileId: relocateProfile.Id,
                                 sourceSurveyOrderId: order.Id,
-                                missionId: draft.SourceMissionId,
-                                plantId: existingPlant.Id,
+                                missionId: missionId,
+                                plantId: targetPlantForRelocate.Id,
                                 farmBaseMapVersionId: draft.Id,
                                 spatialPolicyVersionId: batch.SpatialPolicyVersionId,
                                 managerDecisionId: actorId,
                                 oldLocation: oldLocation,
                                 newLocation: effectivePos,
-                                oldRowIndex: existingPlant.RowIndex,
-                                newRowIndex: effectiveRelocateRow,
-                                oldColumnIndex: existingPlant.ColumnIndex,
-                                newColumnIndex: effectiveRelocateCol,
-                                lifecycleStatus: existingPlant.LifecycleStatus,
+                                oldRowIndex: targetPlantForRelocate.RowIndex,
+                                newRowIndex: effectiveRelocateRow.Value,
+                                oldColumnIndex: targetPlantForRelocate.ColumnIndex,
+                                newColumnIndex: effectiveRelocateCol.Value,
+                                lifecycleStatus: targetPlantForRelocate.LifecycleStatus,
                                 actorId: actorId,
                                 createdAt: now);
-                            dbContext.PlantChangeEvents.Add(relocateChangeEvent);
+                            eventsToAdd.Add(relocateChangeEvent);
 
                             var relocateObservation = PlantProfileObservation.Create(
                                 Guid.NewGuid(),
@@ -429,7 +752,7 @@ internal sealed class FarmBaseMapInternalApprovalOrchestrator(
                                 relocateDistanceM,
                                 now,
                                 actorId);
-                            dbContext.PlantProfileObservations.Add(relocateObservation);
+                            observationsToAdd.Add(relocateObservation);
 
                             if (!isStrictlyInBoundary)
                             {
@@ -441,77 +764,118 @@ internal sealed class FarmBaseMapInternalApprovalOrchestrator(
                                 isAccepted = true;
                                 resultantProfileId = relocateProfile.Id;
                             }
+
+                            snapshotItems.Add(SurveyOrderPoleCountSnapshotItem.Create(
+                                id: Guid.NewGuid(),
+                                snapshotId: snapshotId,
+                                tenantId: order.TenantId,
+                                farmId: farmId,
+                                mappingCandidateBatchId: batch.Id,
+                                mappingCandidateId: c.Id,
+                                sourceCandidateId: c.CandidateId,
+                                plantProfileId: resultantProfileId,
+                                effectivePosition: effectivePos,
+                                reviewDecision: "Relocate",
+                                isAccepted: isAccepted,
+                                isStrictlyInBoundary: isStrictlyInBoundary,
+                                exclusionReason: exclusionReason,
+                                targetPlantId: targetPlantForRelocate.Id,
+                                targetPlantProfileId: relocateProfile.Id,
+                                previousPosition: oldLocation,
+                                effectiveRowIndex: effectiveRelocateRow.Value,
+                                effectiveColumnIndex: effectiveRelocateCol.Value));
                             break;
 
                         case MappingCandidateReviewDecision.Replace:
-                            var replaceTargetId = c.CorrectedMatchedPlantId ?? c.ProposedMatchedPlantId;
-                            if (!replaceTargetId.HasValue || !activeProfiles.TryGetValue(replaceTargetId.Value, out var oldProfile))
+                            var targetPlantIdForReplace = c.CorrectedMatchedPlantId ?? c.ProposedMatchedPlantId;
+                            if (!targetPlantIdForReplace.HasValue || !activePlantsById.TryGetValue(targetPlantIdForReplace.Value, out var targetPlantForReplace))
+                            {
+                                return Result.Failure<FarmBaseMapInternallyApprovedResult>(
+                                    AppError.Validation(
+                                        "MappingCandidate.TargetPlantNotFound",
+                                        $"Candidate {c.Id} references target plant '{targetPlantIdForReplace}' which was not found in farm."));
+                            }
+
+                            if (!targetPlantForReplace.PlantProfileId.HasValue || !activeProfilesById.TryGetValue(targetPlantForReplace.PlantProfileId.Value, out var oldProfile))
                             {
                                 return Result.Failure<FarmBaseMapInternallyApprovedResult>(
                                     AppError.Validation(
                                         "MappingCandidate.TargetProfileNotFound",
-                                        $"Candidate {c.Id} references target profile '{replaceTargetId}' which was not found or is inactive."));
+                                        $"Plant '{targetPlantForReplace.Id}' has no active profile or profile was not found."));
+                            }
+
+                            if (string.IsNullOrWhiteSpace(c.TreeId))
+                            {
+                                return Result.Failure<FarmBaseMapInternallyApprovedResult>(
+                                    AppError.Validation(
+                                        "MappingCandidate.MissingTreeId",
+                                        $"Candidate {c.Id} is missing required TreeId for Replace."));
+                            }
+
+                            var effectiveReplaceRow = c.CorrectedRowIndex ?? c.ProposedRowIndex;
+                            var effectiveReplaceCol = c.CorrectedColumnIndex ?? c.ProposedColumnIndex;
+                            if (!effectiveReplaceRow.HasValue || effectiveReplaceRow.Value < 1 ||
+                                !effectiveReplaceCol.HasValue || effectiveReplaceCol.Value < 1)
+                            {
+                                return Result.Failure<FarmBaseMapInternallyApprovedResult>(
+                                    AppError.Validation(
+                                        "MappingCandidate.InvalidGridIndices",
+                                        $"Candidate {c.Id} must have valid Row and Column indices >= 1 for Replace."));
                             }
 
                             var oldProfileLocation = oldProfile.CurrentLocation;
+                            var replacePoleCode = c.TreeId.Trim();
                             var newReplacementProfile = oldProfile.ReplaceWithNewProfile(
                                 newProfileId: Guid.NewGuid(),
-                                newPoleIdentifier: c.TreeId ?? $"POLE-{c.Id.ToString()[..8].ToUpperInvariant()}",
+                                newPoleIdentifier: replacePoleCode,
                                 newLocation: effectivePos,
                                 mapVersionId: draft.Id,
                                 managerDecisionId: actorId,
                                 reason: c.ReviewReason ?? "Manager approved pole replacement",
                                 at: now);
 
-                            var replaceRow = Math.Max(1, c.CorrectedRowIndex ?? c.ProposedRowIndex ?? 1);
-                            var replaceCol = Math.Max(1, c.CorrectedColumnIndex ?? c.ProposedColumnIndex ?? 1);
-
                             var newPlantForReplaced = Plant.CreateFromFarmMapping(
                                 id: Guid.NewGuid(),
                                 farmId: farmId,
-                                plantCode: c.TreeId ?? $"P-{c.Id.ToString()[..8].ToUpperInvariant()}",
+                                plantCode: replacePoleCode,
                                 location: effectivePos,
                                 farmBaseMapVersionId: draft.Id,
-                                rowIndex: replaceRow,
-                                columnIndex: replaceCol,
+                                rowIndex: effectiveReplaceRow.Value,
+                                columnIndex: effectiveReplaceCol.Value,
                                 locationAccuracyM: null,
                                 positionConfidence: c.PositionConfidence,
                                 healthLevelId: defaultHealthLevelId,
-                                sourceMissionId: draft.SourceMissionId ?? Guid.Empty,
+                                sourceMissionId: missionId,
                                 mappedAt: now);
                             newPlantForReplaced.LinkPlantProfile(newReplacementProfile.Id);
-
-                            activePlantsByProfile.TryGetValue(oldProfile.Id, out var oldPlant);
-                            if (oldPlant is not null)
-                            {
-                                newPlantForReplaced.LinkReplacedPlant(oldPlant.Id);
-                                oldPlant.Retire(PlantLifecycleStatus.Removed, now);
-                            }
+                            newPlantForReplaced.LinkReplacedPlant(targetPlantForReplace.Id);
+                            targetPlantForReplace.Retire(PlantLifecycleStatus.Removed, now);
 
                             var replaceChangeEvent = PlantChangeEvent.Replaced(
                                 farmId: farmId,
                                 plantProfileId: newReplacementProfile.Id,
                                 predecessorPlantProfileId: oldProfile.Id,
                                 sourceSurveyOrderId: order.Id,
-                                missionId: draft.SourceMissionId,
+                                missionId: missionId,
                                 plantId: newPlantForReplaced.Id,
                                 farmBaseMapVersionId: draft.Id,
                                 spatialPolicyVersionId: batch.SpatialPolicyVersionId,
                                 managerDecisionId: actorId,
                                 oldLocation: oldProfileLocation,
                                 newLocation: effectivePos,
-                                oldRowIndex: oldPlant?.RowIndex,
-                                newRowIndex: replaceRow,
-                                oldColumnIndex: oldPlant?.ColumnIndex,
-                                newColumnIndex: replaceCol,
+                                oldRowIndex: targetPlantForReplace.RowIndex,
+                                newRowIndex: effectiveReplaceRow.Value,
+                                oldColumnIndex: targetPlantForReplace.ColumnIndex,
+                                newColumnIndex: effectiveReplaceCol.Value,
                                 actorId: actorId,
                                 createdAt: now);
 
-                            dbContext.PlantProfiles.Add(newReplacementProfile);
-                            dbContext.Plants.Add(newPlantForReplaced);
-                            dbContext.PlantChangeEvents.Add(replaceChangeEvent);
+                            profilesToAdd.Add(newReplacementProfile);
+                            plantsToAdd.Add(newPlantForReplaced);
+                            eventsToAdd.Add(replaceChangeEvent);
 
-                            activeProfiles[newReplacementProfile.Id] = newReplacementProfile;
+                            activeProfilesById[newReplacementProfile.Id] = newReplacementProfile;
+                            activePlantsById[newPlantForReplaced.Id] = newPlantForReplaced;
                             activePlantsByProfile[newReplacementProfile.Id] = newPlantForReplaced;
 
                             if (!isStrictlyInBoundary)
@@ -524,52 +888,63 @@ internal sealed class FarmBaseMapInternalApprovalOrchestrator(
                                 isAccepted = true;
                                 resultantProfileId = newReplacementProfile.Id;
                             }
+
+                            snapshotItems.Add(SurveyOrderPoleCountSnapshotItem.Create(
+                                id: Guid.NewGuid(),
+                                snapshotId: snapshotId,
+                                tenantId: order.TenantId,
+                                farmId: farmId,
+                                mappingCandidateBatchId: batch.Id,
+                                mappingCandidateId: c.Id,
+                                sourceCandidateId: c.CandidateId,
+                                plantProfileId: resultantProfileId,
+                                effectivePosition: effectivePos,
+                                reviewDecision: "Replace",
+                                isAccepted: isAccepted,
+                                isStrictlyInBoundary: isStrictlyInBoundary,
+                                exclusionReason: exclusionReason,
+                                targetPlantId: targetPlantForReplace.Id,
+                                targetPlantProfileId: oldProfile.Id,
+                                previousPosition: oldProfileLocation,
+                                effectiveRowIndex: effectiveReplaceRow.Value,
+                                effectiveColumnIndex: effectiveReplaceCol.Value));
                             break;
 
                         default:
                             return Result.Failure<FarmBaseMapInternallyApprovedResult>(
                                 AppError.Validation(
                                     "MappingCandidate.UnsupportedDecision",
-                                    $"Unsupported review decision '{c.ReviewDecision}'."));
+                                    $"Candidate {c.Id} has unsupported decision '{c.ReviewDecision}'."));
                     }
-
-                    var snapshotItem = SurveyOrderPoleCountSnapshotItem.Create(
-                        id: Guid.NewGuid(),
-                        snapshotId: snapshotId,
-                        tenantId: order.TenantId,
-                        farmId: farmId,
-                        mappingCandidateBatchId: batch.Id,
-                        mappingCandidateId: c.Id,
-                        plantProfileId: resultantProfileId,
-                        effectivePosition: effectivePos,
-                        reviewDecision: c.ReviewDecision.ToString(),
-                        isAccepted: isAccepted,
-                        isStrictlyInBoundary: isStrictlyInBoundary,
-                        exclusionReason: isAccepted ? null : exclusionReason);
-
-                    snapshotItems.Add(snapshotItem);
-                    dbContext.SurveyOrderPoleCountSnapshotItems.Add(snapshotItem);
                 }
 
-                // Compute canonical evidence fingerprint before state transitions
+                // All candidates validated successfully: now attach new entities to DbContext
+                dbContext.PlantProfiles.AddRange(profilesToAdd);
+                dbContext.Plants.AddRange(plantsToAdd);
+                dbContext.PlantChangeEvents.AddRange(eventsToAdd);
+                dbContext.PlantProfileObservations.AddRange(observationsToAdd);
+                dbContext.SurveyOrderPoleCountSnapshotItems.AddRange(snapshotItems);
+
+                // Compute deterministic canonical evidence fingerprint
                 var fingerprint = SurveyOrderPoleCountSnapshot.ComputeEvidenceFingerprint(
-                    order.Id,
-                    farmId,
-                    draft.SourceMissionId,
-                    null,
-                    draft.Id,
-                    boundary.Id,
-                    batch.Id,
-                    batch.SpatialPolicyFingerprint,
-                    snapshotItems);
+                    tenantId: order.TenantId,
+                    surveyOrderId: order.Id,
+                    farmId: farmId,
+                    missionId: missionId,
+                    captureAttemptId: captureAttemptId,
+                    farmBaseMapVersionId: draft.Id,
+                    farmBoundaryVersionId: boundary.Id,
+                    mappingCandidateBatchId: batch.Id,
+                    spatialPolicyFingerprint: batch.SpatialPolicyFingerprint,
+                    items: snapshotItems);
 
                 var snapshot = SurveyOrderPoleCountSnapshot.Create(
                     id: snapshotId,
                     surveyOrderId: order.Id,
                     tenantId: order.TenantId,
                     farmId: farmId,
-                    missionId: draft.SourceMissionId,
-                    captureAttemptId: null,
+                    missionId: missionId,
+                    captureAttemptId: captureAttemptId,
                     farmBaseMapVersionId: draft.Id,
                     farmBoundaryVersionId: boundary.Id,
                     mappingCandidateBatchId: batch.Id,
@@ -588,12 +963,11 @@ internal sealed class FarmBaseMapInternalApprovalOrchestrator(
                     order.RecordInitialMapApproval(snapshot, order.Version);
 
                     var pointer = FarmBaselinePointer.Create(
-                        order.TenantId,
-                        farmId,
-                        draft.Id,
-                        actorId,
-                        now);
-
+                        tenantId: order.TenantId,
+                        farmId: farmId,
+                        baselineMapVersionId: draft.Id,
+                        actorId: actorId,
+                        at: now);
                     dbContext.FarmBaselinePointers.Add(pointer);
                 }
                 else
@@ -609,12 +983,12 @@ internal sealed class FarmBaseMapInternalApprovalOrchestrator(
 
                 // Emit FarmBaseMapInternallyApprovedV1 to outbox
                 var approvedEvent = new FarmBaseMapInternallyApprovedV1(
-                    ApprovalId: Guid.NewGuid(),
+                    ApprovalId: approvalId,
                     CausationId: draft.Id,
                     MappingKind: batch.MappingKind,
                     SurveyOrderId: order.Id,
-                    SourceMissionId: draft.SourceMissionId ?? Guid.Empty,
-                    CaptureAttemptId: draft.SourceMissionId ?? Guid.NewGuid(),
+                    SourceMissionId: missionId,
+                    CaptureAttemptId: captureAttemptId,
                     FarmId: farmId,
                     FarmBoundaryVersionId: boundary.Id,
                     FarmBaseMapVersionId: draft.Id,
@@ -638,18 +1012,19 @@ internal sealed class FarmBaseMapInternalApprovalOrchestrator(
                 dbContext.OutboxMessages.Add(outboxMessageFactory.Create(
                     envelope,
                     IntegrationEventTypes.FarmBaseMapInternallyApprovedV1,
-                    farmId.ToString("D")));
+                    draft.Id.ToString("D")));
 
-                using var newData = JsonDocument.Parse(JsonSerializer.Serialize(new
+                using var auditData = JsonSerializer.SerializeToDocument(new
                 {
                     DraftId = draft.Id,
                     draft.VersionNumber,
-                    OrderId = order.Id,
-                    Kind = batch.MappingKind.ToString(),
+                    SurveyOrderId = order.Id,
+                    MappingKind = batch.MappingKind.ToString(),
                     snapshot.VerifiedBillablePoleCount,
-                    Fingerprint = fingerprint
-                }));
-
+                    EvidenceFingerprint = fingerprint,
+                    MappingCandidateBatchId = batch.Id,
+                    CaptureAttemptId = captureAttemptId
+                });
                 auditWriter.AddUserAction(
                     dbContext,
                     order.TenantId,
@@ -660,31 +1035,26 @@ internal sealed class FarmBaseMapInternalApprovalOrchestrator(
                     draft.Id,
                     "APPROVE_INTERNAL",
                     oldData: null,
-                    newData: newData,
+                    newData: auditData,
                     now);
 
                 await dbContext.SaveChangesAsync(ct);
 
-                logger.LogInformation(
-                    "Farm base map draft {DraftId} approved internally. Order: {OrderId}, Kind: {Kind}, Verified Poles: {Count}",
-                    draft.Id, order.Id, batch.MappingKind, snapshot.VerifiedBillablePoleCount);
-
                 return Result.Success(new FarmBaseMapInternallyApprovedResult(
-                    draft.Id,
-                    draft.VersionNumber,
-                    order.Id,
-                    farmId,
-                    snapshot.VerifiedBillablePoleCount,
-                    snapshot.Id,
-                    fingerprint,
-                    now));
-            }, cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Failed to approve farm base map draft {DraftId} internally for farm {FarmId}.", draftId, farmId);
-            return Result.Failure<FarmBaseMapInternallyApprovedResult>(
-                AppError.Failure("FarmBaseMapInternalApproval.Failed", ex.Message));
-        }
+                    FarmBaseMapVersionId: draft.Id,
+                    VersionNumber: draft.VersionNumber,
+                    SurveyOrderId: order.Id,
+                    FarmId: farmId,
+                    VerifiedBillablePoleCount: snapshot.VerifiedBillablePoleCount,
+                    PoleCountSnapshotId: snapshot.Id,
+                    EvidenceFingerprint: fingerprint,
+                    ApprovedAt: now));
+            }
+            catch (Exception)
+            {
+                dbContext.ChangeTracker.Clear();
+                throw;
+            }
+        }, ct);
     }
 }
