@@ -664,7 +664,12 @@ public sealed class MetashapeService(
                         item.GetProperty("bbox_h").GetDouble(),
                         item.GetProperty("image_name").GetString() ?? "",
                         item.TryGetProperty("crop_image_url", out var ciu) ? ciu.GetString() : null,
-                        item.TryGetProperty("annotated_image_url", out var aiu) ? aiu.GetString() : null));
+                        item.TryGetProperty("annotated_image_url", out var aiu) ? aiu.GetString() : null,
+                        OptionalString(item, "source_storage_key"),
+                        OptionalString(item, "annotated_storage_key"),
+                        OptionalString(item, "crop_storage_key"),
+                        OptionalString(item, "annotated_sha256"),
+                        OptionalString(item, "crop_sha256")));
                 }
             }
 
@@ -716,5 +721,10 @@ public sealed class MetashapeService(
             return null;
         }
     }
+
+    // Trường mới của detector có thể vắng (service cũ) hoặc null — cả hai đều coi là không có.
+    private static string? OptionalString(JsonElement item, string name) =>
+        item.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(value.GetString())
+            ? value.GetString() : null;
 }
 
