@@ -27,6 +27,7 @@ internal sealed class SurveyOrderReadinessStateQueries(NpgsqlDataSource dataSour
         command.CommandText =
             """
             SELECT
+                survey_order.post_flight_settlement,
                 survey_order.tenant_id,
                 survey_order.farm_id,
                 survey_order.status::text,
@@ -262,6 +263,17 @@ internal sealed class SurveyOrderReadinessStateQueries(NpgsqlDataSource dataSour
 
         var depositPaymentStatus = ParsePaymentStatus(
             ReadNullableString(reader, "deposit_payment_status"));
+        var zeroBalanceSettled = expectedAmount == 0m &&
+            ReadNullableDecimal(reader, "final_price") is > 0 &&
+            depositPaymentStatus == SurveyPaymentStatus.Paid &&
+            ParseOrderStatus(reader.GetString(reader.GetOrdinal("status"))) is
+                SurveyOrderStatus.ReadyForPaidService or SurveyOrderStatus.InProgress
+                or SurveyOrderStatus.PendingReview or SurveyOrderStatus.Completed;
+        if (zeroBalanceSettled)
+        {
+            paymentStatus = SurveyPaymentStatus.Paid;
+            paymentMatches = true;
+        }
 
         var snapshot = new SurveyOrderReadinessSnapshot(
             ParseOrderStatus(reader.GetString(reader.GetOrdinal("status"))),
@@ -303,7 +315,8 @@ internal sealed class SurveyOrderReadinessStateQueries(NpgsqlDataSource dataSour
                 "is_baseline_route_current")),
             reader.GetBoolean(reader.GetOrdinal(
                 "is_baseline_route_within_safety_inset")),
-            depositPaymentStatus);
+            depositPaymentStatus,
+            reader.GetBoolean(reader.GetOrdinal("post_flight_settlement")));
 
         return Result.Success(new SurveyOrderReadinessState(
             surveyOrderId,

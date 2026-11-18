@@ -40,6 +40,10 @@ public sealed class PlantChangeEventConfiguration : IEntityTypeConfiguration<Pla
             .HasColumnName("farm_id")
             .HasColumnType("uuid");
 
+        builder.Property(changeEvent => changeEvent.FarmBaseMapVersionId)
+            .HasColumnName("farm_base_map_version_id")
+            .HasColumnType("uuid");
+
         builder.Property(changeEvent => changeEvent.MissionId)
             .HasColumnName("mission_id")
             .HasColumnType("uuid");
@@ -115,6 +119,9 @@ public sealed class PlantChangeEventConfiguration : IEntityTypeConfiguration<Pla
 
         builder.HasIndex(changeEvent => changeEvent.PlantId)
             .HasDatabaseName("ix_plant_change_events_plant");
+
+        builder.HasIndex(changeEvent => changeEvent.FarmBaseMapVersionId)
+            .HasDatabaseName("ix_plant_change_events_farm_base_map");
 
         builder.HasIndex(changeEvent => new { changeEvent.FarmId, changeEvent.CreatedAt })
             .HasDatabaseName("ix_plant_change_events_farm_created")

@@ -12,4 +12,8 @@ public interface ISurveyOrderRepository
         CancellationToken cancellationToken = default);
 
     void Add(SurveyOrder surveyOrder);
+
+    void AddCommercialSnapshot(SurveyOrderCommercialSnapshot snapshot);
+
+    void AddStateHistory(OrderStateHistory history);
 }

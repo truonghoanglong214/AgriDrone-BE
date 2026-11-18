@@ -209,7 +209,10 @@ internal sealed class SurveyOrderOperationalContextV4Query(
             .ToListAsync(cancellationToken);
 
         var expectedPayableAmount = order.RemainingAmount ?? order.FinalPrice;
+        var zeroBalanceSettled = order.IsZeroBalanceSettled();
+        var effectivePaymentStatus = zeroBalanceSettled ? SurveyPaymentStatus.Paid : payment?.Status;
         var isPaymentAmountAndCurrencyMatched = purpose == SurveyOperationPurpose.BaselineMapping
+            || zeroBalanceSettled
             || (payment is not null
                 && expectedPayableAmount.HasValue
                 && payment.Amount == expectedPayableAmount.Value
@@ -227,7 +230,7 @@ internal sealed class SurveyOrderOperationalContextV4Query(
             HasPriceSnapshot: order.PricePerPoleSnapshot.HasValue && order.SurveyServicePriceId.HasValue,
             AppointmentPurpose: appointment?.Purpose,
             AppointmentStatus: appointment?.Status,
-            PaymentStatus: payment?.Status,
+            PaymentStatus: effectivePaymentStatus,
             HasActiveQualifiedPrimaryManager: managerReady,
             IsPrimaryManagerAvailable: managerReady,
             IsAppointmentCurrent: appointment?.Status == SurveyAppointmentStatus.Confirmed,
@@ -244,7 +247,8 @@ internal sealed class SurveyOrderOperationalContextV4Query(
             HasApprovedBaselineRoute: hasApprovedBaselineRoute,
             IsBaselineRouteCurrent: isBaselineRouteCurrent,
             IsBaselineRouteWithinSafetyInset: isBaselineRouteWithinSafetyInset,
-            DepositPaymentStatus: order.DepositPaymentStatus);
+            DepositPaymentStatus: order.DepositPaymentStatus,
+            PostFlightSettlement: order.PostFlightSettlement);
 
         var commercialDecision = SurveyOrderReadinessPolicy.EvaluateCommercialReadiness(commercialSnapshot);
 
@@ -272,7 +276,7 @@ internal sealed class SurveyOrderOperationalContextV4Query(
             TenantId: order.TenantId,
             FarmId: order.FarmId,
             ServiceCode: order.SurveyService.Code,
-            ServiceType: order.SurveyService.ServiceType.ToString(),
+            ServiceType: order.SurveyService.ServiceType?.ToString() ?? order.SurveyService.Code,
             RequestedMissionPurpose: purpose.ToString(),
             OrderStatus: order.Status.ToString(),
             OrderVersion: order.Version,
@@ -298,7 +302,7 @@ internal sealed class SurveyOrderOperationalContextV4Query(
             AppointmentStatus: appointment?.Status.ToString(),
             AppointmentVersion: appointment?.Version,
             PaymentId: payment?.Id,
-            PaymentStatus: payment?.Status.ToString(),
+            PaymentStatus: effectivePaymentStatus?.ToString(),
             PaidAmount: payment?.Amount,
             PaidCurrency: payment?.Currency,
             IsPaymentAmountAndCurrencyMatched: isPaymentAmountAndCurrencyMatched,

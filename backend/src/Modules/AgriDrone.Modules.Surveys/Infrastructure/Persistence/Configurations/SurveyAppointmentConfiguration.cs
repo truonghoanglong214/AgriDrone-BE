@@ -16,8 +16,10 @@ public sealed class SurveyAppointmentConfiguration : IEntityTypeConfiguration<Su
                 table.HasCheckConstraint("ck_survey_appointments_window", "proposed_end_at > proposed_start_at");
                 table.HasCheckConstraint(
                     "ck_survey_appointments_confirmation",
-                    "(status = 'CONFIRMED'::system.survey_appointment_status AND confirmed_by_tenant_owner_id IS NOT NULL AND confirmed_at IS NOT NULL) OR " +
-                    "(status <> 'CONFIRMED'::system.survey_appointment_status AND confirmed_at IS NULL)");
+                    "(status = 'CONFIRMED'::system.survey_appointment_status AND confirmed_at IS NOT NULL AND " +
+                    "((confirmed_by_tenant_owner_id IS NOT NULL AND confirmed_by_system_manager_id IS NULL) OR " +
+                    "(purpose = 'PAID_SERVICE'::system.survey_appointment_purpose AND confirmed_by_tenant_owner_id IS NULL AND confirmed_by_system_manager_id IS NOT NULL))) OR " +
+                    "(status <> 'CONFIRMED'::system.survey_appointment_status AND confirmed_at IS NULL AND confirmed_by_system_manager_id IS NULL)");
                 table.HasCheckConstraint(
                     "ck_survey_appointments_revision_chain",
                     "(revision_number = 1 AND previous_appointment_id IS NULL) OR " +
@@ -44,6 +46,7 @@ public sealed class SurveyAppointmentConfiguration : IEntityTypeConfiguration<Su
         builder.Property(appointment => appointment.ProposedStartAt).HasColumnName("proposed_start_at").HasColumnType("timestamp with time zone");
         builder.Property(appointment => appointment.ProposedEndAt).HasColumnName("proposed_end_at").HasColumnType("timestamp with time zone");
         builder.Property(appointment => appointment.Status).HasColumnName("status").HasColumnType("system.survey_appointment_status").IsRequired();
+        builder.Property(appointment => appointment.ConfirmedBySystemManagerId).HasColumnName("confirmed_by_system_manager_id").HasColumnType("uuid");
         builder.Property(appointment => appointment.ConfirmedByTenantOwnerId).HasColumnName("confirmed_by_tenant_owner_id").HasColumnType("uuid");
         builder.Property(appointment => appointment.ConfirmedAt).HasColumnName("confirmed_at").HasColumnType("timestamp with time zone");
         builder.Property(appointment => appointment.RescheduleReason).HasColumnName("reschedule_reason").HasColumnType("character varying(1000)").HasMaxLength(1000);

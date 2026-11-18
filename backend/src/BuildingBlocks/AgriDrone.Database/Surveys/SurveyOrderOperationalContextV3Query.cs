@@ -177,7 +177,10 @@ internal sealed class SurveyOrderOperationalContextV3Query(
                 version != scope.ZoneVersion);
 
         var expectedPayableAmount = order.RemainingAmount ?? order.FinalPrice;
+        var zeroBalanceSettled = order.IsZeroBalanceSettled();
+        var effectivePaymentStatus = zeroBalanceSettled ? SurveyPaymentStatus.Paid : payment?.Status;
         var isPaymentAmountAndCurrencyMatched = purpose == SurveyOperationPurpose.BaselineMapping
+            || zeroBalanceSettled
             || (payment is not null
                 && expectedPayableAmount.HasValue
                 && payment.Amount == expectedPayableAmount.Value
@@ -196,7 +199,7 @@ internal sealed class SurveyOrderOperationalContextV3Query(
             HasPriceSnapshot: order.PricePerPoleSnapshot.HasValue && order.SurveyServicePriceId.HasValue,
             AppointmentPurpose: appointment?.Purpose,
             AppointmentStatus: appointment?.Status,
-            PaymentStatus: payment?.Status,
+            PaymentStatus: effectivePaymentStatus,
             HasActiveQualifiedPrimaryManager: managerReady,
             IsPrimaryManagerAvailable: managerReady,
             IsAppointmentCurrent: appointment?.Status == SurveyAppointmentStatus.Confirmed,
@@ -213,7 +216,8 @@ internal sealed class SurveyOrderOperationalContextV3Query(
             HasApprovedBaselineRoute: hasApprovedBaselineRoute,
             IsBaselineRouteCurrent: isBaselineRouteCurrent,
             IsBaselineRouteWithinSafetyInset: isBaselineRouteWithinSafetyInset,
-            DepositPaymentStatus: order.DepositPaymentStatus);
+            DepositPaymentStatus: order.DepositPaymentStatus,
+            PostFlightSettlement: order.PostFlightSettlement);
 
         var decision = SurveyOrderReadinessPolicy.EvaluateCommercialReadiness(snapshot);
 
@@ -227,14 +231,14 @@ internal sealed class SurveyOrderOperationalContextV3Query(
 
         return new SurveyOrderOperationalContextV3(
             order.Id, order.TenantId, order.FarmId, order.SurveyService.Code,
-            order.SurveyService.ServiceType.ToString(), purpose.ToString(),
+            order.SurveyService.ServiceType?.ToString() ?? order.SurveyService.Code, purpose.ToString(),
             order.Status.ToString(), order.Version, order.FarmBoundaryVersionId,
             order.FarmBaseMapVersionId, order.RequiresBaselineMapping,
             order.ConfirmedSurveyPoleCount?.Value, order.SurveyServicePriceId,
             order.PricePerPoleSnapshot?.Amount, order.Currency, order.FinalPrice,
             appointment?.Id, appointment?.Purpose.ToString(),
             appointment?.ProposedStartAt, appointment?.ProposedEndAt,
-            appointment?.Status.ToString(), payment?.Id, payment?.Status.ToString(),
+            appointment?.Status.ToString(), payment?.Id, effectivePaymentStatus?.ToString(),
             managerReady ? access.ManagerProfileId : null,
             order.PreviousCompatibleOrderId,
             decision.IsReady && !scopeStale, readinessFailures,
@@ -257,7 +261,8 @@ internal sealed class SurveyOrderOperationalContextV3Query(
             approximateAreaHa,
             surveyRadiusMeters,
             scopeType,
-            scopeZones);
+            scopeZones,
+            order.PostFlightSettlement);
     }
 
     private static GeoJsonPolygonV3 ToGeoJson(

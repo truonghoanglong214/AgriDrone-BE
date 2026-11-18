@@ -1177,39 +1177,33 @@ def get_disease_model():
 
 
 def extract_exif_gps(image_path: str):
-    """Extract decimal (latitude, longitude) from JPEG EXIF GPS metadata."""
+    """Read WGS84 GPS using Pillow; unavailable GPS is never replaced by (0, 0)."""
+    from math import isfinite
+    from PIL import Image
+
+    def decimal_coordinate(values, reference, positive, negative, limit):
+        if isinstance(reference, bytes):
+            reference = reference.decode("ascii")
+        if reference not in (positive, negative) or len(values) != 3:
+            raise ValueError("Invalid GPS reference or DMS values")
+        degrees, minutes, seconds = (float(value) for value in values)
+        if (not all(isfinite(value) for value in (degrees, minutes, seconds)) or
+                degrees < 0 or not 0 <= minutes < 60 or not 0 <= seconds < 60):
+            raise ValueError("Invalid GPS DMS values")
+        value = degrees + minutes / 60 + seconds / 3600
+        if value > limit:
+            raise ValueError("GPS coordinate outside WGS84 range")
+        return -value if reference == negative else value
+
     try:
-        import piexif
-        exif_dict = piexif.load(image_path)
-        gps = exif_dict.get("GPS")
-        if not gps or piexif.GPSIFD.GPSLatitude not in gps or piexif.GPSIFD.GPSLongitude not in gps:
+        with Image.open(image_path) as image:
+            gps = image.getexif().get_ifd(34853)
+        if not gps or any(tag not in gps for tag in (1, 2, 3, 4)):
             return None
-
-        lat_data = gps[piexif.GPSIFD.GPSLatitude]
-        lat_ref = gps.get(piexif.GPSIFD.GPSLatitudeRef, b'N')
-        if isinstance(lat_ref, bytes):
-            lat_ref = lat_ref.decode('latin1', errors='ignore')
-
-        lon_data = gps[piexif.GPSIFD.GPSLongitude]
-        lon_ref = gps.get(piexif.GPSIFD.GPSLongitudeRef, b'E')
-        if isinstance(lon_ref, bytes):
-            lon_ref = lon_ref.decode('latin1', errors='ignore')
-
-        lat = (lat_data[0][0] / lat_data[0][1] +
-               lat_data[1][0] / (lat_data[1][1] * 60) +
-               lat_data[2][0] / (lat_data[2][1] * 3600))
-        if str(lat_ref).strip().upper() == 'S':
-            lat = -lat
-
-        lon = (lon_data[0][0] / lon_data[0][1] +
-               lon_data[1][0] / (lon_data[1][1] * 60) +
-               lon_data[2][0] / (lon_data[2][1] * 3600))
-        if str(lon_ref).strip().upper() == 'W':
-            lon = -lon
-
-        return lat, lon
-    except Exception as e:
-        logger.warning(f"Could not extract EXIF GPS from {image_path}: {e}")
+        return (decimal_coordinate(gps[2], gps[1], "N", "S", 90),
+                decimal_coordinate(gps[4], gps[3], "E", "W", 180))
+    except Exception as error:
+        logger.warning("Could not extract EXIF GPS from %s: %s", image_path, error)
         return None
 
 
@@ -1228,8 +1222,6 @@ def detect_mission_diseases(request: DiseaseDetectMissionRequest):
     import cv2
     from PIL import Image
 
-    model = get_disease_model()
-    class_names = model.names if hasattr(model, "names") else {}
 
     disease_dir = os.path.join(settings.temp_dir, f"disease_{request.mission_id}")
     images_dir = os.path.join(disease_dir, "images")
@@ -1277,6 +1269,17 @@ def detect_mission_diseases(request: DiseaseDetectMissionRequest):
                    f"Vui lòng cung cấp danh sách ảnh thô đã gắn GPS (images)."
         )
 
+    missing_gps = [filename for _, filename, gps in local_image_items if gps is None]
+    if missing_gps:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Missing or invalid EXIF GPS in {len(missing_gps)} raw image(s). "
+                   "Geotag the original photos using their capture times and matching flight telemetry, "
+                   "then upload them again. Detection was not run; no (0, 0) coordinates were generated."
+        )
+
+    model = get_disease_model()
+    class_names = model.names if hasattr(model, "names") else {}
     total_scanned = len(local_image_items)
     image_paths = [item[0] for item in local_image_items]
 
@@ -1292,8 +1295,7 @@ def detect_mission_diseases(request: DiseaseDetectMissionRequest):
     det_idx = 0
 
     for img_path, img_filename, gps_coords in local_image_items:
-        img_lat = gps_coords[0] if gps_coords else 0.0
-        img_lon = gps_coords[1] if gps_coords else 0.0
+        img_lat, img_lon = gps_coords
 
         if request.polygon_geojson and gps_coords and not is_inside_polygon(
             img_lat, img_lon, request.polygon_geojson

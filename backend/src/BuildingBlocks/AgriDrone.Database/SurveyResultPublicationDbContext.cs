@@ -1,6 +1,9 @@
 using AgriDrone.Modules.Plants.Domain.Conditions;
 using AgriDrone.Modules.Plants.Domain.DiseaseZones;
 using AgriDrone.Modules.Plants.Domain.Plants;
+using AgriDrone.Modules.Plants.Domain.Health;
+using AgriDrone.Modules.Plants.Domain.Guidance;
+using AgriDrone.Database.Health;
 using AgriDrone.Modules.Plants.Domain.Recommendations;
 using AgriDrone.Modules.Plants.Infrastructure.Persistence.Configurations;
 using AgriDrone.Modules.Surveys.Application.Abstractions.Persistence;
@@ -11,6 +14,8 @@ using AgriDrone.SharedInfrastructure.Messaging.Persistence;
 using AgriDrone.SharedInfrastructure.Messaging.Persistence.Configurations;
 using AgriDrone.SharedInfrastructure.Persistence.Configurations;
 using Microsoft.EntityFrameworkCore;
+using AgriDrone.Modules.Notifications.Domain.Notifications;
+using AgriDrone.Modules.Notifications.Infrastructure.Persistence.Configurations;
 
 namespace AgriDrone.Database;
 
@@ -21,6 +26,17 @@ public sealed class SurveyResultPublicationDbContext(
     public DbSet<SurveyOrder> SurveyOrders => Set<SurveyOrder>();
 
     public DbSet<SurveyResult> SurveyResults => Set<SurveyResult>();
+    public DbSet<PlantHealthPublication> HealthPublications => Set<PlantHealthPublication>();
+    public DbSet<LatestReviewedPlantHealth> LatestReviewedHealth => Set<LatestReviewedPlantHealth>();
+    public DbSet<Notification> HealthPublicationNotifications => Set<Notification>();
+    public DbSet<PlantHealthImportBatch> HealthImportBatches => Set<PlantHealthImportBatch>();
+    public DbSet<PlantHealthFinding> HealthFindings => Set<PlantHealthFinding>();
+    public DbSet<PlantHealthBatchFinding> HealthBatchFindings => Set<PlantHealthBatchFinding>();
+    public DbSet<PlantHealthBoundaryException> HealthBoundaryExceptions => Set<PlantHealthBoundaryException>();
+    public DbSet<SourcedGuidance> SourcedGuidance => Set<SourcedGuidance>();
+    public DbSet<PlantHealthReviewEntry> HealthReviews => Set<PlantHealthReviewEntry>();
+    public DbSet<PlantHealthReviewState> HealthReviewStates => Set<PlantHealthReviewState>();
+    public DbSet<PlantHealthReviewOperation> HealthReviewOperations => Set<PlantHealthReviewOperation>();
 
     public DbSet<Plant> Plants => Set<Plant>();
 
@@ -67,6 +83,17 @@ public sealed class SurveyResultPublicationDbContext(
 
         modelBuilder.ApplyConfiguration(new SurveyOrderConfiguration());
         modelBuilder.ApplyConfiguration(new SurveyResultConfiguration());
+        modelBuilder.ApplyConfiguration(new PlantHealthPublicationConfiguration());
+        modelBuilder.ApplyConfiguration(new LatestReviewedPlantHealthConfiguration());
+        modelBuilder.ApplyConfiguration(new NotificationConfiguration());
+        modelBuilder.ApplyConfiguration(new PlantHealthImportBatchConfiguration());
+        modelBuilder.ApplyConfiguration(new PlantHealthFindingConfiguration());
+        modelBuilder.ApplyConfiguration(new PlantHealthBatchFindingConfiguration());
+        modelBuilder.ApplyConfiguration(new PlantHealthBoundaryExceptionConfiguration());
+        modelBuilder.ApplyConfiguration(new PlantHealthReviewEntryConfiguration());
+        modelBuilder.ApplyConfiguration(new PlantHealthReviewStateConfiguration());
+        modelBuilder.ApplyConfiguration(new PlantHealthReviewOperationConfiguration());
+        modelBuilder.ApplyConfiguration(new SourcedGuidanceConfiguration());
         modelBuilder.ApplyConfiguration(new PlantConfiguration());
         modelBuilder.ApplyConfiguration(new PlantConditionConfiguration());
         modelBuilder.ApplyConfiguration(new HealthLevelConfiguration());
@@ -80,6 +107,7 @@ public sealed class SurveyResultPublicationDbContext(
         modelBuilder.ApplyConfiguration(new AuditLogConfiguration());
 
         RemoveSurveyOrderDependencies(modelBuilder);
+        PlantHealthRelationships.Configure(modelBuilder);
     }
 
     private static void IgnoreUnrelatedNavigations(ModelBuilder modelBuilder)
@@ -100,6 +128,26 @@ public sealed class SurveyResultPublicationDbContext(
             .Ignore(level => level.ConditionDetections)
             .Ignore(level => level.CorrectedScanVerifications)
             .Ignore(level => level.CorrectedDetectionReviews);
+    }
+
+    private void GuardReviewHistory()
+    {
+        if (ChangeTracker.Entries().Any(e =>
+            (e.Entity is PlantHealthReviewEntry or PlantHealthReviewOperation) &&
+            e.State is EntityState.Modified or EntityState.Deleted))
+            throw new InvalidOperationException("Human review history and operation receipts are append-only.");
+    }
+
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        GuardReviewHistory();
+        return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+
+    public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    {
+        GuardReviewHistory();
+        return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
     }
 
     private static void RemoveSurveyOrderDependencies(ModelBuilder modelBuilder)

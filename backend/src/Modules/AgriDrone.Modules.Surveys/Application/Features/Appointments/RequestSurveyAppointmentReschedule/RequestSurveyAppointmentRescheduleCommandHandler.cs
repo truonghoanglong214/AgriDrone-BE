@@ -125,7 +125,8 @@ internal sealed class RequestSurveyAppointmentRescheduleCommandHandler(
                         "A Baseline Mapping appointment cannot be rescheduled after Baseline work started."));
             }
             else if (appointment.Purpose == SurveyAppointmentPurpose.PaidService &&
-                     previousOrderStatus == SurveyOrderStatus.AwaitingPayment)
+                     (previousOrderStatus == SurveyOrderStatus.AwaitingPayment ||
+                     (order.PostFlightSettlement && previousOrderStatus is SurveyOrderStatus.ReadyForPaidService or SurveyOrderStatus.AwaitingBaselineDeposit)))
             {
                 order.ReopenPaidAppointment(requestedAt);
             }

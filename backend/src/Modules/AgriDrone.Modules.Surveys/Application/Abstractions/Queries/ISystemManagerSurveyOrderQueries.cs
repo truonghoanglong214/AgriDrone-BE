@@ -56,7 +56,8 @@ public sealed record SystemManagerSurveyOrderItem(
     uint? CurrentAppointmentVersion,
     SurveyAppointmentStatus? CurrentAppointmentStatus,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    SurveyAppointmentPurpose? CurrentAppointmentPurpose = null);
 
 public sealed record TenantOwnerSurveyOrderItem(
     Guid SurveyOrderId,
@@ -70,7 +71,15 @@ public sealed record TenantOwnerSurveyOrderItem(
     decimal? RemainingAmount,
     string Currency,
     TenantOwnerCurrentAppointmentItem? CurrentAppointment,
-    SurveyServiceType ServiceType);
+    SurveyServiceType ServiceType,
+    int? ConfirmedMappingPoleCount = null,
+    int? ConfirmedPlantHealthPoleCount = null,
+    decimal? MappingPricePerPole = null,
+    decimal? PlantHealthPricePerPole = null,
+    decimal? MappingSubtotal = null,
+    decimal? PlantHealthSubtotal = null,
+    decimal? ComboDiscountPercentage = null,
+    decimal? ComboDiscountAmount = null);
 
 public sealed record TenantOwnerCurrentAppointmentItem(
     Guid AppointmentId,

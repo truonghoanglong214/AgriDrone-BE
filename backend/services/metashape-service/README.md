@@ -1,5 +1,9 @@
 # AgriDrone Metashape Photogrammetry & Tiling Service
 
+> **V3 scope notice — 2026-11-10.**
+> Architecture policy v3: this FastAPI service is an imagery/AI processor behind authenticated/versioned adapters. .NET remains source of truth for jobs, Tenant/Farm/Plant identity, payments, review and release. Artifacts/candidates cannot directly create official profiles or publish results. This documentation change does not alter service code or deployment.
+> Current: [Business Rules v3](../../../Codex-Plan/Business-Rules-v3.md), [ADR 0018](../../../docs/adr/0018-v3-paid-map-combo-business-policy.md), [target contracts](../../../docs/contracts/survey-business-v3.md). Documentation-only update; no runtime change.
+
 FastAPI Microservice tự động hóa xử lý ảnh drone GoPro 5 (Equidistant Fisheye) bằng **Agisoft Metashape Pro** và cắt GeoTIFF thành các patch nhỏ phục vụ nhận diện cây bằng **YOLO**.
 
 ---

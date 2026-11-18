@@ -63,6 +63,7 @@ internal sealed class GetSurveyOrderBoundaryScopeQueryHandler(
                         zone.Boundary,
                         zone.Status,
                         zone.Version))
-                .ToArray()));
+                .ToArray(),
+            snapshot.ServiceReviewedAt));
     }
 }

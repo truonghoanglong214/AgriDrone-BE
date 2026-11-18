@@ -37,6 +37,57 @@ internal sealed class GetFarmPlantsQueryHandler(
                 AppError.NotFound("Plant.FarmNotFound", "Farm was not found."));
         }
 
+        var orderPaymentPending = await db.Database.SqlQueryRaw<bool>(
+            @"SELECT EXISTS (
+                SELECT 1
+                FROM survey.survey_orders o
+                WHERE o.farm_id = {0}
+                  AND o.id = (
+                    SELECT m.source_survey_order_id FROM farm.farm_base_map_versions m
+                    WHERE m.farm_id = o.farm_id AND m.status::text = 'PUBLISHED'
+                    ORDER BY m.version_number DESC LIMIT 1
+                  )
+                  AND UPPER(o.status::text) <> 'CANCELLED'
+                  AND (
+                    (o.deposit_amount > 0 AND UPPER(o.deposit_payment_status::text) <> 'PAID')
+                    OR UPPER(o.status::text) IN (
+                        'PENDING_BOUNDARY_VERIFICATION',
+                        'AWAITING_BASELINE_APPOINTMENT',
+                        'AWAITING_BASELINE_DEPOSIT',
+                        'AWAITING_BOUNDARY_CAPTURE',
+                        'BASELINE_READY',
+                        'BASELINE_IN_PROGRESS',
+                        'AWAITING_BASELINE_REVIEW',
+                        'AWAITING_PRICING',
+                        'AWAITING_PAID_APPOINTMENT',
+                        'AWAITING_PAYMENT'
+                    )
+                    OR (
+                        o.final_price IS NOT NULL
+                        AND COALESCE(o.remaining_amount, o.final_price) > 0
+                        AND NOT EXISTS (
+                            SELECT 1
+                            FROM survey.survey_payments p
+                            WHERE p.survey_order_id = o.id
+                              AND (p.purpose IN ('FinalBalance', 'FINAL_BALANCE') OR UPPER(REPLACE(p.purpose::text, '_', '')) = 'FINALBALANCE')
+                              AND UPPER(p.status::text) = 'PAID'
+                              AND p.amount = COALESCE(o.remaining_amount, o.final_price)
+                              AND p.currency = o.currency
+                        )
+                    )
+                  )
+              ) AS ""Value""",
+            request.FarmId)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (orderPaymentPending)
+        {
+            return Result.Failure<IReadOnlyList<FarmPlantItem>>(
+                AppError.Conflict(
+                    "FarmPlants.PaymentRequired",
+                    "The survey results for this farm are locked. Please complete the remaining payment to unlock results."));
+        }
+
         var rows = await db.Plants
             .AsNoTracking()
             .Where(plant => plant.FarmId == request.FarmId)

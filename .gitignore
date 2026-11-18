@@ -91,7 +91,9 @@ Thumbs.db
 Desktop.ini
 
 # Repository-specific local files
-/Codex-Plan/
+# Keep planning Markdown reviewable; local non-document artifacts stay ignored.
+/Codex-Plan/*
+!/Codex-Plan/*.md
 /.github/instructions/codacy.instructions.md
 backend/services/metashape-service/temp/
 

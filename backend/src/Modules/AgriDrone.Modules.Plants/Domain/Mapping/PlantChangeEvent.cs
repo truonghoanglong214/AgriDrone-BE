@@ -52,6 +52,8 @@ public sealed class PlantChangeEvent : Entity
 
     public Guid FarmId { get; private set; }
 
+    public Guid? FarmBaseMapVersionId { get; private set; }
+
     public Guid? MissionId { get; private set; }
 
     public Guid? PlantId { get; private set; }
@@ -89,6 +91,146 @@ public sealed class PlantChangeEvent : Entity
     public DateTimeOffset CreatedAt { get; private set; }
 
     public Plant? Plant { get; private set; }
+
+    public static PlantChangeEvent BaseMapPlantCreated(
+        Guid farmId,
+        Guid farmBaseMapVersionId,
+        Guid plantId,
+        Point location,
+        int rowIndex,
+        int columnIndex,
+        Guid actorId,
+        string? reason,
+        DateTimeOffset createdAt)
+    {
+        DomainGuard.NotEmpty(farmId);
+        DomainGuard.NotEmpty(farmBaseMapVersionId);
+        DomainGuard.NotEmpty(plantId);
+        DomainGuard.NotEmpty(actorId);
+        EnsureLocation(location, nameof(location));
+        ArgumentOutOfRangeException.ThrowIfLessThan(rowIndex, 1);
+        ArgumentOutOfRangeException.ThrowIfLessThan(columnIndex, 1);
+        DomainGuard.Utc(createdAt);
+
+        return new PlantChangeEvent
+        {
+            Id = Guid.NewGuid(),
+            FarmId = farmId,
+            FarmBaseMapVersionId = farmBaseMapVersionId,
+            MissionId = null,
+            PlantId = plantId,
+            ChangeType = PlantChangeType.NewPlant,
+            Source = PlantChangeSource.Manual,
+            OldLocation = null,
+            NewLocation = CopyPoint(location),
+            OldRowIndex = null,
+            NewRowIndex = rowIndex,
+            OldColumnIndex = null,
+            NewColumnIndex = columnIndex,
+            OldLifecycleStatus = null,
+            NewLifecycleStatus = PlantLifecycleStatus.Active,
+            CreatedBy = actorId,
+            Status = ReviewStatus.Confirmed,
+            Notes = reason?.Trim() ?? "Created manually on published base map.",
+            ReviewedBy = actorId,
+            ReviewedAt = createdAt,
+            CreatedAt = createdAt
+        };
+    }
+
+    public static PlantChangeEvent BaseMapPlantRelocated(
+        Guid farmId,
+        Guid farmBaseMapVersionId,
+        Guid plantId,
+        Point? oldLocation,
+        Point newLocation,
+        int? oldRowIndex,
+        int newRowIndex,
+        int? oldColumnIndex,
+        int newColumnIndex,
+        PlantLifecycleStatus lifecycleStatus,
+        Guid actorId,
+        string? reason,
+        DateTimeOffset createdAt)
+    {
+        DomainGuard.NotEmpty(farmId);
+        DomainGuard.NotEmpty(farmBaseMapVersionId);
+        DomainGuard.NotEmpty(plantId);
+        DomainGuard.NotEmpty(actorId);
+        EnsureLocation(newLocation, nameof(newLocation));
+        ArgumentOutOfRangeException.ThrowIfLessThan(newRowIndex, 1);
+        ArgumentOutOfRangeException.ThrowIfLessThan(newColumnIndex, 1);
+        DomainGuard.Utc(createdAt);
+
+        return new PlantChangeEvent
+        {
+            Id = Guid.NewGuid(),
+            FarmId = farmId,
+            FarmBaseMapVersionId = farmBaseMapVersionId,
+            MissionId = null,
+            PlantId = plantId,
+            ChangeType = PlantChangeType.MappingDifference,
+            Source = PlantChangeSource.Manual,
+            OldLocation = CopyPoint(oldLocation),
+            NewLocation = CopyPoint(newLocation),
+            OldRowIndex = oldRowIndex,
+            NewRowIndex = newRowIndex,
+            OldColumnIndex = oldColumnIndex,
+            NewColumnIndex = newColumnIndex,
+            OldLifecycleStatus = lifecycleStatus,
+            NewLifecycleStatus = lifecycleStatus,
+            CreatedBy = actorId,
+            Status = ReviewStatus.Confirmed,
+            Notes = reason?.Trim() ?? "Relocated manually on published base map.",
+            ReviewedBy = actorId,
+            ReviewedAt = createdAt,
+            CreatedAt = createdAt
+        };
+    }
+
+    public static PlantChangeEvent BaseMapPlantRemoved(
+        Guid farmId,
+        Guid farmBaseMapVersionId,
+        Guid plantId,
+        Point? oldLocation,
+        int? oldRowIndex,
+        int? oldColumnIndex,
+        PlantLifecycleStatus oldLifecycleStatus,
+        Guid actorId,
+        string? reason,
+        DateTimeOffset createdAt)
+    {
+        DomainGuard.NotEmpty(farmId);
+        DomainGuard.NotEmpty(farmBaseMapVersionId);
+        DomainGuard.NotEmpty(plantId);
+        DomainGuard.NotEmpty(actorId);
+        DomainGuard.Utc(createdAt);
+
+        return new PlantChangeEvent
+        {
+            Id = Guid.NewGuid(),
+            FarmId = farmId,
+            FarmBaseMapVersionId = farmBaseMapVersionId,
+            MissionId = null,
+            PlantId = plantId,
+            ChangeType = PlantChangeType.RemovedPlant,
+            Source = PlantChangeSource.Manual,
+            OldLocation = CopyPoint(oldLocation),
+            NewLocation = CopyPoint(oldLocation),
+            OldRowIndex = oldRowIndex,
+            NewRowIndex = oldRowIndex,
+            OldColumnIndex = oldColumnIndex,
+            NewColumnIndex = oldColumnIndex,
+            OldLifecycleStatus = oldLifecycleStatus,
+            NewLifecycleStatus = PlantLifecycleStatus.Removed,
+            CreatedBy = actorId,
+            Status = ReviewStatus.Confirmed,
+            Notes = reason?.Trim() ?? "Removed manually on published base map.",
+            ReviewedBy = actorId,
+            ReviewedAt = createdAt,
+            CreatedAt = createdAt
+        };
+    }
 
     public static PlantChangeEvent MappingCreated(
         Guid farmId,

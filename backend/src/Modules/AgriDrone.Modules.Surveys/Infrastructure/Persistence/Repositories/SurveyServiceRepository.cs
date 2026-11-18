@@ -16,6 +16,7 @@ internal sealed class SurveyServiceRepository(SurveysDbContext context)
 
         return context.SurveyServices
             .Include(service => service.Prices)
+            .Include(service => service.Revisions)
             .SingleOrDefaultAsync(
                 service => service.Id == surveyServiceId,
                 cancellationToken);
@@ -30,6 +31,7 @@ internal sealed class SurveyServiceRepository(SurveysDbContext context)
 
         return context.SurveyServices
             .Include(service => service.Prices)
+            .Include(service => service.Revisions)
             .SingleOrDefaultAsync(
                 service => service.Code == normalizedCode,
                 cancellationToken);
@@ -45,5 +47,11 @@ internal sealed class SurveyServiceRepository(SurveysDbContext context)
     {
         ArgumentNullException.ThrowIfNull(price);
         context.SurveyServicePrices.Add(price);
+    }
+
+    public void AddRevision(SurveyServiceRevision revision)
+    {
+        ArgumentNullException.ThrowIfNull(revision);
+        context.SurveyServiceRevisions.Add(revision);
     }
 }

@@ -109,6 +109,8 @@ internal sealed class ProcessSurveyPaymentEventCommandHandler(
         var state = stateResult.Value;
         var payment = state.Payment;
         var order = state.Order;
+        if (order.Scope == ContractScope.V3)
+            return Result.Failure<ProcessSurveyPaymentEventResponse>(PaymentError.OrderNotReady());
         if (state.EventAlreadyProcessed)
         {
             return Result.Success(CreateResponse(
@@ -154,6 +156,8 @@ internal sealed class ProcessSurveyPaymentEventCommandHandler(
             command,
             payment,
             order);
+        if (transitionApplied && order.Status == SurveyOrderStatus.Completed)
+            await outbox.AddPostFlightUnlockAsync(order, executionContext.CorrelationId, cancellationToken);
         var paymentEvent = PaymentEvent.Create(
             payment.Id,
             identity,
@@ -285,6 +289,8 @@ internal sealed class ProcessSurveyPaymentEventCommandHandler(
 
         if (payment.Purpose == PaymentPurpose.BaselineDeposit)
         {
+            if (!order.CanAcceptDepositPayment())
+                return (false, "ORDER_NOT_AWAITING_DEPOSIT");
             var amountMatches = payment.Amount == Money.Round(command.Amount) &&
                                 order.DepositAmount == payment.Amount;
             var currencyMatches = string.Equals(
@@ -301,17 +307,28 @@ internal sealed class ProcessSurveyPaymentEventCommandHandler(
                 return (true, "AMOUNT_OR_CURRENCY_MISMATCH");
             }
 
-            if (order.Status != SurveyOrderStatus.AwaitingBaselineDeposit)
+            if (order.RequiresBaselineMapping)
             {
-                return (false, "ORDER_NOT_AWAITING_BASELINE_DEPOSIT");
+                payment.Confirm(command.ProviderReference, command.OccurredAt);
+                order.RecordBaselineDepositConfirmed(payment.Id, payment.Amount, command.OccurredAt);
+                return (true, "APPLIED");
             }
-
-            payment.Confirm(command.ProviderReference, command.OccurredAt);
-            order.RecordBaselineDepositConfirmed(payment.Id, payment.Amount, command.OccurredAt);
-            return (true, "APPLIED");
+            else
+            {
+                payment.Confirm(command.ProviderReference, command.OccurredAt);
+                order.RecordFollowUpDepositConfirmed(payment.Id, payment.Amount, command.OccurredAt);
+                return (true, "APPLIED");
+            }
         }
         else
         {
+            if (order.PostFlightSettlement && order.ServiceReviewedAt is null)
+                return (false, "POST_FLIGHT_REVIEW_REQUIRED");
+            if (order.DepositAmount > 0m && order.DepositPaymentStatus != SurveyPaymentStatus.Paid)
+            {
+                payment.RequireAdjustment(command.OccurredAt);
+                return (true, "DEPOSIT_NOT_PAID");
+            }
             var expectedBalance = order.RemainingAmount ?? order.FinalPrice;
             var amountMatches = payment.Amount == Money.Round(command.Amount) &&
                                 expectedBalance == payment.Amount;

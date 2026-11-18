@@ -80,6 +80,33 @@ public sealed class V3OrderPlanningContractTests
         Assert.False(context.RequiresBaselineMapping);
     }
 
+    [Theory]
+    [InlineData(true, "Paid", null, true)]
+    [InlineData(true, "Pending", null, false)]
+    [InlineData(false, "Paid", "Pending", false)]
+    public async Task FollowUpPlanningUsesThePaymentRequiredByTheOrder(
+        bool postFlightSettlement, string depositStatus, string? finalPaymentStatus, bool canSchedule)
+    {
+        var orderId = Guid.NewGuid();
+        var start = new DateTimeOffset(2026, 11, 16, 2, 0, 0, TimeSpan.Zero);
+        var source = new SurveyOrderOperationalContextV3(
+            orderId, Guid.NewGuid(), Guid.NewGuid(), "PLANT_HEALTH", "PLANT_HEALTH",
+            nameof(MissionPurpose.PlantHealth), canSchedule ? "ReadyForPaidService" : "AwaitingBaselineDeposit",
+            1, Guid.NewGuid(), Guid.NewGuid(), false, 20, null, null, null, null,
+            Guid.NewGuid(), "PaidService", start, start.AddHours(1), "Confirmed",
+            null, finalPaymentStatus, Guid.NewGuid(), null, canSchedule,
+            canSchedule ? [] : ["PaymentNotConfirmed"], start,
+            DepositPaymentStatus: depositStatus, PostFlightSettlement: postFlightSettlement);
+
+        var planning = new SurveyOrderMissionPlanningQuery(new SingleContextQuery(source));
+        var context = await planning.GetAsync(orderId);
+
+        Assert.NotNull(context);
+        Assert.False(context.RequiresBaselineMapping);
+        Assert.Equal(canSchedule, context.IsEligibleForPlanning);
+        Assert.Equal(canSchedule, context.IsReadyToSchedule);
+    }
+
     [Fact]
     public async Task UnverifiedBoundaryCannotBeUsedForMissionPlanning()
     {

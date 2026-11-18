@@ -319,6 +319,16 @@ public sealed class DroneMissionConfiguration : IEntityTypeConfiguration<DroneMi
     .HasColumnName("health_review_handoff_id")
     .HasColumnType("uuid");
 
+        builder.Property(m => m.HealthPublicationId).HasColumnName("health_publication_id");
+        builder.Property(m => m.HealthPublishedResultId).HasColumnName("health_published_result_id");
+        builder.Property(m => m.HealthPublicationVersion).HasColumnName("health_publication_version");
+        builder.Property(m => m.HealthPublicationFingerprint).HasColumnName("health_publication_fingerprint").HasMaxLength(64);
+        builder.HasIndex(m => m.HealthPublicationId).IsUnique().HasFilter("health_publication_id IS NOT NULL")
+            .HasDatabaseName("uq_mission_health_publication");
+        builder.ToTable("drone_missions", "mission", t => t.HasCheckConstraint("ck_mission_health_publication",
+            "(health_publication_id IS NULL AND health_published_result_id IS NULL AND health_publication_version IS NULL AND health_publication_fingerprint IS NULL) OR " +
+            "(health_publication_id IS NOT NULL AND health_published_result_id IS NOT NULL AND health_publication_version IS NOT NULL AND health_publication_version > 0 AND health_publication_fingerprint IS NOT NULL AND length(health_publication_fingerprint) = 64 AND status = 'COMPLETED' AND processing_status = 'COMPLETED' AND health_review_handoff_id IS NOT NULL AND health_review_version IS NOT NULL AND health_review_pending = 0 AND health_review_awaiting_field_verification = 0 AND health_review_total = health_review_resolved)"));
+
         builder.Property(mission => mission.HealthReviewVersion)
             .HasColumnName("health_review_version")
             .HasColumnType("bigint");

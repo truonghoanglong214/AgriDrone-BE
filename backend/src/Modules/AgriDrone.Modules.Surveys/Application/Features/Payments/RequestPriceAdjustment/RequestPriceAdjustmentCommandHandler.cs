@@ -125,7 +125,7 @@ internal sealed class RequestPriceAdjustmentCommandHandler(
                 order.SurveyServicePriceId.Value,
                 state.EffectivePrice.SurveyServicePriceId,
                 order.PricePerPoleSnapshot.Value,
-                PricePerPole.Create(state.EffectivePrice.PricePerPole),
+                order.GetEffectivePricePerPole(PricePerPole.Create(state.EffectivePrice.PricePerPole)),
                 CurrencyCode.Create(state.EffectivePrice.Currency),
                 command.Reason,
                 command.EvidenceReference,

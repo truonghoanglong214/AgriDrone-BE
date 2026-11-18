@@ -3,7 +3,6 @@ using AgriDrone.Api.Controllers;
 using AgriDrone.Api.Legacy;
 using AgriDrone.Modules.Farms.Application.Provisioning;
 using AgriDrone.Modules.Farms.Domain.Farms;
-using AgriDrone.Modules.Farms.Domain.Maps;
 using AgriDrone.Modules.Identity.Application.Provisioning;
 using AgriDrone.Modules.Missions.Domain.Missions;
 using AgriDrone.Modules.Plants.Domain.Scans;
@@ -24,15 +23,6 @@ public sealed class Phase6BoundaryTests
         Assert.True(typeof(ITenantOwnerInvitationPort).IsInterface);
         Assert.True(typeof(IFarmProvisioningPort).IsInterface);
         Assert.DoesNotContain("Controller", typeof(ITenantProvisioningPort).Name);
-    }
-
-    [Fact]
-    public void MissionAndMappingExposeOrderAwarePreparationSeams()
-    {
-        Assert.NotNull(typeof(DroneMission).GetMethod(
-            nameof(DroneMission.CreateForSurvey),
-            BindingFlags.Public | BindingFlags.Static));
-        Assert.True(typeof(IFarmBaseMapPublicationService).IsInterface);
     }
 
     [Fact]

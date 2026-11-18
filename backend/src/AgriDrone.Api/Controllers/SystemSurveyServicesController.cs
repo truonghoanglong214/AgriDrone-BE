@@ -156,7 +156,7 @@ public sealed class SystemSurveyServicesController(ISender sender)
                     price.EffectiveTo,
                     price.CreatedBy,
                     price.CreatedAt,
-                    price.IsLegacyPerHectarePrice))));
+                    price.IsLegacyPerHectarePrice, price.MappingPricePerPole, price.PlantHealthPricePerPole))));
     }
 
     /// <summary>Tạo price version VND có hiệu lực ngay theo giờ UTC của server.</summary>
@@ -171,7 +171,9 @@ public sealed class SystemSurveyServicesController(ISender sender)
                 serviceId,
                 request.AmountPerPole,
                 request.Currency,
-                request.ExpectedServiceVersion),
+                request.ExpectedServiceVersion,
+                request.MappingPricePerPole,
+                request.PlantHealthPricePerPole),
             cancellationToken);
         return result.ToHttpResult(
             HttpContext,
@@ -184,7 +186,9 @@ public sealed class SystemSurveyServicesController(ISender sender)
                     response.EffectiveFrom,
                     response.ClosedPriceVersionId,
                     response.ServiceVersion,
-                    response.CreatedAt),
+                    response.CreatedAt,
+                    response.MappingPricePerPole,
+                    response.PlantHealthPricePerPole),
                 statusCode: StatusCodes.Status201Created));
     }
 
@@ -207,7 +211,7 @@ public sealed class SystemSurveyServicesController(ISender sender)
                     service.CurrentPrice.AmountPerPole,
                     service.CurrentPrice.Currency,
                     service.CurrentPrice.EffectiveFrom,
-                    service.CurrentPrice.EffectiveTo));
+                    service.CurrentPrice.EffectiveTo, service.CurrentPrice.MappingPricePerPole, service.CurrentPrice.PlantHealthPricePerPole));
 
     private static SurveyServiceMutationApiResponse MapMutationResponse(
         Guid serviceId,

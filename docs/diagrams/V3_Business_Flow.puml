@@ -1,0 +1,53 @@
+@startuml
+title AgriDrone v3 - Paid MAP/COMBO target flow (2026-11-10)
+start
+:Select MAP or COMBO;
+if (First survey / new Farm?) then (yes)
+  :Admin approves onboarding;
+  :Provision correct Tenant/Farm/Owner invitation;
+else (Follow-up)
+  :Reuse Tenant/Farm and delivered Baseline version;
+endif
+:Create paid Order;
+:Snapshot service / unit price / shared deposit / policy versions;
+:Confirm appointment and pay deposit;
+:Check assignment, drone, preflight, safety and authorization;
+:Capture imagery and GNSS;
+:Upload / FastAPI processing / pending candidates;
+while (Capture quality inadequate?) is (yes)
+  :Approved quality Re-flight in same Order;
+  :No extra deposit or service charge;
+  :Recheck operational safety and capture again;
+  :Retain original attempts and evidence;
+endwhile (no)
+:Manager reviews boundary, matches and billable poles;
+if (First survey?) then (yes)
+  :Approve internal Baseline and initial profile identities;
+else (Follow-up)
+  :Append survey snapshot and dated observations;
+  :Keep pinned Baseline unchanged;
+endif
+if (COMBO?) then (yes)
+  :Review suspected diseases, zones and cited guidance;
+else (MAP)
+  :Disease observation = NotAssessed;
+  :Preserve prior disease history;
+endif
+:Freeze approved result and finalize count x snapshotted rate;
+if (Amount due > 0?) then (yes)
+  :Owner pays remaining online balance;
+else (no)
+  :Reserve any refundable overpayment;
+endif
+:Atomic publication + unlock + durable notice;
+:Claim window + one original service value + audit/Outbox;
+:Owner views released versions and history;
+if (Evidenced claim before deadline?) then (yes)
+  :Manager verification;
+  :Admin proposal + Owner exact acceptance;
+  :Reserve capped refund and record bank proof;
+  :Withdraw / review replacement when required;
+endif
+:Monthly service revenue / cash / Excel reconciliation;
+stop
+@enduml

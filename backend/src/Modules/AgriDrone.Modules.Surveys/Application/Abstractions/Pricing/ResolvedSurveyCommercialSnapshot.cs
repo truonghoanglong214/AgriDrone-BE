@@ -1,0 +1,28 @@
+namespace AgriDrone.Modules.Surveys.Application.Abstractions.Pricing;
+
+public sealed record ResolvedSurveyCommercialSnapshot(
+    Guid BusinessPolicyVersionId,
+    string PolicyFingerprint,
+    Guid SurveyServiceRevisionId,
+    int SurveyServiceRevisionVersion,
+    string ServiceCode,
+    bool MapsPoles,
+    bool ScreensDisease,
+    Guid PriceVersionId,
+    int PriceVersionNumber,
+    decimal PricePerPole,
+    string Currency,
+    Guid DepositPolicyId,
+    int DepositVersionNumber,
+    decimal DepositAmount,
+    Guid ClaimPolicyId,
+    int ClaimPolicyVersionNumber,
+    int ClaimWindowDays,
+    string ClaimTimeZoneId,
+    bool ExcludeNoticeDate,
+    Guid CancellationPolicyId,
+    int CancellationPolicyVersionNumber,
+    bool RefundableBeforeCapture,
+    bool RetainDepositAfterCapture,
+    int AllowedFreeNoShowReschedules,
+    DateTimeOffset EvaluatedAt);

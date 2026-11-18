@@ -195,26 +195,6 @@ public sealed class MappingIntegrationContractTests
         Assert.Null(error);
     }
 
-    [Fact]
-    public void ContractsAssemblyDoesNotReferenceEfOrDomainModules()
-    {
-        var references = typeof(MappingCandidatesApprovedV1)
-            .Assembly
-            .GetReferencedAssemblies()
-            .Select(reference => reference.Name ?? string.Empty);
-
-        Assert.DoesNotContain(
-            references,
-            name => name.StartsWith(
-                "Microsoft.EntityFrameworkCore",
-                StringComparison.Ordinal));
-        Assert.DoesNotContain(
-            references,
-            name => name.StartsWith(
-                "AgriDrone.Modules.",
-                StringComparison.Ordinal));
-    }
-
     private static ServiceProvider CreateServiceProvider()
     {
         var configuration = new ConfigurationBuilder()

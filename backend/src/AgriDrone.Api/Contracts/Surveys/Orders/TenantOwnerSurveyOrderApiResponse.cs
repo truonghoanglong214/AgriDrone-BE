@@ -12,7 +12,15 @@ public sealed record TenantOwnerSurveyOrderApiResponse(
     decimal? RemainingAmount,
     string Currency,
     TenantOwnerAppointmentApiResponse? CurrentAppointment,
-    string ServiceType);
+    string ServiceType,
+    int? ConfirmedMappingPoleCount = null,
+    int? ConfirmedPlantHealthPoleCount = null,
+    decimal? MappingPricePerPole = null,
+    decimal? PlantHealthPricePerPole = null,
+    decimal? MappingSubtotal = null,
+    decimal? PlantHealthSubtotal = null,
+    decimal? ComboDiscountPercentage = null,
+    decimal? ComboDiscountAmount = null);
 
 public sealed record TenantOwnerAppointmentApiResponse(
     Guid AppointmentId,

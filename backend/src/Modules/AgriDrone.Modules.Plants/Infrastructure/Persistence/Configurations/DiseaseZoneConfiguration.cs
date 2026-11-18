@@ -1,6 +1,7 @@
 using AgriDrone.Modules.Plants.Domain.Conditions;
 using AgriDrone.Modules.Plants.Domain.DiseaseZones;
 using AgriDrone.Modules.Plants.Domain.Recommendations;
+using AgriDrone.Modules.Plants.Domain.Guidance;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -15,6 +16,7 @@ public sealed class DiseaseZoneConfiguration : IEntityTypeConfiguration<DiseaseZ
             "plant",
             table =>
             {
+                table.HasCheckConstraint("ck_disease_zones_source_schema", "(source_schema_version = 3 AND health_level_id IS NOT NULL AND import_batch_id IS NULL) OR (source_schema_version = 4 AND health_level_id IS NULL AND import_batch_id IS NOT NULL AND suspected_class_code IS NOT NULL AND selected_treatment_recommendation_id IS NULL AND guidance_suggestions IS NOT NULL)");
                 table.HasCheckConstraint("ck_disease_zones_version_positive", "version_number >= 1");
                 table.HasCheckConstraint("ck_disease_zones_membership_version_positive", "current_membership_version >= 1");
                 table.HasCheckConstraint("ck_disease_zones_proposed_geometry", "NOT ST_IsEmpty(proposed_geometry) AND ST_IsValid(proposed_geometry) AND ST_SRID(proposed_geometry) = 4326 AND GeometryType(proposed_geometry) = 'POLYGON'");
@@ -24,16 +26,18 @@ public sealed class DiseaseZoneConfiguration : IEntityTypeConfiguration<DiseaseZ
                     "(version_number = 1 AND supersedes_disease_zone_id IS NULL) OR (version_number > 1 AND supersedes_disease_zone_id IS NOT NULL)");
                 table.HasCheckConstraint(
                     "ck_disease_zones_lifecycle",
-                    "(status = 'PROPOSED'::system.disease_zone_status AND reviewed_geometry IS NULL AND current_membership_version = 1 AND selected_treatment_recommendation_id IS NULL AND recommendations_rejected = FALSE AND reviewed_by IS NULL AND reviewed_at IS NULL AND review_reason IS NULL AND review_evidence IS NULL AND published_by IS NULL AND published_at IS NULL AND superseded_by_disease_zone_id IS NULL AND superseded_at IS NULL) OR " +
+                    "(source_schema_version = 4 AND ((status = 'PROPOSED' AND published_at IS NULL AND published_by IS NULL) OR (status = 'REJECTED' AND current_health_review_id IS NOT NULL AND reviewed_by IS NOT NULL AND reviewed_at IS NOT NULL AND reviewed_geometry IS NULL AND published_at IS NULL AND published_by IS NULL) OR (status = 'REVIEWED' AND current_health_review_id IS NOT NULL AND reviewed_geometry IS NOT NULL AND reviewed_suspected_class_code IS NOT NULL AND reviewed_plant_condition_id IS NOT NULL AND reviewed_by IS NOT NULL AND reviewed_at IS NOT NULL AND has_blocking_items = FALSE AND (guidance_decision = 'RejectAll' OR (guidance_decision = 'Select' AND selected_sourced_guidance_id IS NOT NULL)) AND published_at IS NULL AND published_by IS NULL) OR (status = 'PUBLISHED' AND current_health_review_id IS NOT NULL AND reviewed_geometry IS NOT NULL AND reviewed_suspected_class_code IS NOT NULL AND reviewed_plant_condition_id IS NOT NULL AND current_membership_version > 1 AND reviewed_by IS NOT NULL AND reviewed_at IS NOT NULL AND review_reason IS NOT NULL AND review_evidence IS NOT NULL AND has_blocking_items = FALSE AND guidance_decision IS NOT NULL AND (guidance_decision = 'RejectAll' OR (guidance_decision = 'Select' AND selected_sourced_guidance_id IS NOT NULL)) AND published_at IS NOT NULL AND published_by IS NOT NULL AND superseded_by_disease_zone_id IS NULL AND superseded_at IS NULL))) OR (source_schema_version = 3 AND (" +
+                    "(status = 'PROPOSED'::system.disease_zone_status AND reviewed_geometry IS NULL AND (current_membership_version = 1 OR source_schema_version = 4) AND selected_treatment_recommendation_id IS NULL AND recommendations_rejected = FALSE AND reviewed_by IS NULL AND reviewed_at IS NULL AND review_reason IS NULL AND review_evidence IS NULL AND published_by IS NULL AND published_at IS NULL AND superseded_by_disease_zone_id IS NULL AND superseded_at IS NULL) OR " +
                     "(status = 'REVIEWED'::system.disease_zone_status AND reviewed_geometry IS NOT NULL AND current_membership_version > 1 AND ((selected_treatment_recommendation_id IS NOT NULL AND recommendations_rejected = FALSE) OR (selected_treatment_recommendation_id IS NULL AND recommendations_rejected = TRUE)) AND reviewed_by IS NOT NULL AND reviewed_at IS NOT NULL AND review_reason IS NOT NULL AND review_evidence IS NOT NULL AND published_by IS NULL AND published_at IS NULL AND superseded_by_disease_zone_id IS NULL AND superseded_at IS NULL) OR " +
                     "(status = 'PUBLISHED'::system.disease_zone_status AND reviewed_geometry IS NOT NULL AND current_membership_version > 1 AND ((selected_treatment_recommendation_id IS NOT NULL AND recommendations_rejected = FALSE) OR (selected_treatment_recommendation_id IS NULL AND recommendations_rejected = TRUE)) AND reviewed_by IS NOT NULL AND reviewed_at IS NOT NULL AND review_reason IS NOT NULL AND review_evidence IS NOT NULL AND published_by IS NOT NULL AND published_at IS NOT NULL AND superseded_by_disease_zone_id IS NULL AND superseded_at IS NULL) OR " +
                     "(status = 'REJECTED'::system.disease_zone_status AND reviewed_geometry IS NULL AND current_membership_version = 1 AND selected_treatment_recommendation_id IS NULL AND recommendations_rejected = FALSE AND reviewed_by IS NOT NULL AND reviewed_at IS NOT NULL AND review_reason IS NOT NULL AND review_evidence IS NOT NULL AND published_by IS NULL AND published_at IS NULL AND superseded_by_disease_zone_id IS NULL AND superseded_at IS NULL) OR " +
-                    "(status = 'SUPERSEDED'::system.disease_zone_status AND reviewed_geometry IS NOT NULL AND current_membership_version > 1 AND ((selected_treatment_recommendation_id IS NOT NULL AND recommendations_rejected = FALSE) OR (selected_treatment_recommendation_id IS NULL AND recommendations_rejected = TRUE)) AND reviewed_by IS NOT NULL AND reviewed_at IS NOT NULL AND review_reason IS NOT NULL AND review_evidence IS NOT NULL AND published_by IS NOT NULL AND published_at IS NOT NULL AND superseded_by_disease_zone_id IS NOT NULL AND superseded_at IS NOT NULL)");
+                    "(status = 'SUPERSEDED'::system.disease_zone_status AND reviewed_geometry IS NOT NULL AND current_membership_version > 1 AND ((selected_treatment_recommendation_id IS NOT NULL AND recommendations_rejected = FALSE) OR (selected_treatment_recommendation_id IS NULL AND recommendations_rejected = TRUE)) AND reviewed_by IS NOT NULL AND reviewed_at IS NOT NULL AND review_reason IS NOT NULL AND review_evidence IS NOT NULL AND published_by IS NOT NULL AND published_at IS NOT NULL AND superseded_by_disease_zone_id IS NOT NULL AND superseded_at IS NOT NULL)" + "))");
             });
 
         builder.HasKey(zone => zone.Id).HasName("pk_disease_zones");
         builder.HasAlternateKey(zone => new { zone.Id, zone.FarmId }).HasName("uq_disease_zones_id_farm");
         builder.HasAlternateKey(zone => new { zone.Id, zone.TenantId, zone.FarmId }).HasName("uq_disease_zones_id_tenant_farm");
+        builder.HasAlternateKey(zone => new { zone.Id, zone.TenantId, zone.FarmId, zone.SurveyResultId }).HasName("uq_disease_zones_review_context");
         builder.Property(zone => zone.Id).HasColumnName("id").HasColumnType("uuid").HasDefaultValueSql("gen_random_uuid()").ValueGeneratedOnAdd();
         builder.Property(zone => zone.ZoneKey).HasColumnName("zone_key").HasColumnType("uuid");
         builder.Property(zone => zone.VersionNumber).HasColumnName("version_number").HasColumnType("integer");
@@ -45,6 +49,18 @@ public sealed class DiseaseZoneConfiguration : IEntityTypeConfiguration<DiseaseZ
         builder.Property(zone => zone.FarmBaseMapVersionId).HasColumnName("farm_base_map_version_id").HasColumnType("uuid");
         builder.Property(zone => zone.PlantConditionId).HasColumnName("plant_condition_id").HasColumnType("uuid");
         builder.Property(zone => zone.HealthLevelId).HasColumnName("health_level_id").HasColumnType("uuid");
+        builder.Property(zone => zone.SourceSchemaVersion).HasColumnName("source_schema_version").HasDefaultValue(3);
+        builder.Property(zone => zone.ImportBatchId).HasColumnName("import_batch_id");
+        builder.Property(zone => zone.SuspectedClassCode).HasColumnName("suspected_class_code").HasMaxLength(80);
+        builder.Property(zone => zone.SelectedSourcedGuidanceId).HasColumnName("selected_sourced_guidance_id");
+        builder.Property(zone => zone.GuidanceSuggestions).HasColumnName("guidance_suggestions").HasColumnType("jsonb");
+        builder.Property(zone => zone.HasBlockingItems).HasColumnName("has_blocking_items");
+        builder.Property(zone => zone.CurrentHealthReviewId).HasColumnName("current_health_review_id");
+        builder.Property(zone => zone.ReviewedSuspectedClassCode).HasColumnName("reviewed_suspected_class_code").HasMaxLength(80);
+        builder.Property(zone => zone.ReviewedPlantConditionId).HasColumnName("reviewed_plant_condition_id");
+        builder.Property(zone => zone.GuidanceDecision).HasColumnName("guidance_decision").HasMaxLength(40);
+        builder.HasOne<SourcedGuidance>().WithMany().HasForeignKey(zone => zone.SelectedSourcedGuidanceId)
+            .OnDelete(DeleteBehavior.Restrict).HasConstraintName("fk_disease_zones_sourced_guidance");
         builder.Property(zone => zone.SourceHandoffId).HasColumnName("source_handoff_id").HasColumnType("uuid");
         builder.Property(zone => zone.SourceJobId).HasColumnName("source_job_id").HasColumnType("uuid");
         builder.Property(zone => zone.SourceProposalId).HasColumnName("source_proposal_id").HasColumnType("character varying(200)").HasMaxLength(200).IsRequired();

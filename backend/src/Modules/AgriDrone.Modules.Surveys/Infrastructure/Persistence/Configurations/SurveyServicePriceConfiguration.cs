@@ -19,13 +19,18 @@ public sealed class SurveyServicePriceConfiguration : IEntityTypeConfiguration<S
                 table.HasCheckConstraint(
                     "ck_survey_service_prices_pricing_mode",
                     "(price_per_pole IS NOT NULL AND price_per_ha IS NULL) OR (price_per_pole IS NULL AND price_per_ha IS NOT NULL)");
+                table.HasCheckConstraint("ck_survey_service_prices_combo_components",
+                    "(mapping_price_per_pole IS NULL AND plant_health_price_per_pole IS NULL) OR (mapping_price_per_pole IS NOT NULL AND plant_health_price_per_pole IS NOT NULL AND mapping_price_per_pole > 0 AND plant_health_price_per_pole > 0 AND mapping_price_per_pole = trunc(mapping_price_per_pole) AND plant_health_price_per_pole = trunc(plant_health_price_per_pole) AND price_per_pole IS NOT NULL AND price_per_pole = mapping_price_per_pole + plant_health_price_per_pole)");
                 table.HasCheckConstraint("ck_survey_service_prices_currency", "currency ~ '^[A-Z]{3}$'");
                 table.HasCheckConstraint("ck_survey_service_prices_window", "effective_to IS NULL OR effective_to > effective_from");
+                table.HasCheckConstraint("ck_survey_service_prices_version", "version_number IS NULL OR version_number >= 1");
             });
         builder.HasKey(price => price.Id).HasName("pk_survey_service_prices");
         builder.HasAlternateKey(price => new { price.Id, price.SurveyServiceId }).HasName("uq_survey_service_prices_id_service");
         builder.Property(price => price.Id).HasColumnName("id").HasColumnType("uuid").HasDefaultValueSql("gen_random_uuid()").ValueGeneratedOnAdd();
         builder.Property(price => price.SurveyServiceId).HasColumnName("survey_service_id").HasColumnType("uuid");
+        builder.Property(price => price.VersionNumber).HasColumnName("version_number").HasColumnType("integer").IsRequired(false);
+        builder.Property(price => price.PredecessorVersionId).HasColumnName("predecessor_version_id").HasColumnType("uuid").IsRequired(false);
         builder.Property(price => price.PricePerPole)
             .HasConversion(
                 value => value.HasValue ? value.Value.Amount : (decimal?)null,
@@ -35,14 +40,33 @@ public sealed class SurveyServicePriceConfiguration : IEntityTypeConfiguration<S
             .HasColumnName("price_per_pole")
             .HasColumnType("numeric(18,2)")
             .HasPrecision(18, 2);
+        builder.Property(price => price.MappingPricePerPole).HasColumnName("mapping_price_per_pole").HasPrecision(18, 2);
+        builder.Property(price => price.PlantHealthPricePerPole).HasColumnName("plant_health_price_per_pole").HasPrecision(18, 2);
         builder.Property(price => price.PricePerHa).HasColumnName("price_per_ha").HasColumnType("numeric(18,2)").HasPrecision(18, 2);
         builder.Property(price => price.Currency).HasColumnName("currency").HasColumnType("character(3)").HasMaxLength(3).IsFixedLength().IsRequired();
         builder.Property(price => price.EffectiveFrom).HasColumnName("effective_from").HasColumnType("timestamp with time zone");
         builder.Property(price => price.EffectiveTo).HasColumnName("effective_to").HasColumnType("timestamp with time zone");
         builder.Property(price => price.CreatedBy).HasColumnName("created_by").HasColumnType("uuid");
         builder.Property(price => price.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp with time zone").HasDefaultValueSql("NOW()").IsRequired();
+        builder.Property(price => price.ReasonCode).HasColumnName("reason_code").HasColumnType("character varying(100)").HasMaxLength(100).IsRequired(false);
+        builder.Property(price => price.EvidenceReference).HasColumnName("evidence_reference").HasColumnType("character varying(500)").HasMaxLength(500).IsRequired(false);
+
         builder.HasIndex(price => new { price.SurveyServiceId, price.EffectiveFrom }).HasDatabaseName("ix_survey_service_prices_effective").IsDescending(false, true);
-        builder.HasOne(price => price.SurveyService).WithMany(service => service.Prices).HasForeignKey(price => price.SurveyServiceId).OnDelete(DeleteBehavior.Restrict).HasConstraintName("fk_survey_service_prices_services_service_id");
+        builder.HasIndex(price => new { price.SurveyServiceId, price.VersionNumber })
+            .HasDatabaseName("uq_survey_service_prices_service_version")
+            .IsUnique()
+            .HasFilter("version_number IS NOT NULL");
+
+        builder.HasOne(price => price.SurveyService)
+            .WithMany(service => service.Prices)
+            .HasForeignKey(price => price.SurveyServiceId)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_survey_service_prices_services_service_id");
+
+        builder.HasOne<SurveyServicePrice>()
+            .WithMany()
+            .HasForeignKey(price => price.PredecessorVersionId)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_survey_service_prices_predecessor");
     }
 }
-

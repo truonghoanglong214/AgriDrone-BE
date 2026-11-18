@@ -8,11 +8,33 @@ public sealed class SurveyOrderConfiguration : IEntityTypeConfiguration<SurveyOr
 {
     public void Configure(EntityTypeBuilder<SurveyOrder> builder)
     {
+        // 03A-2 is domain-only. Map this in 03B with its expand migration;
+        // convention mapping would otherwise break reads against Step8 schemas.
+        builder.Ignore(order => order.DepositObligationId);
+
         builder.ToTable(
             "survey_orders",
             "survey",
             table =>
             {
+                table.HasCheckConstraint("ck_survey_orders_combo_component_booking",
+                    "(booked_mapping_price_per_pole IS NULL AND booked_plant_health_price_per_pole IS NULL) OR " +
+                    "(booked_mapping_price_per_pole IS NOT NULL AND booked_plant_health_price_per_pole IS NOT NULL AND " +
+                    "scope = 'LEGACY' AND post_flight_settlement AND booked_service_price_id IS NOT NULL AND booked_price_per_pole IS NOT NULL AND " +
+                    "booked_mapping_price_per_pole > 0 AND booked_plant_health_price_per_pole > 0 AND " +
+                    "booked_mapping_price_per_pole = trunc(booked_mapping_price_per_pole) AND booked_plant_health_price_per_pole = trunc(booked_plant_health_price_per_pole) AND " +
+                    "booked_price_per_pole = booked_mapping_price_per_pole + booked_plant_health_price_per_pole)");
+                table.HasCheckConstraint("ck_survey_orders_combo_component_invoice",
+                    "(confirmed_mapping_pole_count IS NULL AND confirmed_plant_health_pole_count IS NULL AND mapping_subtotal IS NULL AND plant_health_subtotal IS NULL AND combo_discount_amount IS NULL AND (booked_mapping_price_per_pole IS NULL OR final_price IS NULL)) OR " +
+                    "(booked_mapping_price_per_pole IS NOT NULL AND booked_plant_health_price_per_pole IS NOT NULL AND confirmed_mapping_pole_count IS NOT NULL AND confirmed_plant_health_pole_count IS NOT NULL AND " +
+                    "confirmed_mapping_pole_count > 0 AND confirmed_plant_health_pole_count > 0 AND confirmed_plant_health_pole_count <= confirmed_mapping_pole_count AND " +
+                    "mapping_subtotal IS NOT NULL AND plant_health_subtotal IS NOT NULL AND combo_discount_amount IS NOT NULL AND combo_discount_percentage IS NOT NULL AND " +
+                    "mapping_subtotal = confirmed_mapping_pole_count * booked_mapping_price_per_pole AND plant_health_subtotal = confirmed_plant_health_pole_count * booked_plant_health_price_per_pole AND " +
+                    "final_price IS NOT NULL AND final_price = round((mapping_subtotal + plant_health_subtotal) * (1 - combo_discount_percentage / 100), 0) AND " +
+                    "combo_discount_amount = mapping_subtotal + plant_health_subtotal - final_price AND " +
+                    "original_final_price IS NOT NULL AND original_final_price = mapping_subtotal + plant_health_subtotal AND " +
+                    "original_survey_service_price_id IS NOT NULL AND original_survey_service_price_id = booked_service_price_id AND " +
+                    "confirmed_survey_pole_count IS NOT NULL AND confirmed_survey_pole_count = confirmed_plant_health_pole_count)");
                 table.HasCheckConstraint("ck_survey_orders_area_positive", "confirmed_survey_area_ha IS NULL OR confirmed_survey_area_ha > 0");
                 table.HasCheckConstraint(
                     "ck_survey_orders_price_nonnegative",
@@ -25,7 +47,7 @@ public sealed class SurveyOrderConfiguration : IEntityTypeConfiguration<SurveyOr
                 table.HasCheckConstraint("ck_survey_orders_currency", "currency IS NULL OR currency ~ '^[A-Z]{3}$'");
                 table.HasCheckConstraint(
                     "ck_survey_orders_legacy_pricing_snapshot_complete",
-                    "(confirmed_survey_area_ha IS NULL AND price_per_ha_snapshot IS NULL) OR " +
+                    "scope = 'V3' OR (confirmed_survey_area_ha IS NULL AND price_per_ha_snapshot IS NULL) OR " +
                     "(confirmed_survey_area_ha IS NOT NULL AND price_per_ha_snapshot IS NOT NULL AND currency IS NOT NULL AND final_price IS NOT NULL AND scope_confirmed_by IS NOT NULL AND scope_confirmed_at IS NOT NULL)");
                 table.HasCheckConstraint(
                     "ck_survey_orders_pole_count_snapshot_complete",
@@ -36,19 +58,19 @@ public sealed class SurveyOrderConfiguration : IEntityTypeConfiguration<SurveyOr
                     "pole_count_evidence_reference IS NULL OR length(btrim(pole_count_evidence_reference)) > 0");
                 table.HasCheckConstraint(
                     "ck_survey_orders_per_pole_pricing_snapshot_complete",
-                    "(price_per_pole_snapshot IS NULL AND pricing_confirmed_by IS NULL AND pricing_confirmed_at IS NULL) OR " +
+                    "scope = 'V3' OR (price_per_pole_snapshot IS NULL AND pricing_confirmed_by IS NULL AND pricing_confirmed_at IS NULL) OR " +
                     "(price_per_pole_snapshot IS NOT NULL AND survey_service_price_id IS NOT NULL AND confirmed_survey_pole_count IS NOT NULL AND farm_boundary_version_id IS NOT NULL AND farm_base_map_version_id IS NOT NULL AND pricing_confirmed_by IS NOT NULL AND pricing_confirmed_at IS NOT NULL AND currency IS NOT NULL AND final_price IS NOT NULL)");
                 table.HasCheckConstraint(
                     "ck_survey_orders_pricing_mode",
                     "NOT (price_per_pole_snapshot IS NOT NULL AND price_per_ha_snapshot IS NOT NULL)");
                 table.HasCheckConstraint(
                     "ck_survey_orders_final_price",
-                    "final_price IS NULL OR " +
+                    "booked_mapping_price_per_pole IS NOT NULL OR scope = 'V3' OR final_price IS NULL OR " +
                     "(price_per_pole_snapshot IS NOT NULL AND final_price = round(confirmed_survey_pole_count * price_per_pole_snapshot, 2)) OR " +
                     "(price_per_ha_snapshot IS NOT NULL AND final_price = round(confirmed_survey_area_ha * price_per_ha_snapshot, 2))");
                 table.HasCheckConstraint(
                     "ck_survey_orders_original_commercial_snapshot",
-                    "(original_final_price IS NULL AND original_survey_service_price_id IS NULL AND original_confirmed_pole_count IS NULL AND original_price_per_pole_snapshot IS NULL) OR " +
+                    "booked_mapping_price_per_pole IS NOT NULL OR (original_final_price IS NULL AND original_survey_service_price_id IS NULL AND original_confirmed_pole_count IS NULL AND original_price_per_pole_snapshot IS NULL) OR " +
                     "(original_final_price = round(original_confirmed_pole_count * original_price_per_pole_snapshot, 2) AND original_survey_service_price_id IS NOT NULL)");
                 table.HasCheckConstraint("ck_survey_orders_previous_not_self", "previous_compatible_order_id IS NULL OR previous_compatible_order_id <> id");
                 table.HasCheckConstraint(
@@ -63,14 +85,25 @@ public sealed class SurveyOrderConfiguration : IEntityTypeConfiguration<SurveyOr
                     "remaining_amount IS NULL OR remaining_amount >= 0");
                 table.HasCheckConstraint(
                     "ck_survey_orders_deposit_consistency",
-                    "(requires_baseline_mapping = false AND deposit_amount = 0 AND deposit_payment_status = 'PAID'::system.survey_payment_status) OR " +
-                    "(requires_baseline_mapping = true AND deposit_amount > 0)");
+                    "scope = 'V3' OR (deposit_amount = 0 AND deposit_payment_status = 'PAID'::system.survey_payment_status) OR " +
+                    "(deposit_amount > 0)");
+                table.HasCheckConstraint(
+                    "ck_survey_orders_scope_policy",
+                    "(scope = 'LEGACY' AND business_policy_version_id IS NULL) OR " +
+                    "(scope = 'V3' AND business_policy_version_id IS NOT NULL)");
+                table.HasCheckConstraint(
+                    "ck_survey_orders_v3_deposit",
+                    "scope = 'LEGACY' OR (deposit_amount > 0 AND deposit_amount = FLOOR(deposit_amount))");
             });
+
         builder.HasKey(order => order.Id).HasName("pk_survey_orders");
         builder.HasAlternateKey(order => new { order.Id, order.TenantId, order.FarmId }).HasName("uq_survey_orders_id_tenant_farm");
         builder.HasAlternateKey(order => new { order.Id, order.FarmId }).HasName("uq_survey_orders_id_farm");
         builder.HasAlternateKey(order => new { order.Id, order.FarmId, order.SurveyServiceId }).HasName("uq_survey_orders_id_farm_service");
+
         builder.Property(order => order.Id).HasColumnName("id").HasColumnType("uuid").HasDefaultValueSql("gen_random_uuid()").ValueGeneratedOnAdd();
+        builder.Property(order => order.Scope).HasColumnName("scope").HasColumnType("system.contract_scope").HasDefaultValue(ContractScope.Legacy).IsRequired();
+        builder.Property(order => order.BusinessPolicyVersionId).HasColumnName("business_policy_version_id").HasColumnType("uuid").IsRequired(false);
         builder.Property(order => order.OrderNumber).HasColumnName("order_number").HasColumnType("character varying(40)").HasMaxLength(40).IsRequired();
         builder.Property(order => order.TenantId).HasColumnName("tenant_id").HasColumnType("uuid");
         builder.Property(order => order.FarmId).HasColumnName("farm_id").HasColumnType("uuid");
@@ -143,6 +176,23 @@ public sealed class SurveyOrderConfiguration : IEntityTypeConfiguration<SurveyOr
             .HasPrecision(18, 2)
             .HasSentinel(-1m)
             .IsRequired();
+        builder.Property(order => order.ComboDiscountPercentage)
+            .HasColumnName("combo_discount_percentage")
+            .HasColumnType("numeric(5,2)")
+            .HasPrecision(5, 2);
+        builder.Property(order => order.PostFlightSettlement).HasColumnName("post_flight_settlement").HasDefaultValue(false);
+        builder.Property(order => order.BookedServicePriceId).HasColumnName("booked_service_price_id");
+        builder.Property(order => order.BookedPricePerPole).HasColumnName("booked_price_per_pole").HasPrecision(18, 2);
+        builder.Ignore(order => order.UsesComponentPricing);
+        builder.Property(order => order.BookedMappingPricePerPole).HasColumnName("booked_mapping_price_per_pole").HasPrecision(18, 2);
+        builder.Property(order => order.BookedPlantHealthPricePerPole).HasColumnName("booked_plant_health_price_per_pole").HasPrecision(18, 2);
+        builder.Property(order => order.ConfirmedMappingPoleCount).HasColumnName("confirmed_mapping_pole_count");
+        builder.Property(order => order.ConfirmedPlantHealthPoleCount).HasColumnName("confirmed_plant_health_pole_count");
+        builder.Property(order => order.MappingSubtotal).HasColumnName("mapping_subtotal").HasPrecision(18, 2);
+        builder.Property(order => order.PlantHealthSubtotal).HasColumnName("plant_health_subtotal").HasPrecision(18, 2);
+        builder.Property(order => order.ComboDiscountAmount).HasColumnName("combo_discount_amount").HasPrecision(18, 2);
+        builder.Property(order => order.BookedServiceType).HasColumnName("booked_service_type").HasColumnType("system.survey_service_type");
+        builder.Property(order => order.ServiceReviewedAt).HasColumnName("service_reviewed_at");
         builder.Property(order => order.RemainingAmount)
             .HasColumnName("remaining_amount")
             .HasColumnType("numeric(18,2)")
@@ -179,14 +229,23 @@ public sealed class SurveyOrderConfiguration : IEntityTypeConfiguration<SurveyOr
         builder.Property(order => order.Version).IsRowVersion();
         builder.Property(order => order.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp with time zone").HasDefaultValueSql("NOW()").IsRequired();
         builder.Property(order => order.UpdatedAt).HasColumnName("updated_at").HasColumnType("timestamp with time zone").HasDefaultValueSql("NOW()").IsRequired();
+
         builder.HasIndex(order => order.OrderNumber).HasDatabaseName("uq_survey_orders_number").IsUnique();
         builder.HasIndex(order => order.SurveyRequestId).HasDatabaseName("uq_survey_orders_request").IsUnique();
         builder.HasIndex(order => new { order.TenantId, order.FarmId, order.Status }).HasDatabaseName("ix_survey_orders_manager_work_queue");
         builder.HasIndex(order => new { order.FarmId, order.SurveyServiceId, order.CreatedAt }).HasDatabaseName("ix_survey_orders_farm_service_history").IsDescending(false, false, true);
+
         builder.HasOne(order => order.SurveyRequest).WithOne().HasForeignKey<SurveyOrder>(order => order.SurveyRequestId).OnDelete(DeleteBehavior.Restrict).HasConstraintName("fk_survey_orders_requests_request_id");
         builder.HasOne(order => order.SurveyService).WithMany().HasForeignKey(order => order.SurveyServiceId).OnDelete(DeleteBehavior.Restrict).HasConstraintName("fk_survey_orders_services_service_id");
         builder.HasOne(order => order.SurveyServicePrice).WithMany().HasForeignKey(order => new { order.SurveyServicePriceId, order.SurveyServiceId }).HasPrincipalKey(price => new { price.Id, price.SurveyServiceId }).OnDelete(DeleteBehavior.Restrict).HasConstraintName("fk_survey_orders_price_same_service");
         builder.HasOne(order => order.PreviousCompatibleOrder).WithMany().HasForeignKey(order => new { order.PreviousCompatibleOrderId, order.FarmId, order.SurveyServiceId }).HasPrincipalKey(order => new { order.Id, order.FarmId, order.SurveyServiceId }).OnDelete(DeleteBehavior.Restrict).HasConstraintName("fk_survey_orders_previous_same_farm_service");
+
+        builder.HasOne<BusinessPolicyVersion>()
+            .WithMany()
+            .HasForeignKey(order => order.BusinessPolicyVersionId)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_survey_orders_business_policy_version");
+
         builder.HasMany(order => order.ZoneScopes)
             .WithOne()
             .HasForeignKey(scope => new { scope.SurveyOrderId, scope.FarmId })

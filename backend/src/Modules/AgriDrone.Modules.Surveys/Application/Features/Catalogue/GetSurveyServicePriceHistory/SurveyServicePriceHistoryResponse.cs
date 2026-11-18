@@ -10,4 +10,6 @@ public sealed record SurveyServicePriceHistoryResponse(
     DateTimeOffset? EffectiveTo,
     Guid CreatedBy,
     DateTimeOffset CreatedAt,
-    bool IsLegacyPerHectarePrice);
+    bool IsLegacyPerHectarePrice,
+    decimal? MappingPricePerPole = null,
+    decimal? PlantHealthPricePerPole = null);

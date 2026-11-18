@@ -81,11 +81,39 @@ public static class SurveyOrderReadinessPolicy
             return;
         }
 
+        if (snapshot.PostFlightSettlement)
+        {
+            var expected = snapshot.Purpose == SurveyOperationPurpose.BaselineMapping
+                ? SurveyOrderStatus.BaselineReady : SurveyOrderStatus.ReadyForPaidService;
+            if (snapshot.OrderStatus != expected) failures.Add(SurveyOrderReadinessFailure.OrderNotEligible);
+            if (snapshot.DepositPaymentStatus != SurveyPaymentStatus.Paid)
+                failures.Add(SurveyOrderReadinessFailure.PaymentNotConfirmed);
+            if (snapshot.Purpose == SurveyOperationPurpose.PlantHealth)
+            {
+                if (!snapshot.HasApprovedFarmBoundary) failures.Add(SurveyOrderReadinessFailure.BoundaryNotApproved);
+                if (!snapshot.IsScopeConfirmed) failures.Add(SurveyOrderReadinessFailure.ScopeNotConfirmed);
+                if (!snapshot.HasPublishedFarmBaseMap) failures.Add(SurveyOrderReadinessFailure.FarmBaseMapNotPublished);
+            }
+            EvaluateAppointmentAndSafetyOwnership(snapshot, failures);
+            if (snapshot.HasPendingFinancialSettlement) failures.Add(SurveyOrderReadinessFailure.FinancialSettlementPending);
+            if (snapshot.HasUnapprovedExtraFlight) failures.Add(SurveyOrderReadinessFailure.ExtraFlightNotApproved);
+            return;
+        }
+
         var expectedOrderStatus = snapshot.Purpose switch
         {
             SurveyOperationPurpose.BaselineMapping => SurveyOrderStatus.BaselineReady,
             SurveyOperationPurpose.PlantHealth =>
-                SurveyOrderStatus.ReadyForPaidService,
+                snapshot.RequiresBaselineMapping
+                    ? (snapshot.OrderStatus is SurveyOrderStatus.BaselineReady
+                                           or SurveyOrderStatus.AwaitingBaselineReview
+                                           or SurveyOrderStatus.AwaitingPricing
+                                           or SurveyOrderStatus.AwaitingPaidAppointment
+                                           or SurveyOrderStatus.AwaitingPayment
+                                           or SurveyOrderStatus.ReadyForPaidService)
+                        ? snapshot.OrderStatus
+                        : SurveyOrderStatus.ReadyForPaidService
+                    : SurveyOrderStatus.ReadyForPaidService,
             _ => throw new ArgumentOutOfRangeException(
                 nameof(snapshot),
                 snapshot.Purpose,
@@ -124,6 +152,28 @@ public static class SurveyOrderReadinessPolicy
             }
         }
 
+        EvaluateAppointmentAndSafetyOwnership(snapshot, failures);
+
+        if (snapshot.Purpose == SurveyOperationPurpose.PlantHealth)
+        {
+            EvaluatePaidService(snapshot, failures);
+        }
+
+        if (snapshot.HasPendingFinancialSettlement)
+        {
+            failures.Add(
+                SurveyOrderReadinessFailure.FinancialSettlementPending);
+        }
+
+        if (snapshot.HasUnapprovedExtraFlight)
+        {
+            failures.Add(SurveyOrderReadinessFailure.ExtraFlightNotApproved);
+        }
+    }
+
+    private static void EvaluateAppointmentAndSafetyOwnership(
+        SurveyOrderReadinessSnapshot snapshot, List<SurveyOrderReadinessFailure> failures)
+    {
         var expectedAppointmentPurpose = snapshot.Purpose switch
         {
             SurveyOperationPurpose.BaselineMapping =>
@@ -158,21 +208,6 @@ public static class SurveyOrderReadinessPolicy
             failures.Add(SurveyOrderReadinessFailure.PrimaryManagerUnavailable);
         }
 
-        if (snapshot.Purpose == SurveyOperationPurpose.PlantHealth)
-        {
-            EvaluatePaidService(snapshot, failures);
-        }
-
-        if (snapshot.HasPendingFinancialSettlement)
-        {
-            failures.Add(
-                SurveyOrderReadinessFailure.FinancialSettlementPending);
-        }
-
-        if (snapshot.HasUnapprovedExtraFlight)
-        {
-            failures.Add(SurveyOrderReadinessFailure.ExtraFlightNotApproved);
-        }
     }
 
     private static void EvaluatePaidService(
@@ -194,24 +229,39 @@ public static class SurveyOrderReadinessPolicy
             failures.Add(SurveyOrderReadinessFailure.PriceNotConfirmed);
         }
 
-        if (snapshot.PaymentStatus == SurveyPaymentStatus.Refunded)
+        if (snapshot.RequiresBaselineMapping)
         {
-            failures.Add(SurveyOrderReadinessFailure.PaymentRevoked);
+            if (snapshot.DepositPaymentStatus != SurveyPaymentStatus.Paid)
+            {
+                failures.Add(SurveyOrderReadinessFailure.PaymentNotConfirmed);
+            }
         }
-        else if (snapshot.PaymentStatus != SurveyPaymentStatus.Paid)
+        else
         {
-            failures.Add(SurveyOrderReadinessFailure.PaymentNotConfirmed);
-        }
+            if (snapshot.DepositPaymentStatus != SurveyPaymentStatus.Paid)
+            {
+                failures.Add(SurveyOrderReadinessFailure.PaymentNotConfirmed);
+            }
 
-        if (!snapshot.IsPaymentAmountAndCurrencyMatched)
-        {
-            failures.Add(
-                SurveyOrderReadinessFailure.PaymentAmountOrCurrencyMismatch);
-        }
+            if (snapshot.PaymentStatus == SurveyPaymentStatus.Refunded)
+            {
+                failures.Add(SurveyOrderReadinessFailure.PaymentRevoked);
+            }
+            else if (snapshot.PaymentStatus != SurveyPaymentStatus.Paid)
+            {
+                failures.Add(SurveyOrderReadinessFailure.PaymentNotConfirmed);
+            }
 
-        if (snapshot.HasPendingPriceAdjustment)
-        {
-            failures.Add(SurveyOrderReadinessFailure.PriceAdjustmentPending);
+            if (!snapshot.IsPaymentAmountAndCurrencyMatched)
+            {
+                failures.Add(
+                    SurveyOrderReadinessFailure.PaymentAmountOrCurrencyMismatch);
+            }
+
+            if (snapshot.HasPendingPriceAdjustment)
+            {
+                failures.Add(SurveyOrderReadinessFailure.PriceAdjustmentPending);
+            }
         }
     }
 }

@@ -68,6 +68,10 @@ internal sealed class ReviewPlantObservationCommandHandler(
                     $"Observation {request.ObservationId} not found."));
         }
 
+        if (await PlantHealthLegacyWriteGuard.IsV4Async(dbContext, request.ObservationId, request.FarmId, cancellationToken))
+            return Result.Failure<ReviewPlantObservationResult>(AppError.Conflict("PlantHealth.V4ReviewRequired",
+                "Review this observation through its pending Plant Health result."));
+
         var dbStatus = decision == "CONFIRMED" ? "CONFIRMED" : "REJECTED";
 
         if (string.Equals(obs.ReviewStatus, dbStatus, StringComparison.OrdinalIgnoreCase))

@@ -86,6 +86,12 @@ internal sealed class InitiateSurveyPaymentCommandHandler(
 
         var state = stateResult.Value;
         var order = state.Order;
+        if (order.Scope == ContractScope.V3 ||
+            (command.Purpose == PaymentPurpose.FinalBalance && order.PostFlightSettlement &&
+             order.ServiceReviewedAt is null))
+        {
+            return Result.Failure<InitiateSurveyPaymentResponse>(PaymentError.OrderNotReady());
+        }
         try
         {
             order.EnsureVersion(command.ExpectedOrderVersion);
@@ -99,9 +105,7 @@ internal sealed class InitiateSurveyPaymentCommandHandler(
         Money amount;
         if (command.Purpose == PaymentPurpose.BaselineDeposit)
         {
-            if (order.Status != SurveyOrderStatus.AwaitingBaselineDeposit ||
-                order.DepositPaymentStatus == SurveyPaymentStatus.Paid ||
-                order.DepositAmount <= 0)
+            if (!order.CanAcceptDepositPayment())
             {
                 return Result.Failure<InitiateSurveyPaymentResponse>(
                     PaymentError.OrderNotReady());
@@ -121,17 +125,27 @@ internal sealed class InitiateSurveyPaymentCommandHandler(
                     PaymentError.OrderNotReady());
             }
 
+            if (order.DepositAmount > 0m && order.DepositPaymentStatus != SurveyPaymentStatus.Paid)
+                return Result.Failure<InitiateSurveyPaymentResponse>(PaymentError.OrderNotReady());
+
             var payableAmount = order.RemainingAmount ?? order.FinalPrice.Value;
-            if (payableAmount == 0)
+            var existingPaid = state.ActivePayment?.Status == SurveyPaymentStatus.Paid &&
+                state.ActivePayment.Amount == payableAmount &&
+                state.ActivePayment.Currency == order.Currency;
+            if (payableAmount == 0 || existingPaid)
             {
+                if (state.ActivePayment?.Status is SurveyPaymentStatus.Pending
+                    or SurveyPaymentStatus.Processing or SurveyPaymentStatus.AdjustmentRequired)
+                    return Result.Failure<InitiateSurveyPaymentResponse>(PaymentError.ActivePaymentExists());
                 order.MarkPaymentConfirmed(initiatedAt);
+                await outbox.AddPostFlightUnlockAsync(order, executionContext.CorrelationId, cancellationToken);
 
                 using var zeroData = JsonSerializer.SerializeToDocument(new
                 {
                     orderId = order.Id,
-                    remainingAmount = 0m,
-                    provider = "SETTLEMENT",
-                    providerReference = "ZERO_BALANCE_SETTLED",
+                    remainingAmount = payableAmount,
+                    provider = existingPaid ? state.ActivePayment!.Provider : "SETTLEMENT",
+                    providerReference = existingPaid ? state.ActivePayment!.ProviderReference : "ZERO_BALANCE_SETTLED",
                     status = "PAID"
                 });
                 auditWriter.AddUserAction(
@@ -142,7 +156,7 @@ internal sealed class InitiateSurveyPaymentCommandHandler(
                     executionContext.CorrelationId,
                     nameof(SurveyOrder),
                     order.Id,
-                    "SETTLE_ZERO_BALANCE_SURVEY_PAYMENT",
+                    existingPaid ? "RESTORE_CONFIRMED_SURVEY_PAYMENT" : "SETTLE_ZERO_BALANCE_SURVEY_PAYMENT",
                     null,
                     zeroData,
                     initiatedAt);
@@ -150,18 +164,18 @@ internal sealed class InitiateSurveyPaymentCommandHandler(
                 await unitOfWork.FlushAsync(cancellationToken);
 
                 return Result.Success(new InitiateSurveyPaymentResponse(
-                    Guid.Empty,
+                    existingPaid ? state.ActivePayment!.Id : Guid.Empty,
                     order.Id,
                     state.PaidServiceAppointmentId,
-                    0m,
+                    payableAmount,
                     order.Currency ?? "VND",
-                    "SETTLEMENT",
-                    "ZERO_BALANCE_SETTLED",
+                    existingPaid ? state.ActivePayment!.Provider : "SETTLEMENT",
+                    existingPaid ? state.ActivePayment!.ProviderReference! : "ZERO_BALANCE_SETTLED",
                     "PAID",
                     new Uri("about:blank"),
                     string.Empty,
                     initiatedAt,
-                    0,
+                    existingPaid ? state.ActivePayment!.Version : 0,
                     order.Version,
                     initiatedAt,
                     state.PaidServiceAppointmentId));

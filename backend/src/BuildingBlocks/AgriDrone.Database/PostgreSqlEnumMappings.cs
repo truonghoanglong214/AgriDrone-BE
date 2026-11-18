@@ -85,6 +85,7 @@ internal static class PostgreSqlEnumMappings
         modelBuilder.HasPostgresEnum<MissionPurpose>(DbSchemas.System, "mission_purpose", translator);
         modelBuilder.HasPostgresEnum<PreflightChecklistDefinitionStatus>(DbSchemas.System, "preflight_checklist_definition_status", translator);
         modelBuilder.HasPostgresEnum<MissionPreflightChecklistStatus>(DbSchemas.System, "mission_preflight_checklist_status", translator);
+        modelBuilder.HasPostgresEnum<ContractScope>(DbSchemas.System, "contract_scope", translator);
         modelBuilder.HasPostgresEnum<SurveyServiceType>(DbSchemas.System, "survey_service_type", translator);
         modelBuilder.HasPostgresEnum<SurveyServiceStatus>(DbSchemas.System, "survey_service_status", translator);
         modelBuilder.HasPostgresEnum<SurveyRequestKind>(DbSchemas.System, "survey_request_kind", translator);
@@ -158,6 +159,7 @@ internal static class PostgreSqlEnumMappings
         dataSourceBuilder.MapEnum<MissionPurpose>("system.mission_purpose", translator);
         dataSourceBuilder.MapEnum<PreflightChecklistDefinitionStatus>("system.preflight_checklist_definition_status", translator);
         dataSourceBuilder.MapEnum<MissionPreflightChecklistStatus>("system.mission_preflight_checklist_status", translator);
+        dataSourceBuilder.MapEnum<ContractScope>("system.contract_scope", translator);
         dataSourceBuilder.MapEnum<SurveyServiceType>("system.survey_service_type", translator);
         dataSourceBuilder.MapEnum<SurveyServiceStatus>("system.survey_service_status", translator);
         dataSourceBuilder.MapEnum<SurveyRequestKind>("system.survey_request_kind", translator);
@@ -231,6 +233,7 @@ internal static class PostgreSqlEnumMappings
         optionsBuilder.MapEnum<MissionPurpose>("mission_purpose", DbSchemas.System, translator);
         optionsBuilder.MapEnum<PreflightChecklistDefinitionStatus>("preflight_checklist_definition_status", DbSchemas.System, translator);
         optionsBuilder.MapEnum<MissionPreflightChecklistStatus>("mission_preflight_checklist_status", DbSchemas.System, translator);
+        optionsBuilder.MapEnum<ContractScope>("contract_scope", DbSchemas.System, translator);
         optionsBuilder.MapEnum<SurveyServiceType>("survey_service_type", DbSchemas.System, translator);
         optionsBuilder.MapEnum<SurveyServiceStatus>("survey_service_status", DbSchemas.System, translator);
         optionsBuilder.MapEnum<SurveyRequestKind>("survey_request_kind", DbSchemas.System, translator);

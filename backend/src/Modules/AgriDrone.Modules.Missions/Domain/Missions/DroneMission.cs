@@ -115,6 +115,35 @@ public sealed class DroneMission : AggregateRoot
 
     public DateTimeOffset? HealthReviewChangedAt { get; private set; }
 
+    public Guid? HealthPublicationId { get; private set; }
+    public Guid? HealthPublishedResultId { get; private set; }
+    public long? HealthPublicationVersion { get; private set; }
+    public string? HealthPublicationFingerprint { get; private set; }
+
+    public bool ApplyPublishedPlantHealth(Guid publicationId, Guid resultId, long publicationVersion, string fingerprint,
+        Guid handoffId, long reviewRevision, int reviewedFindings, DateTimeOffset publishedAt)
+    {
+        DomainGuard.NotEmpty(publicationId); DomainGuard.NotEmpty(resultId); DomainGuard.NotEmpty(handoffId); DomainGuard.Utc(publishedAt);
+        if (publicationVersion <= 0 || reviewRevision < 0 || reviewedFindings < 0 || fingerprint is not { Length: 64 } ||
+            Purpose != global::AgriDrone.Modules.Missions.Domain.Missions.MissionPurpose.PlantHealth)
+            throw new InvalidOperationException("Only a valid published preliminary outcome may complete a Plant Health Mission.");
+        if (HealthPublicationId.HasValue)
+        {
+            if (HealthPublicationId == publicationId && HealthPublishedResultId == resultId && HealthPublicationVersion == publicationVersion &&
+                HealthPublicationFingerprint == fingerprint && HealthReviewHandoffId == handoffId && HealthReviewVersion == reviewRevision &&
+                HealthReviewTotal == reviewedFindings && Status == MissionStatus.Completed) return false;
+            throw new InvalidOperationException("Mission already records another Plant Health publication.");
+        }
+        if (Status != MissionStatus.AwaitingReview || ProcessingStatus != ProcessingStatus.ReviewRequired || publishedAt < UpdatedAt)
+            throw new InvalidOperationException("Publication can only complete the matching Mission awaiting human review.");
+        HealthPublicationId = publicationId; HealthPublishedResultId = resultId; HealthPublicationVersion = publicationVersion;
+        HealthPublicationFingerprint = fingerprint; HealthReviewHandoffId = handoffId; HealthReviewVersion = reviewRevision;
+        HealthReviewState = MissionHealthReviewState.Resolved; HealthReviewTotal = reviewedFindings; HealthReviewResolved = reviewedFindings;
+        HealthReviewPending = 0; HealthReviewAwaitingFieldVerification = 0; HealthReviewChangedAt = publishedAt;
+        Status = MissionStatus.Completed; ProcessingStatus = ProcessingStatus.Completed; UpdatedAt = publishedAt;
+        return true;
+    }
+
     public Drone Drone { get; private set; } = null!;
 
     public ICollection<MissionMedia> Media { get; private set; } = [];
@@ -888,6 +917,8 @@ public sealed class DroneMission : AggregateRoot
     int resolved,
     DateTimeOffset changedAt)
     {
+        if (HealthPublicationId.HasValue)
+            throw new InvalidOperationException("Published Plant Health completion cannot be replaced by legacy review state.");
         ArgumentOutOfRangeException.ThrowIfEqual(
             handoffId,
             Guid.Empty);

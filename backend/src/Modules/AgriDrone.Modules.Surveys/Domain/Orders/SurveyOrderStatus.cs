@@ -16,5 +16,17 @@ public enum SurveyOrderStatus
     InProgress,
     PendingReview,
     Completed,
-    Cancelled
+    Cancelled,
+
+    // Additive V3 statuses
+    AwaitingAppointment,
+    AwaitingDeposit,
+    ReadyForCapture,
+    Capturing,
+    AwaitingCaptureUpload,
+    AwaitingInputReview,
+    AwaitingProcessing,
+    Processing,
+    AwaitingReflightDecision,
+    AwaitingSettlement
 }

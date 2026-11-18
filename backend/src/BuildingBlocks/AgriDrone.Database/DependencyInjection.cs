@@ -53,6 +53,12 @@ public static class DependencyInjection
             SurveyOrderOperationalContextV4Query>();
         services.AddScoped<ISystemManagerSurveyOrderQueries,
             SystemManagerSurveyOrderQueries>();
+        services.AddScoped<IV3FollowUpBaselineQuery,
+            V3FollowUpBaselineQuery>();
+        services.AddScoped<V3FollowUpBaselineEligibilityReader>();
+        services.TryAddScoped<IV3BaselineDeliveryProofReader,
+            UnavailableV3BaselineDeliveryProofReader>();
+        services.AddScoped<IFarmBaseMapPreviewReader, FarmBaseMapPreviewReader>();
 
         return services;
     }
@@ -121,6 +127,19 @@ public static class DependencyInjection
             serviceProvider => serviceProvider.GetRequiredService<
                 SurveyResultPublicationDbContext>());
 
+        services.AddScoped<AgriDrone.IntegrationContracts.Health.IPlantHealthPendingImport, Health.PlantHealthPendingImport>();
+        services.AddScoped<IIntegrationMessageHandler<AgriDrone.IntegrationContracts.Health.PlantHealthAnalysisReadyV4>, Health.PlantHealthAnalysisReadyV4Handler>();
+        services.AddIntegrationConsumer<Health.PlantHealthAnalysisReadyV4Processor>(IntegrationConsumerNames.Be1PlantHealthAnalysisReadyV4);
+        services.AddScoped<Health.PlantHealthReviewService>();
+        services.AddScoped<AgriDrone.IntegrationContracts.Health.IPlantHealthPublicationQuery, Health.PlantHealthPublicationQuery>();
+        services.AddScoped<AgriDrone.Modules.Surveys.Application.Features.Results.PlantHealth.PublishPlantHealthSurveyResult.IPlantHealthPublishedResultReader>(sp => sp.GetRequiredService<Health.PlantHealthReviewService>());
+        services.AddScoped<IIntegrationMessageHandler<AgriDrone.IntegrationContracts.Health.PlantHealthPublicationNotificationRequestedV1>, Health.PlantHealthPublicationNotificationHandler>();
+        services.AddIntegrationConsumer<Health.PlantHealthPublicationNotificationProcessor>(IntegrationConsumerNames.PlantHealthPublicationNotificationV1);
+        services.AddScoped<AgriDrone.Modules.Surveys.Application.Abstractions.HealthReview.IPlantHealthReviewService>(sp => sp.GetRequiredService<Health.PlantHealthReviewService>());
+        services.AddScoped<AgriDrone.Modules.Surveys.Application.Features.Results.PlantHealth.PublishPlantHealthSurveyResult.IPlantHealthResultPublisher>(sp => sp.GetRequiredService<Health.PlantHealthReviewService>());
+        Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddScoped<AgriDrone.Modules.Surveys.Application.Features.Results.PlantHealth.PublishPlantHealthSurveyResult.IPlantHealthPublicationCheckpoint, Health.PlantHealthPublicationCheckpoint>(services);
+        services.AddScoped<AgriDrone.Modules.Surveys.Application.Abstractions.HealthReview.IPlantHealthReviewAuthorizationGuard, Health.PlantHealthReviewAuthorizationGuard>();
+
         return services;
     }
 
@@ -161,6 +180,8 @@ public static class DependencyInjection
         services.AddScoped<ISurveyApprovalOutbox, SurveyApprovalOutbox>();
         services.AddScoped<ISurveyOrderRepository,
             SurveyApprovalOrderRepository>();
+        services.AddScoped<ISurveyCommercialSnapshotResolver,
+            SurveyCommercialSnapshotResolver>();
         return services;
     }
 

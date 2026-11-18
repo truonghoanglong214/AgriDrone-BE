@@ -185,4 +185,14 @@ public sealed class AuditLog : Entity<long>
         document is null
             ? null
             : JsonDocument.Parse(document.RootElement.GetRawText());
+
+    public static AuditLog ForIntegrationAction(Guid tenantId, Guid farmId, Guid sourceJobId,
+        Guid correlationId, string entityType, Guid entityId, string action,
+        JsonDocument? newData, DateTimeOffset createdAt)
+    {
+        DomainGuard.NotEmpty(tenantId); DomainGuard.NotEmpty(farmId); DomainGuard.NotEmpty(sourceJobId);
+        var log = ForSystemAction(correlationId, entityType, entityId, action, null, newData, createdAt);
+        log.TenantId = tenantId; log.FarmId = farmId; log.SourceJobId = sourceJobId;
+        return log;
+    }
 }

@@ -1,40 +1,52 @@
-# Be-Plan Glossary
+# AgriDrone — Glossary hiện hành v3
 
-Status: **Approved**  
-Effective date: 2026-09-22; amended 2026-10-08 by Step 0R
-Source of truth: `Codex-Plan/Be-Plan.md`
+Status: **Approved, 2026-11-10**. Source: [proposal v3](../../Codex-Plan/Be-Plan-v3.md), [Business Rules](../../Codex-Plan/Business-Rules-v3.md), [ADR 0018](../adr/0018-v3-paid-map-combo-business-policy.md).
 
-Tài liệu này là glossary duy nhất cho workflow dịch vụ khảo sát. Tên trong code/API có thể dùng `PascalCase` hoặc mã `UPPER_SNAKE_CASE`, nhưng không được đổi nghĩa dưới đây.
+| Thuật ngữ | Nghĩa chuẩn |
+|---|---|
+| Public Applicant | Gửi first-service request/theo dõi tracking code, không tự provision Tenant/Farm. |
+| SystemAdmin | Duyệt onboarding, cấu hình giá/cọc/staff/drone, refund proposals/bank proof, financial dashboard/export. |
+| SystemManager | Nhân sự AgriDrone assigned Farm; field work, review identity/mapping/disease, xác minh claims/corrections. |
+| TenantOwner | Chủ Tenant/Farm, book/pay, xem released history, báo plant changes, claim/accept refund proposal. |
+| MAP | Paid service mapping, pole count/positions. Demo 1.000 VND/trụ. |
+| COMBO | MAP + 2–3 team-labelled suspected diseases, Disease Zones, cited guidance; không severity/diagnosis. Demo 2.000 VND/trụ. |
+| First survey | Paid Order đầu tiên của Farm, tạo approved Baseline/profiles ban đầu; không free prerequisite service. |
+| Follow-up | Paid Order mới, cùng Tenant/Farm có Baseline đã bàn giao, chọn MAP/COMBO và snapshot giá/cọc mới. |
+| Quality Re-flight | Capture/Mission bổ sung cùng Order vì ảnh không đạt; không phí/cọc thêm, không Follow-up. |
+| Deposit | Cọc cố định chung snapshot cho mọi Order, trước capture và credit một lần. Demo 100.000 VND, chưa sửa runtime. |
+| PricePerPoleSnapshot | Giá theo service/version tại lúc tạo Order; catalogue đổi không sửa lịch sử. |
+| VerifiedBillablePoleCount | Trụ có evidence đã review trong approved boundary của Order; khác estimated count/current active inventory. |
+| Total | VerifiedBillablePoleCount × snapshotted rate; không minimum charge ngầm bằng cọc. |
+| RemainingDue | Trước release: max(Total − confirmed receipts + completed refunds, 0). Complaint refund sau release không tạo lại balance. |
+| Overpayment | Actual net received trước release vượt Total; refund obligation, không service revenue, không cần claim. |
+| FarmBoundary | Farm polygon versioned; near/outside candidates NeedsReview; outside không billable. First capture có thể cung cấp imagery tạo boundary. |
+| Baseline | Map tham chiếu đầu tiên approved từ paid Order, linked source Order/Mission/version; chỉ correction có review mới thay current pointer. |
+| Approved internal map | Mapping được dùng cho pipeline nội bộ trước settlement, không tự mở Owner visibility. |
+| Survey map snapshot | Output riêng từng Order, tham chiếu Baseline; Follow-up không overwrite Baseline. |
+| Digital Plant Profile | Persistent ID cho verified physical pole, tối đa một active profile/pole, append-only observations/history. |
+| Plant lifecycle change | Sau Baseline cần later-survey evidence + Manager approval cho new/retire/replace; missing một lần không retire, relocation giữ ID. |
+| NeedsReview | Uncertain boundary/match/new/missing/finding; không tự biến thành inventory hoặc billing decision. |
+| Disease Zone | Reviewed suspected-disease polygon từ Combo; khác operational Farm Zone. |
+| Sourced Guidance | Cited/versioned reference advice, không severity-based prescription hoặc free-form AI advice. |
+| NotAssessed | Không screening bệnh ở observation, điển hình MAP; không phải Healthy hoặc clear disease history. |
+| ApprovedAt | Manager duyệt immutable revision, chưa đồng nghĩa Owner xem được. |
+| PublishedAt / UnlockedAt | Review đạt và Due=0 thì publication/unlock/durable in-app notice cùng transaction, cùng timestamp trong MVP. |
+| Claim deadline | Notice local date D; deadlineExclusive=00:00 D+8 UTC+7. Nhận hết D+7, không cộng 168 giờ, không tính từ lần đọc/email delivery. |
+| ComplaintRefund | Admin proposal + Owner acceptance cho error của released service; bank proof/audit. |
+| CancellationReturn | Trả tiền đơn hủy/chưa bàn giao; không service revenue refund nếu chưa publication. |
+| CancellationRetention | Cọc giữ khi khách đổi ý sau capture đạt; nhóm báo cáo riêng, không published service value/active deposit liability. |
+| Refund reservation | Completed + reserved refund amounts không vượt receipts toàn Order; retry bank transfer phải đối soát. |
+| Substantive correction | Reviewed replacement thay nội dung thực chất, notice/window mới theo revision, giữ old version; không phí/sale lần hai. |
+| Cosmetic edit | Đổi trình bày không đổi kết quả, không reset claim window. |
+| Net service revenue | Published service value − completed service-value refunds; tiền trả thừa/cọc chưa ghi revenue chỉ ảnh hưởng cash. |
+| Net cash | Actual receipts − tất cả completed cash refunds, theo ngày transaction/completion. |
+| Online-only Manager Mobile | Checklist/notes/uploads cần mạng, retry/resume an toàn; không offline cache hoặc mutation queue. |
+| Policy v3 / wire V3,V4 | Business version khác event schema version. Released payload/enum không đổi tại chỗ. |
+| Request quote snapshot | Indicative configuration at submit; khác immutable commercial snapshot được resolve tại Order approval. |
+| Commercial policy snapshot | Price/deposit/service/claim/cancellation version IDs và resolved values/fingerprint pin cùng Order creation transaction; không re-policy ở invoice/release/refund. |
+| VersionNumber / predecessor | Explicit business version chain, không dùng xmin/concurrency token làm immutable revision identity. |
+| CaptureInputApproval | Audited acceptance of uploaded input manifest before processing; khác terminal Accepted state sau processing/review. |
+| Current projection | State/pointer cập nhật atomic cùng append-only history, không overwrite evidence; không đòi full event sourcing. |
+| V3-01 DesignLocked | Model/contracts/disposition đã chốt theo ADR 0019, source audit hoàn tất; chưa live DB inventory/runtime implementation. |
 
-| Thuật ngữ chuẩn | Định nghĩa bắt buộc | Không được hiểu là |
-|---|---|---|
-| **Public Applicant** | Người chưa đăng nhập gửi `NewCustomer` Survey Request và cung cấp snapshot liên hệ/Farm ban đầu. | TenantOwner đã được provision; người được phép tạo trực tiếp Tenant/Farm; actor vận hành drone. |
-| **SystemAdmin** | System actor quản trị toàn hệ thống: thẩm định Survey Request, quản lý SystemManager, drone hệ thống, Survey Service/giá và master data. | TenantAdmin hoặc thành viên của một Tenant khách hàng. |
-| **SystemManager** | Nhân sự vận hành của AgriDrone, có profile active, available và flight-qualified; chỉ thao tác Farm/Order được gán làm primary manager. | Farm Manager thuộc TenantMembership/FarmMembership; TenantOwner; worker của khách hàng. |
-| **TenantOwner** | Chủ tài khoản khách hàng gắn với Tenant sau approval/invitation; xác nhận lịch, thanh toán và chỉ xem dữ liệu/kết quả đã publish của Tenant mình. | Người tự vận hành drone, duyệt AI thô hoặc tự tạo Mission. |
-| **Survey Service** | Sản phẩm khảo sát được bán và định giá theo active pole position. MVP chỉ bán `PLANT_HEALTH`; `HARVEST_READINESS` là compatibility/Stretch-disabled cho tới UC10 gate. | Baseline Mapping; Follow-up; harvest/yield management; dịch vụ tính theo hectare. |
-| **Baseline Mapping** | Mission vận hành bắt buộc, tự động thêm vào SurveyOrder đầu tiên khi Farm chưa có approved base map; tạo map nền và Digital Plant Profiles ban đầu sau human review. | Survey Service bán riêng; quy trình chạy lại ở mọi survey; map draft mà TenantOwner được xem. |
-| **Follow-up** | Survey lặp lại trên cùng Farm và cùng Survey Service khi đã có lần completed tương thích; so sánh với lần compatible gần nhất. | Một Survey Service hoặc price item riêng; mọi survey sau Baseline Mapping bất kể service. |
-| **Official Result** | Survey Result đã được SystemManager có thẩm quyền review/correct/approve và publish; đây là kết quả duy nhất TenantOwner được xem như kết luận chính thức. | AI output/prediction pending, draft map hoặc dữ liệu chưa publish. |
-| **Pole Position** | Vị trí một trụ thanh long trong approved FarmBoundary/scope; active pole position là đơn vị tính giá. | Số nhánh trên trụ; diện tích hectare; một AI detection chưa review. |
-| **ConfirmedSurveyPoleCount** | Số active pole positions trong approved boundary/scope được assigned SystemManager xác nhận từ current published Farm map. | Estimated pole count trong request; pending candidates; count tự suy ra từ area. |
-| **FarmBoundary** | Polygon SRID 4326 được version hóa; mỗi Farm có tối đa một current approved version và có thể chứa nhiều Zone không overlap. | Farm center point; Zone boundary; mutable polygon được sửa ngược lịch sử. |
-| **Boundary Exception** | Candidate/finding được phân loại `OutOfBoundary` hoặc `NeedsReview` theo một FarmBoundary và policy version cụ thể; chỉ decision có reviewer, reason và evidence mới resolve exception. | Dữ liệu được tự động kéo vào Farm gần nhất; lý do để overwrite original coordinate. |
-| **Farm Base Map** | Bản đồ cấp Farm đã publish, gồm các Zone map version và official active Plant mappings; là nguồn authoritative cho inventory/count tại một thời điểm. | Draft mapping candidate; một `ZoneMapVersion` độc lập; dữ liệu tự hết hạn theo TTL. |
-| **Disease Zone** | Polygon bệnh được đề xuất từ verified findings, review/correct và publish bởi assigned SystemManager. | Farm operational Zone; raw AI cluster; một region tự động official. |
-| **Sourced Guidance** | Target catalogue entry immutable/versioned theo team-labelled suspected class, có source/reference, effective window và lifecycle; không phụ thuộc severity và không được diễn đạt như expert diagnosis. | Free-form advice từ AI/manager; treatment prescription; nội dung không có nguồn; kết luận chẩn đoán chuyên gia. |
-| **Treatment Recommendation** | Legacy compatibility artifact theo condition + health/severity; không thuộc Plant Health target runtime/API sau R2. | Nguồn master data cho flow MVP mới hoặc lý do đưa severity trở lại target contract. |
-| **Digital Plant Profile** | Lịch sử của một biological plant generation tại một pole position. Replacement kết thúc profile cũ và tạo PlantId mới. | Pole pricing unit bất biến qua mọi replacement; record bị overwrite khi thay cây. |
-| **PlantInventoryChangeReport** | Owner report cho removal/replacement/new plant; chỉ thay đổi official inventory sau manager verification và evidence gate tương ứng. | API trực tiếp tạo/xóa Plant hoặc tự thay đổi confirmed count. |
-| **MissionPurpose** | Mục đích readiness server-owned: `BaselineMapping`, `PlantHealth` hoặc `HarvestReadiness`; mỗi purpose có gate riêng. | Survey Service; client-supplied `IsReady`; một readiness rule yêu cầu payment cho mọi flight. |
-| **V3 Ready Handoff** | Payload BE2 → BE1 chứa kết quả AI còn pending review, đầy đủ order/mission/boundary/map/job/model/policy provenance. | Kết quả đã approved/published; quyền cho TenantOwner xem raw AI output. |
-
-## Quy tắc ngôn ngữ liên quan
-
-- `SystemAdmin` và `SystemManager` là system actors, không cần chọn Tenant để đăng nhập/vận hành.
-- Customer-side role mục tiêu là `TenantOwner`; tên `TenantAdmin`, `Member`, `Farm Manager` và `Worker` chỉ dùng khi nói về legacy data/code.
-- “Base map” luôn là trạng thái ở cấp Farm; `ZoneMapVersion` chỉ là spatial slice của một `FarmBaseMapVersion`.
-- “Published”, “official” và “verified” không được dùng cho AI output còn pending.
-- “Harvest Readiness” chỉ là đánh giá qua dấu hiệu nhìn thấy; không bao gồm harvest record, sản lượng, batch hoặc hậu thu hoạch.
-- `PricePerHa` và `ConfirmedSurveyAreaHa` chỉ là legacy compatibility fields; target flow không dùng để tính hoặc snapshot giá.
-- “Ready” trong tên V3 handoff nghĩa là sẵn sàng để BE1 ingest/review, không có nghĩa business data đã được approve hoặc publish.
+Legacy `PLANT_HEALTH`, `HARVEST_READINESS`, free Baseline, baseline-only deposit và full-paid-before-flight mô tả compatibility tại ngày artifact, không phải target v3. Giữ audit/history, không gán lại fake service/payment evidence cho dữ liệu cũ.

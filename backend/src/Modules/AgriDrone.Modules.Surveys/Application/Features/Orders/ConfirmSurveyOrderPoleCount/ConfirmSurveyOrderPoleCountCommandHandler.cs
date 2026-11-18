@@ -109,7 +109,16 @@ internal sealed class ConfirmSurveyOrderPoleCountCommandHandler(
         try
         {
             order.EnsureVersion(command.ExpectedOrderVersion);
-            order.ConfirmPoleCountAndPricing(
+            if (order.UsesComponentPricing)
+            {
+                if (!state.AuthoritativeMappingPoleCount.HasValue)
+                    return Result.Failure<ConfirmSurveyOrderPoleCountResponse>(AppError.Conflict(
+                        "SurveyPricing.MappingCountRequired", "The published-map count must be verified independently of the Health scope."));
+                order.ConfirmComboComponentPricing(state.CurrentFarmBaseMapVersionId,
+                    state.AuthoritativeMappingPoleCount.Value, state.AuthoritativeActivePoleCount,
+                    poleCountSource, command.EvidenceReference, actorId, confirmedAt);
+            }
+            else order.ConfirmPoleCountAndPricing(
                 state.CurrentFarmBaseMapVersionId,
                 ConfirmedSurveyPoleCount.Create(
                     state.AuthoritativeActivePoleCount),
@@ -144,6 +153,14 @@ internal sealed class ConfirmSurveyOrderPoleCountCommandHandler(
             pricePerPole = order.PricePerPoleSnapshot!.Value.Amount,
             order.Currency,
             order.FinalPrice,
+            order.ConfirmedMappingPoleCount,
+            order.ConfirmedPlantHealthPoleCount,
+            order.BookedMappingPricePerPole,
+            order.BookedPlantHealthPricePerPole,
+            order.MappingSubtotal,
+            order.PlantHealthSubtotal,
+            order.ComboDiscountPercentage,
+            order.ComboDiscountAmount,
             orderStatus = order.Status.ToString()
         });
         auditWriter.AddUserAction(
@@ -159,29 +176,49 @@ internal sealed class ConfirmSurveyOrderPoleCountCommandHandler(
             newData,
             confirmedAt);
 
-        var pricingConfirmed = new SurveyOrderPricingConfirmedV1(
-            order.Id,
-            order.TenantId,
-            order.FarmId,
-            order.SurveyServiceId,
-            order.FarmBaseMapVersionId!.Value,
-            MapSource(poleCountSource),
-            order.ConfirmedSurveyPoleCount!.Value.Value,
-            order.SurveyServicePriceId!.Value,
-            order.PricePerPoleSnapshot!.Value.Amount,
-            order.Currency!,
-            order.FinalPrice!.Value,
-            state.SystemManagerProfileId,
-            confirmedAt);
-        var envelope = IntegrationEventEnvelopeFactory.Create(
-            IntegrationEventDescriptors.SurveyOrderPricingConfirmedV1,
-            Guid.CreateVersion7(),
-            executionContext.CorrelationId,
-            order.TenantId,
-            actorId,
-            confirmedAt,
-            pricingConfirmed);
-        outbox.Add(envelope, order.Id.ToString("D"));
+        if (order.UsesComponentPricing)
+        {
+            // The existing V1 single-count/rate contract cannot represent two different scopes.
+            var payload = new SurveyOrderPricingConfirmedV2(order.Id, order.TenantId, order.FarmId,
+                order.SurveyServiceId, order.FarmBaseMapVersionId!.Value, MapSource(poleCountSource),
+                order.SurveyServicePriceId!.Value, order.ConfirmedMappingPoleCount!.Value,
+                order.ConfirmedPlantHealthPoleCount!.Value, order.BookedMappingPricePerPole!.Value,
+                order.BookedPlantHealthPricePerPole!.Value, order.MappingSubtotal!.Value,
+                order.PlantHealthSubtotal!.Value, order.ComboDiscountPercentage ?? 0m,
+                order.ComboDiscountAmount!.Value, order.Currency!, order.FinalPrice!.Value,
+                order.RemainingAmount!.Value, state.SystemManagerProfileId, confirmedAt);
+            var envelope = IntegrationEventEnvelopeFactory.Create(
+                IntegrationEventDescriptors.SurveyOrderPricingConfirmedV2, Guid.CreateVersion7(),
+                executionContext.CorrelationId, order.TenantId, actorId, confirmedAt, payload);
+            outbox.Add(envelope, order.Id.ToString("D"));
+        }
+        else
+        {
+            var pricingConfirmed = new SurveyOrderPricingConfirmedV1(
+                order.Id,
+                order.TenantId,
+                order.FarmId,
+                order.SurveyServiceId,
+                order.FarmBaseMapVersionId!.Value,
+                MapSource(poleCountSource),
+                order.ConfirmedSurveyPoleCount!.Value.Value,
+                order.SurveyServicePriceId!.Value,
+                order.PricePerPoleSnapshot!.Value.Amount,
+                order.Currency!,
+                order.FinalPrice!.Value,
+                state.SystemManagerProfileId,
+                confirmedAt);
+            var envelope = IntegrationEventEnvelopeFactory.Create(
+                IntegrationEventDescriptors.SurveyOrderPricingConfirmedV1,
+                Guid.CreateVersion7(),
+                executionContext.CorrelationId,
+                order.TenantId,
+                actorId,
+                confirmedAt,
+                pricingConfirmed);
+            outbox.Add(envelope, order.Id.ToString("D"));
+
+        }
 
         await unitOfWork.FlushAsync(cancellationToken);
 
@@ -204,7 +241,11 @@ internal sealed class ConfirmSurveyOrderPoleCountCommandHandler(
             order.Status,
             order.Version,
             confirmedAt,
-            order.RemainingAmount));
+            order.RemainingAmount,
+            order.ConfirmedMappingPoleCount, order.ConfirmedPlantHealthPoleCount,
+            order.BookedMappingPricePerPole, order.BookedPlantHealthPricePerPole,
+            order.MappingSubtotal, order.PlantHealthSubtotal,
+            order.ComboDiscountPercentage, order.ComboDiscountAmount));
     }
 
     private static AppError MapDomainError(SurveyDomainException exception) =>

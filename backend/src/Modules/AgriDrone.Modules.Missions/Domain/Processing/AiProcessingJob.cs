@@ -57,6 +57,25 @@ public sealed class AiProcessingJob : Entity
 
     public ICollection<MissionPlantObservation> PlantObservations { get; private set; } = [];
 
+    public static AiProcessingJob RecordCompletedHealthRun(Guid missionId, Guid modelId,
+        PlantHealthProcessingSnapshot snapshot, JsonDocument input, JsonDocument output,
+        DateTimeOffset startedAt, DateTimeOffset completedAt)
+    {
+        DomainGuard.NotEmpty(missionId); DomainGuard.NotEmpty(modelId);
+        ArgumentNullException.ThrowIfNull(snapshot);
+        DomainGuard.Utc(startedAt); DomainGuard.Utc(completedAt);
+        if (completedAt < startedAt) throw new ArgumentException("Completion cannot precede start.");
+        return new AiProcessingJob
+        {
+            Id = Guid.CreateVersion7(), MissionId = missionId, ModelVersionId = modelId,
+            JobType = AiJobType.DiseaseDetection, Status = AiJobStatus.Completed,
+            Parameters = JsonSerializer.SerializeToDocument(snapshot), AttemptNumber = snapshot.SourceVersion,
+            InputManifest = JsonDocument.Parse(input.RootElement.GetRawText()),
+            OutputManifest = JsonDocument.Parse(output.RootElement.GetRawText()),
+            QueuedAt = startedAt, StartedAt = startedAt, CompletedAt = completedAt, ProgressPercent = 100
+        };
+    }
+
     public void SnapshotHarvestReadinessCriterion(
         Guid criterionId,
         int criterionVersionNumber)

@@ -11,19 +11,35 @@ public sealed class SurveyServiceConfiguration : IEntityTypeConfiguration<Survey
 
     public void Configure(EntityTypeBuilder<SurveyService> builder)
     {
-        builder.ToTable("survey_services", "survey");
+        builder.ToTable(
+            "survey_services",
+            "survey",
+            table =>
+            {
+                table.HasCheckConstraint(
+                    "ck_survey_services_scope_type",
+                    "(scope = 'LEGACY' AND service_type IS NOT NULL) OR (scope = 'V3' AND service_type IS NULL)");
+            });
+
         builder.HasKey(service => service.Id).HasName("pk_survey_services");
         builder.Property(service => service.Id).HasColumnName("id").HasColumnType("uuid").HasDefaultValueSql("gen_random_uuid()").ValueGeneratedOnAdd();
         builder.Property(service => service.Code).HasColumnName("code").HasColumnType("character varying(50)").HasMaxLength(50).IsRequired();
         builder.Property(service => service.Name).HasColumnName("name").HasColumnType("character varying(150)").HasMaxLength(150).IsRequired();
         builder.Property(service => service.Description).HasColumnName("description").HasColumnType("text").IsRequired();
-        builder.Property(service => service.ServiceType).HasColumnName("service_type").HasColumnType("system.survey_service_type").IsRequired();
+        builder.Property(service => service.Scope).HasColumnName("scope").HasColumnType("system.contract_scope").HasDefaultValue(ContractScope.Legacy).IsRequired();
+        builder.Property(service => service.ServiceType).HasColumnName("service_type").HasColumnType("system.survey_service_type").IsRequired(false);
         builder.Property(service => service.Status).HasColumnName("status").HasColumnType("system.survey_service_status").IsRequired();
         builder.Property(service => service.Version).IsRowVersion();
         builder.Property(service => service.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp with time zone").HasDefaultValueSql("NOW()").IsRequired();
         builder.Property(service => service.UpdatedAt).HasColumnName("updated_at").HasColumnType("timestamp with time zone").HasDefaultValueSql("NOW()").IsRequired();
         builder.HasIndex(service => service.Code).HasDatabaseName("uq_survey_services_code").IsUnique();
         builder.HasIndex(service => new { service.Status, service.ServiceType }).HasDatabaseName("ix_survey_services_catalogue");
+
+        builder.HasMany(service => service.Revisions)
+            .WithOne()
+            .HasForeignKey(revision => revision.SurveyServiceId)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_survey_service_revisions_services_service_id");
 
         var seededAt = new DateTimeOffset(2026, 9, 25, 0, 0, 0, TimeSpan.Zero);
         builder.HasData(
@@ -33,6 +49,7 @@ public sealed class SurveyServiceConfiguration : IEntityTypeConfiguration<Survey
                 Code = "PLANT_HEALTH",
                 Name = "Plant Health Survey",
                 Description = "Drone imagery survey for human-verified plant health findings.",
+                Scope = ContractScope.Legacy,
                 ServiceType = SurveyServiceType.PlantHealth,
                 Status = SurveyServiceStatus.Active,
                 CreatedAt = seededAt,
@@ -44,6 +61,7 @@ public sealed class SurveyServiceConfiguration : IEntityTypeConfiguration<Survey
                 Code = "HARVEST_READINESS",
                 Name = "Harvest Readiness Survey",
                 Description = "Experimental visible-indicator assessment of harvest readiness.",
+                Scope = ContractScope.Legacy,
                 ServiceType = SurveyServiceType.HarvestReadiness,
                 Status = SurveyServiceStatus.Experimental,
                 CreatedAt = seededAt,
@@ -51,4 +69,3 @@ public sealed class SurveyServiceConfiguration : IEntityTypeConfiguration<Survey
             });
     }
 }
-

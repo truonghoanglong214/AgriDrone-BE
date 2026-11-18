@@ -1,4 +1,5 @@
 using AgriDrone.SharedKernel.Domain;
+using AgriDrone.IntegrationContracts.Health;
 
 namespace AgriDrone.Modules.Plants.Domain.DiseaseZones;
 
@@ -35,9 +36,19 @@ public sealed class DiseaseZonePlantMembership : Entity
 
     public Guid DiseaseZoneId { get; private set; }
     public Guid FarmId { get; private set; }
-    public Guid PlantId { get; private set; }
+    public Guid? PlantId { get; private set; }
+    public Guid? MappingCandidateId { get; private set; }
     public int MembershipVersion { get; private set; }
     public DiseaseZoneMembershipKind Kind { get; private set; }
     public decimal? Confidence { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
+
+    internal static DiseaseZonePlantMembership CreatePending(Guid zoneId, Guid farmId,
+        ProposedDiseaseZoneMembershipV4 source, int version, DateTimeOffset createdAt) => new()
+    {
+        Id = Guid.CreateVersion7(), DiseaseZoneId = zoneId, FarmId = farmId,
+        PlantId = source.PlantId, MappingCandidateId = source.MappingCandidateId,
+        MembershipVersion = version, Kind = DiseaseZoneMembershipKind.Proposed,
+        Confidence = source.Confidence, CreatedAt = createdAt
+    };
 }

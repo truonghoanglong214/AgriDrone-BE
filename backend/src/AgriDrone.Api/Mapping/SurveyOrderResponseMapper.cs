@@ -63,7 +63,10 @@ internal static class SurveyOrderResponseMapper
                     response.CurrentAppointmentVersion,
                     response.CurrentAppointmentStatus?.ToString().ToUpperInvariant(),
                     response.CreatedAt,
-                    response.UpdatedAt))
+                    response.UpdatedAt,
+                    response.CurrentAppointmentPurpose is { } purpose
+                        ? SurveyAppointmentResponseMapper.MapPurpose(purpose)
+                        : null))
                 .ToArray(),
             page.PageNumber,
             page.PageSize,
@@ -100,7 +103,8 @@ internal static class SurveyOrderResponseMapper
                         GeoJsonGeometryMapper.FromPolygon(zone.Boundary),
                         zone.Status.ToUpperInvariant(),
                         zone.Version))
-                .ToArray());
+                .ToArray(),
+            response.ServiceReviewedAt);
 
     public static VerifySurveyOrderBoundaryAndScopeApiResponse ToResponse(
         VerifySurveyOrderBoundaryAndScopeResponse response) =>
@@ -149,7 +153,12 @@ internal static class SurveyOrderResponseMapper
             response.SystemManagerProfileId,
             MapStatus(response.OrderStatus),
             response.OrderVersion,
-            response.ConfirmedAt);
+            response.ConfirmedAt,
+            response.RemainingAmount,
+            response.ConfirmedMappingPoleCount, response.ConfirmedPlantHealthPoleCount,
+            response.MappingPricePerPole, response.PlantHealthPricePerPole,
+            response.MappingSubtotal, response.PlantHealthSubtotal,
+            response.ComboDiscountPercentage, response.ComboDiscountAmount);
 
     private static string MapStatus(SurveyOrderStatus status) =>
         status switch

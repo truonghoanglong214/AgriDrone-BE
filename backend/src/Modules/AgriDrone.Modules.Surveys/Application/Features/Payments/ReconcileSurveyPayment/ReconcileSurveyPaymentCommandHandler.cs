@@ -53,17 +53,30 @@ internal sealed class ReconcileSurveyPaymentCommandHandler(
                     var state = stateResult.Value;
                     var order = state.Order;
                     var payment = state.Payment;
+                    if (order.Scope == ContractScope.V3 ||
+                        (payment.Purpose == PaymentPurpose.FinalBalance && order.PostFlightSettlement &&
+                         order.ServiceReviewedAt is null))
+                        return Result.Failure<ReconcileSurveyPaymentResponse>(PaymentError.OrderNotReady());
                     var normalizedCurrency = command.Currency
                         .Trim()
                         .ToUpperInvariant();
+                    var isDeposit = payment.Purpose == PaymentPurpose.BaselineDeposit;
+                    var expectedAmount = isDeposit
+                        ? order.DepositAmount
+                        : order.RemainingAmount ?? order.FinalPrice;
+                    var expectedCurrency = isDeposit ? "VND" : order.Currency;
+                    var eligible = isDeposit
+                        ? order.CanAcceptDepositPayment()
+                        : order.Status == SurveyOrderStatus.AwaitingPayment &&
+                          (order.DepositAmount == 0m || order.DepositPaymentStatus == SurveyPaymentStatus.Paid);
                     if (!string.Equals(
                             payment.ProviderReference,
                             command.ProviderReference.Trim(),
                             StringComparison.Ordinal) ||
-                        order.Status != SurveyOrderStatus.AwaitingPayment ||
-                        order.FinalPrice != Money.Round(command.SettledAmount) ||
+                        !eligible ||
+                        expectedAmount != Money.Round(command.SettledAmount) ||
                         !string.Equals(
-                            order.Currency,
+                            expectedCurrency,
                             normalizedCurrency,
                             StringComparison.Ordinal))
                     {
@@ -84,7 +97,18 @@ internal sealed class ReconcileSurveyPaymentCommandHandler(
                                 CurrencyCode.Create(normalizedCurrency)),
                             command.ProviderReference,
                             reconciledAt);
-                        order.MarkPaymentConfirmed(reconciledAt);
+                        if (isDeposit)
+                        {
+                            if (order.RequiresBaselineMapping)
+                                order.RecordBaselineDepositConfirmed(payment.Id, payment.Amount, reconciledAt);
+                            else
+                                order.RecordFollowUpDepositConfirmed(payment.Id, payment.Amount, reconciledAt);
+                        }
+                        else
+                        {
+                            order.MarkPaymentConfirmed(reconciledAt);
+                            await outbox.AddPostFlightUnlockAsync(order, executionContext.CorrelationId, token);
+                        }
                     }
                     catch (SurveyDomainException exception)
                     {

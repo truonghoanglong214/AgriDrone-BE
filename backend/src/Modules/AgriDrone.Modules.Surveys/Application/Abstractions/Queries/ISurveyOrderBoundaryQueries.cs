@@ -19,7 +19,8 @@ public sealed record SurveyOrderBoundaryScopeSnapshot(
     uint OrderVersion,
     bool RequiresBaselineMapping,
     SurveyOrderBoundarySnapshot? CurrentApprovedBoundary,
-    IReadOnlyList<SurveyOrderZoneScopeSnapshot> Zones);
+    IReadOnlyList<SurveyOrderZoneScopeSnapshot> Zones,
+    DateTimeOffset? ServiceReviewedAt = null);
 
 public sealed record SurveyOrderBoundarySnapshot(
     Guid FarmBoundaryId,

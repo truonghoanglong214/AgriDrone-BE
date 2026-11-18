@@ -3,6 +3,7 @@ using AgriDrone.IntegrationContracts.Messaging;
 using AgriDrone.IntegrationContracts.Surveys;
 using AgriDrone.Modules.Surveys.Application.Abstractions.Approvals;
 using AgriDrone.Modules.Surveys.Application.Abstractions.Persistence;
+using AgriDrone.Modules.Surveys.Application.Abstractions.Pricing;
 using AgriDrone.Modules.Surveys.Application.Errors;
 using AgriDrone.Modules.Surveys.Application.Features.Approvals.Common;
 using AgriDrone.Modules.Surveys.Application.Features.Requests.Common;
@@ -23,6 +24,7 @@ internal sealed partial class ApproveSurveyRequestCommandHandler(
     ISurveyApprovalRequestRepository requestRepository,
     ISurveyApprovalIdempotencyRepository idempotencyRepository,
     ISurveyApprovalPrerequisiteResolver prerequisiteResolver,
+    ISurveyCommercialSnapshotResolver snapshotResolver,
     IEnumerable<ISurveyRequestKindApprovalOrchestrator> orchestrators,
     ISurveyApprovalOutbox approvalOutbox,
     IAuditWriter auditWriter,
@@ -222,8 +224,10 @@ internal sealed partial class ApproveSurveyRequestCommandHandler(
                 SurveyApprovalError.ConcurrentApproval());
         }
 
-        if (!SurveyServiceMvpPolicy.IsSellable(
-                surveyRequest.SurveyService.ServiceType))
+        if (surveyRequest.SurveyService.Scope == ContractScope.Legacy &&
+            (!surveyRequest.SurveyService.ServiceType.HasValue ||
+             !SurveyServiceMvpPolicy.IsSellable(
+                surveyRequest.SurveyService.ServiceType.Value)))
         {
             return Result.Failure<ApproveSurveyRequestResponse>(
                 SurveyApprovalError.RequestContextInvalid());
@@ -249,6 +253,22 @@ internal sealed partial class ApproveSurveyRequestCommandHandler(
             idempotencyClaim,
             cancellationToken);
 
+        ResolvedSurveyCommercialSnapshot? commercialSnapshot = null;
+        if (surveyRequest.SurveyService.Scope == ContractScope.V3)
+        {
+            var snapshotResult = await snapshotResolver.ResolveForApprovalAsync(
+                surveyRequest.SurveyServiceId,
+                approvedAt,
+                cancellationToken);
+            if (snapshotResult.IsFailure)
+            {
+                return Result.Failure<ApproveSurveyRequestResponse>(
+                    snapshotResult.Error);
+            }
+
+            commercialSnapshot = snapshotResult.Value;
+        }
+
         var prerequisiteResult = await prerequisiteResolver.ResolveAsync(
             surveyRequest,
             command.SelectedSystemManagerProfileId,
@@ -271,7 +291,11 @@ internal sealed partial class ApproveSurveyRequestCommandHandler(
         var orchestrationResult = await orchestrator.OrchestrateAsync(
             surveyRequest,
             prerequisiteResult.Value,
-            new SurveyApprovalExecutionContext(actorId, approvedAt),
+            new SurveyApprovalExecutionContext(
+                actorId,
+                approvedAt,
+                executionContext.CorrelationId,
+                commercialSnapshot),
             cancellationToken);
         if (orchestrationResult.IsFailure)
         {

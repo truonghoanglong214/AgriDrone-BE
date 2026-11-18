@@ -2918,17 +2918,49 @@ def get_map_picker_html(
 
         try {{
 
+          const plantTrees = trees.filter(t => t.status === 'DETECTED' || t.status === 'MISSING');
+
+          const boundaryPoints = points && points.length >= 3
+
+            ? points.map(pt => ({{ longitude: pt[0], latitude: pt[1] }}))
+
+            : null;
+
+          const payload = boundaryPoints
+
+            ? {{ trees: plantTrees, boundary: boundaryPoints }}
+
+            : {{ trees: plantTrees }};
+
           const response = await fetch(`${{apiUrl}}/api/system-manager/farms/${{encodeURIComponent(farmId)}}/missions/${{encodeURIComponent(missionId)}}/plant-gps`, {{
 
             method: 'POST',
 
             headers: {{ 'Content-Type': 'application/json', 'Authorization': `Bearer ${{token}}` }},
 
-            body: JSON.stringify({{ trees }})
+            body: JSON.stringify(payload)
 
           }});
 
-          if (!response.ok) throw new Error(`API trả về HTTP ${{response.status}}`);
+          if (!response.ok) {{
+
+            let errDetail = '';
+
+            try {{
+
+              const errData = await response.json();
+
+              errDetail = errData.detail || errData.title || JSON.stringify(errData);
+
+            }} catch (_) {{
+
+              errDetail = await response.text();
+
+            }}
+
+            throw new Error(`API trả về HTTP ${{response.status}}${{errDetail ? ': ' + errDetail : ''}}`);
+
+          }}
 
           alert('✅ Đã tải file CSV và đồng bộ thành công vào PostgreSQL Database!');
 

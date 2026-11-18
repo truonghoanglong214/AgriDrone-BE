@@ -1,3 +1,4 @@
+using AgriDrone.Modules.Surveys.Application.Abstractions.Pricing;
 using AgriDrone.Modules.Surveys.Application.Features.Approvals.Common;
 using AgriDrone.Modules.Surveys.Domain;
 using AgriDrone.SharedKernel.Application;
@@ -17,7 +18,9 @@ internal interface ISurveyRequestKindApprovalOrchestrator
 
 internal sealed record SurveyApprovalExecutionContext(
     Guid ActorId,
-    DateTimeOffset ApprovedAt);
+    DateTimeOffset ApprovedAt,
+    Guid CorrelationId,
+    ResolvedSurveyCommercialSnapshot? CommercialSnapshot = null);
 
 internal sealed record SurveyApprovalOrchestrationResult(
     SurveyOrder Order,

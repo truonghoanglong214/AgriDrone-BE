@@ -25,6 +25,11 @@ public sealed class NotificationConfiguration : IEntityTypeConfiguration<Notific
             });
 
         builder.HasKey(notification => notification.Id).HasName("pk_notifications");
+        builder.Property(n => n.SourcePublicationId).HasColumnName("source_publication_id");
+        builder.ToTable("notifications", "notification", t => t.HasCheckConstraint("ck_notification_health_publication",
+            "source_publication_id IS NULL OR (notification_type = 'PLANT_HEALTH_PUBLISHED' AND tenant_id IS NOT NULL AND farm_id IS NOT NULL AND entity_type IS NOT NULL AND entity_type = 'PlantHealthPublication' AND entity_id IS NOT NULL AND entity_id = source_publication_id)"));
+        builder.HasIndex(n => n.SourcePublicationId).IsUnique().HasFilter("source_publication_id IS NOT NULL")
+            .HasDatabaseName("uq_notification_health_publication");
 
         builder.Property(notification => notification.Id)
             .HasColumnName("id")

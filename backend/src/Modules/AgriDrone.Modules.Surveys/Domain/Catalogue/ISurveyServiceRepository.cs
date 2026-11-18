@@ -13,4 +13,6 @@ internal interface ISurveyServiceRepository
     void Add(SurveyService surveyService);
 
     void AddPrice(SurveyServicePrice price);
+
+    void AddRevision(SurveyServiceRevision revision);
 }
