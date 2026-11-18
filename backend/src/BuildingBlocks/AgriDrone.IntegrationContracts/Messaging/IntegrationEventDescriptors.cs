@@ -100,11 +100,25 @@ public static class IntegrationEventDescriptors
             IntegrationSchemaVersions.V3,
             RequiresActorId: false);
 
+    public static IntegrationEventDescriptor<MappingCandidatesReadyV4>
+        MappingCandidatesReadyV4 { get; } =
+        new(
+            IntegrationEventTypes.MappingCandidatesReadyV4,
+            IntegrationSchemaVersions.V4,
+            RequiresActorId: false);
+
     public static IntegrationEventDescriptor<FarmBaseMapPublishedV3>
         FarmBaseMapPublishedV3 { get; } =
         new(
             IntegrationEventTypes.FarmBaseMapPublishedV3,
             IntegrationSchemaVersions.V3,
+            RequiresActorId: true);
+
+    public static IntegrationEventDescriptor<FarmBaseMapInternallyApprovedV1>
+        FarmBaseMapInternallyApprovedV1 { get; } =
+        new(
+            IntegrationEventTypes.FarmBaseMapInternallyApprovedV1,
+            IntegrationSchemaVersions.V1,
             RequiresActorId: true);
 
     public static IntegrationEventDescriptor<PlantHealthAnalysisReadyV3>
@@ -170,6 +184,13 @@ public static class IntegrationEventDescriptors
         SurveyBoundaryCaptureChangedV1 { get; } =
         new(
             IntegrationEventTypes.SurveyBoundaryCaptureChangedV1,
+            IntegrationSchemaVersions.V1,
+            RequiresActorId: true);
+
+    public static IntegrationEventDescriptor<SurveyCaptureStateChangedV1>
+        SurveyCaptureStateChangedV1 { get; } =
+        new(
+            IntegrationEventTypes.SurveyCaptureStateChangedV1,
             IntegrationSchemaVersions.V1,
             RequiresActorId: true);
 

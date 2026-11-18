@@ -44,6 +44,7 @@ internal static class SurveyAppointmentCommandSupport
         {
             SurveyAppointmentPurpose.BaselineMapping => "BASELINE_MAPPING",
             SurveyAppointmentPurpose.PaidService => "PAID_SERVICE",
+            SurveyAppointmentPurpose.Capture => "CAPTURE",
             _ => throw new ArgumentOutOfRangeException(nameof(purpose))
         };
 

@@ -120,6 +120,12 @@ internal sealed class SurveyAppointmentSchedulingRepository(
                 appointment,
                 await HasActivePaymentAsync(
                     surveyOrderId,
+                    cancellationToken),
+                await HasSatisfiedDepositAsync(
+                    surveyOrderId,
+                    cancellationToken),
+                await HasActiveCaptureAttemptAsync(
+                    surveyOrderId,
                     cancellationToken)));
     }
 
@@ -230,6 +236,44 @@ internal sealed class SurveyAppointmentSchedulingRepository(
                 'PAID'::system.survey_payment_status,
                 'ADJUSTMENT_REQUIRED'::system.survey_payment_status)
             FOR SHARE OF payment
+            """,
+            cancellationToken,
+            Id("order_id", surveyOrderId));
+
+    private Task<bool> HasSatisfiedDepositAsync(
+        Guid surveyOrderId,
+        CancellationToken cancellationToken) => ExistsAsync(
+            """
+            SELECT obligation.id
+            FROM survey.survey_orders AS survey_order
+            JOIN survey.survey_deposit_obligations AS obligation
+              ON obligation.id = survey_order.deposit_obligation_id
+             AND obligation.survey_order_id = survey_order.id
+             AND obligation.tenant_id = survey_order.tenant_id
+             AND obligation.farm_id = survey_order.farm_id
+            WHERE survey_order.id = @order_id
+              AND obligation.status = 'SATISFIED'::system.survey_deposit_obligation_status
+              AND obligation.allocated_amount >= obligation.amount
+            FOR SHARE OF obligation
+            """,
+            cancellationToken,
+            Id("order_id", surveyOrderId));
+
+    private Task<bool> HasActiveCaptureAttemptAsync(
+        Guid surveyOrderId,
+        CancellationToken cancellationToken) => ExistsAsync(
+            """
+            SELECT attempt.id
+            FROM survey.capture_attempts AS attempt
+            WHERE attempt.order_id = @order_id
+              AND attempt.status IN (
+                'PLANNED'::system.capture_attempt_status,
+                'PREFLIGHT_READY'::system.capture_attempt_status,
+                'IN_FLIGHT'::system.capture_attempt_status,
+                'AWAITING_UPLOAD'::system.capture_attempt_status,
+                'UPLOADED'::system.capture_attempt_status,
+                'PROCESSING'::system.capture_attempt_status)
+            FOR SHARE OF attempt
             """,
             cancellationToken,
             Id("order_id", surveyOrderId));

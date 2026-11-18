@@ -46,15 +46,15 @@ public sealed class Phase6DomainSeamsTests
             Guid.NewGuid(),
             Guid.NewGuid(),
             Guid.NewGuid(),
-            versionNumber: 2,
+            versionNumber: 1,
             sourceMissionGroupId: Guid.NewGuid());
         var service = new FarmBaseMapPublicationService();
 
-        var map = service.PrepareDraft(context, Now);
+        var map = service.CreateFirstBaseline(context, Now);
 
         Assert.Equal(context.SourceSurveyOrderId, map.SourceSurveyOrderId);
         Assert.Equal(context.FarmId, map.FarmId);
-        Assert.Equal(2, map.VersionNumber);
+        Assert.Equal(1, map.VersionNumber);
         Assert.Equal(FarmBaseMapStatus.Draft, map.Status);
         Assert.Null(map.PublishedAt);
     }

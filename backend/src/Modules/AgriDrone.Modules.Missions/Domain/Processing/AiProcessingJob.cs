@@ -76,6 +76,56 @@ public sealed class AiProcessingJob : Entity
         };
     }
 
+    public static AiProcessingJob RecordCompletedMappingRun(
+        Guid missionId,
+        Guid modelId,
+        MappingProcessingSnapshot snapshot,
+        JsonDocument input,
+        JsonDocument output,
+        DateTimeOffset startedAt,
+        DateTimeOffset completedAt,
+        Guid clientOperationId)
+    {
+        DomainGuard.NotEmpty(missionId);
+        DomainGuard.NotEmpty(modelId);
+        DomainGuard.NotEmpty(clientOperationId);
+        ArgumentNullException.ThrowIfNull(snapshot);
+        DomainGuard.Utc(startedAt);
+        DomainGuard.Utc(completedAt);
+        if (completedAt < startedAt) throw new ArgumentException("Completion cannot precede start.");
+        if (snapshot.SourceVersion < 1 ||
+            snapshot.GridBearingDeg is < 0 or >= 360 ||
+            snapshot.RowSpacingM <= 0 ||
+            snapshot.PlantSpacingM <= 0 ||
+            string.IsNullOrWhiteSpace(snapshot.AlgorithmVersion) ||
+            !IsSha256(snapshot.InputFingerprint) ||
+            !IsSha256(snapshot.OutputFingerprint))
+        {
+            throw new ArgumentException("Mapping processing snapshot is incomplete or invalid.", nameof(snapshot));
+        }
+
+        return new AiProcessingJob
+        {
+            Id = Guid.CreateVersion7(),
+            MissionId = missionId,
+            ModelVersionId = modelId,
+            JobType = AiJobType.Mapping,
+            Status = AiJobStatus.Completed,
+            Parameters = JsonSerializer.SerializeToDocument(snapshot),
+            AttemptNumber = snapshot.SourceVersion,
+            InputManifest = JsonDocument.Parse(input.RootElement.GetRawText()),
+            OutputManifest = JsonDocument.Parse(output.RootElement.GetRawText()),
+            ClientOperationId = clientOperationId,
+            QueuedAt = startedAt,
+            StartedAt = startedAt,
+            CompletedAt = completedAt,
+            ProgressPercent = 100
+        };
+    }
+
+    private static bool IsSha256(string? value) =>
+        value is { Length: 64 } && value.All(Uri.IsHexDigit);
+
     public void SnapshotHarvestReadinessCriterion(
         Guid criterionId,
         int criterionVersionNumber)

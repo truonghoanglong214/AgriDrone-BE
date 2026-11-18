@@ -12,12 +12,19 @@ public sealed class MappingCandidateBatchConfiguration : IEntityTypeConfiguratio
         builder.ToTable("mapping_candidate_batches", "farm");
 
         builder.HasKey(b => b.Id).HasName("pk_mapping_candidate_batches");
+        builder.HasAlternateKey(b => new { b.Id, b.TenantId, b.FarmId }).HasName("uq_mapping_candidate_batches_id_tenant_farm");
 
         builder.Property(b => b.Id)
             .HasColumnName("id")
             .HasColumnType("uuid")
             .HasDefaultValueSql("gen_random_uuid()")
             .ValueGeneratedOnAdd();
+
+        builder.Property(b => b.MappingKind)
+            .HasColumnName("mapping_kind")
+            .HasConversion<string>()
+            .HasMaxLength(30)
+            .IsRequired();
 
         builder.Property(b => b.HandoffId)
             .HasColumnName("handoff_id")
@@ -41,6 +48,11 @@ public sealed class MappingCandidateBatchConfiguration : IEntityTypeConfiguratio
 
         builder.Property(b => b.MissionId)
             .HasColumnName("mission_id")
+            .HasColumnType("uuid")
+            .IsRequired();
+
+        builder.Property(b => b.CaptureAttemptId)
+            .HasColumnName("capture_attempt_id")
             .HasColumnType("uuid")
             .IsRequired();
 
@@ -77,6 +89,11 @@ public sealed class MappingCandidateBatchConfiguration : IEntityTypeConfiguratio
             .HasColumnType("uuid")
             .IsRequired();
 
+        builder.Property(b => b.PayloadFingerprint)
+            .HasColumnName("payload_fingerprint")
+            .HasMaxLength(64)
+            .IsRequired();
+
         builder.Property(b => b.ModelVersionId)
             .HasColumnName("model_version_id")
             .HasColumnType("uuid")
@@ -100,6 +117,36 @@ public sealed class MappingCandidateBatchConfiguration : IEntityTypeConfiguratio
         builder.Property(b => b.ProducedAt)
             .HasColumnName("produced_at")
             .HasColumnType("timestamp with time zone")
+            .IsRequired();
+
+        builder.Property(b => b.SpatialPolicyVersionId)
+            .HasColumnName("spatial_policy_version_id")
+            .HasColumnType("uuid")
+            .IsRequired();
+
+        builder.Property(b => b.SpatialPolicyFingerprint)
+            .HasColumnName("spatial_policy_fingerprint")
+            .HasMaxLength(64)
+            .IsRequired();
+
+        builder.Property(b => b.BoundaryToleranceM)
+            .HasColumnName("boundary_tolerance_m")
+            .HasColumnType("double precision")
+            .IsRequired();
+
+        builder.Property(b => b.MatchingDistanceThresholdM)
+            .HasColumnName("matching_distance_threshold_m")
+            .HasColumnType("double precision")
+            .IsRequired();
+
+        builder.Property(b => b.RowBearingToleranceDeg)
+            .HasColumnName("row_bearing_tolerance_deg")
+            .HasColumnType("double precision")
+            .IsRequired();
+
+        builder.Property(b => b.GridSpacingToleranceM)
+            .HasColumnName("grid_spacing_tolerance_m")
+            .HasColumnType("double precision")
             .IsRequired();
 
         builder.Property(b => b.Status)
@@ -141,6 +188,9 @@ public sealed class MappingCandidateBatchConfiguration : IEntityTypeConfiguratio
 
         builder.HasIndex(b => new { b.FarmId, b.SurveyOrderId })
             .HasDatabaseName("ix_mapping_candidate_batches_farm_order");
+
+        builder.HasIndex(b => new { b.CaptureAttemptId, b.MissionId })
+            .HasDatabaseName("ix_mapping_candidate_batches_capture_attempt_mission");
 
         builder.HasOne<Farm>()
             .WithMany()

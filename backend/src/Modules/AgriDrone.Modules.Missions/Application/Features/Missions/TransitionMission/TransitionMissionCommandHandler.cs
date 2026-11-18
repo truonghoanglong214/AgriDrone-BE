@@ -50,6 +50,8 @@ internal sealed class TransitionMissionCommandHandler(
             return Result.Failure<MissionResponse>(MissionError.NotFound(request.MissionId));
         if (mission.SurveyOrderId is not Guid surveyOrderId)
             return Result.Failure<MissionResponse>(MissionOperationError.MissionNotOrderBound());
+        if (mission.CaptureAttemptId.HasValue)
+            return Result.Failure<MissionResponse>(MissionOperationError.V3CoordinatorRequired());
         if (mission.Purpose is null)
             return Result.Failure<MissionResponse>(MissionOperationError.InvalidOrderContext());
         if (mission.Version != request.ExpectedVersion)

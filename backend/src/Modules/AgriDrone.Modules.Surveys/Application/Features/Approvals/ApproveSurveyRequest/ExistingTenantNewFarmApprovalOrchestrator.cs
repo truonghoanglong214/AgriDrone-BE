@@ -64,7 +64,7 @@ internal sealed class ExistingTenantNewFarmApprovalOrchestrator(
                     SurveyApprovalError.CommercialPolicyMismatch("Commercial snapshot is required for V3 survey order."));
             }
 
-            order = SurveyOrder.CreateV3(
+            order = SurveyOrder.CreateV3CaptureOrder(
                 numberGenerator.CreateOrderNumber(),
                 tenantId,
                 farmResult.Value.FarmId,
@@ -83,6 +83,19 @@ internal sealed class ExistingTenantNewFarmApprovalOrchestrator(
                 context.CommercialSnapshot,
                 context.ApprovedAt);
             orderRepository.AddCommercialSnapshot(commercialSnapshot);
+
+            var depositObligation = SurveyDepositObligation.Create(
+                Guid.CreateVersion7(),
+                order.Id,
+                order.TenantId,
+                order.FarmId,
+                context.CommercialSnapshot.BusinessPolicyVersionId,
+                context.CommercialSnapshot.DepositPolicyId,
+                context.CommercialSnapshot.DepositAmount,
+                context.CommercialSnapshot.Currency,
+                context.ApprovedAt);
+            order.BindDepositObligation(depositObligation.Id);
+            orderRepository.AddDepositObligation(depositObligation);
 
             var initialHistory = OrderStateHistory.CreateInitial(
                 Guid.NewGuid(),

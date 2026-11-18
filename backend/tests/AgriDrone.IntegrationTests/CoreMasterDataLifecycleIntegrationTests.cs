@@ -263,20 +263,9 @@ public sealed class CoreMasterDataLifecycleIntegrationTests
         var dataSourceBuilder = new NpgsqlDataSourceBuilder(connectionString);
         PostgreSqlEnumMappings.ConfigureDataSource(dataSourceBuilder);
         await using var dataSource = dataSourceBuilder.Build();
-        var options = new DbContextOptionsBuilder<AgriDroneSchemaDbContext>()
-            .UseNpgsql(
-                dataSource,
-                npgsql =>
-                {
-                    npgsql.UseNetTopologySuite();
-                    npgsql.MigrationsAssembly(
-                        typeof(AgriDroneSchemaDbContext).Assembly.FullName);
-                    npgsql.MigrationsHistoryTable(
-                        "__ef_migrations_history",
-                        "system");
-                })
-            .Options;
-        await using var context = new AgriDroneSchemaDbContext(options);
+        var options = new DbContextOptionsBuilder<AgriDroneSchemaDbContext>();
+        AgriDroneSchemaDbContextOptions.Configure(options, dataSource);
+        await using var context = new AgriDroneSchemaDbContext(options.Options);
         await context.Database.MigrateAsync();
 
         await ExecuteAsync(

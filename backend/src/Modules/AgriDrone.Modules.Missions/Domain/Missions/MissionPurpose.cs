@@ -7,5 +7,6 @@ public enum MissionPurpose
 {
     BaselineMapping,
     PlantHealth,
-    HarvestReadiness
+    HarvestReadiness,
+    Capture
 }

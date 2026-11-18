@@ -51,6 +51,7 @@ public sealed class SurveyApprovalDbContext(
     public DbSet<BusinessPolicyVersion> BusinessPolicyVersions => Set<BusinessPolicyVersion>();
     public DbSet<BusinessPolicyActivation> BusinessPolicyActivations => Set<BusinessPolicyActivation>();
     public DbSet<SurveyOrderCommercialSnapshot> SurveyOrderCommercialSnapshots => Set<SurveyOrderCommercialSnapshot>();
+    public DbSet<SurveyDepositObligation> SurveyDepositObligations => Set<SurveyDepositObligation>();
     public DbSet<OrderStateHistory> OrderStateHistories => Set<OrderStateHistory>();
     public DbSet<SurveyRequest> SurveyRequests => Set<SurveyRequest>();
     public DbSet<SurveyRequestReview> SurveyRequestReviews =>
@@ -180,6 +181,7 @@ public sealed class SurveyApprovalDbContext(
         modelBuilder.ApplyConfiguration(new BusinessPolicyVersionConfiguration());
         modelBuilder.ApplyConfiguration(new BusinessPolicyActivationConfiguration());
         modelBuilder.ApplyConfiguration(new SurveyOrderCommercialSnapshotConfiguration());
+        modelBuilder.ApplyConfiguration(new SurveyDepositObligationConfiguration());
         modelBuilder.ApplyConfiguration(new OrderStateHistoryConfiguration());
         modelBuilder.ApplyConfiguration(new SurveyRequestConfiguration());
         modelBuilder.ApplyConfiguration(new SurveyRequestReviewConfiguration());

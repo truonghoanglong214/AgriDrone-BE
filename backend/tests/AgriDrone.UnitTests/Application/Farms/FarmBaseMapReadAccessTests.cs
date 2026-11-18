@@ -26,7 +26,7 @@ public sealed class FarmBaseMapReadAccessTests
     public async Task DetailRejectsOwnerDraftOrForeignFarmBeforeReadingMedia(bool ownerDraft)
     {
         await using var context = CreateDatabase();
-        var map = FarmBaseMapVersion.PrepareDraft(
+        var map = FarmBaseMapVersion.CreateFirstBaseline(
             new FarmBaseMapPublicationContext(Guid.NewGuid(), TenantId, FarmId, 1, sourceMissionId: Guid.NewGuid()),
             DateTimeOffset.UtcNow);
         if (!ownerDraft) map.Publish(ActorId, DateTimeOffset.UtcNow);
@@ -51,7 +51,7 @@ public sealed class FarmBaseMapReadAccessTests
         var farm = Farm.Create(TenantId, "TEST", "Test Farm", null, null, null, null,
             GeneralStatus.Active, ActorId, DateTimeOffset.UtcNow);
         context.Farms.Add(farm);
-        context.FarmBaseMapVersions.Add(FarmBaseMapVersion.PrepareDraft(
+        context.FarmBaseMapVersions.Add(FarmBaseMapVersion.CreateFirstBaseline(
             new FarmBaseMapPublicationContext(Guid.NewGuid(), TenantId, farm.Id, 1), DateTimeOffset.UtcNow));
         await context.SaveChangesAsync();
         var access = new FarmBaseMapReadAccess(new Context(TenantId, ActorId), new EffectiveAccess(true), new ManagerAccess());
@@ -69,7 +69,7 @@ public sealed class FarmBaseMapReadAccessTests
     public async Task OwnerCannotReadOrSignPublishedMapUntilSourceOrderIsSettled()
     {
         await using var context = CreateDatabase();
-        var map = FarmBaseMapVersion.PrepareDraft(
+        var map = FarmBaseMapVersion.CreateFirstBaseline(
             new FarmBaseMapPublicationContext(Guid.NewGuid(), TenantId, FarmId, 1, sourceMissionId: Guid.NewGuid()),
             DateTimeOffset.UtcNow);
         map.Publish(ActorId, DateTimeOffset.UtcNow);
@@ -93,7 +93,7 @@ public sealed class FarmBaseMapReadAccessTests
         var farm = Farm.Create(TenantId, "LOCKED", "Locked Farm", null, null, null, null,
             GeneralStatus.Active, ActorId, DateTimeOffset.UtcNow);
         context.Farms.Add(farm);
-        var map = FarmBaseMapVersion.PrepareDraft(
+        var map = FarmBaseMapVersion.CreateFirstBaseline(
             new FarmBaseMapPublicationContext(Guid.NewGuid(), TenantId, farm.Id, 1), DateTimeOffset.UtcNow);
         map.Publish(ActorId, DateTimeOffset.UtcNow);
         context.FarmBaseMapVersions.Add(map);

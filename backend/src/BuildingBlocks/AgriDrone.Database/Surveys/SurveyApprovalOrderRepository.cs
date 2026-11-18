@@ -28,6 +28,13 @@ internal sealed class SurveyApprovalOrderRepository(
         context.SurveyOrderCommercialSnapshots.Add(snapshot);
     }
 
+    public void AddDepositObligation(SurveyDepositObligation obligation)
+    {
+        ArgumentNullException.ThrowIfNull(obligation);
+        context.EnsureApprovalTransaction();
+        context.SurveyDepositObligations.Add(obligation);
+    }
+
     public void AddStateHistory(OrderStateHistory history)
     {
         ArgumentNullException.ThrowIfNull(history);

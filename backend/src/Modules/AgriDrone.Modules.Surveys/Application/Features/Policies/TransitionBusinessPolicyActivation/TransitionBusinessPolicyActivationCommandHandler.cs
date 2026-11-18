@@ -30,6 +30,33 @@ internal sealed class TransitionBusinessPolicyActivationCommandHandler(
                 BusinessPolicyError.CurrentUserRequired());
         }
 
+        try
+        {
+            return await unitOfWork.ExecuteInTransactionAsync(
+                async ct =>
+                {
+                    await unitOfWork.AcquireBusinessPolicyWriteLockAsync(ct);
+                    return await TransitionLockedAsync(request, actorId, ct);
+                },
+                cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Result.Failure<TransitionBusinessPolicyActivationResponse>(
+                BusinessPolicyError.ConcurrentUpdate());
+        }
+        catch (DbUpdateException ex)
+        {
+            return Result.Failure<TransitionBusinessPolicyActivationResponse>(
+                BusinessPolicyError.ConcurrentUpdate(ex.Message));
+        }
+    }
+
+    private async Task<Result<TransitionBusinessPolicyActivationResponse>> TransitionLockedAsync(
+        TransitionBusinessPolicyActivationCommand request,
+        Guid actorId,
+        CancellationToken cancellationToken)
+    {
         var now = timeProvider.GetUtcNow();
 
         var bundle = await policyRepository.GetBundleVersionByIdAsync(
@@ -85,40 +112,21 @@ internal sealed class TransitionBusinessPolicyActivationCommandHandler(
                 newActivation.ReasonCode
             });
 
-            try
-            {
-                await unitOfWork.ExecuteInTransactionAsync(
-                    async ct =>
-                    {
-                        policyRepository.AddActivation(newActivation);
-                        policyRepository.AddActivationDecision(initialDecision);
+            policyRepository.AddActivation(newActivation);
+            policyRepository.AddActivationDecision(initialDecision);
 
-                        auditWriter.AddSystemAdminAction(
-                            unitOfWork,
-                            actorId,
-                            executionContext.CorrelationId,
-                            "BusinessPolicyActivation",
-                            newActivation.Id,
-                            "INITIAL_ACTIVATION",
-                            oldData: null,
-                            createData,
-                            now);
+            auditWriter.AddSystemAdminAction(
+                unitOfWork,
+                actorId,
+                executionContext.CorrelationId,
+                "BusinessPolicyActivation",
+                newActivation.Id,
+                "INITIAL_ACTIVATION",
+                oldData: null,
+                createData,
+                now);
 
-                        await unitOfWork.SaveChangesAsync(ct);
-                        return true;
-                    },
-                    cancellationToken);
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                return Result.Failure<TransitionBusinessPolicyActivationResponse>(
-                    BusinessPolicyError.ConcurrentUpdate());
-            }
-            catch (DbUpdateException ex)
-            {
-                return Result.Failure<TransitionBusinessPolicyActivationResponse>(
-                    BusinessPolicyError.ConcurrentUpdate(ex.Message));
-            }
+            await unitOfWork.SaveChangesAsync(cancellationToken);
 
             return Result.Success(new TransitionBusinessPolicyActivationResponse(
                 newActivation.Id,
@@ -132,118 +140,78 @@ internal sealed class TransitionBusinessPolicyActivationCommandHandler(
                 newActivation.EvidenceReference));
         }
 
-        Result<TransitionBusinessPolicyActivationResponse>? failureResult = null;
-        TransitionBusinessPolicyActivationResponse? response = null;
+        if (request.ExpectedLastDecisionId.HasValue &&
+            request.ExpectedLastDecisionId.Value != activation.LastDecisionId)
+        {
+            return Result.Failure<TransitionBusinessPolicyActivationResponse>(
+                BusinessPolicyError.DecisionMismatch(
+                    request.ExpectedLastDecisionId.Value,
+                    activation.LastDecisionId));
+        }
 
+        using var oldStateData = JsonSerializer.SerializeToDocument(new
+        {
+            activation.ActiveBusinessPolicyVersionId,
+            activation.PublicIntakeEnabled,
+            activation.CaptureEnabled,
+            activation.ReleaseEnabled,
+            activation.LastDecisionId
+        });
+
+        BusinessPolicyActivationDecision transitionDecision;
         try
         {
-            await unitOfWork.ExecuteInTransactionAsync(
-                async ct =>
-                {
-                    var currentActivation = await policyRepository.GetActivationAsync(ct);
-                    if (currentActivation is null)
-                    {
-                        failureResult = Result.Failure<TransitionBusinessPolicyActivationResponse>(
-                            BusinessPolicyError.NotFound("Business policy activation"));
-                        return false;
-                    }
-
-                    if (request.ExpectedLastDecisionId.HasValue &&
-                        request.ExpectedLastDecisionId.Value != currentActivation.LastDecisionId)
-                    {
-                        failureResult = Result.Failure<TransitionBusinessPolicyActivationResponse>(
-                            BusinessPolicyError.DecisionMismatch(
-                                request.ExpectedLastDecisionId.Value,
-                                currentActivation.LastDecisionId));
-                        return false;
-                    }
-
-                    using var oldStateData = JsonSerializer.SerializeToDocument(new
-                    {
-                        currentActivation.ActiveBusinessPolicyVersionId,
-                        currentActivation.PublicIntakeEnabled,
-                        currentActivation.CaptureEnabled,
-                        currentActivation.ReleaseEnabled,
-                        currentActivation.LastDecisionId
-                    });
-
-                    BusinessPolicyActivationDecision transitionDecision;
-                    try
-                    {
-                        transitionDecision = currentActivation.ApplyDecision(
-                            decisionId: Guid.NewGuid(),
-                            activeBusinessPolicyVersionId: bundle.Id,
-                            publicIntakeEnabled: request.PublicIntakeEnabled,
-                            captureEnabled: request.CaptureEnabled,
-                            releaseEnabled: request.ReleaseEnabled,
-                            changedBy: actorId,
-                            changedAt: now,
-                            reasonCode: request.ReasonCode,
-                            evidenceReference: request.EvidenceReference);
-                    }
-                    catch (ArgumentException ex)
-                    {
-                        failureResult = Result.Failure<TransitionBusinessPolicyActivationResponse>(
-                            BusinessPolicyError.InvalidLifecycle(ex.Message));
-                        return false;
-                    }
-
-                    using var newStateData = JsonSerializer.SerializeToDocument(new
-                    {
-                        currentActivation.ActiveBusinessPolicyVersionId,
-                        currentActivation.PublicIntakeEnabled,
-                        currentActivation.CaptureEnabled,
-                        currentActivation.ReleaseEnabled,
-                        DecisionId = transitionDecision.Id,
-                        currentActivation.ReasonCode
-                    });
-
-                    policyRepository.AddActivationDecision(transitionDecision);
-
-                    auditWriter.AddSystemAdminAction(
-                        unitOfWork,
-                        actorId,
-                        executionContext.CorrelationId,
-                        "BusinessPolicyActivation",
-                        currentActivation.Id,
-                        "TRANSITION_ACTIVATION",
-                        oldStateData,
-                        newStateData,
-                        now);
-
-                    await unitOfWork.SaveChangesAsync(ct);
-
-                    response = new TransitionBusinessPolicyActivationResponse(
-                        currentActivation.Id,
-                        currentActivation.ActiveBusinessPolicyVersionId,
-                        currentActivation.PublicIntakeEnabled,
-                        currentActivation.CaptureEnabled,
-                        currentActivation.ReleaseEnabled,
-                        currentActivation.LastDecisionId,
-                        currentActivation.ActivatedAt,
-                        currentActivation.ReasonCode,
-                        currentActivation.EvidenceReference);
-
-                    return true;
-                },
-                cancellationToken);
+            transitionDecision = activation.ApplyDecision(
+                decisionId: Guid.NewGuid(),
+                activeBusinessPolicyVersionId: bundle.Id,
+                publicIntakeEnabled: request.PublicIntakeEnabled,
+                captureEnabled: request.CaptureEnabled,
+                releaseEnabled: request.ReleaseEnabled,
+                changedBy: actorId,
+                changedAt: now,
+                reasonCode: request.ReasonCode,
+                evidenceReference: request.EvidenceReference);
         }
-        catch (DbUpdateConcurrencyException)
+        catch (ArgumentException ex)
         {
             return Result.Failure<TransitionBusinessPolicyActivationResponse>(
-                BusinessPolicyError.ConcurrentUpdate());
-        }
-        catch (DbUpdateException ex)
-        {
-            return Result.Failure<TransitionBusinessPolicyActivationResponse>(
-                BusinessPolicyError.ConcurrentUpdate(ex.Message));
+                BusinessPolicyError.InvalidLifecycle(ex.Message));
         }
 
-        if (failureResult is not null)
+        using var newStateData = JsonSerializer.SerializeToDocument(new
         {
-            return failureResult;
-        }
+            activation.ActiveBusinessPolicyVersionId,
+            activation.PublicIntakeEnabled,
+            activation.CaptureEnabled,
+            activation.ReleaseEnabled,
+            DecisionId = transitionDecision.Id,
+            activation.ReasonCode
+        });
 
-        return Result.Success(response!);
+        policyRepository.AddActivationDecision(transitionDecision);
+
+        auditWriter.AddSystemAdminAction(
+            unitOfWork,
+            actorId,
+            executionContext.CorrelationId,
+            "BusinessPolicyActivation",
+            activation.Id,
+            "TRANSITION_ACTIVATION",
+            oldStateData,
+            newStateData,
+            now);
+
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return Result.Success(new TransitionBusinessPolicyActivationResponse(
+            activation.Id,
+            activation.ActiveBusinessPolicyVersionId,
+            activation.PublicIntakeEnabled,
+            activation.CaptureEnabled,
+            activation.ReleaseEnabled,
+            activation.LastDecisionId,
+            activation.ActivatedAt,
+            activation.ReasonCode,
+            activation.EvidenceReference));
     }
 }

@@ -32,6 +32,33 @@ internal sealed class PublishSurveyServicePriceV3CommandHandler(
                 BusinessPolicyError.CurrentUserRequired());
         }
 
+        try
+        {
+            return await unitOfWork.ExecuteInTransactionAsync(
+                async ct =>
+                {
+                    await unitOfWork.AcquireBusinessPolicyWriteLockAsync(ct);
+                    return await PublishLockedAsync(request, actorId, ct);
+                },
+                cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Result.Failure<PublishSurveyServicePriceV3Response>(
+                BusinessPolicyError.ConcurrentUpdate());
+        }
+        catch (DbUpdateException ex)
+        {
+            return Result.Failure<PublishSurveyServicePriceV3Response>(
+                BusinessPolicyError.ConcurrentUpdate(ex.Message));
+        }
+    }
+
+    private async Task<Result<PublishSurveyServicePriceV3Response>> PublishLockedAsync(
+        PublishSurveyServicePriceV3Command request,
+        Guid actorId,
+        CancellationToken cancellationToken)
+    {
         var service = await serviceRepository.GetByIdAsync(
             request.SurveyServiceId,
             cancellationToken);
@@ -127,39 +154,20 @@ internal sealed class PublishSurveyServicePriceV3CommandHandler(
             newPrice.ReasonCode
         });
 
-        try
-        {
-            await unitOfWork.ExecuteInTransactionAsync(
-                async ct =>
-                {
-                    policyRepository.AddPriceV3(newPrice);
+        policyRepository.AddPriceV3(newPrice);
 
-                    auditWriter.AddSystemAdminAction(
-                        unitOfWork,
-                        actorId,
-                        executionContext.CorrelationId,
-                        "SurveyServicePrice",
-                        newPrice.Id,
-                        "PUBLISH_PRICE_V3",
-                        oldData,
-                        newData,
-                        now);
+        auditWriter.AddSystemAdminAction(
+            unitOfWork,
+            actorId,
+            executionContext.CorrelationId,
+            "SurveyServicePrice",
+            newPrice.Id,
+            "PUBLISH_PRICE_V3",
+            oldData,
+            newData,
+            now);
 
-                    await unitOfWork.SaveChangesAsync(ct);
-                    return true;
-                },
-                cancellationToken);
-        }
-        catch (DbUpdateConcurrencyException)
-        {
-            return Result.Failure<PublishSurveyServicePriceV3Response>(
-                BusinessPolicyError.ConcurrentUpdate());
-        }
-        catch (DbUpdateException ex)
-        {
-            return Result.Failure<PublishSurveyServicePriceV3Response>(
-                BusinessPolicyError.ConcurrentUpdate(ex.Message));
-        }
+        await unitOfWork.SaveChangesAsync(cancellationToken);
 
         return Result.Success(new PublishSurveyServicePriceV3Response(
             newPrice.Id,

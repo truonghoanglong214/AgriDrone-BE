@@ -110,6 +110,8 @@ public sealed class Plant : AggregateRoot
 
     public Guid? ReplacedPlantId { get; private set; }
 
+    public Guid? PlantProfileId { get; private set; }
+
     public DateTimeOffset CreatedAt { get; private set; }
 
     public DateTimeOffset UpdatedAt { get; private set; }
@@ -305,6 +307,12 @@ public sealed class Plant : AggregateRoot
         PositionSource = Plants.PositionSource.MappingAi;
         MappedAt = mappedAt;
         UpdatedAt = mappedAt;
+    }
+
+    public void LinkPlantProfile(Guid plantProfileId)
+    {
+        DomainGuard.NotEmpty(plantProfileId);
+        PlantProfileId = plantProfileId;
     }
 
     public void ApplyPublishedFarmMapPosition(

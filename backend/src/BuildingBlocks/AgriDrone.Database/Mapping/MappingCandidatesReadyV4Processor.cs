@@ -6,16 +6,16 @@ using AgriDrone.SharedKernel.Application.Abstractions.Execution;
 
 namespace AgriDrone.Database.Mapping;
 
-internal sealed class BaselineMappingCandidatesReadyV3Processor(
+internal sealed class MappingCandidatesReadyV4Processor(
     IIntegrationMessageReader messageReader,
     IExecutionContextRunner executionContextRunner)
-    : IntegrationMessageProcessor<BaselineMappingCandidatesReadyV3>(
+    : IntegrationMessageProcessor<MappingCandidatesReadyV4>(
         messageReader,
         executionContextRunner)
 {
-    protected override IntegrationEventDescriptor<BaselineMappingCandidatesReadyV3> Descriptor =>
-        IntegrationEventDescriptors.BaselineMappingCandidatesReadyV3;
+    protected override IntegrationEventDescriptor<MappingCandidatesReadyV4> Descriptor =>
+        IntegrationEventDescriptors.MappingCandidatesReadyV4;
 
-    protected override IReadOnlyList<string> ValidatePayload(BaselineMappingCandidatesReadyV3? payload) =>
+    protected override IReadOnlyList<string> ValidatePayload(MappingCandidatesReadyV4? payload) =>
         V3BusinessContractValidators.Validate(payload);
 }

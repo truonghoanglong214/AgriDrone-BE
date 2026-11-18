@@ -30,6 +30,33 @@ internal sealed class PublishCancellationPolicyCommandHandler(
                 BusinessPolicyError.CurrentUserRequired());
         }
 
+        try
+        {
+            return await unitOfWork.ExecuteInTransactionAsync(
+                async ct =>
+                {
+                    await unitOfWork.AcquireBusinessPolicyWriteLockAsync(ct);
+                    return await PublishLockedAsync(request, actorId, ct);
+                },
+                cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Result.Failure<PublishCancellationPolicyResponse>(
+                BusinessPolicyError.ConcurrentUpdate());
+        }
+        catch (DbUpdateException ex)
+        {
+            return Result.Failure<PublishCancellationPolicyResponse>(
+                BusinessPolicyError.ConcurrentUpdate(ex.Message));
+        }
+    }
+
+    private async Task<Result<PublishCancellationPolicyResponse>> PublishLockedAsync(
+        PublishCancellationPolicyCommand request,
+        Guid actorId,
+        CancellationToken cancellationToken)
+    {
         var latestPolicy = await policyRepository.GetLatestCancellationPolicyAsync(
             cancellationToken);
 
@@ -102,39 +129,20 @@ internal sealed class PublishCancellationPolicyCommandHandler(
             newPolicy.ReasonCode
         });
 
-        try
-        {
-            await unitOfWork.ExecuteInTransactionAsync(
-                async ct =>
-                {
-                    policyRepository.AddCancellationPolicy(newPolicy);
+        policyRepository.AddCancellationPolicy(newPolicy);
 
-                    auditWriter.AddSystemAdminAction(
-                        unitOfWork,
-                        actorId,
-                        executionContext.CorrelationId,
-                        "CancellationPolicy",
-                        newPolicy.Id,
-                        "PUBLISH_CANCELLATION_POLICY",
-                        oldData,
-                        newData,
-                        now);
+        auditWriter.AddSystemAdminAction(
+            unitOfWork,
+            actorId,
+            executionContext.CorrelationId,
+            "CancellationPolicy",
+            newPolicy.Id,
+            "PUBLISH_CANCELLATION_POLICY",
+            oldData,
+            newData,
+            now);
 
-                    await unitOfWork.SaveChangesAsync(ct);
-                    return true;
-                },
-                cancellationToken);
-        }
-        catch (DbUpdateConcurrencyException)
-        {
-            return Result.Failure<PublishCancellationPolicyResponse>(
-                BusinessPolicyError.ConcurrentUpdate());
-        }
-        catch (DbUpdateException ex)
-        {
-            return Result.Failure<PublishCancellationPolicyResponse>(
-                BusinessPolicyError.ConcurrentUpdate(ex.Message));
-        }
+        await unitOfWork.SaveChangesAsync(cancellationToken);
 
         return Result.Success(new PublishCancellationPolicyResponse(
             newPolicy.Id,

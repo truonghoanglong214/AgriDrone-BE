@@ -13,6 +13,7 @@ public sealed class MappingCandidateConfiguration : IEntityTypeConfiguration<Map
         builder.ToTable("mapping_candidates", "farm");
 
         builder.HasKey(c => c.Id).HasName("pk_mapping_candidates");
+        builder.HasAlternateKey(c => new { c.Id, c.BatchId }).HasName("uq_mapping_candidates_id_batch");
 
         builder.Property(c => c.Id)
             .HasColumnName("id")
@@ -37,7 +38,7 @@ public sealed class MappingCandidateConfiguration : IEntityTypeConfiguration<Map
         builder.Property(c => c.SourceObservationId)
             .HasColumnName("source_observation_id")
             .HasColumnType("uuid")
-            .IsRequired();
+            .IsRequired(false);
 
         builder.Property(c => c.EvidenceMediaAssetIds)
             .HasColumnName("evidence_media_asset_ids")

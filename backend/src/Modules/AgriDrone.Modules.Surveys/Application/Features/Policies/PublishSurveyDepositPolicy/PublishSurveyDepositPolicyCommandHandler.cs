@@ -31,6 +31,33 @@ internal sealed class PublishSurveyDepositPolicyCommandHandler(
                 BusinessPolicyError.CurrentUserRequired());
         }
 
+        try
+        {
+            return await unitOfWork.ExecuteInTransactionAsync(
+                async ct =>
+                {
+                    await unitOfWork.AcquireBusinessPolicyWriteLockAsync(ct);
+                    return await PublishLockedAsync(request, actorId, ct);
+                },
+                cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Result.Failure<PublishSurveyDepositPolicyResponse>(
+                BusinessPolicyError.ConcurrentUpdate());
+        }
+        catch (DbUpdateException ex)
+        {
+            return Result.Failure<PublishSurveyDepositPolicyResponse>(
+                BusinessPolicyError.ConcurrentUpdate(ex.Message));
+        }
+    }
+
+    private async Task<Result<PublishSurveyDepositPolicyResponse>> PublishLockedAsync(
+        PublishSurveyDepositPolicyCommand request,
+        Guid actorId,
+        CancellationToken cancellationToken)
+    {
         var latestPolicy = await policyRepository.GetLatestDepositPolicyAsync(
             cancellationToken);
 
@@ -99,39 +126,20 @@ internal sealed class PublishSurveyDepositPolicyCommandHandler(
             newPolicy.ReasonCode
         });
 
-        try
-        {
-            await unitOfWork.ExecuteInTransactionAsync(
-                async ct =>
-                {
-                    policyRepository.AddDepositPolicy(newPolicy);
+        policyRepository.AddDepositPolicy(newPolicy);
 
-                    auditWriter.AddSystemAdminAction(
-                        unitOfWork,
-                        actorId,
-                        executionContext.CorrelationId,
-                        "SurveyDepositPolicy",
-                        newPolicy.Id,
-                        "PUBLISH_DEPOSIT_POLICY",
-                        oldData,
-                        newData,
-                        now);
+        auditWriter.AddSystemAdminAction(
+            unitOfWork,
+            actorId,
+            executionContext.CorrelationId,
+            "SurveyDepositPolicy",
+            newPolicy.Id,
+            "PUBLISH_DEPOSIT_POLICY",
+            oldData,
+            newData,
+            now);
 
-                    await unitOfWork.SaveChangesAsync(ct);
-                    return true;
-                },
-                cancellationToken);
-        }
-        catch (DbUpdateConcurrencyException)
-        {
-            return Result.Failure<PublishSurveyDepositPolicyResponse>(
-                BusinessPolicyError.ConcurrentUpdate());
-        }
-        catch (DbUpdateException ex)
-        {
-            return Result.Failure<PublishSurveyDepositPolicyResponse>(
-                BusinessPolicyError.ConcurrentUpdate(ex.Message));
-        }
+        await unitOfWork.SaveChangesAsync(cancellationToken);
 
         return Result.Success(new PublishSurveyDepositPolicyResponse(
             newPolicy.Id,

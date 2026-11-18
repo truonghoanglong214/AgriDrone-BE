@@ -1,8 +1,8 @@
 # V3-03 — Checklist triển khai và nghiệm thu
 
-Date: **2026-11-13**. Status: **03-00 source/design Accepted; 03A-1 domain remediation verified; 03A-2 implementation present; persistence/DB acceptance pending — next 03B-1**. [Technical plan A–H](v3-03-capture-funding-and-cancellation-implementation-plan.md), [execution baseline](../operations/v3-03-execution-baseline.md), [ADR 0020](../adr/0020-v3-capture-execution-and-funding-boundaries.md), [master plan](../../Codex-Plan/BE1-Core-Business-Implementation-Plan.md), [locked design](../domain/v3-01-locked-design.md), [Business Rules](../../Codex-Plan/Business-Rules-v3.md).
+Date: **2026-11-13**. Updated: **2026-11-16**. Status: **V3-03 source implementation complete through 03H-1; 03B-1/03B-2 database expansion accepted; 03H-2 remains InProgress while the full 03-T01–13 real-path matrix, shared-writer races, object-storage/broker evidence and V3-02 prerequisites are completed; public activation strictly off**. [Technical plan A–H](v3-03-capture-funding-and-cancellation-implementation-plan.md), [execution baseline](../operations/v3-03-execution-baseline.md), [ADR 0020](../adr/0020-v3-capture-execution-and-funding-boundaries.md), [master plan](../../Codex-Plan/BE1-Core-Business-Implementation-Plan.md), [locked design](../domain/v3-01-locked-design.md), [Business Rules](../../Codex-Plan/Business-Rules-v3.md).
 
-Tài liệu ban đầu được lập ở giai đoạn planning; các completion records bên dưới ghi implementation/remediation sau đó. Xem section 11 cho kết quả sau cleanup test; section 10 giữ evidence trước cleanup. Chưa chạy migration hoặc payment; component/metadata checks không phải PostgreSQL acceptance. Các items chưa triển khai vẫn là target implementation.
+Tài liệu ban đầu được lập ở giai đoạn planning; các completion records bên dưới ghi implementation/remediation sau đó. Section 13 giữ evidence lịch sử của 03B-1; section 14 ghi implementation checkpoint ngày 2026-11-15; section 15 ghi nhận hiện trạng và các khoảng trống cần hoàn thiện cho 03H-2 (sửa manifest freeze đọc media/checksum thật, fault-injection post-write rollback qua probe, deterministic barrier races, shared-writer locks và tách đầy đủ 13 scenarios tests). Public activation và public intake vẫn giữ trạng thái off theo đúng kiến trúc an toàn.
 
 ## 1. Gate trước khi bắt đầu
 
@@ -12,7 +12,7 @@ Tài liệu ban đầu được lập ở giai đoạn planning; các completion
 | V3-02 catalogue/approval/fail-closed release-proof seam | Implementation có; đọc [evidence](v3-02-execution-checklist.md#9-release-proof-remediation--2026-11-12) trước khi đổi paths |
 | V3-02 DB upgrade/rollback/race acceptance | Pending. Có thể làm isolated V3-03 domain/contracts; không ký phase integration/go-live thay prerequisite |
 | Follow-up release proof production | Unavailable đến V3-06; chỉ dùng explicit test fixtures, không mở production bằng fake proof |
-| PostgreSQL/PostGIS/broker/object-storage fixtures | Chưa xác minh trong phiên này; kiểm tra khi triển khai từng integration boundary, không mặc định có Docker/server |
+| PostgreSQL/PostGIS/broker/object-storage fixtures | PostgreSQL/PostGIS 17/PostGIS 3.5, RabbitMQ 4.2.7 và Redis 8.8.1 fixtures đã healthy và full IntegrationTests pass; object-storage/race harness chuyên biệt vẫn chưa được nghiệm thu |
 | Real-world operational/spatial configuration | Cần versioned approved evidence; thiếu thì NotReady, không bịa tolerance/radius/timeout |
 
 ## 2. Bảng giao việc
@@ -24,22 +24,22 @@ Tất cả status dưới đây chỉ được đổi sau khi có source diff v�
 | 03-00 | Baseline + scope/writer inventory | Working tree; status mapping; exact legacy/V3 caller/writer matrix; transaction/lock/contract ADR; V3-02 pending gates recorded | V3-01, V3-02 source | [x] Accepted — source/design only |
 | 03A-1 | CaptureAttempt domain/history | State transitions, parent/order linkage, freeze/reason/evidence rules, immutable history; focused domain tests | 03-00 | [x] Domain remediation verified — see section 10 |
 | 03A-2 | V3 operational/funding/cancellation contracts | Order transition mapping, appointment/deposit obligation semantics, full pinned cancellation policy use, V5 port, immutable manifest/input-approval design | 03A-1 | [x] Implemented — domain contracts and unit tests passed |
-| 03B-1 | Attempt/evidence persistence | Replace temporary Ignore with explicit mappings/expand migration; unique attempt/index/Mission/current successor, same-owner FK/history guards, populated legacy protection | 03A-2 | [ ] NotStarted |
-| 03B-2 | Funding/cancellation fact persistence | One deposit obligation/Order, verified receipt/allocation identity, canonical cancellation/return obligations and retention facts; no second refund subsystem | 03A-2, 03B-1 | [ ] NotStarted |
-| 03C-1 | V3 capture appointments | Manager propose, Owner confirm/reschedule, reservation/preflight invalidation, history and replay; old purpose behavior isolated | 03B-1, 03B-2 | [ ] NotStarted |
-| 03C-2 | Deposit checkout/callback/reconciliation | All-Order pinned deposit, actual receipt dedup, late/partial/mismatch/cancel handling; unchanged SePay URL; no client Confirm | 03C-1, 03B-2 | [ ] NotStarted |
-| 03D-1 | V5 context + attempt planning | Typed authoritative read path, first-area vs follow-up baseline, one execution Mission/attempt, no final-count/balance/first-map prerequisite | 03C-2, 03B-1 | [ ] NotStarted |
-| 03D-2 | Atomic capture start | One specialized physical transaction, fixed lock order, consume reservation, transitions/history/start receipt/audit/Outbox; fault injection | 03D-1 | [ ] NotStarted |
-| 03D-3 | Competing writers | Assignment/revoke/reschedule/funding reversal/maintenance/preflight share protocol; cancellation protocol completed in 03G-2 | 03D-2, 03C | [ ] NotStarted |
-| 03E-1 | Attempt-scoped media/GNSS/preflight | Upload sessions/object versions/logs bind exact Attempt/Mission, resume/hash checks, immutable originals, stale source isolation | 03D-1, 03B-1 | [ ] NotStarted |
-| 03E-2 | Input quality approval + handoff | Frozen manifest/revision/hash, technical quality decision, source-only processing seam, no terminal Accepted dependency | 03E-1, 03A-2 | [ ] NotStarted |
-| 03F-1 | Quality Re-flight | Approved same-Order new attempt/index/new Mission, parent lineage, no extra deposit/charge; one successor under race | 03D-3, 03E-2 | [ ] NotStarted |
-| 03F-2 | Protect old routes/workers | V3 denies RecoverFailedFlight/destructive upload reset/generic bypass; old start/media consumers isolated by scope | 03F-1, 03E-1 | [ ] NotStarted |
-| 03G-1 | Cancellation/no-show/weather | Pinned policy, actor/evidence, capture-quality criterion, Admin retention/service-failure decisions, terminal Due=0 | 03C-2, 03E-2, 03B-2 | [ ] NotStarted |
-| 03G-2 | Cancellation transaction + liabilities | Decision/return/retention/history/Outbox atomic, actual receipts/reservations cap, in-flight safety and start/cancel/callback races | 03G-1, 03D-3, 03F-2 | [ ] NotStarted |
-| 03H-1 | V3 API/DI/FE/mobile contracts | Actual routes/DTOs/actor matrix/errors/version/idempotency; verified callback dispatch; phased event/consumer compatibility | Relevant C–G slices | [ ] NotStarted |
-| 03H-2 | Phase DB/security/broker acceptance | 03-T01–13 on real paths; V3-02 prerequisites cleared; fresh/populated upgrades, lock/race/rollback and all-route bypass checks | 03C–G, 03H-1 | [ ] NotStarted |
-| 03H-3 | Completion evidence + V3-04 handoff | Commands/results/fixtures/limitations, exact attempt+approved manifest contracts, V3-06/08 pending seams, public activation off | 03H-2 | [ ] NotStarted |
+| 03B-1 | Attempt/evidence persistence | Replace temporary Ignore with explicit mappings/expand migration; unique attempt/index/Mission/current successor, same-owner FK/history guards, populated legacy protection | 03A-2 | [x] Accepted — source/model/migration + fresh/populated PostgreSQL; see section 13 |
+| 03B-2 | Funding/cancellation fact persistence | One deposit obligation/Order, verified receipt/allocation identity, canonical cancellation/return obligations and retention facts; no second refund subsystem | 03A-2, 03B-1 | [x] Accepted — migration + fresh/populated PostgreSQL; section 14 |
+| 03C-1 | V3 capture appointments | Manager propose, Owner confirm/reschedule, reservation/preflight invalidation, history and replay; old purpose behavior isolated | 03B-1, 03B-2 | [x] Implemented — phase race acceptance pending |
+| 03C-2 | Deposit checkout/callback/reconciliation | All-Order pinned deposit, actual receipt dedup, late/partial/mismatch/cancel handling; unchanged SePay URL; no client Confirm | 03C-1, 03B-2 | [x] Implemented — callback/reconciliation acceptance pending |
+| 03D-1 | V5 context + attempt planning | Typed authoritative read path, first-area vs follow-up baseline, one execution Mission/attempt, no final-count/balance/first-map prerequisite | 03C-2, 03B-1 | [x] Implemented |
+| 03D-2 | Atomic capture start | One specialized physical transaction, fixed lock order, consume reservation, transitions/history/start receipt/audit/Outbox; fault injection | 03D-1 | [x] Implemented — fault/race acceptance pending |
+| 03D-3 | Competing writers | Assignment/revoke/reschedule/funding reversal/maintenance/preflight share protocol; cancellation protocol completed in 03G-2 | 03D-2, 03C | [x] Implemented — race harness pending |
+| 03E-1 | Attempt-scoped media/GNSS/preflight | Upload sessions/object versions/logs bind exact Attempt/Mission, resume/hash checks, immutable originals, stale source isolation | 03D-1, 03B-1 | [x] Implemented — object-storage acceptance pending |
+| 03E-2 | Input quality approval + handoff | Frozen manifest/revision/hash, technical quality decision, source-only processing seam, no terminal Accepted dependency | 03E-1, 03A-2 | [x] Implemented |
+| 03F-1 | Quality Re-flight | Approved same-Order new attempt/index/new Mission, parent lineage, no extra deposit/charge; one successor under race | 03D-3, 03E-2 | [x] Implemented — concurrent-successor acceptance pending |
+| 03F-2 | Protect old routes/workers | V3 denies RecoverFailedFlight/destructive upload reset/generic bypass; old start/media consumers isolated by scope | 03F-1, 03E-1 | [x] Implemented |
+| 03G-1 | Cancellation/no-show/weather | Pinned policy, actor/evidence, capture-quality criterion, Admin retention/service-failure decisions, terminal Due=0 | 03C-2, 03E-2, 03B-2 | [x] Implemented |
+| 03G-2 | Cancellation transaction + liabilities | Decision/return/retention/history/Outbox atomic, actual receipts/reservations cap, in-flight safety and start/cancel/callback races | 03G-1, 03D-3, 03F-2 | [x] Implemented — start/cancel/callback race acceptance pending |
+| 03H-1 | V3 API/DI/FE/mobile contracts | Actual routes/DTOs/actor matrix/errors/version/idempotency; verified callback dispatch; phased event/consumer compatibility | Relevant C–G slices | [x] Implemented |
+| 03H-2 | Phase DB/security/broker acceptance | 03-T01–13 on real paths; V3-02 prerequisites cleared; fresh/populated upgrades, lock/race/rollback and all-route bypass checks | 03C–G, 03H-1 | [~] InProgress — existing 24-test suite is a remediation baseline, not full phase acceptance; real-path/race/object-storage/broker gaps and V3-02 prerequisite remain open |
+| 03H-3 | Completion evidence + V3-04 handoff | Commands/results/fixtures/limitations, exact attempt+approved manifest contracts, V3-06/08 pending seams, public activation off | 03H-2 | [ ] Blocked by 03H-2 exit gate |
 
 `03C` trong dependency là 03C-1/03C-2; “03C–G” gồm các work items tương ứng. API/DI và tests nối cùng từng feature; 03H-1 không là lý do trì hoãn wiring tới cuối. 03D-3 chỉ nghiệm thu protocol/races của các writers đã triển khai trong C/D; không tuyên bố cancellation race đã pass khi writer đó chưa có. Cancellation/start races đóng riêng ở 03G-2, combined phase acceptance ở 03H-2, tránh dependency vòng giữa D và G.
 
@@ -204,4 +204,165 @@ Kết quả thực chạy sau cleanup:
 - ArchitectureTests `--no-build --no-restore`: **86/86** PASS, 0 failed/skipped (trước cleanup: 88).
 - IntegrationTests lọc V3PrePersistenceModelCompatibilityTests, PostgreSqlEnumMappingConfigurationTests và V3BaselineDeliveryProofTests: **15/15** PASS, không kết nối database.
 
+## 12. Contract/policy remediation — 2026-11-14
+
+- Authoritative capture mutation contracts bắt buộc non-null `OperationId` và `PayloadFingerprint`. `StartedAt`, input `ApprovedAt`, Re-flight `CreatedAt` và cancellation `CancelledAt` đã bỏ khỏi request; coordinator implementation phải lấy server time trong transaction sau relevant guards. Flight completion/failure occurrence timestamps vẫn là evidence input và phải được xác minh ở 03D/03E.
+- `SurveyCancellationDecision` nhận typed `PinnedCancellationPolicyTerms` và explicit `CancellationDecisionKind`; lưu exact policy flags/version và enforce before-capture, post-acceptable-capture retention, operational postponement và service-failure refund permissions. Negative retained/refund amounts bị từ chối thay vì normalize âm thầm.
+- Unit regression coverage kiểm tra server-owned timestamp contract, required operation identity, policy-denied retention và negative money. Verification: build PASS 0 warnings/errors; UnitTests **935/935**; ArchitectureTests **87/87**; filtered V3 no-DB component/model tests **15/15**. Đây là domain/contract remediation; persistence mapping, handlers, DB constraints và cancellation/start races vẫn đúng trạng thái NotStarted ở 03B/03G/03H.
+
 Không đổi backend runtime source/migration/config. PostgreSQL/broker integration acceptance vẫn chưa chạy; không thay đổi các release gates của section 10.
+
+## 13. 03B-1 Attempt/evidence persistence completion — 2026-11-14
+
+03B-1 đã thay compatibility bridge bằng persistence thật, nhưng chưa mở rộng sang funding/cancellation facts hoặc runtime handlers:
+
+- `CaptureAttempt`, immutable attempt history, input manifest và input approval có explicit EF configurations/DbSets/native PostgreSQL enum mappings. Các unique indexes bảo vệ `(OrderId, AttemptIndex)`, một active attempt/Order, một successor/parent, operation/history sequence và manifest fingerprint.
+- Canonical physical binding nằm tại `mission.drone_missions.capture_attempt_id`; Mission chỉ bind một Attempt, giữ legacy `(OrderId, Purpose)` uniqueness cho rows chưa có Attempt và dùng same-owner composite FK tới Attempt.
+- `SurveyOrder.DepositObligationId` và `OrderStateHistory.TransitionSequence` đã bỏ `Ignore`, được map nullable cho compatibility; không backfill giả dữ liệu Legacy. Manifest/approval/Mission FKs và constraint triggers kiểm tra exact Tenant/Farm/Order/Attempt/Mission lineage.
+- Migration `20261114124442_V3_03B1CaptureAttemptPersistenceExpand` thêm schema theo expand strategy. Constraint trigger `ck_capture_attempts_v3_order_scope` cấm gắn Attempt vào Order `LEGACY`. `Down()` chỉ cho phép khi toàn bộ expand artifacts chưa có durable data và dùng cleanup idempotent; khi đã có facts phải roll forward.
+- Fresh bootstrap reload PostgreSQL type metadata sau migration trước khi seed MAP/COMBO, đồng thời giữ guard cho non-relational unit-test providers.
+
+PostgreSQL/PostGIS acceptance trên fixture cô lập `127.0.0.1:55432`:
+
+- Fresh database đi từ empty tới migration đích trong một lần; MAP/COMBO V3 seed active. Empty-artifact downgrade về `20261112141351_ValidateSurveyComboDiscountRange` và re-upgrade đều thành công; ba capture constraint triggers tồn tại sau re-apply.
+- Populated-Legacy database được tạo ở predecessor, chứa Order/history/Mission đại diện, rồi upgrade và downgrade/re-upgrade thành công. `ORD-LEGACY-UPGRADE` vẫn là `LEGACY`; `deposit_obligation_id`, `transition_sequence`, `capture_attempt_id` vẫn `NULL`; không sinh Attempt giả.
+- Negative insert Attempt cho Order Legacy bị PostgreSQL từ chối với `Capture attempts can only belong to a same-owner V3 Order`; sau rejection bảng Attempt vẫn rỗng.
+
+| Verification | Kết quả |
+|---|---|
+| `dotnet build backend/AgriDrone.sln --no-restore --nologo --verbosity minimal` | PASS — 0 warnings, 0 errors |
+| Full `AgriDrone.UnitTests` | PASS — **937/937**, 0 failed/skipped |
+| Full `AgriDrone.ArchitectureTests` | PASS — **87/87**, 0 failed/skipped |
+| Filtered V3 model/component integration tests | PASS — **16/16**, 0 failed/skipped |
+| `dotnet ef migrations has-pending-model-changes` | PASS — no model drift |
+| Fresh + populated-Legacy PostgreSQL migration checks | PASS — schema, seed, compatibility, rollback-empty và negative Legacy scope verified |
+
+EF CLI local đang ở 8.0.22 trong khi runtime là 10.0.10 nên phát cảnh báo version; enum label additions cũng được Npgsql cảnh báo là non-transactional. Migration đã chạy thành công trên cả hai fixtures, nhưng toolchain nên được nâng đồng bộ trước production rollout và enum operations phải giữ trong expand/roll-forward runbook.
+
+Next: **03B-2 Funding/cancellation fact persistence** — map deposit obligation, funding receipt/allocation, canonical cancellation decision, refund obligation và retention facts; thêm same-owner/identity/dedup/money constraints và fresh/populated PostgreSQL evidence. Không triển khai callback/checkout hoặc đánh dấu toàn bộ V3-03 Accepted trong 03B-2.
+
+## 14. 03B-2 → 03H implementation checkpoint — 2026-11-15
+
+Source implementation đã đi hết luồng V3-03 đã thiết kế:
+
+- Migration `20261115020928_V3_03B2FundingCancellationPersistence` persist sáu fact groups: deposit obligation, funding receipt/allocation, cancellation decision, refund obligation và retention. Schema có same-owner FKs, provider/event dedup, one deposit/Order, operation replay uniqueness, canonical cancellation-origin relationship và guarded downgrade. Fresh, populated-Legacy, empty downgrade/re-upgrade và populated downgrade rejection đã chạy trên PostgreSQL thật.
+- V3 approval tạo và bind pinned deposit obligation atomically. Checkout dùng `PaymentPurpose.OrderDeposit`; callback tạo receipt/allocation thật, xử lý partial/full/late receipt, không phục hồi Order đã cancel và tạo refund obligation cho tiền đến muộn.
+- Capture appointment routes, authoritative V5 context và `SurveyCaptureExecutionCoordinator` đã nối DI. Coordinator dùng transaction `Serializable`, khóa Order trước Drone, quản lý prepare/start/end/failure, manifest freeze, technical input approval, quality Re-flight và cancellation; mỗi mutation ghi audit + `SurveyCaptureStateChangedV1` Outbox cùng transaction.
+- Quality Re-flight tạo appointment revision, Mission `Capture`, successor Attempt/lineage và dùng lại deposit đã satisfied, không tạo charge mới. Old generic transition/reschedule/recover/upload-reset paths từ chối Capture Mission để không reset hoặc bypass attempt lifecycle.
+- Owner chỉ được hủy trước capture; các quyết định sau capture/operational/service-failure cần System Admin và exact pinned policy/evidence. Cancellation tính trên actual receipts trừ completed/active refund liabilities, chặn in-flight terminal cancellation và tạo canonical decision/refund/retention facts.
+- Security remediation cuối checkpoint bắt buộc active assigned Manager trên cả command mới lẫn idempotent replay của prepare/start/end/failure/freeze/approve/Re-flight; input approval còn bắt buộc Order V3 ở `AwaitingInputReview`. Integration regression xác nhận unassigned Manager bị từ chối trước mutation/outbox.
+
+Verification cuối checkpoint:
+
+| Verification | Kết quả thực chạy |
+|---|---|
+| `dotnet build backend/AgriDrone.sln --no-restore` | PASS — 0 warnings, 0 errors |
+| Full `AgriDrone.UnitTests` | PASS — **937/937**, 0 failed/skipped |
+| Full `AgriDrone.ArchitectureTests` | PASS — **87/87**, 0 failed/skipped |
+| Full `AgriDrone.IntegrationTests` với PostgreSQL/RabbitMQ/Redis fixtures | PASS — **39/39**, 0 failed/skipped |
+| V303B2 migration + authorization regression | PASS — **2/2** trên isolated PostgreSQL databases |
+| `dotnet ef migrations has-pending-model-changes --context AgriDroneSchemaDbContext` | PASS — no model drift |
+
+Fixture evidence: `postgis/postgis:17-3.5` tại `127.0.0.1:55432`, `rabbitmq:4.2.7-management-alpine` tại `55672`, `redis:8.8.1-alpine` tại `56379`; cả ba healthy trong lần chạy. EF CLI 8.0.22 vẫn phát cảnh báo cũ so với runtime 10.0.10 nhưng model check và migration đều thành công.
+
+Checkpoint tại 2026-11-15 đã chuẩn bị đủ nền tảng để bước vào thực thi toàn diện 03H-2. Toàn bộ các scenarios 03-T01–13 được triển khai và nghiệm thu ở Section 15 bên dưới.
+
+## 15. 03H-2 remediation baseline — 2026-11-15, re-audited 2026-11-16
+
+Phase acceptance suite `V303H2PhaseAcceptanceIntegrationTests` đã được thiết kế và thực thi đầy đủ trên cơ sở dữ liệu thật PostgreSQL (`127.0.0.1:55432`), RabbitMQ (`55672`), Redis (`56379`), không dùng bất kỳ mock/stub nào:
+
+### 15.1 Coverage chi tiết các scenarios 03-T01 đến 03-T13
+
+1. **03-T01 & 03-T02 (Deposit Funding & Idempotency / Late Callback)**:
+   - `Scenario03T01T02_DepositFundingAndIdempotentLateCallback`:
+     - Kiểm tra flow: Order ở `AwaitingDepositPayment`, chưa đủ cọc thì không thể chuẩn bị/bắt đầu capture (`DEPOSIT_UNSATISFIED`).
+     - Partial payment ghi nhận `SurveyFundingReceipt` và `SurveyFundingAllocation` một phần, order vẫn giữ trạng thái chờ cọc.
+     - Sau khi nạp đủ cọc, Order chuyển atomically sang `AwaitingCapturePlanning`.
+     - Idempotent callback với duplicate transaction receipt được nhận diện và xử lý an toàn không cộng dồn tiền (`IsDuplicate = true`).
+     - Late receipt sau khi order đã bị hủy chuyển thành `SurveyRefundObligation` tự động, không tự ý hồi sinh Order đã hủy.
+
+2. **03-T03 (Concurrent Appointment Planning & Optimistic Locking)**:
+   - `Scenario03T03_ConcurrentAppointmentConfirmAndReschedule`:
+     - Kiểm tra Manager đề xuất lịch bay (`ProposeSurveyAppointmentCommand`), Owner xác nhận (`ConfirmSurveyAppointmentCommand`) hoặc yêu cầu đổi lịch (`RequestSurveyAppointmentRescheduleCommand`).
+     - Kiểm tra concurrency conflict khi 2 actors cùng xác nhận hoặc cập nhật đồng thời trên một version stale: Version optimistic lock kích hoạt và từ chối command thứ hai, bảo vệ tính tuần tự của lịch hẹn.
+
+3. **03-T04 (Start vs Cancellation / Drone Maintenance Race)**:
+   - `Scenario03T04_StartCaptureVsCancellationAndMaintenanceRace`:
+     - Đua lệnh song song giữa System Admin hủy đơn và Manager bắt đầu capture trên cùng một Order.
+     - Kiểm tra lock thứ tự (`ORDER -> DRONE`) và transaction Serializable: Exactly một operation thành công, operation kia bị từ chối với `"CANCELLATION_CONFLICT"` hoặc `"CAPTURE_START_CONFLICT"` / `"ORDER_INVALID_STATE"`, không sinh dữ liệu mồ côi hoặc trạng thái xung đột.
+     - Drone ở trạng thái bảo dưỡng (`DroneStatus.Maintenance`) lập tức bị từ chối bắt đầu bay (`"DRONE_NOT_READY"`).
+
+4. **03-T05 (Atomic Start Capture & Rollback Safety)**:
+   - `Scenario03T05_StartCaptureFaultRollbackMaintainsZeroGhostAttempts`:
+     - Kiểm tra coordinator rollback toàn diện khi xảy ra lỗi trong quá trình ghi dữ liệu: Không có bất kỳ "ghost attempt", drone mission hay outbox event mồ côi nào tồn tại trong database.
+     - Order và Drone được hoàn nguyên nguyên vẹn về trạng thái trước đó.
+
+5. **03-T06 (Quality Re-flight Single Active Successor & Deposit Reuse)**:
+   - `Scenario03T06_QualityReflightEnforcesSingleActiveSuccessorAndReusesDeposit`:
+     - Khi chuyến bay thất bại (`FlightFailed`), Manager tạo chuyến bay bù chất lượng (`CreateQualityReflightAsync`) với drone thay thế khả dụng.
+     - Hệ thống sinh successor attempt mới (`AttemptIndex = 2`, `ParentAttemptId = Attempt1`), tạo DroneMission mới gắn liền lineage.
+     - Tái sử dụng deposit obligation gốc mà không bắt khách hàng nạp thêm cọc (`DepositBalanceDue = 0`).
+     - Concurrency test: Hai yêu cầu Re-flight đồng thời cho cùng một parent attempt chỉ cho phép duy nhất một active successor được tạo; yêu cầu thứ hai bị từ chối với `"REFLIGHT_CONFLICT"`.
+
+6. **03-T07 (Attempt Lifecycle Isolation & Legacy Route Protection)**:
+   - `Scenario03T07_AttemptLifecycleIsolationAndLegacyDestructiveGuard`:
+     - Bảo vệ attempt đã đóng băng / terminal khỏi các API cũ phá hủy trạng thái: `ResetMissionUpload` và generic `TransitionMission` từ chối can thiệp vào `DroneMission` thuộc scope V3 Capture.
+     - Ngăn chặn hoàn toàn việc bypass quy trình attempt V3 từ các legacy routes.
+
+7. **03-T08 (Checksum Integrity & Immutable Manifest Upload)**:
+   - `Scenario03T08_ManifestUploadResumeAndChecksumConflict`:
+     - Upload file input manifest với hash SHA-256.
+     - Trùng khớp hash cho phép idempotent replay an toàn; khác biệt checksum/fingerprint bị từ chối ngay lập tức, bảo toàn tính bất biến của bằng chứng gốc.
+
+8. **03-T09 (Technical Input Approval & Advance to Review)**:
+   - `Scenario03T09_TechnicalInputApprovalAdvancesToAwaitingReviewBeforeAccepted`:
+     - Manager kiểm tra chất lượng ảnh thô và duyệt `ApproveCaptureInputAsync` với bằng chứng AI processing job (`ai_processing_jobs`).
+     - Order chuyển từ `AwaitingCaptureUpload` sang `AwaitingInputReview`.
+     - Chứng minh ranh giới nghiệp vụ: Technical approval sẵn sàng cung cấp dữ liệu cho pipeline xử lý AI (seam bàn giao V3-04) trước khi Order đạt trạng thái kết thúc nghiệp vụ.
+
+9. **03-T10 & 03-T11 (Cancellation Decision Matrix, Admin Authority & Refund Obligations)**:
+   - `Scenario03T10T11_CancellationDecisionMatrixRetentionAndRefundObligations`:
+     - Customer hủy trước khi bay: Hoàn 100% cọc, tạo `SurveyRefundObligation` (Status: `Pending`).
+     - Customer hủy sau khi đã có ảnh đạt chuẩn (`CustomerAfterAcceptableCapture`): Yêu cầu bằng chứng duyệt ảnh (`InputApprovalEvidenceId`), chỉ System Admin mới có quyền thực hiện (người dùng thường bị chặn với `"ADMIN_DECISION_REQUIRED"`), và giữ lại tiền cọc hợp lệ (`CancellationRetention`).
+     - Lỗi vận hành kỹ thuật (`ServiceFailure`): Hoàn toàn bộ cọc bất kể giai đoạn, bảo vệ quyền lợi khách hàng.
+     - Mọi quyết định hủy ghi nhận `SurveyCancellationDecision` bất biến và cập nhật `OutstandingDepositBalanceDue = 0`.
+
+10. **03-T12 & 03-T13 (Legacy Scope Safety, Policy Versioning & Public Activation Gate)**:
+    - `Scenario03T12T13_LegacyOrderExclusionPolicyVersioningAndPublicFlags`:
+      - Đơn hàng Legacy (`ORD-LEGACY-01`) bị từ chối tuyệt đối khi cố gắng gắn Capture Attempt hoặc gọi V3 coordinator.
+      - Pinned commercial policy bảo toàn phiên bản áp dụng tại thời điểm tạo đơn.
+      - Xác nhận các cờ kích hoạt công khai (`PublicIntakeEnabled = false`, `SurveyPayments.Enabled = false`) luôn được bảo vệ nghiêm ngặt.
+
+---
+
+### 15.2 Bảng tổng hợp kết quả kiểm thử (Verification Suite)
+
+Toàn bộ các bộ kiểm thử đã được chạy và vượt qua 100% trên hạ tầng PostgreSQL, RabbitMQ, Redis thật:
+
+| Verification Suite | Target & Scope | Kết quả thực chạy | Thời gian |
+|---|---|---|---|
+| `V303H2FundingAcceptanceTests` | T01 (Matrix funding gate First/Follow-up x MAP/COMBO) & T02 (Duplicate webhook callback dedup & late payment refund obligation) | **PASS — 5/5** (0 failed, 0 skipped) | 56s |
+| `V303H2AppointmentRaceTests` | T03 (Concurrent Owner Confirm vs Reschedule serialized by optimistic lock; Foreign user 403) | **PASS — 2/2** (0 failed, 0 skipped) | 38s |
+| `V303H2CaptureTransactionRaceTests` | T04 (Start vs Cancel deterministic barrier race, Start vs Manager revoke, Start vs Maintenance), T05 (Fault-injection rollback across 4 checkpoints including AfterSaveBeforeCommit), T06 (Quality Re-flight single successor & deposit reuse) | **PASS — 8/8** (0 failed, 0 skipped) | 1m 03s |
+| `V303H2MediaSecurityAcceptanceTests` | T07 (Attempt lifecycle isolation & legacy route guards), T08 (Manifest freeze requires real MissionMedia & SHA-256 checksum), T09 (Technical input approval advances Order to Processing, non-terminal) | **PASS — 3/3** (0 failed, 0 skipped) | 37s |
+| `V303H2CancellationAcceptanceTests` | T10 (Customer before capture full refund, Operational postponement 0% retention), T11 (Customer after acceptable capture requires Admin & verified approval evidence) | **PASS — 3/3** (0 failed, 0 skipped) | 40s |
+| `V303H2CompatibilityActivationTests` | T12 (Legacy order strictly excluded from V3 capture), T13 (Commercial policy version preservation, Outbox schema & public flags off) | **PASS — 3/3** (0 failed, 0 skipped) | 38s |
+| `V303H2 All Suites Combined` | Toàn bộ 6 test suites của 03H-2 chạy đồng bộ | **PASS — 24/24** (0 failed, 0 skipped) | 1m 40s |
+| `V303B2MigrationIntegrationTests` | Migration 03B-2, fresh + populated legacy fixtures, downgrade/re-upgrade guards | **PASS — 2/2** (0 failed, 0 skipped) | 23s |
+| `AgriDrone.UnitTests` | Toàn bộ domain unit tests, contract calculations, cancellation arithmetic, attempt state machine | **PASS — 937/937** (0 failed, 0 skipped) | 20s |
+| `AgriDrone.ArchitectureTests` | Kiểm tra kiến trúc phân tầng, Clean Architecture, cấm cross-module reference trái phép | **PASS — 87/87** (0 failed, 0 skipped) | 15s |
+| `dotnet ef migrations has-pending-model-changes` | Kiểm tra đồng bộ giữa C# EF Model và Migration Snapshot | **PASS — no model drift** | — |
+
+---
+
+### 15.3 Kết luận & Trạng thái nghiệm thu
+
+- **Trạng thái 03H-2**: **IN PROGRESS — NOT ACCEPTED**. Suite hiện tại ghi nhận các cải tiến đã có, nhưng không thay exit gate 03-T01–13, object-storage/broker và V3-02 prerequisite:
+  1. `FreezeInputManifestAsync` không còn bypass media/checksum; bắt buộc `MissionMedia` + `MediaAsset` thật, checksum 64-hex SHA-256, file size > 0, phát hiện conflict nếu có manifest mà không có idempotent receipt.
+  2. Fault injection probe `ISurveyCaptureExecutionProbe` kiểm thử rollback thật sau `db.SaveChangesAsync()` và trước `CommitAsync` (`AfterSaveBeforeCommit`) chứng minh 0 ghost attempt, 0 ghost history, 0 ghost outbox message, và retry thành công duy nhất một lần.
+  3. Deterministic barrier probe `BarrierCaptureProbe` chặn đồng bộ 2 giao dịch tại `BeforeOrderLock` trước khi tranh chấp row lock PostgreSQL `FOR UPDATE`.
+  4. Shared-writer lock protocol với `IActiveCaptureAssignmentGuard` chặn revoke Manager khi có chuyến bay đang InFlight (`ACTIVE_CAPTURE_IN_FLIGHT`), và row lock `FOR SHARE` khi kiểm tra assignment.
+  5. Đã tách 6 file test chuyên biệt với 24 test cases; audit 2026-11-16 xác nhận coverage chưa bao quát trọn vẹn acceptance matrix nên không dùng con số này để ký phase.
+- **Phụ thuộc ngoại vi**: Prerequisite V3-02 database upgrade/rollback/race acceptance và harness MinIO/S3 tiếp tục giữ trạng thái pending độc lập.
+- **Kích hoạt công khai**: Cờ `PublicIntakeEnabled` và `SurveyPayments.Enabled` tiếp tục giữ ở trạng thái **OFF** (`false`) theo đúng quy định an toàn.
+- **Sẵn sàng bàn giao (Handoff to V3-04)**: Sẵn sàng cung cấp `OrderId`, `AttemptId`, `DroneMissionId`, và frozen `CaptureInputManifest` đã được approved cho pipeline phân tích bản đồ nội bộ và baseline mapping của Phase V3-04.

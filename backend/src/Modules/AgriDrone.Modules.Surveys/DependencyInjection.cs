@@ -134,6 +134,7 @@ public static class DependencyInjection
         services.AddScoped<IAdjustmentSettlementRepository, AdjustmentSettlementRepository>();
         services.AddScoped<IExtraFlightRequestRepository, ExtraFlightRequestRepository>();
         services.AddScoped<ISurveyRequestRepository, SurveyRequestRepository>();
+        services.AddScoped<ISpatialPolicyRepository, SpatialPolicyRepository>();
         services.AddScoped<ISurveyIntegrationOutbox, SurveyIntegrationOutbox>();
         services.AddScoped<ISurveyCatalogueQueries, SurveyCatalogueQueries>();
         services.AddScoped<ISurveyRequestQueries, SurveyRequestQueries>();

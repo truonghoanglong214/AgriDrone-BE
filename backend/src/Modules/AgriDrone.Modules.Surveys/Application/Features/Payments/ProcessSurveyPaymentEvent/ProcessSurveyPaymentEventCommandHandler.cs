@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using AgriDrone.IntegrationContracts.Messaging;
 using AgriDrone.Modules.Surveys.Application.Abstractions.Payments;
@@ -136,6 +138,7 @@ internal sealed class ProcessSurveyPaymentEventCommandHandler(
         }
 
         if (payment.Status == SurveyPaymentStatus.Paid &&
+            payment.Purpose != PaymentPurpose.OrderDeposit &&
             string.Equals(
                 command.EventType.Trim(),
                 SurveyPaymentCommandSupport.SucceededEvent,
@@ -152,12 +155,45 @@ internal sealed class ProcessSurveyPaymentEventCommandHandler(
 
         var previousPaymentStatus = payment.Status;
         var previousOrderStatus = order.Status;
-        var (transitionApplied, disposition) = ApplyEvent(
-            command,
-            payment,
-            order);
+        bool transitionApplied;
+        string disposition;
+        if (payment.Purpose == PaymentPurpose.OrderDeposit &&
+            string.Equals(
+                command.EventType.Trim(),
+                SurveyPaymentCommandSupport.SucceededEvent,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            var fundingResult = ApplyOrderDepositReceipt(
+                command,
+                payment,
+                order,
+                state.DepositObligation,
+                state.CancellationDecision,
+                repository);
+            transitionApplied = fundingResult.Applied;
+            disposition = fundingResult.Disposition;
+        }
+        else if (payment.Purpose == PaymentPurpose.OrderDeposit)
+        {
+            (transitionApplied, disposition) = ApplyOrderDepositNonReceiptEvent(
+                command,
+                payment,
+                order,
+                state.DepositObligation,
+                repository);
+        }
+        else
+        {
+            (transitionApplied, disposition) = ApplyEvent(
+                command,
+                payment,
+                order);
+        }
+
         if (transitionApplied && order.Status == SurveyOrderStatus.Completed)
+        {
             await outbox.AddPostFlightUnlockAsync(order, executionContext.CorrelationId, cancellationToken);
+        }
         var paymentEvent = PaymentEvent.Create(
             payment.Id,
             identity,
@@ -357,6 +393,217 @@ internal sealed class ProcessSurveyPaymentEventCommandHandler(
         }
     }
 
+    private static (bool Applied, string Disposition) ApplyOrderDepositReceipt(
+        ProcessSurveyPaymentEventCommand command,
+        SurveyPayment payment,
+        SurveyOrder order,
+        SurveyDepositObligation? obligation,
+        SurveyCancellationReceiptDisposition? cancellationDecision,
+        ISurveyPaymentProcessingRepository repository)
+    {
+        if (obligation is null ||
+            payment.DepositObligationId != obligation.Id ||
+            obligation.SurveyOrderId != order.Id)
+        {
+            return (false, "DEPOSIT_OBLIGATION_NOT_FOUND");
+        }
+
+        if (!string.Equals(command.Currency.Trim(), "VND", StringComparison.Ordinal) ||
+            command.Amount <= 0m ||
+            decimal.Floor(command.Amount) != command.Amount)
+        {
+            if (payment.Status is SurveyPaymentStatus.Pending or SurveyPaymentStatus.Processing)
+            {
+                payment.RequireAdjustment(EffectiveEventTime(command, payment));
+                return (true, "AMOUNT_OR_CURRENCY_MISMATCH");
+            }
+
+            return (false, "AMOUNT_OR_CURRENCY_MISMATCH");
+        }
+
+        var receiptId = Guid.CreateVersion7();
+        var payloadBytes = Encoding.UTF8.GetBytes(
+            command.Payload.RootElement.GetRawText());
+        var payloadFingerprint = Convert.ToHexString(
+            SHA256.HashData(payloadBytes));
+        var receipt = SurveyFundingReceipt.Create(
+            receiptId,
+            order.TenantId,
+            order.Id,
+            obligation.Id,
+            payment.Provider,
+            command.ProviderEventId,
+            command.Amount,
+            command.Currency,
+            command.ProviderReference,
+            payloadFingerprint,
+            command.ReceivedAt,
+            command.ReceivedAt);
+        repository.AddFundingReceipt(receipt);
+
+        if (order.Status == SurveyOrderStatus.Cancelled ||
+            obligation.Status == SurveyDepositObligationStatus.Cancelled)
+        {
+            if (cancellationDecision is not null)
+            {
+                repository.AddRefundObligation(SurveyRefundObligation.Create(
+                    Guid.CreateVersion7(),
+                    order.Id,
+                    order.TenantId,
+                    cancellationDecision.DecisionKind == CancellationDecisionKind.ServiceFailure
+                        ? SurveyRefundOriginKind.ServiceFailure
+                        : SurveyRefundOriginKind.CancellationReturn,
+                    cancellationDecision.DecisionId,
+                    command.Amount,
+                    command.Currency,
+                    command.ReceivedAt,
+                    receipt.Id));
+            }
+            return (true, "LATE_RECEIPT_AFTER_CANCELLATION");
+        }
+
+        var allocatableAmount = Math.Min(
+            command.Amount,
+            obligation.RemainingAmount);
+        if (allocatableAmount > 0m)
+        {
+            var allocation = SurveyFundingAllocation.Create(
+                Guid.CreateVersion7(),
+                receipt.Id,
+                order.Id,
+                obligation.Id,
+                allocatableAmount,
+                command.Currency,
+                command.ReceivedAt);
+            repository.AddFundingAllocation(allocation);
+            obligation.ApplyAllocation(allocatableAmount, command.ReceivedAt);
+        }
+
+        if (!obligation.IsSatisfied)
+        {
+            if (payment.Status is SurveyPaymentStatus.Pending or SurveyPaymentStatus.Processing)
+            {
+                payment.RequireAdjustment(EffectiveEventTime(command, payment));
+            }
+
+            return (true, "PARTIAL_RECEIPT_ALLOCATED");
+        }
+
+        if (payment.Status is SurveyPaymentStatus.Pending or
+            SurveyPaymentStatus.Processing or
+            SurveyPaymentStatus.AdjustmentRequired)
+        {
+            payment.Confirm(
+                command.ProviderReference,
+                EffectiveEventTime(command, payment));
+        }
+
+        if (order.Status == SurveyOrderStatus.AwaitingDeposit)
+        {
+            order.TransitionToReadyForCaptureV3(command.ReceivedAt);
+        }
+
+        return (true, allocatableAmount > 0m
+            ? "DEPOSIT_OBLIGATION_SATISFIED"
+            : "RECEIPT_UNALLOCATED_OBLIGATION_SATISFIED");
+    }
+
+    private static (bool Applied, string Disposition) ApplyOrderDepositNonReceiptEvent(
+        ProcessSurveyPaymentEventCommand command,
+        SurveyPayment payment,
+        SurveyOrder order,
+        SurveyDepositObligation? obligation,
+        ISurveyPaymentProcessingRepository repository)
+    {
+        if (command.OccurredAt < payment.UpdatedAt)
+        {
+            return (false, "IGNORED_OUT_OF_ORDER");
+        }
+
+        var eventType = command.EventType.Trim().ToLowerInvariant();
+        if (eventType == SurveyPaymentCommandSupport.ProcessingEvent &&
+            payment.Status == SurveyPaymentStatus.Pending)
+        {
+            payment.StartProcessing(command.ProviderReference, command.OccurredAt);
+            return (true, "APPLIED");
+        }
+
+        if (eventType == SurveyPaymentCommandSupport.FailedEvent &&
+            payment.Status is SurveyPaymentStatus.Pending or SurveyPaymentStatus.Processing)
+        {
+            payment.Fail(command.OccurredAt);
+            return (true, "APPLIED");
+        }
+
+        if (eventType is not (SurveyPaymentCommandSupport.RefundedEvent or
+            SurveyPaymentCommandSupport.ChargebackEvent))
+        {
+            return (false, "IGNORED_CURRENT_STATE");
+        }
+        if (obligation is null ||
+            payment.DepositObligationId != obligation.Id ||
+            obligation.SurveyOrderId != order.Id)
+        {
+            return (false, "DEPOSIT_OBLIGATION_NOT_FOUND");
+        }
+        if (payment.Status is not (
+            SurveyPaymentStatus.Paid or
+            SurveyPaymentStatus.AdjustmentRequired))
+        {
+            return (false, "IGNORED_CURRENT_STATE");
+        }
+        if (!string.Equals(command.Currency.Trim(), obligation.Currency, StringComparison.Ordinal) ||
+            command.Amount <= 0m ||
+            decimal.Floor(command.Amount) != command.Amount)
+        {
+            return (false, "AMOUNT_OR_CURRENCY_MISMATCH");
+        }
+
+        var reversedAmount = Math.Min(command.Amount, obligation.AllocatedAmount);
+        if (reversedAmount <= 0m)
+        {
+            return (false, "NO_ALLOCATED_FUNDING_TO_REVERSE");
+        }
+
+        var effectiveAt = EffectiveEventTime(command, payment);
+        payment.Refund(effectiveAt);
+        obligation.ReverseAllocation(reversedAmount, effectiveAt);
+        repository.AddFundingReversal(SurveyFundingReversal.Create(
+            Guid.CreateVersion7(),
+            payment.Id,
+            order.Id,
+            obligation.Id,
+            payment.Provider,
+            command.ProviderEventId,
+            command.EventType,
+            reversedAmount,
+            obligation.Currency,
+            command.OccurredAt,
+            command.ReceivedAt));
+
+        if (order.Status is SurveyOrderStatus.ReadyForCapture or
+            SurveyOrderStatus.AwaitingReflightDecision)
+        {
+            order.TransitionToAwaitingDepositV3(effectiveAt);
+            return (true, eventType == SurveyPaymentCommandSupport.ChargebackEvent
+                ? "CHARGEBACK_REVERSED_CAPTURE_READINESS"
+                : "REFUND_REVERSED_CAPTURE_READINESS");
+        }
+
+        return (true, order.Status == SurveyOrderStatus.Capturing
+            ? "FUNDING_REVERSAL_RECORDED_AFTER_CAPTURE_START"
+            : "FUNDING_REVERSAL_RECORDED");
+    }
+
+    private static DateTimeOffset EffectiveEventTime(
+        ProcessSurveyPaymentEventCommand command,
+        SurveyPayment payment) => new[]
+        {
+            command.OccurredAt,
+            command.ReceivedAt,
+            payment.UpdatedAt
+        }.Max();
+
     private static ProcessSurveyPaymentEventResponse CreateResponse(
         ProcessSurveyPaymentEventCommand command,
         SurveyPayment payment,
@@ -398,5 +645,6 @@ internal sealed class ProcessSurveyPaymentEventCommandHandler(
 
     private static bool IsDedupConstraint(string? constraintName) =>
         constraintName is "uq_payment_events_provider_dedup" or
-                          "uq_payment_events_provider_reference_event";
+                          "uq_payment_events_provider_reference_event" or
+                          "uq_survey_funding_receipts_provider_transaction";
 }

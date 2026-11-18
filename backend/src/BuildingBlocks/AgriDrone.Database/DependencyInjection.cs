@@ -51,6 +51,14 @@ public static class DependencyInjection
             SurveyOrderOperationalContextV3Query>();
         services.AddScoped<ISurveyOrderOperationalContextV4Query,
             SurveyOrderOperationalContextV4Query>();
+        services.AddScoped<ISurveyOrderCaptureContextV5Query,
+            SurveyOrderCaptureContextV5Query>();
+        services.AddScoped<IActiveCaptureAssignmentGuard,
+            ActiveCaptureAssignmentGuard>();
+        services.TryAddSingleton<ISurveyCaptureExecutionProbe,
+            NoopSurveyCaptureExecutionProbe>();
+        services.AddScoped<ISurveyCaptureExecutionCoordinator,
+            SurveyCaptureExecutionCoordinator>();
         services.AddScoped<ISystemManagerSurveyOrderQueries,
             SystemManagerSurveyOrderQueries>();
         services.AddScoped<IV3FollowUpBaselineQuery,
@@ -93,12 +101,13 @@ public static class DependencyInjection
             IntegrationConsumerNames.Be1MappingCandidatesApprovedV1);
 
         services.AddScoped<
-            IIntegrationMessageHandler<BaselineMappingCandidatesReadyV3>,
-            BaselineMappingCandidatesReadyV3Handler>();
-        services.AddIntegrationConsumer<BaselineMappingCandidatesReadyV3Processor>(
-            IntegrationConsumerNames.Be1BaselineMappingCandidatesReadyV3);
+            IIntegrationMessageHandler<MappingCandidatesReadyV4>,
+            MappingCandidatesReadyV4Handler>();
+        services.AddIntegrationConsumer<MappingCandidatesReadyV4Processor>(
+            IntegrationConsumerNames.Be1MappingCandidatesReadyV4);
 
-        services.AddScoped<IFarmBaseMapPublicationOrchestrator, FarmBaseMapPublicationOrchestrator>();
+        services.AddScoped<IFarmBaseMapInternalApprovalOrchestrator, FarmBaseMapInternalApprovalOrchestrator>();
+        services.AddScoped<IOrderPoleEvidenceReader, OrderPoleEvidenceReader>();
 
         return services;
     }

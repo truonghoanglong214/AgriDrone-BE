@@ -895,6 +895,7 @@ public sealed class SurveyScopeBaselineRemediationTests
     {
         public SurveyOrder? SavedOrder { get; private set; }
         public SurveyOrderCommercialSnapshot? SavedCommercialSnapshot { get; private set; }
+        public SurveyDepositObligation? SavedDepositObligation { get; private set; }
         public OrderStateHistory? SavedStateHistory { get; private set; }
 
         public Task<SurveyOrder?> GetBySurveyRequestIdAsync(Guid surveyRequestId, CancellationToken cancellationToken = default) =>
@@ -902,6 +903,7 @@ public sealed class SurveyScopeBaselineRemediationTests
 
         public void Add(SurveyOrder surveyOrder) => SavedOrder = surveyOrder;
         public void AddCommercialSnapshot(SurveyOrderCommercialSnapshot snapshot) => SavedCommercialSnapshot = snapshot;
+        public void AddDepositObligation(SurveyDepositObligation obligation) => SavedDepositObligation = obligation;
         public void AddStateHistory(OrderStateHistory history) => SavedStateHistory = history;
     }
 

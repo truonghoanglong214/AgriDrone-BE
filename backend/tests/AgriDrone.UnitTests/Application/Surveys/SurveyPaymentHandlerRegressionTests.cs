@@ -290,14 +290,14 @@ public sealed class SurveyPaymentHandlerRegressionTests
         public Task<Result<SurveyPaymentOwnerState>> GetForOwnerInitiationAsync(Guid surveyOrderId,
             Guid actorUserId, DateTimeOffset evaluatedAt, PaymentPurpose purpose = PaymentPurpose.FinalBalance,
             CancellationToken cancellationToken = default) => Task.FromResult(Result.Success(
-                new SurveyPaymentOwnerState(order, Guid.NewGuid(), payment)));
+                new SurveyPaymentOwnerState(order, Guid.NewGuid(), payment, null)));
         public Task<Result<IReadOnlyList<SurveyPayment>>> GetOwnerPaymentHistoryAsync(Guid surveyOrderId,
             Guid actorUserId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<Result<IReadOnlyList<SurveyPayment>>> GetSystemAdminPaymentHistoryAsync(Guid surveyOrderId,
             CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<Result<SurveyPaymentEventState>> GetForProviderEventAsync(string provider,
             string providerReference, string deduplicationKey, CancellationToken cancellationToken = default) =>
-            Task.FromResult(Result.Success(new SurveyPaymentEventState(order, payment!, false)));
+            Task.FromResult(Result.Success(new SurveyPaymentEventState(order, payment!, false, null, null)));
         public Task<Result<SurveyPriceAdjustmentRequestState>> GetForPriceAdjustmentRequestAsync(Guid surveyOrderId,
             Guid actorUserId, DateTimeOffset evaluatedAt, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
@@ -305,6 +305,10 @@ public sealed class SurveyPaymentHandlerRegressionTests
             Guid adjustmentId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public void AddPayment(SurveyPayment value) => throw new NotSupportedException();
         public void AddEvent(PaymentEvent value) { }
+        public void AddFundingReceipt(SurveyFundingReceipt value) => throw new NotSupportedException();
+        public void AddFundingAllocation(SurveyFundingAllocation value) => throw new NotSupportedException();
+        public void AddFundingReversal(SurveyFundingReversal value) => throw new NotSupportedException();
+        public void AddRefundObligation(SurveyRefundObligation value) => throw new NotSupportedException();
         public void AddPriceAdjustment(PriceAdjustment value) => throw new NotSupportedException();
     }
 }

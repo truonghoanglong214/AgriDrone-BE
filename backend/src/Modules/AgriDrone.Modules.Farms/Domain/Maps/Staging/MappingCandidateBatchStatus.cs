@@ -6,5 +6,6 @@ public enum MappingCandidateBatchStatus
     ReviewInProgress,
     Approved,
     Rejected,
-    Published
+    Applied
 }
+

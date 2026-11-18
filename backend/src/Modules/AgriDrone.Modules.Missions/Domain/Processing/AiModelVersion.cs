@@ -33,4 +33,28 @@ public sealed class AiModelVersion : Entity
     public ICollection<AiProcessingJob> ProcessingJobs { get; private set; } = [];
 
     public ICollection<MissionPlantObservation> PlantObservations { get; private set; } = [];
+
+    public static AiModelVersion CreateMappingModel(
+        Guid id,
+        string modelName,
+        string version,
+        DateTimeOffset now)
+    {
+        DomainGuard.NotEmpty(id);
+        ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(version);
+        DomainGuard.Utc(now);
+
+        return new AiModelVersion
+        {
+            Id = id,
+            ModelName = modelName.Trim(),
+            Version = version.Trim(),
+            ModelType = AiModelType.PlantDetection,
+            Metrics = JsonDocument.Parse("{}"),
+            IsActive = true,
+            CreatedAt = now,
+            UpdatedAt = now
+        };
+    }
 }

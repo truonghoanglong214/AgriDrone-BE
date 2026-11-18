@@ -1,8 +1,12 @@
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 using AgriDrone.IntegrationContracts.Mapping;
 using AgriDrone.IntegrationContracts.Messaging;
 using AgriDrone.IntegrationContracts.Messaging.Validation;
 using AgriDrone.Modules.Missions.Application.Abstractions.Missions;
 using AgriDrone.Modules.Missions.Domain.Missions;
+using AgriDrone.Modules.Missions.Domain.Processing;
 using AgriDrone.SharedInfrastructure.Messaging.Outbox;
 using Microsoft.EntityFrameworkCore;
 
@@ -24,43 +28,90 @@ internal sealed class MissionPlantGpsPublisher(
         CancellationToken cancellationToken)
     {
         var existingMessage = await db.OutboxMessages.AsNoTracking()
-            .SingleOrDefaultAsync(message => message.MessageId == idempotencyKey,
-                cancellationToken);
+            .SingleOrDefaultAsync(message => message.MessageId == idempotencyKey, cancellationToken);
         if (existingMessage is not null)
         {
-            return existingMessage.EventType ==
-                   IntegrationEventTypes.BaselineMappingCandidatesReadyV3
-                ? new MissionPlantGpsPublishResult(
-                    MissionPlantGpsPublishStatus.Queued, idempotencyKey)
+            return existingMessage.EventType == IntegrationEventTypes.MappingCandidatesReadyV4
+                ? new MissionPlantGpsPublishResult(MissionPlantGpsPublishStatus.Queued, idempotencyKey)
                 : new MissionPlantGpsPublishResult(
                     MissionPlantGpsPublishStatus.Conflict,
                     Errors: ["Idempotency-Key has already been used for another event."]);
         }
 
         var mission = await db.DroneMissions
-            .Where(item => item.Id == missionId && item.FarmId == farmId &&
-                           item.TenantId == tenantId)
+            .Where(item => item.Id == missionId && item.FarmId == farmId && item.TenantId == tenantId)
             .SingleOrDefaultAsync(cancellationToken);
         if (mission is null)
         {
-            return new MissionPlantGpsPublishResult(
-                MissionPlantGpsPublishStatus.NotFound);
+            return new MissionPlantGpsPublishResult(MissionPlantGpsPublishStatus.NotFound);
         }
 
-        if (mission.SurveyOrderId is null ||
-            mission.SurveyOrderId != request.SurveyOrderId ||
-            mission.Purpose != MissionPurpose.BaselineMapping)
+        if (mission.SurveyOrderId is null || mission.SurveyOrderId != request.SurveyOrderId)
         {
             return new MissionPlantGpsPublishResult(
                 MissionPlantGpsPublishStatus.Conflict,
-                Errors: ["Payload survey order does not match a baseline mapping mission."]);
+                Errors: ["Payload survey order does not match the mission context."]);
         }
 
-        if (request.Candidates is null || request.Candidates.Count == 0)
+        if (!mission.CaptureAttemptId.HasValue || mission.CaptureAttemptId.Value == Guid.Empty)
         {
             return new MissionPlantGpsPublishResult(
-                MissionPlantGpsPublishStatus.Invalid,
-                Errors: ["Payload must contain complete candidate records."]);
+                MissionPlantGpsPublishStatus.Conflict,
+                Errors: ["Mission must be associated with a valid CaptureAttempt before publishing mapping candidates."]);
+        }
+
+        var captureAttemptId = mission.CaptureAttemptId.Value;
+        var captureAttemptMatches = await db.Database.SqlQueryRaw<int>(
+                "SELECT 1 AS \"Value\" FROM survey.capture_attempts " +
+                "WHERE id = {0} AND order_id = {1} AND mission_id = {2} " +
+                "AND tenant_id = {3} AND farm_id = {4}",
+                captureAttemptId,
+                request.SurveyOrderId,
+                missionId,
+                tenantId,
+                farmId)
+            .AnyAsync(cancellationToken);
+        if (!captureAttemptMatches)
+        {
+            return new MissionPlantGpsPublishResult(
+                MissionPlantGpsPublishStatus.Conflict,
+                Errors: ["Mission CaptureAttempt does not match the tenant, farm, order, and mission context."]);
+        }
+
+        if (!mission.FarmBoundaryVersionId.HasValue || mission.FarmBoundaryVersionId.Value == Guid.Empty)
+        {
+            return new MissionPlantGpsPublishResult(
+                MissionPlantGpsPublishStatus.Conflict,
+                Errors: ["Mission must be associated with a valid FarmBoundaryVersion before publishing mapping candidates."]);
+        }
+
+        var farmBoundaryVersionId = mission.FarmBoundaryVersionId.Value;
+
+        // Whitelist mapping kind according to mission purpose
+        MappingKind determinedKind;
+        Guid? expectedCurrentMapId;
+        if (mission.Purpose == MissionPurpose.BaselineMapping)
+        {
+            determinedKind = MappingKind.FirstBaseline;
+            expectedCurrentMapId = null;
+        }
+        else if (mission.Purpose is MissionPurpose.PlantHealth or MissionPurpose.HarvestReadiness)
+        {
+            if (!mission.SourceMapVersionId.HasValue || mission.SourceMapVersionId.Value == Guid.Empty)
+            {
+                return new MissionPlantGpsPublishResult(
+                    MissionPlantGpsPublishStatus.Conflict,
+                    Errors: ["Follow-up mapping mission must have a pinned SourceMapVersionId."]);
+            }
+
+            determinedKind = MappingKind.FollowUpSnapshot;
+            expectedCurrentMapId = mission.SourceMapVersionId;
+        }
+        else
+        {
+            return new MissionPlantGpsPublishResult(
+                MissionPlantGpsPublishStatus.Conflict,
+                Errors: [$"Mission purpose '{mission.Purpose}' is not eligible for mapping candidate publication."]);
         }
 
         var storedRows = await db.Database.SqlQueryRaw<MissionPlantGpsRow>(
@@ -78,70 +129,120 @@ internal sealed class MissionPlantGpsPublisher(
                 Errors: ["No saved plant GPS rows were found for this mission."]);
         }
 
-        var storedByTreeId = storedRows.ToDictionary(
-            row => row.TreeId, StringComparer.Ordinal);
-        var candidatesRequest = request.Candidates.ToArray();
-        var treeIds = candidatesRequest.Select(candidate => candidate.TreeId).ToArray();
-        if (treeIds.Any(string.IsNullOrWhiteSpace) ||
-            treeIds.Distinct(StringComparer.Ordinal).Count() != treeIds.Length ||
-            treeIds.Length != storedByTreeId.Count ||
-            treeIds.Any(treeId => !storedByTreeId.ContainsKey(treeId!)))
+        if (storedRows.Any(row => string.IsNullOrWhiteSpace(row.TreeId)) ||
+            storedRows.Select(row => row.TreeId).Distinct(StringComparer.Ordinal).Count() != storedRows.Count)
         {
             return new MissionPlantGpsPublishResult(
                 MissionPlantGpsPublishStatus.Conflict,
-                Errors: ["Payload candidates must match every saved CSV tree_id exactly once."]);
+                Errors: ["Saved mapping output contains missing or duplicate tree_id values."]);
         }
 
-        if (candidatesRequest.Any(candidate =>
-                candidate.Row < 1 || candidate.Col < 1 ||
-                candidate.Latitude is < -90 or > 90 ||
-                candidate.Longitude is < -180 or > 180 ||
-                candidate.Confidence is < 0 or > 1 ||
-                string.IsNullOrWhiteSpace(candidate.Status) ||
-                string.IsNullOrWhiteSpace(candidate.Source)))
+        if (storedRows.Any(row =>
+                row.Row < 1 || row.Col < 1 ||
+                row.Latitude is < -90 or > 90 ||
+                row.Longitude is < -180 or > 180 ||
+                row.Confidence is < 0 or > 1 ||
+                string.IsNullOrWhiteSpace(row.Status) ||
+                string.IsNullOrWhiteSpace(row.Source)))
         {
             return new MissionPlantGpsPublishResult(
                 MissionPlantGpsPublishStatus.Invalid,
-                Errors: ["Each candidate must include valid row, col, coordinates, confidence, status, and source."]);
+                Errors: ["Saved mapping output contains invalid row, column, coordinates, confidence, status, or source values."]);
         }
 
-        if (candidatesRequest.Any(candidate =>
-            {
-                var stored = storedByTreeId[candidate.TreeId];
-                return candidate.Row != stored.Row || candidate.Col != stored.Col ||
-                       candidate.Latitude != stored.Latitude ||
-                       candidate.Longitude != stored.Longitude ||
-                       candidate.Confidence != stored.Confidence ||
-                       !string.Equals(candidate.Status, stored.Status, StringComparison.Ordinal) ||
-                       !string.Equals(candidate.Source, stored.Source, StringComparison.Ordinal);
-            }))
+        var processingJob = await db.AiProcessingJobs
+            .Include(j => j.ModelVersion)
+            .SingleOrDefaultAsync(j => j.Id == request.ProcessingJobId &&
+                                       j.MissionId == missionId &&
+                                       j.JobType == AiJobType.Mapping &&
+                                       j.Status == AiJobStatus.Completed, cancellationToken);
+
+        if (processingJob is null || !processingJob.ModelVersionId.HasValue || !processingJob.CompletedAt.HasValue)
         {
             return new MissionPlantGpsPublishResult(
                 MissionPlantGpsPublishStatus.Conflict,
-                Errors: ["Payload candidate fields must match the saved plant GPS rows."]);
+                Errors: ["A completed AI mapping processing job was not found for this mission. Complete mapping AI processing before publishing mapping candidates."]);
         }
 
-        var occurredAt = timeProvider.GetUtcNow();
-        var candidates = candidatesRequest.Select(candidate =>
+        var handoffId = idempotencyKey;
+        var jobId = processingJob.Id;
+        var modelVersionId = processingJob.ModelVersionId.Value;
+        var producedAt = processingJob.CompletedAt.Value;
+
+        if (processingJob.ModelVersion is null)
         {
+            return new MissionPlantGpsPublishResult(
+                MissionPlantGpsPublishStatus.Conflict,
+                Errors: ["The mapping processing job references a missing AI model version."]);
+        }
+
+        MappingProcessingSnapshot? processingSnapshot;
+        try
+        {
+            processingSnapshot = processingJob.Parameters.Deserialize<MappingProcessingSnapshot>();
+        }
+        catch (JsonException)
+        {
+            processingSnapshot = null;
+        }
+
+        if (processingSnapshot is null ||
+            processingSnapshot.SourceVersion < 1 ||
+            processingJob.AttemptNumber != processingSnapshot.SourceVersion ||
+            processingSnapshot.GridBearingDeg is < 0 or >= 360 ||
+            processingSnapshot.RowSpacingM <= 0 ||
+            processingSnapshot.PlantSpacingM <= 0 ||
+            string.IsNullOrWhiteSpace(processingSnapshot.AlgorithmVersion) ||
+            !IsSha256(processingSnapshot.InputFingerprint) ||
+            !IsSha256(processingSnapshot.OutputFingerprint) ||
+            !string.Equals(
+                MissionPlantGpsFingerprint.Compute(storedRows),
+                processingSnapshot.OutputFingerprint,
+                StringComparison.Ordinal))
+        {
+            return new MissionPlantGpsPublishResult(
+                MissionPlantGpsPublishStatus.Conflict,
+                Errors: ["The mapping processing job does not contain a complete immutable mapping snapshot."]);
+        }
+
+        var candidates = storedRows.Select(candidate =>
+        {
+            var deterministicCandidateId = CreateVersion5(
+                jobId,
+                candidate.TreeId.Trim().ToUpperInvariant());
             return new MappingCandidateV3(
                 Longitude: (double)candidate.Longitude,
                 Latitude: (double)candidate.Latitude,
                 ProposedRowIndex: candidate.Row,
                 ProposedColumnIndex: candidate.Col,
                 PositionConfidence: candidate.Confidence,
-                TreeId: candidate.TreeId,
+                TreeId: candidate.TreeId.Trim(),
+                CandidateId: deterministicCandidateId,
+                SourceObservationId: null,
                 Status: candidate.Status,
                 Source: candidate.Source);
         }).ToArray();
-        var enrichedPayload = new BaselineMappingCandidatesReadyV3(
-            request.SurveyOrderId,
-            missionId,
-            farmId,
-            request.GridBearingDeg,
-            request.RowSpacingM,
-            request.PlantSpacingM,
-            candidates);
+
+        var enrichedPayload = new MappingCandidatesReadyV4(
+            MappingKind: determinedKind,
+            SurveyOrderId: request.SurveyOrderId,
+            MissionId: missionId,
+            CaptureAttemptId: captureAttemptId,
+            FarmId: farmId,
+            FarmBoundaryVersionId: farmBoundaryVersionId,
+            HandoffId: handoffId,
+            JobId: jobId,
+            ModelVersionId: modelVersionId,
+            ExpectedCurrentFarmBaseMapVersionId: expectedCurrentMapId,
+            ProducedAt: producedAt,
+            GridBearingDeg: processingSnapshot.GridBearingDeg,
+            RowSpacingM: processingSnapshot.RowSpacingM,
+            PlantSpacingM: processingSnapshot.PlantSpacingM,
+            Candidates: candidates,
+            ModelVersion: processingJob.ModelVersion.Version,
+            AlgorithmVersion: processingSnapshot.AlgorithmVersion,
+            BoundaryPolicyVersion: null,
+            CausationId: correlationId);
 
         var validationErrors = V3BusinessContractValidators.Validate(enrichedPayload);
         if (validationErrors.Count != 0)
@@ -152,20 +253,52 @@ internal sealed class MissionPlantGpsPublisher(
         }
 
         var envelope = IntegrationEventEnvelopeFactory.Create(
-            IntegrationEventDescriptors.BaselineMappingCandidatesReadyV3,
+            IntegrationEventDescriptors.MappingCandidatesReadyV4,
             idempotencyKey,
             correlationId,
             tenantId,
             actorId,
-            occurredAt,
+            timeProvider.GetUtcNow(),
             enrichedPayload);
+
         db.OutboxMessages.Add(outboxMessageFactory.Create(
             envelope,
-            IntegrationEventTypes.BaselineMappingCandidatesReadyV3,
+            IntegrationEventTypes.MappingCandidatesReadyV4,
             missionId.ToString("D")));
         await db.SaveChangesAsync(cancellationToken);
 
         return new MissionPlantGpsPublishResult(
             MissionPlantGpsPublishStatus.Queued, idempotencyKey);
     }
+
+    private static Guid CreateVersion5(Guid namespaceId, string name)
+    {
+        var namespaceBytes = namespaceId.ToByteArray();
+        SwapGuidByteOrder(namespaceBytes);
+        var nameBytes = Encoding.UTF8.GetBytes(name);
+        var input = new byte[namespaceBytes.Length + nameBytes.Length];
+        Buffer.BlockCopy(namespaceBytes, 0, input, 0, namespaceBytes.Length);
+        Buffer.BlockCopy(nameBytes, 0, input, namespaceBytes.Length, nameBytes.Length);
+
+#pragma warning disable CA5350 // RFC 4122 UUID v5 requires SHA-1; this is identity derivation, not security.
+        var hash = SHA1.HashData(input);
+#pragma warning restore CA5350
+        var guidBytes = hash[..16];
+        guidBytes[6] = (byte)((guidBytes[6] & 0x0F) | 0x50);
+        guidBytes[8] = (byte)((guidBytes[8] & 0x3F) | 0x80);
+        SwapGuidByteOrder(guidBytes);
+        return new Guid(guidBytes);
+    }
+
+    private static bool IsSha256(string? value) =>
+        value is { Length: 64 } && value.All(Uri.IsHexDigit);
+
+    private static void SwapGuidByteOrder(byte[] bytes)
+    {
+        (bytes[0], bytes[3]) = (bytes[3], bytes[0]);
+        (bytes[1], bytes[2]) = (bytes[2], bytes[1]);
+        (bytes[4], bytes[5]) = (bytes[5], bytes[4]);
+        (bytes[6], bytes[7]) = (bytes[7], bytes[6]);
+    }
+
 }

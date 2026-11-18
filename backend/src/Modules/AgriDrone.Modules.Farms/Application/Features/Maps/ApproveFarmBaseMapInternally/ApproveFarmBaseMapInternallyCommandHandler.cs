@@ -5,21 +5,21 @@ using AgriDrone.SharedKernel.Application.Abstractions.Authorization;
 using AgriDrone.SharedKernel.Application.Abstractions.Execution;
 using MediatR;
 
-namespace AgriDrone.Modules.Farms.Application.Features.Maps.PublishFarmBaseMap;
+namespace AgriDrone.Modules.Farms.Application.Features.Maps.ApproveFarmBaseMapInternally;
 
-internal sealed class PublishFarmBaseMapCommandHandler(
-    IFarmBaseMapPublicationOrchestrator orchestrator,
+internal sealed class ApproveFarmBaseMapInternallyCommandHandler(
+    IFarmBaseMapInternalApprovalOrchestrator orchestrator,
     ISystemManagerAccessService managerAccessService,
     IExecutionContext executionContext)
-    : IRequestHandler<PublishFarmBaseMapCommand, Result<FarmBaseMapPublishedResult>>
+    : IRequestHandler<ApproveFarmBaseMapInternallyCommand, Result<FarmBaseMapInternallyApprovedResult>>
 {
-    public async Task<Result<FarmBaseMapPublishedResult>> Handle(
-        PublishFarmBaseMapCommand command,
+    public async Task<Result<FarmBaseMapInternallyApprovedResult>> Handle(
+        ApproveFarmBaseMapInternallyCommand command,
         CancellationToken cancellationToken)
     {
         if (executionContext.ActorId is not Guid actorId)
         {
-            return Result.Failure<FarmBaseMapPublishedResult>(
+            return Result.Failure<FarmBaseMapInternallyApprovedResult>(
                 AuthenticationError.CurrentUserRequired());
         }
 
@@ -29,10 +29,10 @@ internal sealed class PublishFarmBaseMapCommandHandler(
 
         if (!access.IsAllowed)
         {
-            return Result.Failure<FarmBaseMapPublishedResult>(FarmError.NotFound());
+            return Result.Failure<FarmBaseMapInternallyApprovedResult>(FarmError.NotFound());
         }
 
-        return await orchestrator.PublishAsync(
+        return await orchestrator.ApproveInternalAsync(
             command.FarmId,
             command.DraftId,
             actorId,

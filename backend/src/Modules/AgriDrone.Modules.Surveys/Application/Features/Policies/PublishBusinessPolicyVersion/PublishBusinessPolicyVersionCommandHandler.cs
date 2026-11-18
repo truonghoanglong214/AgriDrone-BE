@@ -31,6 +31,33 @@ internal sealed class PublishBusinessPolicyVersionCommandHandler(
                 BusinessPolicyError.CurrentUserRequired());
         }
 
+        try
+        {
+            return await unitOfWork.ExecuteInTransactionAsync(
+                async ct =>
+                {
+                    await unitOfWork.AcquireBusinessPolicyWriteLockAsync(ct);
+                    return await PublishLockedAsync(request, actorId, ct);
+                },
+                cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Result.Failure<PublishBusinessPolicyVersionResponse>(
+                BusinessPolicyError.ConcurrentUpdate());
+        }
+        catch (DbUpdateException ex)
+        {
+            return Result.Failure<PublishBusinessPolicyVersionResponse>(
+                BusinessPolicyError.ConcurrentUpdate(ex.Message));
+        }
+    }
+
+    private async Task<Result<PublishBusinessPolicyVersionResponse>> PublishLockedAsync(
+        PublishBusinessPolicyVersionCommand request,
+        Guid actorId,
+        CancellationToken cancellationToken)
+    {
         var now = timeProvider.GetUtcNow();
 
         // 1. Verify dependencies exist and are effective
@@ -150,39 +177,20 @@ internal sealed class PublishBusinessPolicyVersionCommandHandler(
             newBundle.ReasonCode
         });
 
-        try
-        {
-            await unitOfWork.ExecuteInTransactionAsync(
-                async ct =>
-                {
-                    policyRepository.AddBundleVersion(newBundle);
+        policyRepository.AddBundleVersion(newBundle);
 
-                    auditWriter.AddSystemAdminAction(
-                        unitOfWork,
-                        actorId,
-                        executionContext.CorrelationId,
-                        "BusinessPolicyVersion",
-                        newBundle.Id,
-                        "PUBLISH_BUNDLE",
-                        oldData,
-                        newData,
-                        now);
+        auditWriter.AddSystemAdminAction(
+            unitOfWork,
+            actorId,
+            executionContext.CorrelationId,
+            "BusinessPolicyVersion",
+            newBundle.Id,
+            "PUBLISH_BUNDLE",
+            oldData,
+            newData,
+            now);
 
-                    await unitOfWork.SaveChangesAsync(ct);
-                    return true;
-                },
-                cancellationToken);
-        }
-        catch (DbUpdateConcurrencyException)
-        {
-            return Result.Failure<PublishBusinessPolicyVersionResponse>(
-                BusinessPolicyError.ConcurrentUpdate());
-        }
-        catch (DbUpdateException ex)
-        {
-            return Result.Failure<PublishBusinessPolicyVersionResponse>(
-                BusinessPolicyError.ConcurrentUpdate(ex.Message));
-        }
+        await unitOfWork.SaveChangesAsync(cancellationToken);
 
         return Result.Success(new PublishBusinessPolicyVersionResponse(
             newBundle.Id,

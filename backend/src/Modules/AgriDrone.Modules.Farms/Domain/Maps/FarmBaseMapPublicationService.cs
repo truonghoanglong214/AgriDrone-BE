@@ -2,8 +2,15 @@ namespace AgriDrone.Modules.Farms.Domain.Maps;
 
 public sealed class FarmBaseMapPublicationService : IFarmBaseMapPublicationService
 {
-    public FarmBaseMapVersion PrepareDraft(
+    public FarmBaseMapVersion CreateFirstBaseline(
         FarmBaseMapPublicationContext context,
         DateTimeOffset createdAt) =>
-        FarmBaseMapVersion.PrepareDraft(context, createdAt);
+        FarmBaseMapVersion.CreateFirstBaseline(context, createdAt);
+
+    public FarmBaseMapVersion CreateFollowUp(
+        FarmBaseMapPublicationContext context,
+        FarmBaseMapVersion predecessor,
+        FarmBaseMapVersion baseline,
+        DateTimeOffset createdAt) =>
+        FarmBaseMapVersion.CreateFollowUp(context, predecessor, baseline, createdAt);
 }

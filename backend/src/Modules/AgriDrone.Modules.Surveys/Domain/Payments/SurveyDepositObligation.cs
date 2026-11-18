@@ -103,4 +103,27 @@ public sealed class SurveyDepositObligation : Entity
         Status = SurveyDepositObligationStatus.Cancelled;
         CancelledAt = cancelledAt;
     }
+
+    public void ReverseAllocation(decimal amount, DateTimeOffset reversedAt)
+    {
+        DomainGuard.Utc(reversedAt, nameof(reversedAt));
+        if (Status == SurveyDepositObligationStatus.Cancelled)
+        {
+            throw new InvalidOperationException("Cannot reverse a cancelled deposit obligation.");
+        }
+        if (amount <= 0m || decimal.Floor(amount) != amount || amount > AllocatedAmount)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(amount),
+                amount,
+                "Reversal must be a positive whole VND value no greater than the allocated amount.");
+        }
+
+        AllocatedAmount -= amount;
+        if (!IsSatisfied)
+        {
+            Status = SurveyDepositObligationStatus.Pending;
+            SatisfiedAt = null;
+        }
+    }
 }
