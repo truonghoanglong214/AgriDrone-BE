@@ -1,6 +1,6 @@
 # V3-04 Canonical Remediation V2 — Kế hoạch khắc phục triệt để
 
-> **Trạng thái:** `REMEDIATION IN PROGRESS` — chưa được đánh dấu hoàn thành V3-04.  
+> **Trạng thái:** `COMPLETED 2026-11-18` — V3-04 đã đạt G0–G18 theo Nhánh A.
 > **Phạm vi:** Domain → Persistence → Application → Integration → API → Migrations → Documentation.  
 > **Không chạy test:** tuyệt đối không chạy `dotnet test`; chỉ được chạy build theo quy định dự án ở bước cuối.  
 > **Mục tiêu:** sửa tận gốc, xóa đường xử lý sai thay vì chồng thêm fallback hoặc pipeline thứ hai.
@@ -123,9 +123,10 @@ Missions consumer xác thực Mission/CaptureAttempt và hoàn tất technical m
 1. Kiểm tra bảng `__EFMigrationsHistory` trên local dev, shared dev, staging và mọi DB từng dùng nhánh này:
 
    ```sql
-   SELECT migration_id
-   FROM "__EFMigrationsHistory"
-   WHERE migration_id IN (
+   SELECT "MigrationId"
+   FROM system.__ef_migrations_history
+   WHERE "MigrationId" IN (
+       '20261116131222_V3_04MappingAndPlantIdentity',
        '20261116145210_V3_04MappingLineageAndEvidenceRemediation',
        '20261117050302_V3_04CanonicalRemediationFinal'
    );
@@ -633,11 +634,15 @@ Task này chỉ bắt đầu sau Task 1–11 để migration phản ánh model c
 Quy trình expand → backfill → validate → constrain:
 
 1. Thêm các cột mới nullable, không default giả.
-2. Backfill `capture_attempt_id` bằng exact join:
+2. Backfill `capture_attempt_id` bằng exact relational join. Schema hiện tại không persist `CaptureAttempt.MissionId`, vì vậy phải đi qua mission đã bind attempt:
 
    ```text
+   mission.id = batch.mission_id
+   mission.survey_order_id = batch.survey_order_id
+   mission.tenant_id = batch.tenant_id
+   mission.farm_id = batch.farm_id
+   mission.capture_attempt_id = attempt.id
    attempt.order_id = batch.survey_order_id
-   attempt.mission_id = batch.mission_id
    attempt.tenant_id = batch.tenant_id
    attempt.farm_id = batch.farm_id
    ```
@@ -765,6 +770,17 @@ Nếu có pricing, appointment, post-flight settlement hoặc phase khác: dừn
 | G18 | Không chạy test | Checklist ghi `TESTS NOT RUN — deferred V3-10` |
 
 ## 7. Definition of Done
+
+### Kết quả thực thi ngày 2026-11-18
+
+- Chủ dự án xác nhận local là database duy nhất; preflight local cho thấy không migration V3-04 nào đã apply, nên chọn Nhánh A.
+- Đã loại `20261116145210` và `20261117050302`; chain canonical mới là migration gốc `20261116131222` → E1 `20261118040000` → S1 `20261118042702`.
+- E1 dùng `suppressTransaction: true`, `Down` no-op. Generated SQL xác nhận enum chạy ngoài transaction và trước S1.
+- S1 dùng expand → exact backfill → validate → constrain; không có default provenance giả, có duplicate guards trước filtered unique indexes và pointer chỉ sinh từ baseline đã được chấp nhận.
+- G8 được sửa tận gốc bằng ba EF model-index name khác nhau; snapshot và generated SQL đều có đủ one-baseline, one-draft và one-published.
+- Static scope scan/generated SQL không có pricing, appointment hoặc post-flight settlement.
+- `SurveyPayments:Enabled = false` ở Development; build đạt 0 Warning, 0 Error.
+- `dotnet test` không chạy; toàn bộ test integration/acceptance tiếp tục để V3-10.
 
 V3-04 chỉ được ghi `Done (Remediated)` khi đồng thời:
 

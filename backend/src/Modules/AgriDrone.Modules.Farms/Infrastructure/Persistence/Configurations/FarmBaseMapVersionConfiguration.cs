@@ -56,9 +56,24 @@ public sealed class FarmBaseMapVersionConfiguration : IEntityTypeConfiguration<F
         builder.Property(map => map.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp with time zone").HasDefaultValueSql("NOW()").IsRequired();
         builder.Property(map => map.UpdatedAt).HasColumnName("updated_at").HasColumnType("timestamp with time zone").HasDefaultValueSql("NOW()").IsRequired();
         builder.HasIndex(map => new { map.TenantId, map.FarmId, map.VersionNumber }).HasDatabaseName("uq_farm_base_map_versions_tenant_farm_version").IsUnique();
-        builder.HasIndex(map => new { map.TenantId, map.FarmId }).HasDatabaseName("uq_farm_base_map_versions_one_baseline").HasFilter("is_baseline = TRUE").IsUnique();
-        builder.HasIndex(map => new { map.TenantId, map.FarmId }).HasDatabaseName("uq_farm_base_map_versions_one_draft").HasFilter("status = 'DRAFT'::system.farm_base_map_status").IsUnique();
-        builder.HasIndex(map => new { map.TenantId, map.FarmId }).HasDatabaseName("uq_farm_base_map_versions_one_published").HasFilter("status = 'PUBLISHED'::system.farm_base_map_status").IsUnique();
+        builder.HasIndex(
+                map => new { map.TenantId, map.FarmId },
+                "IX_FarmBaseMapVersion_OneBaseline")
+            .HasDatabaseName("uq_farm_base_map_versions_one_baseline")
+            .HasFilter("is_baseline = TRUE")
+            .IsUnique();
+        builder.HasIndex(
+                map => new { map.TenantId, map.FarmId },
+                "IX_FarmBaseMapVersion_OneDraft")
+            .HasDatabaseName("uq_farm_base_map_versions_one_draft")
+            .HasFilter("status = 'DRAFT'::system.farm_base_map_status")
+            .IsUnique();
+        builder.HasIndex(
+                map => new { map.TenantId, map.FarmId },
+                "IX_FarmBaseMapVersion_OnePublished")
+            .HasDatabaseName("uq_farm_base_map_versions_one_published")
+            .HasFilter("status = 'PUBLISHED'::system.farm_base_map_status")
+            .IsUnique();
         builder.HasIndex(map => map.SourceSurveyOrderId).HasDatabaseName("uq_farm_base_map_versions_source_order").IsUnique();
         builder.HasOne<Farm>().WithMany().HasForeignKey(map => new { map.FarmId, map.TenantId }).HasPrincipalKey(farm => new { farm.Id, farm.TenantId }).OnDelete(DeleteBehavior.Restrict).HasConstraintName("fk_farm_base_map_versions_farms_same_tenant");
         builder.HasOne<FarmBaseMapVersion>().WithMany().HasForeignKey(map => map.PredecessorVersionId).OnDelete(DeleteBehavior.Restrict).HasConstraintName("fk_farm_base_map_versions_predecessor");

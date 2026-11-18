@@ -2,7 +2,7 @@
 
 **Repository**: `D:\Project\ProjectMonHoc\DoAn\AgriDrone`  
 **Current Active Branch**: `LongTH`  
-**Last Updated**: 2026-11-17
+**Last Updated**: 2026-11-18
 **Tech Stack**: .NET 10, C# 14, Clean Architecture, Entity Framework Core, PostgreSQL 17 + PostGIS 3.5, NetTopologySuite, RabbitMQ 4.2.7, Redis 8.8.1, MinIO.
 
 ---
@@ -28,8 +28,8 @@ AgriDrone là hệ thống quản lý và điều phối dịch vụ khảo sát
 | **V3-01** | Policy model, contracts, scope separation | **[x] Done** | Tách MAP/COMBO, First/Follow-up |
 | **V3-02** | Catalogue, shared deposit, approval snapshots | **[x] Done** | Published price revisions, deposit policies |
 | **V3-03** | Capture execution, funding, re-flight, cancellation | **[x] Done (Code)** | Hoàn thành `03A` → `03H-2` (Commit `16210b3`), `03H-3` handoff |
-| **V3-04** | **Mapping, Plant Identity & Spatial Lineage** | **[~] Remediation In Progress** | **Code/build đã sạch 0W/0E; G0 migration-history và G14 migration-scope chưa có bằng chứng đóng; Tests deferred to V3-10** |
-| **V3-05** | **Combo review, invoice finalization, pole count** | **[ ] Planned** | Chỉ bắt đầu sau khi đóng đủ exit gates V3-04 |
+| **V3-04** | **Mapping, Plant Identity & Spatial Lineage** | **[x] Done (Remediated)** | **G0–G18 closed; E1/S1 migration chain sạch; build 0W/0E; tests deferred to V3-10** |
+| **V3-05** | **Combo review, invoice finalization, pole count** | **[ ] Planned — Next** | Có thể bắt đầu lập kế hoạch sau khi V3-04 đã đóng đủ exit gates |
 | **V3-06** | Settlement, atomic release, customer notice | **[ ] Planned** | Release proof, financial facts |
 | **V3-07** | Owner portal, media viewer, comparison | **[ ] Planned** | Historical comparison UI |
 | **V3-08** | Claims, refund execution, post-release correction | **[ ] Planned** | Transfer proofs, complaint window |
@@ -56,14 +56,17 @@ AgriDrone là hệ thống quản lý và điều phối dịch vụ khảo sát
 
 ---
 
-## 4. Tiến độ Phase V3-04 (Canonical Remediation V2 — In Progress)
-> **Trạng thái**: Phần code nghiệp vụ đã được khắc phục và build sạch, nhưng chưa được phép ghi Done vì chưa có bằng chứng `__EFMigrationsHistory` để chọn nhánh migration và migration hiện tại còn lẫn thay đổi ngoài V3-04.
+## 4. Tiến độ Phase V3-04 (Canonical Remediation V2 — Done 2026-11-18)
+> **Trạng thái**: Hoàn thành G0–G18. Chủ dự án xác nhận local là database duy nhất; lịch sử migration và backlog local đã đủ để chốt Nhánh A. Migration canonical mới không lẫn phase khác.
 > **Nguyên tắc**: Tests NOT RUN (dành tập trung cho V3-10); `dotnet build backend/AgriDrone.sln --no-restore --nologo` đạt 0 Warning, 0 Error.
 
 Các hạng mục đã hoàn thành toàn diện:
-1. **Migration Gate M0 — Chưa đóng**:
-   - Chưa có kết quả `__EFMigrationsHistory` từ các database liên quan, vì vậy chưa được tự chọn Nhánh A hoặc Nhánh B.
-   - Migration `20261117050302` vẫn chứa pricing/appointment/post-flight ngoài scope V3-04; phải tách theo đúng phase sau khi có quyết định M0.
+1. **Migration Gate M0 — Đã đóng theo Nhánh A**:
+   - Chủ dự án xác nhận không có database nào khác ngoài local. Local preflight lúc 11:05 ngày 2026-11-18 (Asia/Bangkok) cho thấy các migration V3-04 cũ chưa từng apply; migration mới nhất local là `20261109071540_Step7EPlantHealthCompletionOutput`.
+   - Local V3 backlog: outbox chưa xử lý = 0, inbox chưa hoàn tất = 0; RabbitMQ main/retry/dead queues của `be1-baseline-mapping-candidates-ready-v3` đều 0.
+   - Đã loại hai remediation migration cũ `20261116145210` và `20261117050302`. Chain canonical: `20261116131222_V3_04MappingAndPlantIdentity` → `20261118040000_V3_04AddInternalApprovedMapStatus` → `20261118042702_V3_04CanonicalMappingRemediation`.
+   - E1 thêm enum ngoài transaction và có `Down` no-op. S1 chỉ chứa scope V3-04, backfill provenance theo expand → exact join → validate → constrain; không có pricing/appointment/post-flight.
+   - Generated SQL đã được inspect nhưng không apply database; script preflight read-only giữ tại `docs/operations/v3-04-remediation-preflight.sql`.
 2. **Provenance & Metadata Thật**:
    - `MissionPlantGpsPublisher` đọc metadata từ `AiProcessingJob` hoàn thành, sinh deterministic candidate UUIDs v5 từ `jobId + treeId`, loại bỏ mọi GUID / timestamp ngẫu nhiên (`Guid.NewGuid()`, `UtcNow`).
 3. **CaptureAttemptId Xuyên suốt**:
@@ -77,11 +80,16 @@ Các hạng mục đã hoàn thành toàn diện:
 7. **Khóa DB Invariants & Restrict FKs**:
    - Check constraint `ck_farm_base_map_versions_lineage`, `ck_survey_order_pole_count_snapshot_items_acceptance`.
    - Unique filtered index `(tenant_id, farm_id)` cho baseline (`is_baseline=true`) và draft (`status='DRAFT'`).
-   - Unique filtered index `uq_plants_farm_profile` trên `(farm_id, plant_profile_id)`.
+   - Unique filtered index `uq_plants_farm_plant_profile` trên `(farm_id, plant_profile_id)`.
    - Restrict toàn bộ FK snapshot evidence (`MappingCandidateBatch`, `PlantProfile`, `MappingCandidate`).
 8. **Bảo toàn Semantics Nội bộ (Zero Published Trong V3-04)**:
    - `FarmBaseMapInternalApprovalOrchestrator` chỉ phê duyệt nội bộ (`InternalApproved`), không gán các trường mang nghĩa Published.
    - `DroneMission` ghi nhận `InternallyApprovedMapVersionId` và `MapInternallyApprovedAt` với outcome-based method (`DroneMissionApprovalOutcome`), không chạm `PublishedMapVersionId`/`MapPublishedAt`.
+9. **Verification cuối**:
+   - Sửa ba filtered index baseline/draft/published thành ba EF model-index name riêng, tránh EF ghi đè metadata khi cùng dùng `(TenantId, FarmId)`.
+   - `SurveyPayments:Enabled` ở Development đã trả về `false`, giữ fail-closed đến V3-10.
+   - Static scans đạt; `dotnet build backend/AgriDrone.sln --no-restore --nologo` đạt 0 Warning, 0 Error.
+   - **TESTS NOT RUN — deferred to V3-10**.
 
 ---
 
