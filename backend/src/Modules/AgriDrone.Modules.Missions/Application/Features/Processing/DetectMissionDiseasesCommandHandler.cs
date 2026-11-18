@@ -5,6 +5,7 @@ using System.Text;
 using System.Globalization;
 using AgriDrone.IntegrationContracts.Health;
 using AgriDrone.Modules.Missions.Domain.Processing;
+using AgriDrone.Modules.Missions.Application.Abstractions.Media;
 using AgriDrone.Modules.Missions.Application.Abstractions.Missions;
 using AgriDrone.Modules.Missions.Application.Abstractions.Processing;
 using AgriDrone.Modules.Missions.Domain.Media;
@@ -25,6 +26,7 @@ internal sealed class DetectMissionDiseasesCommandHandler(
     IDroneMissionRepository missionRepository,
     MissionsDbContext dbContext,
     IMetashapeService metashapeService,
+    IObjectStorage objectStorage,
     ISystemManagerAccessService managerAccessService,
     IExecutionContext executionContext,
     TimeProvider timeProvider,
@@ -167,6 +169,10 @@ internal sealed class DetectMissionDiseasesCommandHandler(
             var provenance = new PlantHealthProvenanceV4(RequiredMetadata("datasetId"), RequiredMetadata("datasetVersion"),
                 RequiredMetadata("annotationRuleVersion"), model.Id, model.Version,
                 "confidence:" + request.ConfidenceThreshold.ToString("R", CultureInfo.InvariantCulture), RequiredMetadata("boundaryPolicyVersion"));
+            // 1. Ảnh gốc: nối theo khóa MinIO detector trả về (tên img_XXXX chỉ là tên nội bộ); service cũ không trả khóa thì thử theo tên file.
+            var sources = new DetectionSourceIndex(mediaList);
+            // Ảnh khoanh vùng / ảnh cắt: kiểm tra object có thật trên MinIO TRƯỚC khi mở transaction (gọi mạng, không giữ khóa mission).
+            var derivedObjects = await InspectDerivedImagesAsync(request, result, sources, cancellationToken);
             await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
             _ = await dbContext.DroneMissions.FromSqlInterpolated($"SELECT *, xmin FROM mission.drone_missions WHERE id = {request.MissionId} FOR UPDATE")
                 .SingleAsync(cancellationToken);
@@ -177,11 +183,19 @@ internal sealed class DetectMissionDiseasesCommandHandler(
                 JsonSerializer.SerializeToDocument(new { request.ConfidenceThreshold, captureMap, MediaIds = mediaList.Select(m => m.MediaId).ToArray() }),
                 JsonSerializer.SerializeToDocument(result), startedAt, timeProvider.GetUtcNow());
             dbContext.AiProcessingJobs.Add(job);
-            // 1. Tạo bản đồ tra cứu ảnh gốc để lấy evidence_media_id
-            var mediaMap = mediaList
-                .Where(mm => !string.IsNullOrEmpty(mm.Media?.StorageKey))
-                .GroupBy(mm => Path.GetFileName(mm.Media.StorageKey), StringComparer.OrdinalIgnoreCase)
-                .ToDictionary(g => g.Key, g => g.First().MediaId, StringComparer.OrdinalIgnoreCase);
+            // Đăng ký ảnh khoanh vùng / ảnh cắt thành media của Mission (vai trò Other: không lẫn với ảnh xem trước bản đồ ProcessedImage).
+            // Một ảnh khoanh vùng dùng chung cho mọi detection trên cùng ảnh gốc ⇒ chỉ đăng ký 1 lần.
+            var registeredAt = timeProvider.GetUtcNow();
+            var derivedMediaIds = new Dictionary<string, Guid>(StringComparer.Ordinal);
+            foreach (var (key, info) in derivedObjects)
+            {
+                var asset = MediaAsset.Create(Guid.NewGuid(), request.TenantId, request.FarmId, info.Source.Media.Provider, key, info.StorageUri,
+                    MediaType.Image, "image/jpeg", info.SizeBytes, info.Sha256, executionContext.ActorId!.Value, registeredAt);
+                dbContext.MediaAssets.Add(asset);
+                dbContext.MissionMedia.Add(MissionMedia.Create(request.MissionId, asset.Id, MissionMediaRole.Other, registeredAt, info.Source.CapturedAt));
+                derivedMediaIds[key] = asset.Id;
+            }
+            Guid? DerivedId(string? key) => key is not null && derivedMediaIds.TryGetValue(key, out var id) ? id : null;
 
             // 2. Lấy danh sách cây hiện có của Farm trong plant.plants để so khớp
             var farmPlants = await dbContext.Database.SqlQueryRaw<PlantMatchTarget>(
@@ -236,19 +250,18 @@ internal sealed class DetectMissionDiseasesCommandHandler(
                     matchConf = (decimal)Math.Round(Math.Max(0.1, 1.0 - (minDistance / matchingToleranceM)), 4);
                 }
 
-                // Tra cứu ảnh media gốc
-                Guid? evidenceMediaId = null;
-                if (!string.IsNullOrEmpty(detection.ImageName) && mediaMap.TryGetValue(detection.ImageName, out var foundMediaId))
-                {
-                    evidenceMediaId = foundMediaId;
-                }
+                // Tra cứu ảnh media gốc (theo khóa MinIO; service cũ thì theo tên file)
+                var source = sources.Find(detection);
+                Guid? evidenceMediaId = source?.MediaId;
+                var annotatedMediaId = DerivedId(detection.AnnotatedStorageKey);
+                var cropMediaId = DerivedId(detection.CropStorageKey);
 
                 // Tạo metadata JSON cho vết bệnh
                 var metadataDoc = JsonDocument.Parse(JsonSerializer.Serialize(new
                 {
                     source_finding_id = new Guid(SHA256.HashData(Encoding.UTF8.GetBytes(
                         $"{request.MissionId:D}/{detection.ImageName}/{detection.Id}" )).AsSpan(0, 16)),
-                    observed_at = mediaList.FirstOrDefault(m => Path.GetFileName(m.Media.StorageKey) == detection.ImageName)?.CapturedAt ?? missionObservedAt
+                    observed_at = source?.CapturedAt ?? missionObservedAt
                         ?? throw new InvalidOperationException("Capture time or Mission flight time is required for observed-time provenance."),
                     suggested_plant_id = matchedPlantId,
                     detection_id = detection.Id,
@@ -257,6 +270,10 @@ internal sealed class DetectMissionDiseasesCommandHandler(
                     image_name = detection.ImageName,
                     crop_image_url = detection.CropImageUrl,
                     annotated_image_url = detection.AnnotatedImageUrl,
+                    // Media đã đăng ký (link xem cấp mới mỗi lần qua .../media/{id}/download-url, không hết hạn như link ký sẵn).
+                    source_storage_key = source?.Media.StorageKey,
+                    annotated_media_id = annotatedMediaId,
+                    crop_media_id = cropMediaId,
                     bbox = new[] { detection.BboxX, detection.BboxY, detection.BboxW, detection.BboxH },
                     plant_code = nearestPlant?.PlantCode,
                     row = nearestPlant?.RowIndex,
@@ -299,6 +316,56 @@ internal sealed class DetectMissionDiseasesCommandHandler(
                 request.MissionId, ex.Message);
             throw;
         }
+    }
+
+    // Ảnh gốc của detection: ưu tiên khóa MinIO đầy đủ (chính xác), sau đó mới tới tên file (service cũ chưa trả khóa).
+    internal sealed class DetectionSourceIndex(IEnumerable<MissionMedia> media)
+    {
+        private readonly Dictionary<string, MissionMedia> _byKey = media.Where(m => !string.IsNullOrEmpty(m.Media?.StorageKey))
+            .GroupBy(m => m.Media.StorageKey, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
+        private readonly Dictionary<string, MissionMedia> _byName = media.Where(m => !string.IsNullOrEmpty(m.Media?.StorageKey))
+            .GroupBy(m => Path.GetFileName(m.Media.StorageKey), StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+
+        public MissionMedia? Find(DiseaseDetectionItem detection) =>
+            detection.SourceStorageKey is { } key ? _byKey.GetValueOrDefault(key)
+            : string.IsNullOrEmpty(detection.ImageName) ? null : _byName.GetValueOrDefault(detection.ImageName);
+    }
+
+    internal sealed record DerivedImage(MissionMedia Source, string StorageUri, long SizeBytes, string Sha256);
+
+    // Chỉ nhận ảnh nằm trong thư mục disease của đúng Tenant/Mission, có SHA-256 hợp lệ và ảnh gốc đã đăng ký.
+    internal static string? DerivedStorageUri(string key, string? sha256, MissionMedia? source, Guid tenantId, Guid missionId)
+    {
+        var prefix = $"tenants/{tenantId:D}/media/{missionId:D}/disease/";
+        if (source is null || !key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) || key.Contains("..", StringComparison.Ordinal) ||
+            sha256 is not { Length: 64 } || !sha256.All(char.IsAsciiHexDigit) ||
+            !source.Media.Url.EndsWith(source.Media.StorageKey, StringComparison.Ordinal))
+            return null;
+        // Cùng bucket với ảnh gốc: thay phần khóa trong storage URI (minio://bucket/<khóa>).
+        return source.Media.Url[..^source.Media.StorageKey.Length] + key;
+    }
+
+    private async Task<Dictionary<string, DerivedImage>> InspectDerivedImagesAsync(
+        DetectMissionDiseasesCommand request, DetectMissionDiseasesResult result, DetectionSourceIndex sources, CancellationToken cancellationToken)
+    {
+        var found = new Dictionary<string, DerivedImage>(StringComparer.Ordinal);
+        var candidates = result.Detections
+            .SelectMany(d => new[] { (Key: d.AnnotatedStorageKey, Sha: d.AnnotatedSha256, Detection: d), (Key: d.CropStorageKey, Sha: d.CropSha256, Detection: d) })
+            .Where(c => c.Key is not null).GroupBy(c => c.Key!, StringComparer.Ordinal).Select(g => g.First());
+        foreach (var (key, sha, detection) in candidates)
+        {
+            var source = sources.Find(detection);
+            var uri = DerivedStorageUri(key!, sha, source, request.TenantId, request.MissionId);
+            var info = uri is null ? null : await objectStorage.GetInfoAsync(uri, cancellationToken);
+            if (uri is null || info is not { FileSizeBytes: > 0 })
+            {
+                // Không chặn cả lần nhận diện: phát hiện vẫn lưu, chỉ thiếu ảnh khoanh vùng/ảnh cắt.
+                logger.LogWarning("Skipping disease evidence image {StorageKey} for Mission {MissionId}: invalid reference or object not found.", key, request.MissionId);
+                continue;
+            }
+            found[key!] = new DerivedImage(source!, uri, info.FileSizeBytes, sha!.ToLowerInvariant());
+        }
+        return found;
     }
 
     internal static decimal? GetGpsDistanceMeters(double? distance, string imageName)

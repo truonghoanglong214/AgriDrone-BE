@@ -46,7 +46,7 @@ public sealed class SurveyAppointmentWindowTests
     }
 
     [Fact]
-    public void TryResolveForDateWithTodayShouldStartAtRequestTime()
+    public void TryResolveForDateWithTodayShouldStartFiveMinutesAfterRequestTime()
     {
         // Arrange: Now is 2026-11-03 11:30:00 VN time (04:30:00 UTC)
         var nowUtc = new DateTimeOffset(2026, 11, 3, 4, 30, 0, TimeSpan.Zero);
@@ -64,7 +64,7 @@ public sealed class SurveyAppointmentWindowTests
         Assert.True(success);
         Assert.Null(errorMessage);
 
-        Assert.Equal(nowUtc, startUtc);
+        Assert.Equal(nowUtc.AddMinutes(5), startUtc);
         Assert.True(endUtc > startUtc);
         Assert.Equal(new DateTimeOffset(2026, 11, 3, 17, 0, 0, TimeSpan.Zero),
             endUtc);

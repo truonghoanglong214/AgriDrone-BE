@@ -208,6 +208,13 @@ class DiseaseDetectionItem(BaseModel):
     image_name: str
     crop_image_url: Optional[str] = None
     annotated_image_url: Optional[str] = None
+    # Khóa MinIO thật để .NET nối detection với media đã đăng ký (image_name chỉ là tên nội bộ img_XXXX).
+    source_storage_key: Optional[str] = None
+    annotated_storage_key: Optional[str] = None
+    crop_storage_key: Optional[str] = None
+    # SHA-256 (hex) của file đã upload — .NET cần checksum để đăng ký media.
+    annotated_sha256: Optional[str] = None
+    crop_sha256: Optional[str] = None
 
 
 class DiseaseDetectMissionRequest(BaseModel):

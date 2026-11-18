@@ -16,7 +16,13 @@ public sealed record DiseaseDetectionItem(
     double BboxH,
     string ImageName,
     string? CropImageUrl,
-    string? AnnotatedImageUrl = null);
+    string? AnnotatedImageUrl = null,
+    // Khóa MinIO thật do detector trả về; ImageName chỉ là tên nội bộ img_XXXX nên không dùng để nối media.
+    string? SourceStorageKey = null,
+    string? AnnotatedStorageKey = null,
+    string? CropStorageKey = null,
+    string? AnnotatedSha256 = null,
+    string? CropSha256 = null);
 
 /// <summary>
 /// Result of running disease detection across mission photos.

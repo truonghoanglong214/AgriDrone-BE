@@ -58,8 +58,7 @@ internal sealed class MissionPlantHealthPublisher(
                 """).SingleOrDefaultAsync(cancellationToken);
             if (boundary is null) return Conflict("The capture boundary is unavailable.");
             var classCode = ClassCode(className);
-            IReadOnlyList<EvidenceMediaReferenceV4> media = observation.EvidenceMediaId is Guid mediaId
-                ? [new(mediaId, "source_image")] : [];
+            IReadOnlyList<EvidenceMediaReferenceV4> media = EvidenceMedia(observation.EvidenceMediaId, metadata);
             var uncertain = observation.ResolvedPlantId is null || classCode is null || !boundary.Covered || boundary.Distance <= (double)PlantHealthV4Values.BoundaryReviewThresholdMeters;
             findings.Add(new(findingId, snapshot.SourceVersion, observation.ResolvedPlantId, null,
                 point, observedAt.ToUniversalTime(), classCode ?? className, PlantHealthV4Values.ClassificationNature,
@@ -81,6 +80,18 @@ internal sealed class MissionPlantHealthPublisher(
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return new(MissionPlantHealthPublishStatus.Queued, idempotencyKey);
+    }
+
+    // Ảnh gốc + ảnh khoanh vùng + ảnh cắt (media đã đăng ký lúc nhận diện). Dữ liệu cũ chỉ có ảnh gốc.
+    internal static IReadOnlyList<EvidenceMediaReferenceV4> EvidenceMedia(Guid? sourceMediaId, JsonElement metadata)
+    {
+        List<EvidenceMediaReferenceV4> media = [];
+        if (sourceMediaId is Guid source) media.Add(new(source, "source_image"));
+        foreach (var (field, role) in new[] { ("annotated_media_id", "annotated_image"), ("crop_media_id", "crop_image") })
+            if (metadata.ValueKind == JsonValueKind.Object && metadata.TryGetProperty(field, out var value) &&
+                value.ValueKind == JsonValueKind.String && value.TryGetGuid(out var id) && id != Guid.Empty && media.All(m => m.MediaAssetId != id))
+                media.Add(new(id, role));
+        return media;
     }
 
     private static MissionPlantHealthPublishResult Conflict(string error) => new(MissionPlantHealthPublishStatus.Conflict, Errors: [error]);
