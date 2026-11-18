@@ -16,4 +16,6 @@ public sealed record MissionListItemResponse(
     DateTimeOffset? StartedAt,
     DateTimeOffset? EndedAt,
     uint Version,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    DateTimeOffset? PreflightConfirmedAt = null,
+    bool? PreflightSuitableForFlight = null);

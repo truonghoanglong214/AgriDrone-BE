@@ -41,7 +41,8 @@ internal sealed class MissionQueries(
                 mission.Id, mission.FarmId, mission.ZoneId, mission.DroneId,
                 mission.MissionCode, mission.MissionType, mission.Status, mission.ProcessingStatus,
                 mission.ScheduledAt, mission.ScheduledEndAt, mission.StartedAt, mission.EndedAt,
-                mission.Version, mission.CreatedAt))
+                mission.Version, mission.CreatedAt,
+                mission.PreflightConfirmedAt, mission.PreflightSuitableForFlight))
             .ToPagedResultAsync(new PagedRequest(request.PageNumber, request.PageSize), cancellationToken);
     }
 

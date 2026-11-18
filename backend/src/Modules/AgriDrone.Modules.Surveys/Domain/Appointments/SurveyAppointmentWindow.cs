@@ -37,7 +37,21 @@ public static class SurveyAppointmentWindow
             return false;
         }
 
-        startUtc = proposedStart <= nowUtc ? nowUtc : proposedStart;
+        if (proposedStart <= nowUtc)
+        {
+            // Today: start a few minutes ahead so later "start must be in the future" checks
+            // (e.g. Manager-scheduled Plant Health flights) still pass after request processing.
+            var adjustedStart = nowUtc.AddMinutes(5);
+            if (adjustedStart >= proposedEnd)
+            {
+                errorMessage = "The scheduled date window has expired.";
+                return false;
+            }
+
+            proposedStart = adjustedStart;
+        }
+
+        startUtc = proposedStart;
         endUtc = proposedEnd;
         return true;
     }
