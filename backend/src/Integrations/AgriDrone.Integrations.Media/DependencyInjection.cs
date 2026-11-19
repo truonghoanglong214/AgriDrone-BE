@@ -25,6 +25,8 @@ public static class DependencyInjection
             IValidateOptions<MinioStorageOptions>,
             MinioStorageOptionsValidator>();
 
+        services.AddSingleton<AgriDrone.SharedKernel.Application.Abstractions.IRefundEvidenceStorage, RefundEvidenceStorage>();
+
         services.TryAddSingleton<TimeProvider>(
             TimeProvider.System);
 

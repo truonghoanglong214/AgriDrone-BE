@@ -196,9 +196,12 @@ public sealed class QualityRefundCase : Entity
         Guid adminId,
         string bankTransferReference,
         DateTimeOffset recordedAt,
-        uint expectedVersion)
+        uint expectedVersion,
+        string? transferEvidenceReference = null)
     {
         EnsureVersion(expectedVersion);
+        ArgumentException.ThrowIfNullOrWhiteSpace(transferEvidenceReference);
+        if (transferEvidenceReference.Length > 1000) throw new ArgumentException("Evidence reference is too long.");
         DomainGuard.NotEmpty(adminId);
         DomainGuard.Utc(recordedAt);
         ArgumentException.ThrowIfNullOrWhiteSpace(bankTransferReference);
@@ -211,6 +214,7 @@ public sealed class QualityRefundCase : Entity
 
         Status = QualityRefundStatus.Refunded;
         BankTransferReference = bankTransferReference.Trim();
+        TransferEvidenceReference = transferEvidenceReference;
         TransferredAt = recordedAt;
         RecordedBy = adminId;
         RecordedAt = recordedAt;

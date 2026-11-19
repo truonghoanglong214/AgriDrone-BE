@@ -49,6 +49,17 @@ Nếu FE cần ảnh nền và trạng thái sức khỏe để hiển thị b�
 
 ## 3. Owner gửi một báo cáo cho nhiều cây
 
+Trước khi mở form, FE gọi:
+
+```http
+GET /api/tenant-owner/survey-orders/{orderId}/quality-refunds/claim-window
+```
+
+Response gồm `serverTime`, `noticeCreatedAt`, `deadlineExclusive`, `canReport`, `reason`. Luồng Plant Health hiện tại lấy thông báo `PLANT_HEALTH_PUBLISHED` đã lưu, gắn với publication có đúng tenant/farm/result/approved batch/fingerprint; lấy mốc sớm nhất để không gia hạn do thông báo trùng. Thiếu thông báo thì không suy ra từ ngày bay, ngày review, thời điểm hiện tại hoặc lần Owner đọc thông báo.
+
+Thời hạn là 7 ngày lịch UTC+7, không tính ngày thông báo. Ví dụ thông báo lúc 14:00 ngày 10/11 thì nhận đến hết 17/11; `deadlineExclusive` là 00:00 ngày 18/11 UTC+7 (17:00Z ngày 17/11). Backend kiểm tra thời điểm nhận khi POST, frontend hiển thị hạn và chỉ mở form khi `canReport=true`. Hồ sơ đã nhận đúng hạn vẫn được Manager/Admin xử lý sau hạn; bị từ chối rồi gửi lại không tạo hạn mới. Đây là kiểm tra trên thông báo đã lưu của luồng hiện tại, không thay thế transaction release/notice canonical của V3-06.
+
+
 ```http
 POST /api/tenant-owner/survey-orders/{orderId}/quality-refunds
 Content-Type: application/json
@@ -148,7 +159,14 @@ Khi duyệt, BE tự tính `approvedAmount = grossPaid - refunded` từ các kho
 
 ## 6. Admin chuyển tiền và ghi nhận giao dịch
 
-Admin chuyển số tiền `approvedAmount` cho tài khoản nhận hoàn bằng ứng dụng ngân hàng. Sau khi ngân hàng xác nhận giao dịch thành công, Admin ghi mã giao dịch vào BE:
+Admin chuyển số tiền `approvedAmount` cho tài khoản nhận hoàn bằng ứng dụng ngân hàng. Sau khi ngân hàng xác nhận giao dịch thành công, Admin upload ảnh biên lai PNG/JPEG tối đa 5 MB:
+
+```http
+POST /api/system-admin/survey-orders/{orderId}/quality-refunds/{caseId}/transfer-evidence
+Content-Type: multipart/form-data
+```
+
+Gửi file ở field `file`. Backend kiểm tra chữ ký PNG/JPEG, lưu ảnh qua hạ tầng MinIO và trả `{ "transferEvidenceReference": "minio://..." }`. Chỉ hồ sơ `APPROVED` được upload; upload không đổi trạng thái hoàn tiền. Sau đó Admin gửi mã giao dịch và tham chiếu ảnh vừa nhận:
 
 ```http
 POST /api/system-admin/survey-orders/{orderId}/quality-refunds/{caseId}/record-transfer
@@ -158,11 +176,21 @@ Content-Type: application/json
 ```json
 {
   "bankTransferReference": "1029TC3478192301",
+  "transferEvidenceReference": "minio://your-bucket/refund-evidence/tenant-id/case-id/generated-file.png",
   "expectedVersion": 3
 }
 ```
 
-Lấy `expectedVersion` từ response duyệt hoặc GET Admin mới nhất. Không gửi `approvedAmount`, `evidenceReference` hay `transferredAt` trong request này. BE tự lưu thời điểm xác nhận làm `transferredAt` và đổi hồ sơ thành `REFUNDED`.
+Tham chiếu ảnh trong ví dụ chỉ minh họa; phải dùng nguyên giá trị từ API upload. Backend kiểm tra ảnh tồn tại và đúng tenant/hồ sơ trước khi xác nhận. Lấy `expectedVersion` từ response duyệt hoặc GET Admin mới nhất. Không gửi `approvedAmount`, `evidenceReference` hay `transferredAt` trong request này. BE tự lưu thời điểm xác nhận làm `transferredAt` và đổi hồ sơ thành `REFUNDED`.
+
+### Owner và Admin xem biên lai
+
+```http
+GET /api/tenant-owner/survey-orders/{orderId}/quality-refunds/{caseId}/transfer-evidence
+GET /api/system-admin/survey-orders/{orderId}/quality-refunds/{caseId}/transfer-evidence
+```
+
+Chỉ hồ sơ `REFUNDED` có bằng chứng mới cấp URL. Owner phải thuộc đúng tenant của đơn. Response `{ "url": "https://..." }` chứa URL MinIO tạm thời, thời hạn theo `ObjectStorage:PresignedUrlExpiryMinutes`; response không được cache. FE hiển thị ảnh trong hộp xem trước và gọi lại endpoint khi cần URL mới. DB giữ storage reference, không lưu URL tạm. Hồ sơ cũ chưa có biên lai không hiện nút xem.
 
 ## 7. Kiểm tra hoàn tất và doanh thu thực thu
 

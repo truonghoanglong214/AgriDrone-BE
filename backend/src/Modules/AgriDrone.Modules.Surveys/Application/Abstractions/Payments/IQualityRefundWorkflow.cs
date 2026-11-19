@@ -16,6 +16,8 @@ public interface IQualityRefundWorkflow
         string recipientAccountName,
         CancellationToken cancellationToken);
 
+    Task<Result<QualityRefundClaimWindowView>> GetOwnerClaimWindowAsync(Guid orderId, CancellationToken cancellationToken);
+
     Task<Result<IReadOnlyList<QualityRefundCaseView>>> GetOwnerCasesAsync(
         Guid orderId,
         CancellationToken cancellationToken);
@@ -50,10 +52,14 @@ public interface IQualityRefundWorkflow
         uint expectedVersion,
         CancellationToken cancellationToken);
 
+    Task<Result<string>> UploadTransferEvidenceAsync(Guid orderId, Guid caseId, Stream content, CancellationToken cancellationToken);
+    Task<Result<Uri>> GetTransferEvidenceAsync(Guid orderId, Guid caseId, bool owner, CancellationToken cancellationToken);
+
     Task<Result<QualityRefundCaseView>> RecordTransferAsync(
         Guid orderId,
         Guid caseId,
         string bankTransferReference,
+        string transferEvidenceReference,
         uint expectedVersion,
         CancellationToken cancellationToken);
 }
