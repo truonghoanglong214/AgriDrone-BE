@@ -9,19 +9,32 @@ namespace AgriDrone.Integrations.Media;
 internal sealed class MinioMultipartObjectStorage : IMultipartObjectStorage, IDisposable
 {
     private readonly AmazonS3Client _client;
+    private readonly AmazonS3Client _presignClient;
     private readonly MinioStorageOptions _options;
 
     public MinioMultipartObjectStorage(IOptions<MinioStorageOptions> options)
     {
         _options = options.Value;
+        var credentials = new BasicAWSCredentials(_options.AccessKey, _options.SecretKey);
         _client = new AmazonS3Client(
-            new BasicAWSCredentials(_options.AccessKey, _options.SecretKey),
+            credentials,
             new AmazonS3Config
             {
                 ServiceURL = _options.Endpoint,
                 ForcePathStyle = true,
                 AuthenticationRegion = _options.Region
             });
+
+        _presignClient = !string.IsNullOrWhiteSpace(_options.PublicEndpoint)
+            ? new AmazonS3Client(
+                credentials,
+                new AmazonS3Config
+                {
+                    ServiceURL = _options.PublicEndpoint,
+                    ForcePathStyle = true,
+                    AuthenticationRegion = _options.Region
+                })
+            : _client;
     }
 
     public async Task<string> InitiateAsync(string storageUri, string mimeType,
@@ -49,7 +62,11 @@ internal sealed class MinioMultipartObjectStorage : IMultipartObjectStorage, IDi
             lifetime > TimeSpan.FromDays(7))
             throw new ArgumentOutOfRangeException(nameof(lifetime));
 
-        var url = await _client.GetPreSignedURLAsync(
+        var presignEndpoint = !string.IsNullOrWhiteSpace(_options.PublicEndpoint)
+            ? _options.PublicEndpoint
+            : _options.Endpoint;
+
+        var url = await _presignClient.GetPreSignedURLAsync(
             new GetPreSignedUrlRequest
             {
                 BucketName = _options.Bucket,
@@ -58,7 +75,7 @@ internal sealed class MinioMultipartObjectStorage : IMultipartObjectStorage, IDi
                 PartNumber = partNumber,
                 Verb = HttpVerb.PUT,
                 Expires = DateTime.UtcNow.Add(lifetime),
-                Protocol = new Uri(_options.Endpoint).Scheme == Uri.UriSchemeHttps
+                Protocol = new Uri(presignEndpoint).Scheme == Uri.UriSchemeHttps
                     ? Protocol.HTTPS : Protocol.HTTP
             });
         return new Uri(url);
@@ -142,7 +159,14 @@ internal sealed class MinioMultipartObjectStorage : IMultipartObjectStorage, IDi
         }, cancellationToken);
     }
 
-    public void Dispose() => _client.Dispose();
+    public void Dispose()
+    {
+        _client.Dispose();
+        if (!ReferenceEquals(_client, _presignClient))
+        {
+            _presignClient.Dispose();
+        }
+    }
 
     private string GetObjectKey(string storageUri)
     {

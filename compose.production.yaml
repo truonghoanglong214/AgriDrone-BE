@@ -1,0 +1,308 @@
+name: agridrone-production
+
+networks:
+  edge:
+    driver: bridge
+  internal:
+    driver: bridge
+
+volumes:
+  caddy_data:
+  caddy_config:
+  postgres_data:
+  rabbitmq_data:
+  redis_data:
+  minio_data:
+  metashape_temp:
+
+services:
+  # ============================================================================
+  # Reverse Proxy & Edge Entrypoint (Only Caddy exposes public ports)
+  # ============================================================================
+  caddy:
+    image: caddy:2.9-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infrastructure/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - edge
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL:-admin@agridrone.vn}
+    depends_on:
+      api:
+        condition: service_healthy
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  # ============================================================================
+  # Core Profile: ASP.NET Core API (.NET 10)
+  # ============================================================================
+  api:
+    image: ${API_IMAGE:-ghcr.io/agridrone/agridrone-api:latest}
+    restart: unless-stopped
+    env_file:
+      - ${ENV_FILE:-secrets/.env.production}
+    networks:
+      - edge
+      - internal
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health/live"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: "1536M"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  # ============================================================================
+  # Core Profile: One-shot Database Migrator (Runs efbundle once then exits)
+  # ============================================================================
+  migrate:
+    image: ${MIGRATOR_IMAGE:-ghcr.io/agridrone/agridrone-migrator:latest}
+    restart: "no"
+    env_file:
+      - ${ENV_FILE:-secrets/.env.production}
+    networks:
+      - internal
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["./efbundle", "--connection", "${ConnectionStrings__AgriDrone}"]
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  # ============================================================================
+  # Core Profile: PostgreSQL 17 + PostGIS 3.5 (No host port exposure)
+  # ============================================================================
+  postgres:
+    image: postgis/postgis:17-3.5
+    restart: unless-stopped
+    shm_size: 256mb
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-agridrone}
+      POSTGRES_USER: ${POSTGRES_USER:-agridrone_app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.5"
+          memory: "3072M"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  # ============================================================================
+  # Core Profile: RabbitMQ Message Broker (No host port exposure)
+  # ============================================================================
+  rabbitmq:
+    image: rabbitmq:4.2.7-management-alpine
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RabbitMq__UserName:-agridrone}
+      RABBITMQ_DEFAULT_PASS: ${RabbitMq__Password}
+      RABBITMQ_DEFAULT_VHOST: ${RabbitMq__VirtualHost:-agridrone}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: "512M"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  # ============================================================================
+  # Core Profile: Redis Cache (No host port exposure)
+  # ============================================================================
+  redis:
+    image: redis:8.8.1-alpine
+    restart: unless-stopped
+    command: ["/bin/sh", "-c", "exec redis-server --appendonly yes --requirepass \"$$REDIS_PASSWORD\""]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$REDIS_PASSWORD\" redis-cli ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: "512M"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  # ============================================================================
+  # Core Profile: MinIO Object Storage (S3 API via Caddy, Console closed)
+  # ============================================================================
+  minio:
+    image: quay.io/minio/minio:RELEASE.2025-02-07T23-21-09Z
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ${ObjectStorage__AccessKey}
+      MINIO_ROOT_PASSWORD: ${ObjectStorage__SecretKey}
+      MINIO_SERVER_URL: https://media.${APP_DOMAIN}
+      MINIO_BROWSER: "off"
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - edge
+      - internal
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: "1024M"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  minio-init:
+    image: quay.io/minio/mc:RELEASE.2025-02-08T03-51-17Z
+    restart: "no"
+    networks:
+      - internal
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 $${ObjectStorage__AccessKey} $${ObjectStorage__SecretKey};
+      mc mb --ignore-existing local/$${ObjectStorage__Bucket:-agridrone-media};
+      mc anonymous set none local/$${ObjectStorage__Bucket:-agridrone-media};
+      exit 0;
+      "
+    environment:
+      ObjectStorage__AccessKey: ${ObjectStorage__AccessKey}
+      ObjectStorage__SecretKey: ${ObjectStorage__SecretKey}
+      ObjectStorage__Bucket: ${ObjectStorage__Bucket:-agridrone-media}
+
+  # ============================================================================
+  # Processing Profile: FastAPI Imagery/AI Coordinator (CPU PyTorch / YOLO)
+  # ============================================================================
+  metashape-service:
+    image: ${AI_IMAGE:-ghcr.io/agridrone/agridrone-ai:latest}
+    restart: unless-stopped
+    profiles:
+      - processing
+    networks:
+      - internal
+    environment:
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: ${ObjectStorage__AccessKey}
+      MINIO_SECRET_KEY: ${ObjectStorage__SecretKey}
+      MINIO_BUCKET: ${ObjectStorage__Bucket:-agridrone-media}
+      ODM_ENDPOINT: http://nodeodm:3000
+    volumes:
+      - metashape_temp:/app/temp_assets
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: "2048M"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  # ============================================================================
+  # Processing Profile: OpenDroneMap (NodeODM, Concurrency=1)
+  # ============================================================================
+  nodeodm:
+    image: opendronemap/nodeodm:3.2.0
+    restart: unless-stopped
+    profiles:
+      - processing
+    networks:
+      - internal
+    environment:
+      MAX_CONCURRENCY: 1
+    deploy:
+      resources:
+        limits:
+          cpus: "3.0"
+          memory: "10240M"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"

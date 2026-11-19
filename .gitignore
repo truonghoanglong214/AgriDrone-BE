@@ -67,6 +67,10 @@ artifacts-obj/
 .env
 .env.*
 !.env.example
+!.env.production.example
+infrastructure/local-secrets/
+*.dump
+*.sha256
 *.pfx
 *.p12
 
