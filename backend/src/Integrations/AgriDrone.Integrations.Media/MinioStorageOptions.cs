@@ -8,6 +8,8 @@ public sealed class MinioStorageOptions
 
     public string Endpoint { get; set; } = string.Empty;
 
+    public string? PublicEndpoint { get; set; }
+
     public string Bucket { get; set; } = string.Empty;
 
     public string Region { get; set; } = "us-east-1";

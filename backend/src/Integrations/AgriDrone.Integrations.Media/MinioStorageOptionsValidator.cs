@@ -32,6 +32,15 @@ internal sealed class MinioStorageOptionsValidator
                 "ObjectStorage:Endpoint must use HTTPS when UseSsl is true.");
         }
 
+        if (!string.IsNullOrWhiteSpace(options.PublicEndpoint))
+        {
+            if (!Uri.TryCreate(options.PublicEndpoint, UriKind.Absolute, out var publicEndpoint) ||
+                publicEndpoint.Scheme is not "http" and not "https")
+            {
+                failures.Add("ObjectStorage:PublicEndpoint must be a valid HTTP or HTTPS URL when specified.");
+            }
+        }
+
         if (string.IsNullOrWhiteSpace(options.Bucket))
         {
             failures.Add("ObjectStorage:Bucket is required.");

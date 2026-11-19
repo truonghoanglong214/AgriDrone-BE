@@ -32,6 +32,14 @@ internal sealed class MinioObjectStorage(
     private readonly MinioStorageOptions _options =
         options.Value;
 
+    private readonly IMinioClient _presignClient = !string.IsNullOrWhiteSpace(options.Value.PublicEndpoint)
+        ? new MinioClient()
+            .WithEndpoint(new Uri(options.Value.PublicEndpoint))
+            .WithCredentials(options.Value.AccessKey, options.Value.SecretKey)
+            .WithSSL(new Uri(options.Value.PublicEndpoint).Scheme == Uri.UriSchemeHttps)
+            .Build()
+        : minioClient;
+
     public async Task<ObjectUploadSession>
         CreateUploadSessionAsync(
             ObjectUploadRequest request,
@@ -60,7 +68,7 @@ internal sealed class MinioObjectStorage(
             .WithExpiry(expirySeconds);
 
         var uploadUrl =
-            await minioClient.PresignedPutObjectAsync(args);
+            await _presignClient.PresignedPutObjectAsync(args);
 
         return new ObjectUploadSession(
             BuildStorageUri(objectName),
@@ -148,7 +156,7 @@ internal sealed class MinioObjectStorage(
                 checked((int)expirySecondsDouble));
 
         var downloadUrl =
-            await minioClient.PresignedGetObjectAsync(args);
+            await _presignClient.PresignedGetObjectAsync(args);
 
         return new Uri(downloadUrl);
     }

@@ -2,7 +2,7 @@
 
 **Repository**: `D:\Project\ProjectMonHoc\DoAn\AgriDrone`  
 **Current Active Branch**: `LongTH`  
-**Last Updated**: 2026-11-18
+**Last Updated**: 2026-11-19
 **Tech Stack**: .NET 10, C# 14, Clean Architecture, Entity Framework Core, PostgreSQL 17 + PostGIS 3.5, NetTopologySuite, RabbitMQ 4.2.7, Redis 8.8.1, MinIO.
 
 ---
@@ -116,3 +116,28 @@ Trọng tâm công việc Phase V3-05:
 3. **BẢO TỒN DỮ LIỆU & BẤT BIẾN (Immutability)**:
    - Không UPDATE đè lên các bản ghi lịch sử, receipt, snapshot hoặc sự kiện domain.
    - Dùng Result pattern (`Result<T>`), không throw exception để điều khiển luồng nghiệp vụ.
+
+---
+
+## 7. AWS Lightsail Demo Deployment Readiness (Phases P0–P5 Completed 2026-11-19)
+> **Trạng thái**: Toàn bộ codebase packaging, proxy safety, compose architecture, scripts và CI/CD đã hoàn tất 100%. Sẵn sàng deploy lên AWS Lightsail (Singapore).
+- **Packaging & Containerization**:
+  - `backend/src/AgriDrone.Api/Dockerfile`: Multi-stage .NET 10 SDK -> ASP.NET 10 Runtime non-root (`$APP_UID`), build sẵn `efbundle` self-contained Linux-x64, healthcheck nhẹ.
+  - `backend/src/AgriDrone.Api/Dockerfile.migrator`: Dedicated migrator image chạy one-shot migration.
+  - `backend/services/metashape-service/Dockerfile`: PyTorch / Torchvision CPU-only từ official wheel index, pinned packages, non-root user `appuser`.
+- **Proxy Safety & Configuration**:
+  - `Program.cs`: `ForwardedHeadersOptions` cấu hình `KnownIPNetworks` cho các dải subnet Docker container bridge (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`), `ForwardLimit = 1`.
+  - `Program.cs` & `appsettings.json`: Dynamic CORS fail-closed đọc từ `Cors:AllowedOrigins` (mặc định rỗng, không wildcard credentials khi production).
+  - `appsettings.json`: `DatabaseInitialization:ApplyMigrationsOnStartup = false` (tách migration ra khỏi API startup).
+- **MinIO Public/Internal Split**:
+  - `MinioStorageOptions.cs` thêm `PublicEndpoint` (URL presigned dành cho browser bên ngoài `https://media.domain.com`), trong khi `Endpoint` giữ `http://minio:9000` cho internal calls trong Docker bridge.
+- **Production Compose & Edge Caddy**:
+  - `compose.production.yaml`: Hai profiles: `core` (Caddy, API, Postgres 17, RabbitMQ, Redis, MinIO, one-shot Migrator) và `processing` (FastAPI, NodeODM concurrency=1).
+  - `infrastructure/caddy/Caddyfile`: Tự động Let's Encrypt HTTPS cho `api.domain` và `media.domain`; chỉ publish duy nhất port 80/443; chặn console 9001 và Caddy admin.
+- **Operations & CI/CD**:
+  - `infrastructure/scripts/`: `bootstrap-lightsail.sh` (cài Docker, 16GB Swapfile, folder `/opt/agridrone`), `deploy.sh` (flock lock, pre-deploy backup, one-shot migration, smoke test, automatic rollback), `backup.sh` (`pg_dump -Fc` nén + sha256), `restore.sh` (diễn tập an toàn), `smoke-test.sh`.
+  - `.github/workflows/`: `ci.yml` (build check .NET 10 0W/0E, compose config validation; không chạy test) và `deploy-lightsail.yml` (GHCR push immutable tags, SSH deploy).
+- **Verification Evidence**:
+  - `dotnet build backend/AgriDrone.sln --no-restore --nologo`: **0 Warning, 0 Error**.
+  - `docker compose config`: 100% Valid, Published ports: 80 & 443 ONLY.
+  - Integration Tests: Deferred to V3-10 per project governance.
