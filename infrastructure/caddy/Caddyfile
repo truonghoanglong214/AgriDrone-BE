@@ -3,7 +3,7 @@
     email {$ACME_EMAIL:admin@agridrone.vn}
 }
 
-api.{$APP_DOMAIN} {
+{$API_DOMAIN:api.{$APP_DOMAIN}} {
     encode zstd gzip
 
     reverse_proxy api:8080 {
@@ -18,7 +18,7 @@ api.{$APP_DOMAIN} {
     }
 }
 
-media.{$APP_DOMAIN} {
+{$MEDIA_DOMAIN:media.{$APP_DOMAIN}} {
     # Block internal MinIO console/admin endpoints
     @blocked_paths {
         path /minio/ui*

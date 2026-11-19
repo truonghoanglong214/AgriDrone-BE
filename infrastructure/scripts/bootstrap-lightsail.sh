@@ -17,10 +17,10 @@ apt-get install -y ca-certificates curl gnupg jq git unzip fail2ban ufw
 timedatectl set-timezone Asia/Bangkok
 echo "Timezone configured: $(timedatectl show --property=Timezone --value)"
 
-echo "===> [2/6] Configuring 16 GB Swapfile for memory safety..."
+echo "===> [2/6] Configuring 8 GB Swapfile for memory safety..."
 if [ ! -f /swapfile ]; then
-    # Allocate 16GB swap
-    fallocate -l 16G /swapfile || dd if=/dev/zero of=/swapfile bs=1M count=16384
+    # Allocate 8GB swap for 2GB-4GB RAM instances
+    fallocate -l 8G /swapfile || dd if=/dev/zero of=/swapfile bs=1M count=8192
     chmod 600 /swapfile
     mkswap /swapfile
     swapon /swapfile

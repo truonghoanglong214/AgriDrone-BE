@@ -32,7 +32,9 @@ services:
     networks:
       - edge
     environment:
-      APP_DOMAIN: ${APP_DOMAIN}
+      APP_DOMAIN: ${APP_DOMAIN:-agridrone.vn}
+      API_DOMAIN: ${API_DOMAIN:-api.${APP_DOMAIN:-agridrone.vn}}
+      MEDIA_DOMAIN: ${MEDIA_DOMAIN:-media.${APP_DOMAIN:-agridrone.vn}}
       ACME_EMAIL: ${ACME_EMAIL:-admin@agridrone.vn}
     depends_on:
       api:
@@ -204,7 +206,7 @@ services:
     environment:
       MINIO_ROOT_USER: ${ObjectStorage__AccessKey}
       MINIO_ROOT_PASSWORD: ${ObjectStorage__SecretKey}
-      MINIO_SERVER_URL: https://media.${APP_DOMAIN}
+      MINIO_SERVER_URL: https://${MEDIA_DOMAIN:-media.${APP_DOMAIN:-agridrone.vn}}
       MINIO_BROWSER: "off"
     command: server /data --console-address ":9001"
     volumes:
