@@ -141,6 +141,7 @@ public static class DependencyInjection
         services.AddIntegrationConsumer<Health.PlantHealthAnalysisReadyV4Processor>(IntegrationConsumerNames.Be1PlantHealthAnalysisReadyV4);
         services.AddScoped<Health.PlantHealthReviewService>();
         services.AddScoped<AgriDrone.IntegrationContracts.Health.IPlantHealthPublicationQuery, Health.PlantHealthPublicationQuery>();
+        services.AddScoped<IQualityRefundNoticeQuery, Health.QualityRefundNoticeQuery>();
         services.AddScoped<AgriDrone.Modules.Surveys.Application.Features.Results.PlantHealth.PublishPlantHealthSurveyResult.IPlantHealthPublishedResultReader>(sp => sp.GetRequiredService<Health.PlantHealthReviewService>());
         services.AddScoped<IIntegrationMessageHandler<AgriDrone.IntegrationContracts.Health.PlantHealthPublicationNotificationRequestedV1>, Health.PlantHealthPublicationNotificationHandler>();
         services.AddIntegrationConsumer<Health.PlantHealthPublicationNotificationProcessor>(IntegrationConsumerNames.PlantHealthPublicationNotificationV1);

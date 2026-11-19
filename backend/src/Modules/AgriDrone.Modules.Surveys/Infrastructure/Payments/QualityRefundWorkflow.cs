@@ -18,7 +18,9 @@ internal sealed class QualityRefundWorkflow(
     IExecutionContext executionContext,
     ISystemManagerAccessService managerAccess,
     IAuditWriter auditWriter,
-    TimeProvider timeProvider) : IQualityRefundWorkflow
+    TimeProvider timeProvider,
+    IQualityRefundNoticeQuery noticeQuery,
+    AgriDrone.SharedKernel.Application.Abstractions.IRefundEvidenceStorage evidenceStorage) : IQualityRefundWorkflow
 {
     public async Task<Result<QualityRefundCaseView>> ReportAsync(
         Guid orderId,
@@ -36,6 +38,7 @@ internal sealed class QualityRefundWorkflow(
             return Result.Failure<QualityRefundCaseView>(Forbidden());
         }
 
+        var receivedAt = timeProvider.GetUtcNow();
         try
         {
             await using var transaction = await db.Database.BeginTransactionAsync(
@@ -72,13 +75,19 @@ internal sealed class QualityRefundWorkflow(
                     AppError.Conflict("QualityRefund.NoCapturedPayment", "The order has no captured service payment."));
             }
 
+            var noticeCreatedAt = await noticeQuery.GetCreatedAtAsync(tenantId, orderId, result.Id, cancellationToken);
+            if (noticeCreatedAt is null)
+                return Result.Failure<QualityRefundCaseView>(AppError.Conflict("QualityRefund.NoticeUnavailable", "Chưa có thông báo mở kết quả để xác định thời hạn khiếu nại."));
+            if (receivedAt < noticeCreatedAt.Value || receivedAt >= ClaimPolicy.CalculateSevenDayDeadline(noticeCreatedAt.Value))
+                return Result.Failure<QualityRefundCaseView>(AppError.Conflict("QualityRefund.ClaimWindowClosed", "Đã hết thời hạn 7 ngày gửi khiếu nại hoàn tiền theo giờ Việt Nam."));
+
             QualityRefundCase refundCase;
             try
             {
                 refundCase = QualityRefundCase.Report(
                     order, result, actorId, issues, description, evidenceReference,
                     recipientBankName, recipientAccountNumber, recipientAccountName,
-                    timeProvider.GetUtcNow());
+                    receivedAt);
             }
             catch (ArgumentException exception)
             {
@@ -118,6 +127,28 @@ internal sealed class QualityRefundWorkflow(
         {
             return Result.Failure<QualityRefundCaseView>(Conflict());
         }
+    }
+
+    public async Task<Result<QualityRefundClaimWindowView>> GetOwnerClaimWindowAsync(Guid orderId, CancellationToken cancellationToken)
+    {
+        if (executionContext.ActorId is null || executionContext.TenantId is not Guid tenantId)
+            return Result.Failure<QualityRefundClaimWindowView>(Forbidden());
+        var now = timeProvider.GetUtcNow();
+        var order = await db.SurveyOrders.AsNoTracking().SingleOrDefaultAsync(x => x.Id == orderId && x.TenantId == tenantId, cancellationToken);
+        if (order is null) return Result.Failure<QualityRefundClaimWindowView>(NotFound());
+        var result = await db.SurveyResults.AsNoTracking().SingleOrDefaultAsync(x => x.SurveyOrderId == orderId && x.TenantId == tenantId, cancellationToken);
+        var notice = result is null ? null : await noticeQuery.GetCreatedAtAsync(tenantId, orderId, result.Id, cancellationToken);
+        DateTimeOffset? deadline = notice is null ? null : ClaimPolicy.CalculateSevenDayDeadline(notice.Value);
+        string? reason = null;
+        if (order.Status != SurveyOrderStatus.Completed || result is null || result.Status != SurveyResultStatus.Published ||
+            result.InvalidatedAt.HasValue || result.ServiceType != SurveyServiceType.PlantHealth)
+            reason = "Đơn chưa có kết quả đủ điều kiện khiếu nại.";
+        else if (await db.QualityRefundCases.AnyAsync(x => x.SurveyOrderId == orderId && x.Status != QualityRefundStatus.Rejected, cancellationToken))
+            reason = "Đơn đã có hồ sơ đang xử lý hoặc đã hoàn tiền.";
+        else if (notice is null) reason = "Chưa có thông báo mở kết quả để xác định thời hạn khiếu nại.";
+        else if (now < notice.Value || now >= deadline!.Value) reason = "Đã hết thời hạn 7 ngày gửi khiếu nại hoàn tiền.";
+        else if (await GrossPaidAsync(orderId, cancellationToken) <= 0) reason = "Đơn chưa có khoản thanh toán được xác nhận.";
+        return Result.Success(new QualityRefundClaimWindowView(now, notice, deadline, reason is null, reason));
     }
 
     public async Task<Result<IReadOnlyList<QualityRefundCaseView>>> GetOwnerCasesAsync(
@@ -400,6 +431,7 @@ internal sealed class QualityRefundWorkflow(
         Guid orderId,
         Guid caseId,
         string bankTransferReference,
+        string transferEvidenceReference,
         uint expectedVersion,
         CancellationToken cancellationToken)
     {
@@ -423,8 +455,11 @@ internal sealed class QualityRefundWorkflow(
             var now = timeProvider.GetUtcNow();
             try
             {
+                if (string.IsNullOrWhiteSpace(transferEvidenceReference) ||
+                    !await evidenceStorage.ExistsAsync(refundCase.TenantId, caseId, transferEvidenceReference, cancellationToken))
+                    return Result.Failure<QualityRefundCaseView>(AppError.Validation("QualityRefund.InvalidEvidence", "Ảnh biên lai không hợp lệ hoặc chưa upload thành công."));
                 refundCase.RecordTransfer(adminId, bankTransferReference,
-                    now, expectedVersion);
+                    now, expectedVersion, transferEvidenceReference);
             }
             catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
             {
@@ -436,6 +471,7 @@ internal sealed class QualityRefundWorkflow(
             {
                 refundCase.ApprovedAmount,
                 refundCase.BankTransferReference,
+                refundCase.TransferEvidenceReference,
                 refundCase.TransferredAt,
                 refundCase.RecordedBy
             });
@@ -454,6 +490,38 @@ internal sealed class QualityRefundWorkflow(
         {
             return Result.Failure<QualityRefundCaseView>(Conflict());
         }
+    }
+
+    public async Task<Result<string>> UploadTransferEvidenceAsync(Guid orderId, Guid caseId, Stream content, CancellationToken cancellationToken)
+    {
+        if (executionContext.ActorId is null) return Result.Failure<string>(Forbidden());
+        var item = await db.QualityRefundCases.AsNoTracking().SingleOrDefaultAsync(
+            x => x.Id == caseId && x.SurveyOrderId == orderId, cancellationToken);
+        if (item is null) return Result.Failure<string>(NotFound());
+        if (item.Status != QualityRefundStatus.Approved)
+            return Result.Failure<string>(AppError.Conflict("QualityRefund.NotApproved", "Chỉ upload biên lai cho hồ sơ đã duyệt và chưa hoàn tiền."));
+        try
+        {
+            return Result.Success(await evidenceStorage.UploadAsync(item.TenantId, caseId, content, cancellationToken));
+        }
+        catch (ArgumentException exception)
+        {
+            return Result.Failure<string>(AppError.Validation("QualityRefund.InvalidEvidence", exception.Message));
+        }
+    }
+
+    public async Task<Result<Uri>> GetTransferEvidenceAsync(Guid orderId, Guid caseId, bool owner, CancellationToken cancellationToken)
+    {
+        if (executionContext.ActorId is null || (owner && executionContext.TenantId is null))
+            return Result.Failure<Uri>(Forbidden());
+        var item = await db.QualityRefundCases.AsNoTracking().SingleOrDefaultAsync(
+            x => x.Id == caseId && x.SurveyOrderId == orderId &&
+                 (!owner || x.TenantId == executionContext.TenantId), cancellationToken);
+        if (item is null || item.Status != QualityRefundStatus.Refunded || string.IsNullOrWhiteSpace(item.TransferEvidenceReference))
+            return Result.Failure<Uri>(NotFound());
+        if (!await evidenceStorage.ExistsAsync(item.TenantId, caseId, item.TransferEvidenceReference, cancellationToken))
+            return Result.Failure<Uri>(NotFound());
+        return Result.Success(await evidenceStorage.GetDownloadUriAsync(item.TransferEvidenceReference, cancellationToken));
     }
 
     private async Task<decimal> GrossPaidAsync(Guid orderId, CancellationToken cancellationToken) =>

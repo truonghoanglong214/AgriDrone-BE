@@ -70,6 +70,27 @@ public sealed class SystemSurveyOrdersController(
         return result.ToHttpResult(HttpContext, Results.Ok);
     }
 
+    /// <summary>Upload ảnh biên lai PNG/JPEG tối đa 5 MB vào kho riêng tư.</summary>
+    [HttpPost("{orderId:guid}/quality-refunds/{caseId:guid}/transfer-evidence")]
+    [RequestSizeLimit(6 * 1024 * 1024)]
+    public async Task<IResult> UploadTransferEvidence(Guid orderId, Guid caseId, [FromForm] IFormFile file, CancellationToken cancellationToken)
+    {
+        if (file.Length is <= 0 or > 5 * 1024 * 1024)
+            return Results.BadRequest(new { detail = "Chọn ảnh PNG/JPEG không quá 5 MB." });
+        await using var content = file.OpenReadStream();
+        var result = await qualityRefunds.UploadTransferEvidenceAsync(orderId, caseId, content, cancellationToken);
+        return result.ToHttpResult(HttpContext, value => Results.Ok(new { transferEvidenceReference = value }));
+    }
+
+    /// <summary>Admin xem biên lai hoàn tiền qua URL tạm thời.</summary>
+    [HttpGet("{orderId:guid}/quality-refunds/{caseId:guid}/transfer-evidence")]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    public async Task<IResult> GetTransferEvidence(Guid orderId, Guid caseId, CancellationToken cancellationToken)
+    {
+        var result = await qualityRefunds.GetTransferEvidenceAsync(orderId, caseId, false, cancellationToken);
+        return result.ToHttpResult(HttpContext, value => Results.Ok(new { url = value.AbsoluteUri }));
+    }
+
     /// <summary>Chỉ Admin ghi nhận khoản đã chuyển qua ứng dụng ngân hàng.</summary>
     [HttpPost("{orderId:guid}/quality-refunds/{caseId:guid}/record-transfer")]
     public async Task<IResult> RecordQualityRefundTransfer(
@@ -79,7 +100,7 @@ public sealed class SystemSurveyOrdersController(
         CancellationToken cancellationToken)
     {
         var result = await qualityRefunds.RecordTransferAsync(orderId, caseId,
-            request.BankTransferReference, request.ExpectedVersion, cancellationToken);
+            request.BankTransferReference, request.TransferEvidenceReference, request.ExpectedVersion, cancellationToken);
         return result.ToHttpResult(HttpContext, Results.Ok);
     }
 

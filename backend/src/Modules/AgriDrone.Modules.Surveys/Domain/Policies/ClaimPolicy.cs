@@ -88,13 +88,20 @@ public sealed class ClaimPolicy : Entity
     /// </summary>
     public DateTimeOffset CalculateExclusiveDeadline(DateTimeOffset noticeCreatedAtUtc)
     {
-        DomainGuard.Utc(noticeCreatedAtUtc, nameof(noticeCreatedAtUtc));
+        return CalculateDeadline(noticeCreatedAtUtc, CalendarWindowDays, TimeZoneId, ExcludeNoticeDate);
+    }
 
-        var timeZone = TimeZoneInfo.FindSystemTimeZoneById(TimeZoneId);
+    public static DateTimeOffset CalculateSevenDayDeadline(DateTimeOffset noticeCreatedAtUtc) =>
+        CalculateDeadline(noticeCreatedAtUtc, 7, "Asia/Ho_Chi_Minh", true);
+
+    private static DateTimeOffset CalculateDeadline(DateTimeOffset noticeCreatedAtUtc, int days, string timeZoneId, bool excludeNoticeDate)
+    {
+        DomainGuard.Utc(noticeCreatedAtUtc, nameof(noticeCreatedAtUtc));
+        var timeZone = TimeZoneInfo.FindSystemTimeZoneById(timeZoneId);
         var localDateTime = TimeZoneInfo.ConvertTime(noticeCreatedAtUtc, timeZone);
         var noticeDate = DateOnly.FromDateTime(localDateTime.DateTime);
 
-        var deadlineDate = noticeDate.AddDays(ExcludeNoticeDate ? CalendarWindowDays + 1 : CalendarWindowDays);
+        var deadlineDate = noticeDate.AddDays(excludeNoticeDate ? days + 1 : days);
         var localMidnight = deadlineDate.ToDateTime(TimeOnly.MinValue);
         var offset = timeZone.GetUtcOffset(localMidnight);
 

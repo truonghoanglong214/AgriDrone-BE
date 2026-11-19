@@ -198,6 +198,15 @@ public sealed class TenantOwnerSurveyOrdersController(
             response => Results.Json(response, statusCode: StatusCodes.Status201Created));
     }
 
+    /// <summary>Owner xem thời hạn 7 ngày gửi khiếu nại theo lịch UTC+7.</summary>
+    [HttpGet("{orderId:guid}/quality-refunds/claim-window")]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    public async Task<IResult> GetClaimWindow(Guid orderId, CancellationToken cancellationToken)
+    {
+        var result = await qualityRefunds.GetOwnerClaimWindowAsync(orderId, cancellationToken);
+        return result.ToHttpResult(HttpContext, Results.Ok);
+    }
+
     /// <summary>Owner xem các báo cáo sai kết quả và trạng thái hoàn tiền của đơn.</summary>
     [HttpGet("{orderId:guid}/quality-refunds")]
     [ProducesResponseType(StatusCodes.Status200OK)]
@@ -207,6 +216,15 @@ public sealed class TenantOwnerSurveyOrdersController(
     {
         var result = await qualityRefunds.GetOwnerCasesAsync(orderId, cancellationToken);
         return result.ToHttpResult(HttpContext, Results.Ok);
+    }
+
+    /// <summary>Owner xem biên lai của đơn thuộc tenant hiện tại qua URL tạm thời.</summary>
+    [HttpGet("{orderId:guid}/quality-refunds/{caseId:guid}/transfer-evidence")]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    public async Task<IResult> GetTransferEvidence(Guid orderId, Guid caseId, CancellationToken cancellationToken)
+    {
+        var result = await qualityRefunds.GetTransferEvidenceAsync(orderId, caseId, true, cancellationToken);
+        return result.ToHttpResult(HttpContext, value => Results.Ok(new { url = value.AbsoluteUri }));
     }
 
     private static bool TryParsePaymentPurpose(string? purpose, out PaymentPurpose parsedPurpose)

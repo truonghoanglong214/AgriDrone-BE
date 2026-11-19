@@ -21,7 +21,7 @@ public sealed class QualityRefundCaseTests
 
         Assert.Equal(QualityRefundStatus.Submitted, refundCase.Status);
         Assert.Throws<InvalidOperationException>(() => refundCase.RecordTransfer(
-            adminId, "TX-1", Now.AddHours(14), refundCase.Version));
+            adminId, "TX-1", Now.AddHours(14), refundCase.Version, "minio://test/refund-evidence/receipt.png"));
         Assert.Throws<InvalidOperationException>(() => refundCase.Approve(
             adminId, "Chưa có xác minh", 1_600_000m, Now.AddHours(14)));
 
@@ -38,13 +38,20 @@ public sealed class QualityRefundCaseTests
 
         var approvedVersion = refundCase.Version;
         Assert.Throws<InvalidOperationException>(() => refundCase.RecordTransfer(
-            adminId, "TX-1", Now.AddHours(15), approvedVersion - 1));
-        refundCase.RecordTransfer(adminId, "TX-1", Now.AddHours(15), approvedVersion);
+            adminId, "TX-1", Now.AddHours(15), approvedVersion - 1, "minio://test/refund-evidence/receipt.png"));
+        Assert.Throws<ArgumentNullException>(() => refundCase.RecordTransfer(
+            adminId, "TX-1", Now.AddHours(15), approvedVersion));
+        Assert.Equal(QualityRefundStatus.Approved, refundCase.Status);
+        refundCase.RecordTransfer(adminId, "TX-1", Now.AddHours(15), approvedVersion,
+            "minio://test/refund-evidence/receipt.png");
+        Assert.Throws<InvalidOperationException>(() => refundCase.RecordTransfer(
+            adminId, "TX-2", Now.AddHours(16), refundCase.Version,
+            "minio://test/refund-evidence/replacement.png"));
         Assert.Equal(QualityRefundStatus.Refunded, refundCase.Status);
         Assert.Equal("TX-1", refundCase.BankTransferReference);
         Assert.Equal(Now.AddHours(15), refundCase.TransferredAt);
         Assert.Equal(refundCase.TransferredAt, refundCase.RecordedAt);
-        Assert.Null(refundCase.TransferEvidenceReference);
+        Assert.Equal("minio://test/refund-evidence/receipt.png", refundCase.TransferEvidenceReference);
     }
 
     [Fact]
