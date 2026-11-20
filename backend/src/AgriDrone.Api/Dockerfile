@@ -39,9 +39,11 @@ RUN dotnet publish src/AgriDrone.Api/AgriDrone.Api.csproj \
     --no-restore
 
 # Build self-contained EF migration bundle for Linux x64
+ENV Jwt__Secret="BuildTimePlaceholderSecretKeyDoNotUseInProd1234567890!"
 RUN dotnet ef migrations bundle \
     --project src/BuildingBlocks/AgriDrone.Database/AgriDrone.Database.csproj \
     --startup-project src/AgriDrone.Api/AgriDrone.Api.csproj \
+    --context AgriDroneSchemaDbContext \
     --output /app/publish-migrator/efbundle \
     --configuration Release \
     --self-contained \

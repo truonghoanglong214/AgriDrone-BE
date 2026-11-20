@@ -28,9 +28,11 @@ COPY src/ src/
 
 RUN dotnet build src/AgriDrone.Api/AgriDrone.Api.csproj -c Release --no-restore
 
+ENV Jwt__Secret="BuildTimePlaceholderSecretKeyDoNotUseInProd1234567890!"
 RUN dotnet ef migrations bundle \
     --project src/BuildingBlocks/AgriDrone.Database/AgriDrone.Database.csproj \
     --startup-project src/AgriDrone.Api/AgriDrone.Api.csproj \
+    --context AgriDroneSchemaDbContext \
     --output /app/efbundle \
     --configuration Release \
     --self-contained \
