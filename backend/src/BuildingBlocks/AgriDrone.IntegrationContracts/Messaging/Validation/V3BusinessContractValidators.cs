@@ -40,11 +40,143 @@ public static class V3BusinessContractValidators
             "ExpectedCurrentFarmBaseMapVersionId", errors);
         RequiredText(payload.ModelVersion, "ModelVersion", errors);
         RequiredText(payload.AlgorithmVersion, "AlgorithmVersion", errors);
-        RequiredText(payload.BoundaryPolicyVersion, "BoundaryPolicyVersion", errors);
+        OptionalText(payload.BoundaryPolicyVersion, "BoundaryPolicyVersion", errors);
         if (payload.ProducedAt.HasValue)
         {
             Utc(payload.ProducedAt.Value, "ProducedAt", errors);
         }
+        Bearing(payload.GridBearingDeg, "GridBearingDeg", errors);
+        PositiveMeasurement(payload.RowSpacingM, "RowSpacingM", errors);
+        PositiveMeasurement(payload.PlantSpacingM, "PlantSpacingM", errors);
+        RequiredItems(payload.Candidates, "Candidates", errors);
+
+        if (payload.Candidates is null)
+        {
+            return errors;
+        }
+
+        var providedCandidateIds = payload.Candidates
+            .Where(candidate => candidate.CandidateId.HasValue && candidate.CandidateId.Value != Guid.Empty)
+            .Select(candidate => candidate.CandidateId!.Value)
+            .ToList();
+        if (providedCandidateIds.Count != payload.Candidates.Count)
+        {
+            errors.Add("CandidateId is required for every V4 mapping candidate.");
+        }
+        Unique(providedCandidateIds, "CandidateId", errors);
+
+        var candidateCount = payload.Candidates.Count;
+        Maximum(candidateCount, IntegrationContractLimits.MaximumMappingCandidateCount,
+            "Mapping candidates", errors);
+
+        foreach (var candidate in payload.Candidates)
+        {
+            RequiredId(candidate.CandidateId ?? Guid.Empty, "CandidateId", errors);
+            OptionalId(candidate.SourceObservationId, "SourceObservationId", errors);
+            if (candidate.EvidenceMediaAssetIds is not null)
+            {
+                foreach (var mediaAssetId in candidate.EvidenceMediaAssetIds)
+                {
+                    RequiredId(mediaAssetId, "EvidenceMediaAssetId", errors);
+                }
+
+                Unique(candidate.EvidenceMediaAssetIds,
+                    "EvidenceMediaAssetId within a candidate", errors);
+            }
+
+            if (candidate.OriginalPosition is not null)
+            {
+                Point(candidate.OriginalPosition, "OriginalPosition", errors);
+            }
+            else
+            {
+                if (candidate.Longitude is < -180 or > 180)
+                {
+                    errors.Add("Longitude must be in the range [-180, 180].");
+                }
+                if (candidate.Latitude is < -90 or > 90)
+                {
+                    errors.Add("Latitude must be in the range [-90, 90].");
+                }
+                if (candidate.Longitude == 0 && candidate.Latitude == 0)
+                {
+                    errors.Add("Mapping candidate coordinates (Longitude, Latitude) must be provided.");
+                }
+            }
+
+            GridPosition(candidate.ProposedRowIndex, candidate.ProposedColumnIndex,
+                errors);
+            Range(candidate.PositionConfidence, 0, 1,
+                "PositionConfidence", errors);
+
+            if (!string.IsNullOrWhiteSpace(candidate.BoundaryClassification))
+            {
+                Allowed(candidate.BoundaryClassification,
+                    CandidateBoundaryClassifications, "BoundaryClassification", errors);
+            }
+
+            if (candidate.MeasuredBoundaryDistanceM.HasValue)
+            {
+                NonNegative(candidate.MeasuredBoundaryDistanceM.Value,
+                    "MeasuredBoundaryDistanceM", errors);
+            }
+
+            if (candidate.BoundaryThresholdM.HasValue)
+            {
+                Positive(candidate.BoundaryThresholdM.Value, "BoundaryThresholdM", errors);
+            }
+
+            OptionalId(candidate.MatchedPlantId, "MatchedPlantId", errors);
+            if (candidate.MatchConfidence.HasValue)
+            {
+                Range(candidate.MatchConfidence.Value, 0, 1,
+                    "MatchConfidence", errors);
+            }
+
+            if (candidate.Status is not null &&
+                candidate.Status is not ("DETECTED" or "MISSING"))
+            {
+                errors.Add("Status must be DETECTED or MISSING when provided.");
+            }
+
+            if (candidate.Source is { Length: > 100 })
+            {
+                errors.Add("Source cannot exceed 100 characters.");
+            }
+        }
+
+        return errors;
+    }
+
+    public static IReadOnlyList<string> Validate(MappingCandidatesReadyV4? payload)
+    {
+        var errors = RequiredIds(
+            (payload?.SurveyOrderId, "SurveyOrderId"),
+            (payload?.MissionId, "MissionId"),
+            (payload?.CaptureAttemptId, "CaptureAttemptId"),
+            (payload?.FarmId, "FarmId"),
+            (payload?.FarmBoundaryVersionId, "FarmBoundaryVersionId"),
+            (payload?.HandoffId, "HandoffId"),
+            (payload?.JobId, "JobId"),
+            (payload?.ModelVersionId, "ModelVersionId"));
+
+        if (payload is null)
+        {
+            return errors;
+        }
+
+        if (!Enum.IsDefined(payload.MappingKind))
+        {
+            errors.Add("MappingKind is invalid.");
+        }
+
+        OptionalId(payload.CausationId, "CausationId", errors);
+        OptionalId(payload.ExpectedCurrentFarmBaseMapVersionId,
+            "ExpectedCurrentFarmBaseMapVersionId", errors);
+        RequiredText(payload.ModelVersion, "ModelVersion", errors);
+        RequiredText(payload.AlgorithmVersion, "AlgorithmVersion", errors);
+        OptionalText(payload.BoundaryPolicyVersion, "BoundaryPolicyVersion", errors);
+        Utc(payload.ProducedAt, "ProducedAt", errors);
         Bearing(payload.GridBearingDeg, "GridBearingDeg", errors);
         PositiveMeasurement(payload.RowSpacingM, "RowSpacingM", errors);
         PositiveMeasurement(payload.PlantSpacingM, "PlantSpacingM", errors);
@@ -139,6 +271,43 @@ public static class V3BusinessContractValidators
             {
                 errors.Add("Source cannot exceed 100 characters.");
             }
+        }
+
+        return errors;
+    }
+
+    public static IReadOnlyList<string> Validate(FarmBaseMapInternallyApprovedV1? payload)
+    {
+        var errors = RequiredIds(
+            (payload?.ApprovalId, "ApprovalId"),
+            (payload?.CausationId, "CausationId"),
+            (payload?.SurveyOrderId, "SurveyOrderId"),
+            (payload?.SourceMissionId, "SourceMissionId"),
+            (payload?.CaptureAttemptId, "CaptureAttemptId"),
+            (payload?.FarmId, "FarmId"),
+            (payload?.FarmBoundaryVersionId, "FarmBoundaryVersionId"),
+            (payload?.FarmBaseMapVersionId, "FarmBaseMapVersionId"),
+            (payload?.BaselineMapVersionId, "BaselineMapVersionId"),
+            (payload?.MappingCandidateBatchId, "MappingCandidateBatchId"),
+            (payload?.PoleCountSnapshotId, "PoleCountSnapshotId"),
+            (payload?.ApprovedBy, "ApprovedBy"));
+
+        if (payload is null)
+        {
+            return errors;
+        }
+
+        if (!Enum.IsDefined(payload.MappingKind))
+        {
+            errors.Add("MappingKind is invalid.");
+        }
+
+        RequiredText(payload.EvidenceFingerprint, "EvidenceFingerprint", errors);
+        Utc(payload.ApprovedAt, "ApprovedAt", errors);
+
+        if (payload.VerifiedBillablePoleCount < 0)
+        {
+            errors.Add("VerifiedBillablePoleCount cannot be negative.");
         }
 
         return errors;
@@ -537,6 +706,15 @@ public static class V3BusinessContractValidators
         if (string.IsNullOrWhiteSpace(value))
         {
             errors.Add($"{name} is required.");
+        }
+    }
+
+    private static void OptionalText(string? value, string name,
+        List<string> errors)
+    {
+        if (value is not null && string.IsNullOrWhiteSpace(value))
+        {
+            errors.Add($"{name} cannot be whitespace when provided.");
         }
     }
 

@@ -35,6 +35,7 @@ public sealed class SurveyPayment : Entity
     private SurveyPayment() { }
 
     public Guid SurveyOrderId { get; private set; }
+    public Guid? DepositObligationId { get; private set; }
     public decimal Amount { get; private set; }
     public string Currency { get; private set; } = null!;
     public string Provider { get; private set; } = null!;
@@ -53,11 +54,23 @@ public sealed class SurveyPayment : Entity
         Money amount,
         string provider,
         DateTimeOffset createdAt,
-        PaymentPurpose purpose = PaymentPurpose.FinalBalance)
+        PaymentPurpose purpose = PaymentPurpose.FinalBalance,
+        Guid? depositObligationId = null)
     {
         DomainGuard.NotEmpty(surveyOrderId);
         DomainGuard.Utc(createdAt);
         ArgumentException.ThrowIfNullOrWhiteSpace(provider);
+        if (depositObligationId.HasValue)
+        {
+            DomainGuard.NotEmpty(depositObligationId.Value, nameof(depositObligationId));
+        }
+
+        if ((purpose == PaymentPurpose.OrderDeposit) != depositObligationId.HasValue)
+        {
+            throw new ArgumentException(
+                "ORDER_DEPOSIT payments must reference the pinned deposit obligation, and other purposes must not.",
+                nameof(depositObligationId));
+        }
         if (amount.Amount <= 0)
         {
             throw new ArgumentOutOfRangeException(
@@ -77,6 +90,7 @@ public sealed class SurveyPayment : Entity
         {
             Id = Guid.CreateVersion7(),
             SurveyOrderId = surveyOrderId,
+            DepositObligationId = depositObligationId,
             Amount = amount.Amount,
             Currency = amount.Currency.Value,
             Provider = normalizedProvider,

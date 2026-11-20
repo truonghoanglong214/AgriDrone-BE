@@ -135,10 +135,10 @@ public static class DependencyInjection
             IntegrationConsumerNames.Be2FarmBaseMapPublishedV2);
 
         services.AddScoped<
-            IIntegrationMessageHandler<FarmBaseMapPublishedV3>,
-            FarmBaseMapPublishedV3Handler>();
-        services.AddIntegrationConsumer<FarmBaseMapPublishedV3Processor>(
-            IntegrationConsumerNames.Be2FarmBaseMapPublishedV3);
+            IIntegrationMessageHandler<FarmBaseMapInternallyApprovedV1>,
+            FarmBaseMapInternallyApprovedV1Handler>();
+        services.AddIntegrationConsumer<FarmBaseMapInternallyApprovedV1Processor>(
+            IntegrationConsumerNames.Be2FarmBaseMapInternallyApprovedV1);
         services.AddScoped<IIntegrationMessageHandler<PlantHealthPreliminaryResultPublishedV1>, PlantHealthPreliminaryResultPublishedHandler>();
         services.AddIntegrationConsumer<PlantHealthPreliminaryResultPublishedProcessor>(IntegrationConsumerNames.Be2PlantHealthPreliminaryResultPublishedV1);
 

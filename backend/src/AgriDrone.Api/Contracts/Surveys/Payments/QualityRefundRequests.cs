@@ -30,4 +30,5 @@ public sealed record VerifyQualityRefundRequest(
 
 public sealed record RecordQualityRefundTransferRequest(
     string BankTransferReference,
-    uint ExpectedVersion);
+    uint ExpectedVersion,
+    string TransferEvidenceReference);

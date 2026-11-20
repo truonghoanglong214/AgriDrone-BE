@@ -1,3 +1,4 @@
+using AgriDrone.IntegrationContracts.Mapping;
 using AgriDrone.Modules.Farms.Application.Services;
 using AgriDrone.Modules.Farms.Domain.Maps.Staging;
 using NetTopologySuite.Geometries;
@@ -271,11 +272,13 @@ public sealed class BaselineMappingBatchValidatorTests
         var batchId = Guid.NewGuid();
         var batch = MappingCandidateBatch.Create(
             id: batchId,
+            mappingKind: MappingKind.FirstBaseline,
             handoffId: Guid.NewGuid(),
             tenantId: Guid.NewGuid(),
             farmId: Guid.NewGuid(),
             surveyOrderId: Guid.NewGuid(),
             missionId: Guid.NewGuid(),
+            captureAttemptId: Guid.NewGuid(),
             farmBoundaryVersionId: Guid.NewGuid(),
             farmBaseMapVersionId: Guid.NewGuid(),
             expectedCurrentFarmBaseMapVersionId: null,
@@ -283,11 +286,18 @@ public sealed class BaselineMappingBatchValidatorTests
             rowSpacingM: 2.5,
             plantSpacingM: 2.5,
             jobId: Guid.NewGuid(),
+            payloadFingerprint: new string('0', 64),
             modelVersionId: Guid.NewGuid(),
             modelVersion: "v1.0",
             algorithmVersion: "grid-v1",
             boundaryPolicyVersion: "poly-v1",
             producedAt: now,
+            spatialPolicyVersionId: Guid.NewGuid(),
+            spatialPolicyFingerprint: "test-policy-fingerprint",
+            boundaryToleranceM: 2.0,
+            matchingDistanceThresholdM: 1.5,
+            rowBearingToleranceDeg: 15.0,
+            gridSpacingToleranceM: 0.5,
             createdAt: now);
 
         return batch;

@@ -98,6 +98,7 @@ public static class DependencyInjection
         services.AddScoped<IPlantHealthMasterDataQueries, PlantHealthMasterDataQueries>();
         services.AddScoped<IPlantConditionRepository, PlantConditionRepository>();
         services.AddScoped<IPlantRepository, PlantRepository>();
+        services.AddScoped<IPlantProfileRepository, PlantProfileRepository>();
         services.AddScoped<
             IPlantInventoryChangeReportRepository,
             PlantInventoryChangeReportRepository>();

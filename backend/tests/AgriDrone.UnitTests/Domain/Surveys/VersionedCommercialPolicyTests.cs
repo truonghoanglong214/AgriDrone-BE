@@ -10,6 +10,16 @@ public sealed class VersionedCommercialPolicyTests
         new(2026, 11, 10, 8, 0, 0, TimeSpan.Zero);
     private static readonly Guid ActorId = Guid.NewGuid();
 
+    [Theory]
+    [InlineData("2026-11-10T07:00:00Z", "2026-11-17T17:00:00Z")]
+    [InlineData("2026-11-10T17:00:00Z", "2026-11-18T17:00:00Z")]
+    [InlineData("2026-12-31T16:59:59Z", "2027-01-07T17:00:00Z")]
+    public void SevenDayRefundDeadlineUsesVietnamCalendarAndExcludesNoticeDate(string notice, string expected)
+    {
+        Assert.Equal(DateTimeOffset.Parse(expected, CultureInfo.InvariantCulture),
+            ClaimPolicy.CalculateSevenDayDeadline(DateTimeOffset.Parse(notice, CultureInfo.InvariantCulture)));
+    }
+
     [Fact]
     public void SurveyServiceRevisionValidInputCreatesSuccessfully()
     {

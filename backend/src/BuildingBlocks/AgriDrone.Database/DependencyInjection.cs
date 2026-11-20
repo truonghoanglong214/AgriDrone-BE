@@ -51,6 +51,14 @@ public static class DependencyInjection
             SurveyOrderOperationalContextV3Query>();
         services.AddScoped<ISurveyOrderOperationalContextV4Query,
             SurveyOrderOperationalContextV4Query>();
+        services.AddScoped<ISurveyOrderCaptureContextV5Query,
+            SurveyOrderCaptureContextV5Query>();
+        services.AddScoped<IActiveCaptureAssignmentGuard,
+            ActiveCaptureAssignmentGuard>();
+        services.TryAddSingleton<ISurveyCaptureExecutionProbe,
+            NoopSurveyCaptureExecutionProbe>();
+        services.AddScoped<ISurveyCaptureExecutionCoordinator,
+            SurveyCaptureExecutionCoordinator>();
         services.AddScoped<ISystemManagerSurveyOrderQueries,
             SystemManagerSurveyOrderQueries>();
         services.AddScoped<IV3FollowUpBaselineQuery,
@@ -93,12 +101,13 @@ public static class DependencyInjection
             IntegrationConsumerNames.Be1MappingCandidatesApprovedV1);
 
         services.AddScoped<
-            IIntegrationMessageHandler<BaselineMappingCandidatesReadyV3>,
-            BaselineMappingCandidatesReadyV3Handler>();
-        services.AddIntegrationConsumer<BaselineMappingCandidatesReadyV3Processor>(
-            IntegrationConsumerNames.Be1BaselineMappingCandidatesReadyV3);
+            IIntegrationMessageHandler<MappingCandidatesReadyV4>,
+            MappingCandidatesReadyV4Handler>();
+        services.AddIntegrationConsumer<MappingCandidatesReadyV4Processor>(
+            IntegrationConsumerNames.Be1MappingCandidatesReadyV4);
 
-        services.AddScoped<IFarmBaseMapPublicationOrchestrator, FarmBaseMapPublicationOrchestrator>();
+        services.AddScoped<IFarmBaseMapInternalApprovalOrchestrator, FarmBaseMapInternalApprovalOrchestrator>();
+        services.AddScoped<IOrderPoleEvidenceReader, OrderPoleEvidenceReader>();
 
         return services;
     }
@@ -132,6 +141,7 @@ public static class DependencyInjection
         services.AddIntegrationConsumer<Health.PlantHealthAnalysisReadyV4Processor>(IntegrationConsumerNames.Be1PlantHealthAnalysisReadyV4);
         services.AddScoped<Health.PlantHealthReviewService>();
         services.AddScoped<AgriDrone.IntegrationContracts.Health.IPlantHealthPublicationQuery, Health.PlantHealthPublicationQuery>();
+        services.AddScoped<IQualityRefundNoticeQuery, Health.QualityRefundNoticeQuery>();
         services.AddScoped<AgriDrone.Modules.Surveys.Application.Features.Results.PlantHealth.PublishPlantHealthSurveyResult.IPlantHealthPublishedResultReader>(sp => sp.GetRequiredService<Health.PlantHealthReviewService>());
         services.AddScoped<IIntegrationMessageHandler<AgriDrone.IntegrationContracts.Health.PlantHealthPublicationNotificationRequestedV1>, Health.PlantHealthPublicationNotificationHandler>();
         services.AddIntegrationConsumer<Health.PlantHealthPublicationNotificationProcessor>(IntegrationConsumerNames.PlantHealthPublicationNotificationV1);

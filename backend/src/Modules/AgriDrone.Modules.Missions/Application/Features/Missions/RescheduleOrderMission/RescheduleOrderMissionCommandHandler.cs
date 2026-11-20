@@ -45,6 +45,8 @@ internal sealed class RescheduleOrderMissionCommandHandler(
             return Result.Failure<MissionResponse>(MissionError.NotFound(request.MissionId));
         if (mission.SurveyOrderId is not Guid orderId || mission.Purpose is not MissionPurpose purpose)
             return Result.Failure<MissionResponse>(MissionOperationError.MissionNotOrderBound());
+        if (mission.CaptureAttemptId.HasValue)
+            return Result.Failure<MissionResponse>(MissionOperationError.V3CoordinatorRequired());
         var recovering = mission.Status == MissionStatus.FlightFailed;
         if (mission.Status is not (MissionStatus.Scheduled or MissionStatus.FlightFailed))
             return Result.Failure<MissionResponse>(MissionError.InvalidTransition(

@@ -1,5 +1,13 @@
 namespace AgriDrone.IntegrationContracts.Surveys;
 
+public enum CaptureCancellationDecisionKind
+{
+    CustomerBeforeCapture,
+    CustomerAfterAcceptableCapture,
+    OperationalPostponement,
+    ServiceFailure
+}
+
 public record PrepareCaptureAttemptRequest(
     Guid OrderId,
     uint ExpectedOrderVersion,
@@ -7,8 +15,8 @@ public record PrepareCaptureAttemptRequest(
     Guid? DroneId,
     string? Reason,
     Guid CorrelationId,
-    Guid? OperationId = null,
-    string? PayloadFingerprint = null);
+    Guid OperationId,
+    string PayloadFingerprint);
 
 public record PrepareCaptureAttemptResult(
     bool Success,
@@ -28,9 +36,8 @@ public record StartCaptureFlightRequest(
     Guid MissionId,
     Guid ActorId,
     Guid CorrelationId,
-    DateTimeOffset StartedAt,
-    Guid? OperationId = null,
-    string? PayloadFingerprint = null);
+    Guid OperationId,
+    string PayloadFingerprint);
 
 public record StartCaptureFlightResult(
     bool Success,
@@ -50,8 +57,8 @@ public record EndCaptureFlightRequest(
     Guid CorrelationId,
     DateTimeOffset EndedAt,
     string FlightCompletedReceipt,
-    Guid? OperationId = null,
-    string? PayloadFingerprint = null);
+    Guid OperationId,
+    string PayloadFingerprint);
 
 public record EndCaptureFlightResult(
     bool Success,
@@ -72,12 +79,35 @@ public record RecordFlightFailureRequest(
     DateTimeOffset FailedAt,
     string FailureReason,
     string FailureIncidentEvidence,
-    Guid? OperationId = null,
-    string? PayloadFingerprint = null);
+    Guid OperationId,
+    string PayloadFingerprint);
 
 public record RecordFlightFailureResult(
     bool Success,
     Guid AttemptId,
+    string Status,
+    uint Version,
+    string? ErrorCode = null,
+    string? ErrorMessage = null);
+
+public record FreezeCaptureInputManifestRequest(
+    Guid OrderId,
+    uint ExpectedOrderVersion,
+    Guid AttemptId,
+    uint ExpectedAttemptVersion,
+    Guid MissionId,
+    Guid ActorId,
+    Guid CorrelationId,
+    Guid OperationId,
+    string PayloadFingerprint);
+
+public record FreezeCaptureInputManifestResult(
+    bool Success,
+    Guid AttemptId,
+    Guid ManifestId,
+    string ManifestFingerprint,
+    int TotalFileCount,
+    long TotalSizeBytes,
     string Status,
     uint Version,
     string? ErrorCode = null,
@@ -93,10 +123,9 @@ public record ApproveCaptureInputRequest(
     Guid ProcessingJobId,
     Guid ActorId,
     Guid CorrelationId,
-    DateTimeOffset ApprovedAt,
-    string? Notes = null,
-    Guid? OperationId = null,
-    string? PayloadFingerprint = null);
+    Guid OperationId,
+    string PayloadFingerprint,
+    string? Notes = null);
 
 public record ApproveCaptureInputResult(
     bool Success,
@@ -112,14 +141,15 @@ public record CreateQualityReflightRequest(
     uint ExpectedOrderVersion,
     Guid ParentAttemptId,
     uint ExpectedParentAttemptVersion,
-    Guid NewMissionId,
+    Guid DroneId,
+    DateTimeOffset ProposedStartAt,
+    DateTimeOffset ProposedEndAt,
     Guid ActorId,
     Guid CorrelationId,
     string Reason,
     string TechnicalQualityEvidence,
-    DateTimeOffset CreatedAt,
-    Guid? OperationId = null,
-    string? PayloadFingerprint = null);
+    Guid OperationId,
+    string PayloadFingerprint);
 
 public record CreateQualityReflightResult(
     bool Success,
@@ -136,11 +166,14 @@ public record CancelCaptureOrderRequest(
     uint ExpectedOrderVersion,
     Guid ActorId,
     Guid RequesterId,
-    string Reason,
+    CaptureCancellationDecisionKind DecisionKind,
+    decimal RequestedRetentionAmount,
+    Guid? InputApprovalEvidenceId,
+    string ReasonCode,
+    string ReasonDescription,
     Guid CorrelationId,
-    DateTimeOffset CancelledAt,
-    Guid? OperationId = null,
-    string? PayloadFingerprint = null);
+    Guid OperationId,
+    string PayloadFingerprint);
 
 public record CancelCaptureOrderResult(
     bool Success,
@@ -148,7 +181,33 @@ public record CancelCaptureOrderResult(
     string Status,
     decimal RefundAmount,
     decimal RetainedAmount,
+    Guid? CancellationDecisionId = null,
     Guid? RefundObligationId = null,
+    string? ErrorCode = null,
+    string? ErrorMessage = null);
+
+public record RecordCaptureNoShowRequest(
+    Guid OrderId,
+    uint ExpectedOrderVersion,
+    Guid AppointmentId,
+    uint ExpectedAppointmentVersion,
+    Guid ActorId,
+    DateTimeOffset OccurredAt,
+    string Reason,
+    string EvidenceReference,
+    Guid CorrelationId,
+    Guid OperationId,
+    string PayloadFingerprint);
+
+public record RecordCaptureNoShowResult(
+    bool Success,
+    Guid OrderId,
+    Guid AppointmentId,
+    Guid NoShowId,
+    int OccurrenceIndex,
+    string Disposition,
+    string OrderStatus,
+    string AppointmentStatus,
     string? ErrorCode = null,
     string? ErrorMessage = null);
 
@@ -170,6 +229,10 @@ public interface ISurveyCaptureExecutionCoordinator
         RecordFlightFailureRequest request,
         CancellationToken cancellationToken = default);
 
+    Task<FreezeCaptureInputManifestResult> FreezeInputManifestAsync(
+        FreezeCaptureInputManifestRequest request,
+        CancellationToken cancellationToken = default);
+
     Task<ApproveCaptureInputResult> ApproveInputAsync(
         ApproveCaptureInputRequest request,
         CancellationToken cancellationToken = default);
@@ -180,5 +243,9 @@ public interface ISurveyCaptureExecutionCoordinator
 
     Task<CancelCaptureOrderResult> CancelOrderAsync(
         CancelCaptureOrderRequest request,
+        CancellationToken cancellationToken = default);
+
+    Task<RecordCaptureNoShowResult> RecordNoShowAsync(
+        RecordCaptureNoShowRequest request,
         CancellationToken cancellationToken = default);
 }

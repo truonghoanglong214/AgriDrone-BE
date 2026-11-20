@@ -30,6 +30,33 @@ internal sealed class PublishClaimPolicyCommandHandler(
                 BusinessPolicyError.CurrentUserRequired());
         }
 
+        try
+        {
+            return await unitOfWork.ExecuteInTransactionAsync(
+                async ct =>
+                {
+                    await unitOfWork.AcquireBusinessPolicyWriteLockAsync(ct);
+                    return await PublishLockedAsync(request, actorId, ct);
+                },
+                cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Result.Failure<PublishClaimPolicyResponse>(
+                BusinessPolicyError.ConcurrentUpdate());
+        }
+        catch (DbUpdateException ex)
+        {
+            return Result.Failure<PublishClaimPolicyResponse>(
+                BusinessPolicyError.ConcurrentUpdate(ex.Message));
+        }
+    }
+
+    private async Task<Result<PublishClaimPolicyResponse>> PublishLockedAsync(
+        PublishClaimPolicyCommand request,
+        Guid actorId,
+        CancellationToken cancellationToken)
+    {
         var latestPolicy = await policyRepository.GetLatestClaimPolicyAsync(
             cancellationToken);
 
@@ -100,39 +127,20 @@ internal sealed class PublishClaimPolicyCommandHandler(
             newPolicy.ReasonCode
         });
 
-        try
-        {
-            await unitOfWork.ExecuteInTransactionAsync(
-                async ct =>
-                {
-                    policyRepository.AddClaimPolicy(newPolicy);
+        policyRepository.AddClaimPolicy(newPolicy);
 
-                    auditWriter.AddSystemAdminAction(
-                        unitOfWork,
-                        actorId,
-                        executionContext.CorrelationId,
-                        "ClaimPolicy",
-                        newPolicy.Id,
-                        "PUBLISH_CLAIM_POLICY",
-                        oldData,
-                        newData,
-                        now);
+        auditWriter.AddSystemAdminAction(
+            unitOfWork,
+            actorId,
+            executionContext.CorrelationId,
+            "ClaimPolicy",
+            newPolicy.Id,
+            "PUBLISH_CLAIM_POLICY",
+            oldData,
+            newData,
+            now);
 
-                    await unitOfWork.SaveChangesAsync(ct);
-                    return true;
-                },
-                cancellationToken);
-        }
-        catch (DbUpdateConcurrencyException)
-        {
-            return Result.Failure<PublishClaimPolicyResponse>(
-                BusinessPolicyError.ConcurrentUpdate());
-        }
-        catch (DbUpdateException ex)
-        {
-            return Result.Failure<PublishClaimPolicyResponse>(
-                BusinessPolicyError.ConcurrentUpdate(ex.Message));
-        }
+        await unitOfWork.SaveChangesAsync(cancellationToken);
 
         return Result.Success(new PublishClaimPolicyResponse(
             newPolicy.Id,

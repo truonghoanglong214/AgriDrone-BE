@@ -1,0 +1,41 @@
+{
+    admin off
+    email {$ACME_EMAIL:admin@agridrone.vn}
+}
+
+{$API_DOMAIN} {
+    encode zstd gzip
+
+    reverse_proxy api:8080 {
+        health_uri /health/live
+        health_interval 15s
+        health_timeout 5s
+    }
+
+    log {
+        output stdout
+        format json
+    }
+}
+
+{$MEDIA_DOMAIN} {
+    # Block internal MinIO console/admin endpoints
+    @blocked_paths {
+        path /minio/ui*
+        path /minio/admin*
+    }
+    respond @blocked_paths 403
+
+    reverse_proxy minio:9000 {
+        # Keep Host header as requested for AWS SigV4 presigned URLs
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+    }
+
+    log {
+        output stdout
+        format json
+    }
+}

@@ -10,7 +10,7 @@ public sealed class MappingCandidate : AggregateRoot
     public Guid BatchId { get; private set; }
     public Guid? ZoneId { get; private set; }
     public Guid CandidateId { get; private set; }
-    public Guid SourceObservationId { get; private set; }
+    public Guid? SourceObservationId { get; private set; }
     public IReadOnlyList<Guid> EvidenceMediaAssetIds { get; private set; } = [];
     public Point OriginalPosition { get; private set; } = null!;
     public int? ProposedRowIndex { get; private set; }
@@ -42,7 +42,7 @@ public sealed class MappingCandidate : AggregateRoot
         Guid batchId,
         Guid? zoneId,
         Guid candidateId,
-        Guid sourceObservationId,
+        Guid? sourceObservationId,
         IReadOnlyList<Guid> evidenceMediaAssetIds,
         Point originalPosition,
         int? proposedRowIndex,
@@ -60,7 +60,7 @@ public sealed class MappingCandidate : AggregateRoot
         DomainGuard.NotEmpty(batchId);
         if (zoneId.HasValue) DomainGuard.NotEmpty(zoneId.Value);
         DomainGuard.NotEmpty(candidateId);
-        DomainGuard.NotEmpty(sourceObservationId);
+        if (sourceObservationId.HasValue) DomainGuard.NotEmpty(sourceObservationId.Value);
         ArgumentNullException.ThrowIfNull(originalPosition);
         DomainGuard.Utc(createdAt);
 

@@ -68,6 +68,17 @@ internal static class SurveyPaymentCommandSupport
             SurveyOrderStatus.PendingReview => "PENDING_REVIEW",
             SurveyOrderStatus.Completed => "COMPLETED",
             SurveyOrderStatus.Cancelled => "CANCELLED",
+            SurveyOrderStatus.AwaitingAppointment => "AWAITING_APPOINTMENT",
+            SurveyOrderStatus.AwaitingDeposit => "AWAITING_DEPOSIT",
+            SurveyOrderStatus.ReadyForCapture => "READY_FOR_CAPTURE",
+            SurveyOrderStatus.Capturing => "CAPTURING",
+            SurveyOrderStatus.AwaitingCaptureUpload => "AWAITING_CAPTURE_UPLOAD",
+            SurveyOrderStatus.AwaitingInputReview => "AWAITING_INPUT_REVIEW",
+            SurveyOrderStatus.AwaitingProcessing => "AWAITING_PROCESSING",
+            SurveyOrderStatus.Processing => "PROCESSING",
+            SurveyOrderStatus.AwaitingReflightDecision =>
+                "AWAITING_REFLIGHT_DECISION",
+            SurveyOrderStatus.AwaitingSettlement => "AWAITING_SETTLEMENT",
             _ => throw new ArgumentOutOfRangeException(nameof(status))
         };
 

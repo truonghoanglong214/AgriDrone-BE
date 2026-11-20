@@ -23,6 +23,8 @@ public sealed class DroneMission : AggregateRoot
 
     public Guid? SurveyOrderId { get; private set; }
 
+    public Guid? CaptureAttemptId { get; private set; }
+
     public MissionPurpose? Purpose { get; private set; }
 
     public Guid? PreparationOperationId { get; private set; }
@@ -40,6 +42,25 @@ public sealed class DroneMission : AggregateRoot
     public bool RequiresBaselineCompletion { get; private set; }
 
     public MissionPurpose? MissionPurpose => Purpose;
+
+    public void BindCaptureAttempt(Guid captureAttemptId)
+    {
+        DomainGuard.NotEmpty(captureAttemptId, nameof(captureAttemptId));
+
+        if (!SurveyOrderId.HasValue)
+        {
+            throw new InvalidOperationException(
+                "Only an Order-bound mission can be linked to a capture attempt.");
+        }
+
+        if (CaptureAttemptId.HasValue && CaptureAttemptId.Value != captureAttemptId)
+        {
+            throw new InvalidOperationException(
+                $"Mission is already linked to capture attempt '{CaptureAttemptId.Value}'.");
+        }
+
+        CaptureAttemptId = captureAttemptId;
+    }
 
     public Guid? SourceMapVersionId { get; private set; }
 
@@ -92,6 +113,10 @@ public sealed class DroneMission : AggregateRoot
     public DateTimeOffset CreatedAt { get; private set; }
 
     public DateTimeOffset UpdatedAt { get; private set; }
+
+    public Guid? InternallyApprovedMapVersionId { get; private set; }
+
+    public DateTimeOffset? MapInternallyApprovedAt { get; private set; }
 
     public Guid? PublishedMapVersionId { get; private set; }
 
@@ -378,6 +403,7 @@ public sealed class DroneMission : AggregateRoot
 
         if (!requiresBaselineCompletion &&
             purpose != global::AgriDrone.Modules.Missions.Domain.Missions.MissionPurpose.BaselineMapping &&
+            purpose != global::AgriDrone.Modules.Missions.Domain.Missions.MissionPurpose.Capture &&
             sourceMapVersionId is null)
         {
             throw new ArgumentException(
@@ -580,6 +606,11 @@ public sealed class DroneMission : AggregateRoot
     public void RecoverFailedFlight(Guid droneId, DateTimeOffset scheduledAt,
         DateTimeOffset scheduledEndAt, DateTimeOffset changedAt)
     {
+        if (CaptureAttemptId.HasValue)
+        {
+            throw new InvalidOperationException(
+                "V3 capture Missions cannot be recovered in place; create an approved successor Capture Attempt.");
+        }
         DomainGuard.NotEmpty(droneId);
         DomainGuard.Utc(scheduledAt);
         DomainGuard.Utc(scheduledEndAt);
@@ -906,6 +937,100 @@ public sealed class DroneMission : AggregateRoot
         RequiresBaselineCompletion = false;
         UpdatedAt = publishedAt;
         return true;
+    }
+
+    public DroneMissionApprovalOutcome ApplyInternallyApprovedFarmBaseMap(
+        Guid surveyOrderId,
+        Guid approvalId,
+        Guid farmBaseMapVersionId,
+        DateTimeOffset approvedAt)
+    {
+        DomainGuard.NotEmpty(surveyOrderId);
+        DomainGuard.NotEmpty(approvalId);
+        DomainGuard.NotEmpty(farmBaseMapVersionId);
+        DomainGuard.Utc(approvedAt);
+
+        if (SurveyOrderId != surveyOrderId)
+        {
+            return DroneMissionApprovalOutcome.Conflict;
+        }
+
+        if (Purpose == global::AgriDrone.Modules.Missions.Domain.Missions.MissionPurpose.BaselineMapping)
+        {
+            if (InternallyApprovedMapVersionId == farmBaseMapVersionId &&
+                MappingApprovalId == approvalId &&
+                Status == MissionStatus.Completed)
+            {
+                return DroneMissionApprovalOutcome.NoChange;
+            }
+
+            if (InternallyApprovedMapVersionId.HasValue &&
+                (InternallyApprovedMapVersionId != farmBaseMapVersionId || MappingApprovalId != approvalId))
+            {
+                return DroneMissionApprovalOutcome.Conflict;
+            }
+
+            if (Status != MissionStatus.AwaitingReview ||
+                ProcessingStatus != ProcessingStatus.ReviewRequired)
+            {
+                return DroneMissionApprovalOutcome.Conflict;
+            }
+
+            InternallyApprovedMapVersionId = farmBaseMapVersionId;
+            MappingApprovalId = approvalId;
+            MapInternallyApprovedAt = approvedAt;
+            Status = MissionStatus.Completed;
+            ProcessingStatus = ProcessingStatus.Completed;
+            UpdatedAt = approvedAt;
+            return DroneMissionApprovalOutcome.Applied;
+        }
+
+        if (!RequiresBaselineCompletion &&
+            SourceMapVersionId == farmBaseMapVersionId &&
+            !InternallyApprovedMapVersionId.HasValue)
+        {
+            return DroneMissionApprovalOutcome.NoChange;
+        }
+
+        if (RequiresBaselineCompletion)
+        {
+            if (SourceMapVersionId.HasValue && SourceMapVersionId != farmBaseMapVersionId)
+            {
+                return DroneMissionApprovalOutcome.Conflict;
+            }
+
+            SourceMapVersionId = farmBaseMapVersionId;
+            RequiresBaselineCompletion = false;
+            UpdatedAt = approvedAt;
+            return DroneMissionApprovalOutcome.Applied;
+        }
+
+        if (InternallyApprovedMapVersionId == farmBaseMapVersionId &&
+            MappingApprovalId == approvalId &&
+            Status == MissionStatus.Completed)
+        {
+            return DroneMissionApprovalOutcome.NoChange;
+        }
+
+        if (InternallyApprovedMapVersionId.HasValue &&
+            (InternallyApprovedMapVersionId != farmBaseMapVersionId || MappingApprovalId != approvalId))
+        {
+            return DroneMissionApprovalOutcome.Conflict;
+        }
+
+        // For follow-up technical mapping mission: mark completed
+        if (Status == MissionStatus.AwaitingReview && ProcessingStatus == ProcessingStatus.ReviewRequired)
+        {
+            InternallyApprovedMapVersionId = farmBaseMapVersionId;
+            MappingApprovalId = approvalId;
+            MapInternallyApprovedAt = approvedAt;
+            Status = MissionStatus.Completed;
+            ProcessingStatus = ProcessingStatus.Completed;
+            UpdatedAt = approvedAt;
+            return DroneMissionApprovalOutcome.Applied;
+        }
+
+        return DroneMissionApprovalOutcome.Conflict;
     }
     public bool ApplyHealthReviewState(
     Guid handoffId,

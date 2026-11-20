@@ -2,7 +2,7 @@ namespace AgriDrone.Modules.Farms.Application.Features.Maps.GetFarmBaseMapDraft;
 
 public sealed record CandidateDto(
     Guid CandidateId,
-    Guid SourceObservationId,
+    Guid? SourceObservationId,
     IReadOnlyList<Guid> EvidenceMediaAssetIds,
     double Longitude,
     double Latitude,

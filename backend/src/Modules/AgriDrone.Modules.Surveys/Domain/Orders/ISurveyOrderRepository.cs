@@ -15,5 +15,7 @@ public interface ISurveyOrderRepository
 
     void AddCommercialSnapshot(SurveyOrderCommercialSnapshot snapshot);
 
+    void AddDepositObligation(SurveyDepositObligation obligation);
+
     void AddStateHistory(OrderStateHistory history);
 }

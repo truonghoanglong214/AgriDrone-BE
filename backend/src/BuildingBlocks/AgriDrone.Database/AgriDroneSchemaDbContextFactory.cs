@@ -20,12 +20,22 @@ public sealed class AgriDroneSchemaDbContextFactory
 
         var configuration = new ConfigurationBuilder()
             .SetBasePath(configurationDirectory)
-            .AddJsonFile("appsettings.json", optional: false)
+            .AddJsonFile("appsettings.json", optional: true)
             .AddJsonFile($"appsettings.{environment}.json", optional: true)
             .AddEnvironmentVariables()
             .Build();
 
-        var connectionString = Environment.GetEnvironmentVariable(ConnectionStringVariable)
+        string? connectionString = null;
+        for (var i = 0; i < args.Length; i++)
+        {
+            if ((args[i] == "--connection" || args[i] == "-c") && i + 1 < args.Length)
+            {
+                connectionString = args[i + 1];
+                break;
+            }
+        }
+
+        connectionString ??= Environment.GetEnvironmentVariable(ConnectionStringVariable)
             ?? configuration.GetConnectionString(ConnectionStringName);
 
         if (string.IsNullOrWhiteSpace(connectionString))
@@ -77,7 +87,6 @@ public sealed class AgriDroneSchemaDbContextFactory
             directory = directory.Parent;
         }
 
-        throw new InvalidOperationException(
-            "Could not locate src/AgriDrone.Api/appsettings.json from the current directory.");
+        return Directory.GetCurrentDirectory();
     }
 }

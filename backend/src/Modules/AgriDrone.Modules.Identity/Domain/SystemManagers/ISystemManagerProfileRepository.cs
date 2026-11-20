@@ -19,6 +19,11 @@ public interface IFarmManagerAssignmentRepository
         Guid farmId,
         CancellationToken cancellationToken = default);
 
+    Task<FarmManagerAssignment?> GetActiveByFarmIdForUpdateAsync(
+        Guid farmId,
+        CancellationToken cancellationToken = default) =>
+        GetActiveByFarmIdAsync(farmId, cancellationToken);
+
     Task<IReadOnlyCollection<FarmManagerAssignment>> GetActiveByProfileIdAsync(
         Guid profileId,
         CancellationToken cancellationToken = default);

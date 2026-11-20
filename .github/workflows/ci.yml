@@ -1,0 +1,41 @@
+name: AgriDrone CI Pipeline
+
+on:
+  push:
+    branches: [ "LongTH", "main" ]
+  pull_request:
+    branches: [ "LongTH", "main" ]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-validate:
+    name: Build .NET 10 & Validate Configuration
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore Local .NET Tools
+        run: dotnet tool restore
+        working-directory: backend
+
+      - name: Restore Dependencies
+        run: dotnet restore backend/AgriDrone.sln
+
+      - name: Build Solution (0 Warning, 0 Error policy)
+        run: dotnet build backend/AgriDrone.sln --no-restore --nologo -c Release
+        # CRITICAL PROJECT INSTRUCTION: DO NOT RUN 'dotnet test' BEFORE PHASE V3-10!
+
+      - name: Validate Production Compose Config
+        run: |
+          docker compose --env-file infrastructure/env/.env.production.example -f compose.production.yaml config --quiet
+          echo "Production compose configuration syntax is VALID."

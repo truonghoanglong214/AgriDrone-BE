@@ -1,0 +1,50 @@
+# Standalone Dockerfile for AgriDrone Database Migrator
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+WORKDIR /app
+
+COPY Directory.Build.props Directory.Packages.props ./
+COPY .config/dotnet-tools.json ./.config/
+
+COPY src/AgriDrone.Api/AgriDrone.Api.csproj src/AgriDrone.Api/
+COPY src/BuildingBlocks/AgriDrone.Database/AgriDrone.Database.csproj src/BuildingBlocks/AgriDrone.Database/
+COPY src/BuildingBlocks/AgriDrone.IntegrationContracts/AgriDrone.IntegrationContracts.csproj src/BuildingBlocks/AgriDrone.IntegrationContracts/
+COPY src/BuildingBlocks/AgriDrone.SharedInfrastructure/AgriDrone.SharedInfrastructure.csproj src/BuildingBlocks/AgriDrone.SharedInfrastructure/
+COPY src/BuildingBlocks/AgriDrone.SharedKernel/AgriDrone.SharedKernel.csproj src/BuildingBlocks/AgriDrone.SharedKernel/
+COPY src/Integrations/AgriDrone.Integrations.AI/AgriDrone.Integrations.AI.csproj src/Integrations/AgriDrone.Integrations.AI/
+COPY src/Integrations/AgriDrone.Integrations.Email/AgriDrone.Integrations.Email.csproj src/Integrations/AgriDrone.Integrations.Email/
+COPY src/Integrations/AgriDrone.Integrations.Media/AgriDrone.Integrations.Media.csproj src/Integrations/AgriDrone.Integrations.Media/
+COPY src/Integrations/AgriDrone.Integrations.SePay/AgriDrone.Integrations.SePay.csproj src/Integrations/AgriDrone.Integrations.SePay/
+COPY src/Modules/AgriDrone.Modules.Farms/AgriDrone.Modules.Farms.csproj src/Modules/AgriDrone.Modules.Farms/
+COPY src/Modules/AgriDrone.Modules.Identity/AgriDrone.Modules.Identity.csproj src/Modules/AgriDrone.Modules.Identity/
+COPY src/Modules/AgriDrone.Modules.Missions/AgriDrone.Modules.Missions.csproj src/Modules/AgriDrone.Modules.Missions/
+COPY src/Modules/AgriDrone.Modules.Notifications/AgriDrone.Modules.Notifications.csproj src/Modules/AgriDrone.Modules.Notifications/
+COPY src/Modules/AgriDrone.Modules.Plants/AgriDrone.Modules.Plants.csproj src/Modules/AgriDrone.Modules.Plants/
+COPY src/Modules/AgriDrone.Modules.Surveys/AgriDrone.Modules.Surveys.csproj src/Modules/AgriDrone.Modules.Surveys/
+
+RUN dotnet restore src/AgriDrone.Api/AgriDrone.Api.csproj
+RUN dotnet tool restore
+
+COPY src/ src/
+
+RUN dotnet build src/AgriDrone.Api/AgriDrone.Api.csproj -c Release --no-restore
+
+ENV Jwt__Secret="BuildTimePlaceholderSecretKeyDoNotUseInProd1234567890!"
+RUN dotnet ef migrations bundle \
+    --project src/BuildingBlocks/AgriDrone.Database/AgriDrone.Database.csproj \
+    --startup-project src/AgriDrone.Api/AgriDrone.Api.csproj \
+    --context AgriDroneSchemaDbContext \
+    --output /app/efbundle \
+    --configuration Release \
+    --self-contained \
+    -r linux-x64 \
+    --no-build
+
+FROM mcr.microsoft.com/dotnet/runtime-deps:10.0 AS runtime
+WORKDIR /app
+
+USER $APP_UID
+
+COPY --from=build /app/efbundle ./
+COPY src/AgriDrone.Api/appsettings.json ./
+
+ENTRYPOINT ["./efbundle"]

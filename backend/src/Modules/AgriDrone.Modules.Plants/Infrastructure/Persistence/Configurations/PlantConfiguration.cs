@@ -119,6 +119,10 @@ public sealed class PlantConfiguration : IEntityTypeConfiguration<Plant>
             .HasColumnName("replaced_plant_id")
             .HasColumnType("uuid");
 
+        builder.Property(plant => plant.PlantProfileId)
+            .HasColumnName("plant_profile_id")
+            .HasColumnType("uuid");
+
         builder.Property(plant => plant.CreatedAt)
             .HasColumnName("created_at")
             .HasColumnType("timestamp with time zone")
@@ -151,6 +155,9 @@ public sealed class PlantConfiguration : IEntityTypeConfiguration<Plant>
         builder.HasIndex(plant => plant.FarmBaseMapVersionId)
             .HasDatabaseName("ix_plants_farm_base_map_version");
 
+        builder.HasIndex(plant => plant.PlantProfileId)
+            .HasDatabaseName("ix_plants_plant_profile");
+
         builder.HasIndex(plant => new
         {
             plant.FarmBaseMapVersionId,
@@ -170,6 +177,11 @@ public sealed class PlantConfiguration : IEntityTypeConfiguration<Plant>
         builder.HasIndex(plant => new { plant.FarmId, plant.LifecycleStatus })
             .HasDatabaseName("ix_plants_farm_lifecycle");
 
+        builder.HasIndex(plant => new { plant.FarmId, plant.PlantProfileId })
+            .HasDatabaseName("uq_plants_farm_plant_profile")
+            .HasFilter("plant_profile_id IS NOT NULL")
+            .IsUnique();
+
         builder.HasIndex(plant => plant.Location)
             .HasDatabaseName("ix_plants_location_gist")
             .HasMethod("gist");
@@ -185,5 +197,12 @@ public sealed class PlantConfiguration : IEntityTypeConfiguration<Plant>
             .HasForeignKey(plant => plant.ReplacedPlantId)
             .OnDelete(DeleteBehavior.SetNull)
             .HasConstraintName("fk_plants_replaced_plant_id");
+
+        builder.HasOne<PlantProfile>()
+            .WithMany()
+            .HasForeignKey(plant => new { plant.PlantProfileId, plant.FarmId })
+            .HasPrincipalKey(profile => new { profile.Id, profile.FarmId })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_plants_plant_profile_same_farm");
     }
 }

@@ -98,7 +98,9 @@ internal sealed class SurveyPaymentProcessingRepository(
             purpose,
             evaluatedAt,
             cancellationToken);
-        var requiresAppointment = (purpose == PaymentPurpose.FinalBalance && !order.PostFlightSettlement) ||
+        var requiresAppointment =
+            (purpose == PaymentPurpose.FinalBalance && !order.PostFlightSettlement) ||
+            purpose == PaymentPurpose.OrderDeposit ||
             (order.RequiresBaselineMapping && order.Status == SurveyOrderStatus.AwaitingBaselineDeposit);
         if (!appointmentId.HasValue && requiresAppointment)
         {
@@ -122,10 +124,15 @@ internal sealed class SurveyPaymentProcessingRepository(
                 """)
             .ToListAsync(cancellationToken);
 
+        var depositObligation = await ReadDepositObligationForUpdateAsync(
+            order.DepositObligationId,
+            cancellationToken);
+
         return Result.Success(new SurveyPaymentOwnerState(
             order,
             appointmentId ?? Guid.Empty,
-            activePayments.SingleOrDefault()));
+            activePayments.SingleOrDefault(),
+            depositObligation));
     }
 
     public async Task<Result<SurveyPaymentEventState>>
@@ -169,6 +176,14 @@ internal sealed class SurveyPaymentProcessingRepository(
         var order = await context.SurveyOrders.SingleAsync(
             item => item.Id == orderId,
             cancellationToken);
+        var depositObligation = await ReadDepositObligationForUpdateAsync(
+            payment.DepositObligationId,
+            cancellationToken);
+        var cancellationDecision = order.Status == SurveyOrderStatus.Cancelled
+            ? await ReadCancellationDispositionForUpdateAsync(
+                order.Id,
+                cancellationToken)
+            : null;
         var duplicate = await context.PaymentEvents.AsNoTracking().AnyAsync(
             item => item.Provider == provider &&
                     item.DeduplicationKey == deduplicationKey,
@@ -177,7 +192,9 @@ internal sealed class SurveyPaymentProcessingRepository(
         return Result.Success(new SurveyPaymentEventState(
             order,
             payment,
-            duplicate));
+            duplicate,
+            depositObligation,
+            cancellationDecision));
     }
 
     public async Task<Result<SurveyPriceAdjustmentRequestState>>
@@ -337,6 +354,34 @@ internal sealed class SurveyPaymentProcessingRepository(
         context.PaymentEvents.Add(paymentEvent);
     }
 
+    public void AddFundingReceipt(SurveyFundingReceipt receipt)
+    {
+        ArgumentNullException.ThrowIfNull(receipt);
+        context.EnsureTransaction();
+        context.SurveyFundingReceipts.Add(receipt);
+    }
+
+    public void AddFundingAllocation(SurveyFundingAllocation allocation)
+    {
+        ArgumentNullException.ThrowIfNull(allocation);
+        context.EnsureTransaction();
+        context.SurveyFundingAllocations.Add(allocation);
+    }
+
+    public void AddFundingReversal(SurveyFundingReversal reversal)
+    {
+        ArgumentNullException.ThrowIfNull(reversal);
+        context.EnsureTransaction();
+        context.SurveyFundingReversals.Add(reversal);
+    }
+
+    public void AddRefundObligation(SurveyRefundObligation obligation)
+    {
+        ArgumentNullException.ThrowIfNull(obligation);
+        context.EnsureTransaction();
+        context.SurveyRefundObligations.Add(obligation);
+    }
+
     public void AddPriceAdjustment(PriceAdjustment adjustment)
     {
         ArgumentNullException.ThrowIfNull(adjustment);
@@ -479,9 +524,16 @@ internal sealed class SurveyPaymentProcessingRepository(
         DateTimeOffset evaluatedAt,
         CancellationToken cancellationToken)
     {
-        var purposeSql = purpose == PaymentPurpose.BaselineDeposit
-            ? "'BASELINE_MAPPING'::system.survey_appointment_purpose"
-            : "'PAID_SERVICE'::system.survey_appointment_purpose";
+        var purposeSql = purpose switch
+        {
+            PaymentPurpose.BaselineDeposit =>
+                "'BASELINE_MAPPING'::system.survey_appointment_purpose",
+            PaymentPurpose.FinalBalance =>
+                "'PAID_SERVICE'::system.survey_appointment_purpose",
+            PaymentPurpose.OrderDeposit =>
+                "'CAPTURE'::system.survey_appointment_purpose",
+            _ => throw new InvalidOperationException("Unsupported payment purpose.")
+        };
 
         await using var command = CreateCommand(
             $"""
@@ -497,6 +549,58 @@ internal sealed class SurveyPaymentProcessingRepository(
             new NpgsqlParameter("evaluated_at", evaluatedAt));
         var value = await command.ExecuteScalarAsync(cancellationToken);
         return value is Guid id ? id : null;
+    }
+
+    private async Task<SurveyDepositObligation?> ReadDepositObligationForUpdateAsync(
+        Guid? depositObligationId,
+        CancellationToken cancellationToken)
+    {
+        if (!depositObligationId.HasValue)
+        {
+            return null;
+        }
+
+        var obligations = await context.SurveyDepositObligations
+            .FromSqlInterpolated($$"""
+                SELECT obligation.*
+                FROM survey.survey_deposit_obligations AS obligation
+                WHERE obligation.id = {{depositObligationId.Value}}
+                FOR UPDATE OF obligation
+                """)
+            .ToListAsync(cancellationToken);
+        return obligations.SingleOrDefault();
+    }
+
+    private async Task<SurveyCancellationReceiptDisposition?>
+        ReadCancellationDispositionForUpdateAsync(
+            Guid surveyOrderId,
+            CancellationToken cancellationToken)
+    {
+        await using var command = CreateCommand(
+            """
+            SELECT decision.id, decision.decision_kind::text
+            FROM survey.survey_cancellation_decisions AS decision
+            WHERE decision.survey_order_id = @order_id
+            ORDER BY decision.created_at DESC
+            LIMIT 1
+            FOR UPDATE OF decision
+            """,
+            Id("order_id", surveyOrderId));
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        if (!await reader.ReadAsync(cancellationToken))
+        {
+            return null;
+        }
+
+        var decisionKind = reader.GetString(1) switch
+        {
+            "CUSTOMER_BEFORE_CAPTURE" => CancellationDecisionKind.CustomerBeforeCapture,
+            "CUSTOMER_AFTER_ACCEPTABLE_CAPTURE" => CancellationDecisionKind.CustomerAfterAcceptableCapture,
+            "OPERATIONAL_POSTPONEMENT" => CancellationDecisionKind.OperationalPostponement,
+            "SERVICE_FAILURE" => CancellationDecisionKind.ServiceFailure,
+            _ => throw new InvalidOperationException("Unsupported persisted cancellation decision kind.")
+        };
+        return new SurveyCancellationReceiptDisposition(reader.GetGuid(0), decisionKind);
     }
 
     private async Task<bool> ExistsAsync(

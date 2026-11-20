@@ -40,8 +40,14 @@ public static class IntegrationConsumerNames
     public const string Be1BaselineMappingCandidatesReadyV3 =
         "be1-baseline-mapping-candidates-ready-v3";
 
+    public const string Be1MappingCandidatesReadyV4 =
+        "be1-mapping-candidates-ready-v4";
+
     public const string Be2FarmBaseMapPublishedV3 =
         "be2-farm-base-map-published-v3";
+
+    public const string Be2FarmBaseMapInternallyApprovedV1 =
+        "be2-farm-base-map-internally-approved-v1";
 
     public const string Be1PlantHealthAnalysisReadyV3 =
         "be1-plant-health-analysis-ready-v3";

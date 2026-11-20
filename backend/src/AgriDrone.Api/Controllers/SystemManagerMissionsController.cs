@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Security.Cryptography;
 using System.Text.Json;
 using AgriDrone.Api.Contracts.Missions;
 using AgriDrone.Api.Contracts.Farms;
@@ -70,7 +71,7 @@ public sealed class SystemManagerMissionsController(
         });
     }
 
-    /// <summary>Lưu cây GPS và tùy chọn đồng bộ Farm boundary bằng JSON.</summary>
+    /// <summary>Lưu cây GPS, immutable mapping processing run và tùy chọn đồng bộ Farm boundary bằng JSON.</summary>
     [HttpPost("plant-gps")]
     public async Task<IResult> ReplacePlantGps(
         [FromRoute] Guid farmId, [FromRoute] Guid missionId,
@@ -80,6 +81,14 @@ public sealed class SystemManagerMissionsController(
         var access = await managerAccessService.ResolveFarmAccessAsync(farmId, cancellationToken);
         if (!access.IsAllowed || access.TenantId is null || access.FarmId != farmId)
             return Results.Forbid();
+
+        var actualJsonInputFingerprint = Convert.ToHexString(SHA256.HashData(
+                JsonSerializer.SerializeToUtf8Bytes(new
+                {
+                    request.Trees,
+                    request.Boundary
+                })))
+            .ToLowerInvariant();
 
         var rawTrees = request.Trees ?? [];
         var boundaryPoints = request.Boundary?.ToList() ?? [];
@@ -230,23 +239,40 @@ public sealed class SystemManagerMissionsController(
         var rows = trees.Select(tree => new MissionPlantGpsRow(
             tree.TreeId, tree.Row, tree.Col, tree.Latitude!.Value, tree.Longitude!.Value,
             tree.Confidence, tree.Status, tree.Source)).ToArray();
-        var saved = await plantGpsStore.ReplaceAsync(access.TenantId.Value,
-            farmId, missionId, rows, cancellationToken);
-        return saved
+        var processing = request.Processing;
+        var replaceResult = await plantGpsStore.ReplaceAsync(
+            access.TenantId.Value,
+            farmId,
+            missionId,
+            rows,
+            new MappingProcessingCompletion(
+                processing.ClientOperationId,
+                processing.ModelVersionId,
+                processing.SourceVersion,
+                processing.GridBearingDeg,
+                processing.RowSpacingM,
+                processing.PlantSpacingM,
+                processing.AlgorithmVersion,
+                actualJsonInputFingerprint,
+                "json",
+                processing.StartedAt),
+            cancellationToken);
+        return replaceResult.Status == MissionPlantGpsReplaceStatus.Saved
             ? Results.Ok(new
             {
                 missionId,
                 savedCount = rows.Length,
+                processingJobId = replaceResult.ProcessingJobId,
                 boundaryPointCount,
                 boundaryId,
                 boundaryVersionNumber,
                 boundaryStatus = boundaryId.HasValue ? "Approved" : null
             })
-            : Results.NotFound();
+            : ToMissionPlantGpsReplaceError(replaceResult);
     }
 
     /// <summary>
-    /// Lưu cây và cập nhật Farm boundary từ các dòng BOUNDARY trong CSV.
+    /// Lưu cây, immutable mapping processing run và cập nhật Farm boundary từ các dòng BOUNDARY trong CSV.
     /// </summary>
     [HttpPost("plant-gps/csv")]
     [Consumes("multipart/form-data")]
@@ -269,6 +295,14 @@ public sealed class SystemManagerMissionsController(
             {
                 ["file"] = ["Upload a non-empty CSV file no larger than 5 MB."]
             });
+        }
+
+        string csvInputFingerprint;
+        await using (var fingerprintStream = file.OpenReadStream())
+        {
+            csvInputFingerprint = Convert.ToHexString(
+                    await SHA256.HashDataAsync(fingerprintStream, cancellationToken))
+                .ToLowerInvariant();
         }
 
         var access = await managerAccessService.ResolveFarmAccessAsync(
@@ -482,14 +516,30 @@ public sealed class SystemManagerMissionsController(
             }
         }
 
-        var saved = await plantGpsStore.ReplaceAsync(
-            access.TenantId.Value, farmId, missionId, rows, cancellationToken);
+        var replaceResult = await plantGpsStore.ReplaceAsync(
+            access.TenantId.Value,
+            farmId,
+            missionId,
+            rows,
+            new MappingProcessingCompletion(
+                request.ClientOperationId,
+                request.ModelVersionId,
+                request.SourceVersion,
+                request.GridBearingDeg,
+                request.RowSpacingM,
+                request.PlantSpacingM,
+                request.AlgorithmVersion,
+                csvInputFingerprint,
+                "csv",
+                request.StartedAt),
+            cancellationToken);
 
-        return saved
+        return replaceResult.Status == MissionPlantGpsReplaceStatus.Saved
             ? Results.Ok(new
             {
                 missionId,
                 savedCount = rows.Count,
+                processingJobId = replaceResult.ProcessingJobId,
                 boundaryPointCount = boundaryPositions.Count == 0
                     ? 0
                     : boundaryPositions.Count - 1,
@@ -497,14 +547,14 @@ public sealed class SystemManagerMissionsController(
                 boundaryVersionNumber,
                 boundaryStatus = boundaryId.HasValue ? "Approved" : null
             })
-            : Results.NotFound();
+            : ToMissionPlantGpsReplaceError(replaceResult);
     }
 
-    /// <summary>Kiểm tra candidate GPS đầy đủ và xếp message vào Outbox.</summary>
+    /// <summary>Kiểm tra mapping output đã lưu và xếp message vào Outbox.</summary>
     /// <remarks>
-    /// Client gửi SurveyOrderId, spacing và candidate GPS đầy đủ, không cần gửi zone.
-    /// Các candidate phải khớp những dòng đã lưu trong mission. Backend dùng hoặc
-    /// gán zone nội bộ rồi tạo message. Dùng lại Idempotency-Key khi retry.
+    /// Client chỉ gửi SurveyOrderId và ProcessingJobId đã được trả về ở bước import.
+    /// Backend đọc candidate và toàn bộ provenance/spatial metadata từ dữ liệu đã lưu.
+    /// Dùng lại Idempotency-Key khi retry publish.
     /// </remarks>
     [HttpPost("plant-gps/publish")]
     public async Task<IResult> PublishPlantGps(
@@ -540,31 +590,17 @@ public sealed class SystemManagerMissionsController(
             });
         }
 
-        if (request.Payload.Candidates is null || request.Payload.Candidates.Count == 0 ||
-            request.Payload.Candidates.Any(candidate => candidate is null ||
-                string.IsNullOrWhiteSpace(candidate.TreeId)))
+        if (request.Payload.SurveyOrderId == Guid.Empty || request.Payload.ProcessingJobId == Guid.Empty)
         {
             return Results.ValidationProblem(new Dictionary<string, string[]>
             {
-                ["payload.candidates"] = ["At least one candidate with treeId is required."]
+                ["payload"] = ["surveyOrderId and processingJobId are required."]
             });
         }
 
         var publishRequest = new MissionPlantGpsPublishRequest(
             request.Payload.SurveyOrderId,
-            request.Payload.RowSpacingM,
-            request.Payload.PlantSpacingM,
-            request.Payload.GridBearingDeg,
-            request.Payload.Candidates.Select(candidate =>
-                new MissionPlantGpsCandidateInput(
-                    candidate.TreeId,
-                    candidate.Row,
-                    candidate.Col,
-                    candidate.Latitude,
-                    candidate.Longitude,
-                    candidate.Confidence,
-                    candidate.Status,
-                    candidate.Source)).ToArray());
+            request.Payload.ProcessingJobId);
 
         var result = await plantGpsPublisher.PublishAsync(
             tenantId,
@@ -813,6 +849,24 @@ public sealed class SystemManagerMissionsController(
         CancellationToken cancellationToken) =>
         Transition(farmId, missionId, MissionStatus.Cancelled,
             request.ExpectedMissionVersion, request.Reason, cancellationToken);
+
+    private static IResult ToMissionPlantGpsReplaceError(
+        MissionPlantGpsReplaceResult result) => result.Status switch
+        {
+            MissionPlantGpsReplaceStatus.NotFound => Results.NotFound(),
+            MissionPlantGpsReplaceStatus.Conflict => Results.Conflict(new
+            {
+                errors = result.Errors ?? []
+            }),
+            MissionPlantGpsReplaceStatus.Invalid => Results.ValidationProblem(
+                new Dictionary<string, string[]>
+                {
+                    ["processing"] = (result.Errors ?? ["Invalid mapping processing metadata."]).ToArray()
+                }),
+            _ => Results.Problem(
+                statusCode: StatusCodes.Status500InternalServerError,
+                title: "Unexpected mapping import result.")
+        };
 
     private async Task<IResult> Transition(
         Guid farmId,

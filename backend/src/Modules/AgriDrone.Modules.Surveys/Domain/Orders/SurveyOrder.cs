@@ -49,7 +49,8 @@ public sealed class SurveyOrder : AggregateRoot
             },
             [SurveyOrderStatus.AwaitingBaselineReview] = new HashSet<SurveyOrderStatus>
             {
-                SurveyOrderStatus.AwaitingPricing
+                SurveyOrderStatus.AwaitingPricing,
+                SurveyOrderStatus.AwaitingPaidAppointment
             },
             [SurveyOrderStatus.AwaitingPricing] = new HashSet<SurveyOrderStatus>
             {
@@ -161,6 +162,11 @@ public sealed class SurveyOrder : AggregateRoot
     public decimal? OriginalFinalPrice { get; private set; }
     public Guid? FarmBoundaryVersionId { get; private set; }
     public Guid? FarmBaseMapVersionId { get; private set; }
+    public Guid? BaselineMapVersionId { get; private set; }
+    public Guid? VerifiedPoleCountSnapshotId { get; private set; }
+    public int? VerifiedBillablePoleCount { get; private set; }
+    public Guid? CountVerifiedBy { get; private set; }
+    public DateTimeOffset? CountVerifiedAt { get; private set; }
     public Guid? BoundaryCaptureSessionId { get; private set; }
     public Guid? BaselineRoutePlanId { get; private set; }
     public SurveyPoleCountSource? PoleCountSource { get; private set; }
@@ -798,6 +804,169 @@ public sealed class SurveyOrder : AggregateRoot
         ScopeConfirmedBy = verifiedBy;
         ScopeConfirmedAt = verifiedAt;
         UpdatedAt = verifiedAt;
+        Version++;
+    }
+
+    public void RecordInitialMapApproval(
+        SurveyOrderPoleCountSnapshot snapshot,
+        uint expectedVersion)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        DomainGuard.Utc(snapshot.VerifiedAt, nameof(snapshot.VerifiedAt));
+        SurveyTransitionGuard.EnsureTimestamp(snapshot.VerifiedAt, UpdatedAt);
+
+        if (Version != expectedVersion)
+        {
+            throw new InvalidOperationException(
+                $"Optimistic concurrency violation: order version is {Version}, expected {expectedVersion}.");
+        }
+
+        if (!RequiresBaselineMapping)
+        {
+            throw new InvalidOperationException("Initial map approval is only valid for first baseline orders.");
+        }
+
+        if (Status != SurveyOrderStatus.AwaitingBaselineReview)
+        {
+            throw new InvalidOperationException($"Cannot record initial map approval in status '{Status}'. Must be AwaitingBaselineReview.");
+        }
+
+        if (snapshot.RevisionNumber != 1)
+        {
+            throw new InvalidOperationException("Initial map approval snapshot must have revision number 1.");
+        }
+
+        if (VerifiedPoleCountSnapshotId.HasValue)
+        {
+            throw new InvalidOperationException("Pole count snapshot has already been verified for this survey order.");
+        }
+
+        if (snapshot.SurveyOrderId != Id)
+        {
+            throw new InvalidOperationException("Pole count snapshot does not belong to this survey order.");
+        }
+
+        if (snapshot.TenantId != TenantId)
+        {
+            throw new InvalidOperationException("Pole count snapshot does not belong to this tenant.");
+        }
+
+        if (snapshot.FarmId != FarmId)
+        {
+            throw new InvalidOperationException("Pole count snapshot does not belong to this farm.");
+        }
+
+        if (FarmBoundaryVersionId.HasValue && snapshot.FarmBoundaryVersionId != FarmBoundaryVersionId.Value)
+        {
+            throw new InvalidOperationException("Pole count snapshot boundary version does not match survey order boundary version.");
+        }
+
+        DomainGuard.NotEmpty(snapshot.FarmBaseMapVersionId, nameof(snapshot.FarmBaseMapVersionId));
+
+        BaselineMapVersionId = snapshot.FarmBaseMapVersionId;
+        FarmBaseMapVersionId = snapshot.FarmBaseMapVersionId;
+        FarmBoundaryVersionId ??= snapshot.FarmBoundaryVersionId;
+        VerifiedPoleCountSnapshotId = snapshot.Id;
+        VerifiedBillablePoleCount = snapshot.VerifiedBillablePoleCount;
+        CountVerifiedBy = snapshot.VerifiedBy;
+        CountVerifiedAt = snapshot.VerifiedAt;
+
+        var targetStatus = IsPostFlightPlantHealthOrder && RequiresBaselineMapping
+            ? SurveyOrderStatus.AwaitingPaidAppointment
+            : SurveyOrderStatus.AwaitingPricing;
+
+        EnsureTransitionTo(targetStatus, snapshot.VerifiedAt);
+        ApplyTransition(targetStatus, snapshot.VerifiedAt);
+    }
+
+    public void RecordFollowUpMapSnapshot(
+        SurveyOrderPoleCountSnapshot snapshot,
+        Guid pinnedBaselineMapVersionId,
+        uint expectedVersion)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        DomainGuard.NotEmpty(pinnedBaselineMapVersionId, nameof(pinnedBaselineMapVersionId));
+        DomainGuard.Utc(snapshot.VerifiedAt, nameof(snapshot.VerifiedAt));
+        SurveyTransitionGuard.EnsureTimestamp(snapshot.VerifiedAt, UpdatedAt);
+
+        if (Version != expectedVersion)
+        {
+            throw new InvalidOperationException(
+                $"Optimistic concurrency violation: order version is {Version}, expected {expectedVersion}.");
+        }
+
+        if (RequiresBaselineMapping)
+        {
+            throw new InvalidOperationException("Follow-up map snapshot is only valid for follow-up orders.");
+        }
+
+        if (Status != SurveyOrderStatus.Processing)
+        {
+            throw new InvalidOperationException($"Cannot record follow-up map snapshot in status '{Status}'. Must be Processing.");
+        }
+
+        if (snapshot.RevisionNumber != 1)
+        {
+            throw new InvalidOperationException("Follow-up map snapshot must have revision number 1.");
+        }
+
+        if (VerifiedPoleCountSnapshotId.HasValue)
+        {
+            throw new InvalidOperationException("Follow-up pole count snapshot has already been recorded for this survey order.");
+        }
+
+        if (snapshot.SurveyOrderId != Id)
+        {
+            throw new InvalidOperationException("Pole count snapshot does not belong to this survey order.");
+        }
+
+        if (snapshot.TenantId != TenantId)
+        {
+            throw new InvalidOperationException("Pole count snapshot does not belong to this tenant.");
+        }
+
+        if (snapshot.FarmId != FarmId)
+        {
+            throw new InvalidOperationException("Pole count snapshot does not belong to this farm.");
+        }
+
+        if (FarmBoundaryVersionId.HasValue && snapshot.FarmBoundaryVersionId != FarmBoundaryVersionId.Value)
+        {
+            throw new InvalidOperationException("Pole count snapshot boundary version does not match survey order boundary version.");
+        }
+
+        if (!BaselineMapVersionId.HasValue || BaselineMapVersionId.Value != pinnedBaselineMapVersionId)
+        {
+            throw new InvalidOperationException("Survey order must have BaselineMapVersionId already pinned and matching the pinned baseline map version.");
+        }
+
+        FarmBaseMapVersionId = snapshot.FarmBaseMapVersionId;
+        FarmBoundaryVersionId ??= snapshot.FarmBoundaryVersionId;
+        VerifiedPoleCountSnapshotId = snapshot.Id;
+        VerifiedBillablePoleCount = snapshot.VerifiedBillablePoleCount;
+        CountVerifiedBy = snapshot.VerifiedBy;
+        CountVerifiedAt = snapshot.VerifiedAt;
+        UpdatedAt = snapshot.VerifiedAt;
+        Version++;
+    }
+
+    public void SetBaselineMapVersion(
+        Guid baselineMapVersionId,
+        uint expectedVersion,
+        DateTimeOffset occurredAt)
+    {
+        DomainGuard.NotEmpty(baselineMapVersionId, nameof(baselineMapVersionId));
+        DomainGuard.Utc(occurredAt, nameof(occurredAt));
+        SurveyTransitionGuard.EnsureTimestamp(occurredAt, UpdatedAt);
+
+        if (Version != expectedVersion)
+        {
+            throw new InvalidOperationException(
+                $"Optimistic concurrency violation: order version is {Version}, expected {expectedVersion}.");
+        }
+
+        BaselineMapVersionId = baselineMapVersionId;
+        UpdatedAt = occurredAt;
         Version++;
     }
 

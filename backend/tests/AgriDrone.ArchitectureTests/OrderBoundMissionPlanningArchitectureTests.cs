@@ -112,13 +112,14 @@ public sealed class OrderBoundMissionPlanningArchitectureTests
     }
 
     [Fact]
-    public void TargetMissionPurposesExcludeLegacyMissionTypes()
+    public void TargetMissionPurposesIncludeDedicatedV3CaptureWithoutLegacyTypes()
     {
         Assert.Equal(
             [
                 MissionPurpose.BaselineMapping,
                 MissionPurpose.PlantHealth,
-                MissionPurpose.HarvestReadiness
+                MissionPurpose.HarvestReadiness,
+                MissionPurpose.Capture
             ],
             Enum.GetValues<MissionPurpose>());
     }

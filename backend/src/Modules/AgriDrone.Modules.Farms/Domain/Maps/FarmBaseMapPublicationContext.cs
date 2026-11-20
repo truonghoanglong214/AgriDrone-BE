@@ -15,7 +15,10 @@ public sealed record FarmBaseMapPublicationContext
         Guid? handoffId = null,
         double gridBearingDeg = 0,
         double rowSpacingM = 3,
-        double plantSpacingM = 2.5)
+        double plantSpacingM = 2.5,
+        Guid? predecessorVersionId = null,
+        bool isBaseline = false,
+        Guid? baselineMapVersionId = null)
     {
         DomainGuard.NotEmpty(sourceSurveyOrderId);
         DomainGuard.NotEmpty(tenantId);
@@ -25,6 +28,8 @@ public sealed record FarmBaseMapPublicationContext
         if (sourceMissionId.HasValue) DomainGuard.NotEmpty(sourceMissionId.Value);
         if (farmBoundaryVersionId.HasValue) DomainGuard.NotEmpty(farmBoundaryVersionId.Value);
         if (handoffId.HasValue) DomainGuard.NotEmpty(handoffId.Value);
+        if (predecessorVersionId.HasValue) DomainGuard.NotEmpty(predecessorVersionId.Value);
+        if (baselineMapVersionId.HasValue) DomainGuard.NotEmpty(baselineMapVersionId.Value);
         ArgumentOutOfRangeException.ThrowIfNegative(gridBearingDeg);
         ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(gridBearingDeg, 360);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(rowSpacingM);
@@ -41,6 +46,9 @@ public sealed record FarmBaseMapPublicationContext
         GridBearingDeg = gridBearingDeg;
         RowSpacingM = rowSpacingM;
         PlantSpacingM = plantSpacingM;
+        PredecessorVersionId = predecessorVersionId;
+        IsBaseline = isBaseline;
+        BaselineMapVersionId = baselineMapVersionId;
     }
 
     public Guid SourceSurveyOrderId { get; }
@@ -54,4 +62,7 @@ public sealed record FarmBaseMapPublicationContext
     public double GridBearingDeg { get; }
     public double RowSpacingM { get; }
     public double PlantSpacingM { get; }
+    public Guid? PredecessorVersionId { get; }
+    public bool IsBaseline { get; }
+    public Guid? BaselineMapVersionId { get; }
 }

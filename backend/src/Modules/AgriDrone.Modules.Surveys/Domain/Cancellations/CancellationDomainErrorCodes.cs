@@ -6,5 +6,7 @@ public static class CancellationDomainErrorCodes
     public const string RetentionRequiresAcceptableCapture = "Cancellation.RetentionRequiresAcceptableCapture";
     public const string RetentionExceedsAllowedCap = "Cancellation.RetentionExceedsAllowedCap";
     public const string InvalidRefundAmount = "Cancellation.InvalidRefundAmount";
+    public const string PolicyDoesNotPermitRefund = "Cancellation.PolicyDoesNotPermitRefund";
+    public const string PolicyDoesNotPermitRetention = "Cancellation.PolicyDoesNotPermitRetention";
     public const string RefundObligationAlreadyFinal = "Cancellation.RefundObligationAlreadyFinal";
 }

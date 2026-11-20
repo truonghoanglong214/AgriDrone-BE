@@ -14,6 +14,19 @@ internal sealed class FarmManagerAssignmentRepository(IdentityDbContext dbContex
             assignment => assignment.FarmId == farmId && assignment.EndedAt == null,
             cancellationToken);
 
+    public Task<FarmManagerAssignment?> GetActiveByFarmIdForUpdateAsync(
+        Guid farmId,
+        CancellationToken cancellationToken = default) =>
+        dbContext.FarmManagerAssignments
+            .FromSqlInterpolated($"""
+                SELECT assignment.*, assignment.xmin
+                FROM identity.farm_manager_assignments AS assignment
+                WHERE assignment.farm_id = {farmId}
+                  AND assignment.ended_at IS NULL
+                FOR UPDATE OF assignment
+                """)
+            .SingleOrDefaultAsync(cancellationToken);
+
     public async Task<IReadOnlyCollection<FarmManagerAssignment>> GetActiveByProfileIdAsync(
         Guid profileId,
         CancellationToken cancellationToken = default) =>

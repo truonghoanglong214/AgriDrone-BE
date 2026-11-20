@@ -22,10 +22,13 @@ using AgriDrone.SharedInfrastructure.Health;
 using AgriDrone.SharedInfrastructure.Messaging;
 using AgriDrone.SharedInfrastructure.Validation;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.OpenApi;
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -96,6 +99,17 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 
+// Forwarded Headers for reverse proxy (Caddy)
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    // Trust internal container network ranges (Docker standard bridge subnets)
+    options.KnownIPNetworks.Add(System.Net.IPNetwork.Parse("10.0.0.0/8"));
+    options.KnownIPNetworks.Add(System.Net.IPNetwork.Parse("172.16.0.0/12"));
+    options.KnownIPNetworks.Add(System.Net.IPNetwork.Parse("192.168.0.0/16"));
+    options.ForwardLimit = 1;
+});
+
 // CORS
 builder.Services.AddCors(options =>
 {
@@ -111,14 +125,60 @@ builder.Services.AddCors(options =>
         }
         else
         {
-            policy
-                .WithOrigins("http://localhost:5173",
-                    builder.Configuration["Metashape:BrowserOrigin"] ?? "http://localhost:8000")
-                .AllowCredentials()
-                .AllowAnyHeader()
-                .AllowAnyMethod();
+            var allowedOrigins = builder.Configuration
+                .GetSection("Cors:AllowedOrigins")
+                .Get<string[]>()?
+                .Where(origin => !string.IsNullOrWhiteSpace(origin))
+                .Distinct()
+                .ToArray() ?? [];
+
+            if (allowedOrigins.Length > 0)
+            {
+                policy
+                    .WithOrigins(allowedOrigins)
+                    .AllowCredentials()
+                    .AllowAnyHeader()
+                    .AllowAnyMethod();
+            }
+            else
+            {
+                // Fail-closed: No origins permitted when not configured
+                policy.WithOrigins();
+            }
         }
     });
+});
+
+var publicSubmitPermitLimit = Math.Max(1, builder.Configuration.GetValue(
+    "RateLimiting:V3PublicSurvey:SubmitPermitLimit", 5));
+var publicTrackPermitLimit = Math.Max(1, builder.Configuration.GetValue(
+    "RateLimiting:V3PublicSurvey:TrackPermitLimit", 30));
+var publicWindowSeconds = Math.Max(1, builder.Configuration.GetValue(
+    "RateLimiting:V3PublicSurvey:WindowSeconds", 60));
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy(V3PublicRateLimitPolicies.Submit, httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            GetPublicRateLimitPartition(httpContext),
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = publicSubmitPermitLimit,
+                Window = TimeSpan.FromSeconds(publicWindowSeconds),
+                QueueLimit = 0,
+                AutoReplenishment = true
+            }));
+    options.AddPolicy(V3PublicRateLimitPolicies.Track, httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            GetPublicRateLimitPartition(httpContext),
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = publicTrackPermitLimit,
+                Window = TimeSpan.FromSeconds(publicWindowSeconds),
+                QueueLimit = 0,
+                AutoReplenishment = true
+            }));
 });
 
 // Modules
@@ -173,6 +233,7 @@ await app.Services.BootstrapSystemAdminAsync();
 await app.Services.PurgeOrphanedSurveyAuthorizationsAsync();
 
 
+app.UseForwardedHeaders();
 app.UseExceptionHandler();
 
 if (app.Environment.IsDevelopment())
@@ -192,6 +253,7 @@ if (!app.Environment.IsDevelopment())
 }
 
 app.UseRouting();
+app.UseRateLimiter();
 
 app.UseCors("Frontend");
 
@@ -221,3 +283,6 @@ app.MapHealthChecks(
         Predicate = registration => registration.Tags.Contains("minio")
     });
 app.Run();
+
+static string GetPublicRateLimitPartition(HttpContext httpContext) =>
+    httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown-client";

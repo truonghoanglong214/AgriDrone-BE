@@ -37,7 +37,7 @@ public sealed class SurveyApprovalV3Tests
 
         Assert.Equal(request.Id, response.SurveyRequestId);
         Assert.Equal(SurveyRequestStatus.Approved, response.RequestStatus);
-        Assert.Equal(SurveyOrderStatus.AwaitingBaselineAppointment, response.OrderStatus);
+        Assert.Equal(SurveyOrderStatus.AwaitingAppointment, response.OrderStatus);
         Assert.NotNull(response.PrimaryManagerAssignmentId);
         Assert.NotNull(response.OwnerInvitationId);
 
@@ -46,9 +46,16 @@ public sealed class SurveyApprovalV3Tests
         Assert.NotNull(order);
         Assert.Equal(ContractScope.V3, order.Scope);
         Assert.Equal(harness.Snapshot.BusinessPolicyVersionId, order.BusinessPolicyVersionId);
-        Assert.Equal(SurveyOrderStatus.AwaitingBaselineAppointment, order.Status);
+        Assert.Equal(SurveyOrderStatus.AwaitingAppointment, order.Status);
         Assert.Equal(SurveyPaymentStatus.Pending, order.DepositPaymentStatus);
         Assert.Equal(harness.Snapshot.DepositAmount, order.DepositAmount);
+        Assert.NotNull(order.DepositObligationId);
+
+        var depositObligation = harness.OrderRepository.SavedDepositObligation;
+        Assert.NotNull(depositObligation);
+        Assert.Equal(order.DepositObligationId, depositObligation.Id);
+        Assert.Equal(order.Id, depositObligation.SurveyOrderId);
+        Assert.Equal(harness.Snapshot.DepositAmount, depositObligation.Amount);
 
         // Verify Commercial Snapshot
         var commercialSnapshot = harness.OrderRepository.SavedCommercialSnapshot;
@@ -65,7 +72,7 @@ public sealed class SurveyApprovalV3Tests
         Assert.NotNull(history);
         Assert.Equal(order.Id, history.SurveyOrderId);
         Assert.Null(history.FromStatus);
-        Assert.Equal(SurveyOrderStatus.AwaitingBaselineAppointment, history.ToStatus);
+        Assert.Equal(SurveyOrderStatus.AwaitingAppointment, history.ToStatus);
         Assert.Equal(harness.AdminActorId, history.ActorId);
         Assert.Equal("APPROVAL", history.Source);
 
@@ -109,6 +116,7 @@ public sealed class SurveyApprovalV3Tests
         Assert.NotNull(order);
         Assert.Equal(ContractScope.V3, order.Scope);
         Assert.NotNull(harness.OrderRepository.SavedCommercialSnapshot);
+        Assert.NotNull(harness.OrderRepository.SavedDepositObligation);
         Assert.NotNull(harness.OrderRepository.SavedStateHistory);
     }
 
@@ -143,11 +151,12 @@ public sealed class SurveyApprovalV3Tests
         Assert.Equal(ContractScope.V3, order.Scope);
         Assert.False(order.RequiresBaselineMapping);
         Assert.NotNull(order.FarmBaseMapVersionId);
-        Assert.Equal(SurveyOrderStatus.AwaitingBaselineAppointment, order.Status);
+        Assert.Equal(SurveyOrderStatus.AwaitingAppointment, order.Status);
         Assert.Equal(SurveyPaymentStatus.Pending, order.DepositPaymentStatus);
         Assert.Equal(harness.Snapshot.DepositAmount, order.DepositAmount);
 
         Assert.NotNull(harness.OrderRepository.SavedCommercialSnapshot);
+        Assert.NotNull(harness.OrderRepository.SavedDepositObligation);
         Assert.NotNull(harness.OrderRepository.SavedStateHistory);
     }
 
@@ -535,6 +544,7 @@ public sealed class SurveyApprovalV3Tests
     {
         public SurveyOrder? SavedOrder { get; private set; }
         public SurveyOrderCommercialSnapshot? SavedCommercialSnapshot { get; private set; }
+        public SurveyDepositObligation? SavedDepositObligation { get; private set; }
         public OrderStateHistory? SavedStateHistory { get; private set; }
 
         public Task<SurveyOrder?> GetBySurveyRequestIdAsync(
@@ -546,6 +556,9 @@ public sealed class SurveyApprovalV3Tests
 
         public void AddCommercialSnapshot(SurveyOrderCommercialSnapshot snapshot) =>
             SavedCommercialSnapshot = snapshot;
+
+        public void AddDepositObligation(SurveyDepositObligation obligation) =>
+            SavedDepositObligation = obligation;
 
         public void AddStateHistory(OrderStateHistory history) =>
             SavedStateHistory = history;

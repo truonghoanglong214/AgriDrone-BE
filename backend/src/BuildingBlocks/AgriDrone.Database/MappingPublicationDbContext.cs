@@ -11,6 +11,9 @@ using AgriDrone.Modules.Plants.Domain.Plants;
 using AgriDrone.Modules.Plants.Infrastructure.Persistence.Configurations;
 using AgriDrone.Modules.Surveys.Domain;
 using AgriDrone.Modules.Surveys.Infrastructure.Persistence.Configurations;
+using AgriDrone.Modules.Missions.Domain.Missions;
+using AgriDrone.Modules.Missions.Domain.Processing;
+using AgriDrone.Modules.Missions.Infrastructure.Persistence.Configurations;
 using AgriDrone.Database.Mapping;
 using AgriDrone.SharedInfrastructure.Auditing;
 using AgriDrone.SharedInfrastructure.Messaging.Persistence;
@@ -35,6 +38,9 @@ public sealed class MappingPublicationDbContext(
     public DbSet<FarmBaseMapVersion> FarmBaseMapVersions =>
         Set<FarmBaseMapVersion>();
 
+    public DbSet<FarmBaselinePointer> FarmBaselinePointers =>
+        Set<FarmBaselinePointer>();
+
     public DbSet<ZoneMapVersion> ZoneMapVersions => Set<ZoneMapVersion>();
 
     public DbSet<MappingCandidateBatch> MappingCandidateBatches =>
@@ -47,12 +53,32 @@ public sealed class MappingPublicationDbContext(
 
     public DbSet<Plant> Plants => Set<Plant>();
 
+    public DbSet<PlantProfile> PlantProfiles => Set<PlantProfile>();
+
+    public DbSet<PlantProfileObservation> PlantProfileObservations => Set<PlantProfileObservation>();
+
     public DbSet<PlantChangeEvent> PlantChangeEvents => Set<PlantChangeEvent>();
 
     public DbSet<PlantInventoryChangeReport> PlantInventoryChangeReports =>
         Set<PlantInventoryChangeReport>();
 
     public DbSet<SurveyOrder> SurveyOrders => Set<SurveyOrder>();
+
+    public DbSet<CaptureAttempt> CaptureAttempts => Set<CaptureAttempt>();
+
+    public DbSet<DroneMission> DroneMissions => Set<DroneMission>();
+
+    public DbSet<AiProcessingJob> AiProcessingJobs => Set<AiProcessingJob>();
+
+    public DbSet<AiModelVersion> AiModelVersions => Set<AiModelVersion>();
+
+    public DbSet<SurveyOrderPoleCountSnapshot> SurveyOrderPoleCountSnapshots =>
+        Set<SurveyOrderPoleCountSnapshot>();
+
+    public DbSet<SurveyOrderPoleCountSnapshotItem> SurveyOrderPoleCountSnapshotItems =>
+        Set<SurveyOrderPoleCountSnapshotItem>();
+
+    public DbSet<SpatialPolicy> SpatialPolicies => Set<SpatialPolicy>();
 
     public DbSet<InboxMessage> InboxMessages => Set<InboxMessage>();
 
@@ -92,15 +118,22 @@ public sealed class MappingPublicationDbContext(
         modelBuilder.ApplyConfiguration(new FarmBoundaryConfiguration());
         modelBuilder.ApplyConfiguration(new BoundaryExceptionConfiguration());
         modelBuilder.ApplyConfiguration(new FarmBaseMapVersionConfiguration());
+        modelBuilder.ApplyConfiguration(new FarmBaselinePointerConfiguration());
         modelBuilder.ApplyConfiguration(new ZoneMapVersionConfiguration());
         modelBuilder.ApplyConfiguration(new MappingCandidateBatchConfiguration());
         modelBuilder.ApplyConfiguration(new MappingCandidateConfiguration());
         modelBuilder.ApplyConfiguration(new HealthLevelConfiguration());
         modelBuilder.ApplyConfiguration(new PlantConfiguration());
+        modelBuilder.ApplyConfiguration(new PlantProfileConfiguration());
+        modelBuilder.ApplyConfiguration(new PlantProfileObservationConfiguration());
         modelBuilder.ApplyConfiguration(new PlantChangeEventConfiguration());
         modelBuilder.ApplyConfiguration(
             new PlantInventoryChangeReportConfiguration());
         modelBuilder.ApplyConfiguration(new SurveyOrderConfiguration());
+        modelBuilder.ApplyConfiguration(new CaptureAttemptConfiguration());
+        modelBuilder.ApplyConfiguration(new DroneMissionConfiguration());
+        modelBuilder.ApplyConfiguration(new SurveyOrderPoleCountSnapshotConfiguration());
+        modelBuilder.ApplyConfiguration(new SpatialPolicyConfiguration());
         modelBuilder.ApplyConfiguration(new InboxMessageConfiguration());
         modelBuilder.ApplyConfiguration(new OutboxMessageConfiguration());
         modelBuilder.ApplyConfiguration(new AuditLogConfiguration());
