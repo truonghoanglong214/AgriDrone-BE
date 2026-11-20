@@ -49,7 +49,7 @@ services:
   # Core Profile: ASP.NET Core API (.NET 10)
   # ============================================================================
   api:
-    image: ${API_IMAGE:-ghcr.io/agridrone/agridrone-api:latest}
+    image: ${API_IMAGE:-ghcr.io/truonghoanglong214/agridrone-be/agridrone-api:latest}
     restart: unless-stopped
     env_file:
       - ${ENV_FILE:-secrets/.env.production}
@@ -100,7 +100,7 @@ services:
   # Core Profile: One-shot Database Migrator (Runs efbundle once then exits)
   # ============================================================================
   migrate:
-    image: ${MIGRATOR_IMAGE:-ghcr.io/agridrone/agridrone-migrator:latest}
+    image: ${MIGRATOR_IMAGE:-ghcr.io/truonghoanglong214/agridrone-be/agridrone-migrator:latest}
     restart: "no"
     env_file:
       - ${ENV_FILE:-secrets/.env.production}
@@ -263,7 +263,7 @@ services:
   # Processing Profile: FastAPI Imagery/AI Coordinator (CPU PyTorch / YOLO)
   # ============================================================================
   metashape-service:
-    image: ${AI_IMAGE:-ghcr.io/agridrone/agridrone-ai:latest}
+    image: ${AI_IMAGE:-ghcr.io/truonghoanglong214/agridrone-be/agridrone-ai:latest}
     restart: unless-stopped
     profiles:
       - processing

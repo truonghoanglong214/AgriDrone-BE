@@ -14,11 +14,12 @@ CURRENT_RELEASE_FILE="${BASE_DIR}/releases/current_release.txt"
 PREVIOUS_RELEASE_FILE="${BASE_DIR}/releases/previous_release.txt"
 
 if [ $# -lt 1 ]; then
-    echo "Usage: $0 <GIT_SHA_OR_IMAGE_TAG>"
+    echo "Usage: $0 <GIT_SHA_OR_IMAGE_TAG> [REPO_NAME]"
     exit 1
 fi
 
 TARGET_TAG="$1"
+REPO_NAME="${2:-truonghoanglong214/agridrone-be}"
 
 # 1. Acquire Deployment Lock (Prevent concurrent deployments)
 exec 200>"${LOCK_FILE}"
@@ -28,7 +29,7 @@ if ! flock -n 200; then
 fi
 
 echo "========================================================================"
-echo "AgriDrone Deploy: Deploying Release [${TARGET_TAG}] at $(date)"
+echo "AgriDrone Deploy: Deploying Release [${TARGET_TAG}] from [${REPO_NAME}] at $(date)"
 echo "========================================================================"
 
 # Save current release for rollback reference if available
@@ -40,6 +41,21 @@ fi
 
 cd "${BASE_DIR}"
 
+# Sync latest configs from local git cache if available
+if [ -d "/tmp/agridrone-repo/.git" ]; then
+    echo "===> Syncing latest configs from /tmp/agridrone-repo..."
+    git -C /tmp/agridrone-repo pull origin main || true
+    cp /tmp/agridrone-repo/compose.production.yaml "${BASE_DIR}/compose.production.yaml" || true
+    if [ -f "/tmp/agridrone-repo/infrastructure/caddy/Caddyfile" ]; then
+        mkdir -p "${BASE_DIR}/infrastructure/caddy"
+        cp /tmp/agridrone-repo/infrastructure/caddy/Caddyfile "${BASE_DIR}/infrastructure/caddy/Caddyfile" || true
+    fi
+    if [ -d "/tmp/agridrone-repo/infrastructure/scripts" ]; then
+        cp /tmp/agridrone-repo/infrastructure/scripts/*.sh "${BASE_DIR}/scripts/" || true
+        chmod +x "${BASE_DIR}/scripts/"*.sh || true
+    fi
+fi
+
 # 2. Pre-deploy Safety Backup
 echo "===> [1/6] Running pre-deployment database backup..."
 if [ -f "${BASE_DIR}/scripts/backup.sh" ]; then
@@ -48,8 +64,8 @@ fi
 
 # 3. Pull new images from GHCR
 echo "===> [2/6] Pulling images for release ${TARGET_TAG}..."
-export API_IMAGE="ghcr.io/agridrone/agridrone-api:${TARGET_TAG}"
-export MIGRATOR_IMAGE="ghcr.io/agridrone/agridrone-migrator:${TARGET_TAG}"
+export API_IMAGE="ghcr.io/${REPO_NAME}/agridrone-api:${TARGET_TAG}"
+export MIGRATOR_IMAGE="ghcr.io/${REPO_NAME}/agridrone-migrator:${TARGET_TAG}"
 
 docker pull "${API_IMAGE}" || echo "Warning: API image pull failed or using local build."
 docker pull "${MIGRATOR_IMAGE}" || echo "Warning: Migrator image pull failed or using local build."
@@ -83,7 +99,7 @@ if ! bash "${BASE_DIR}/scripts/smoke-test.sh"; then
     echo "========================================================================"
     if [ -n "${PREVIOUS_TAG}" ]; then
         echo "Rolling back to previous known-good release: ${PREVIOUS_TAG}"
-        export API_IMAGE="ghcr.io/agridrone/agridrone-api:${PREVIOUS_TAG}"
+        export API_IMAGE="ghcr.io/${REPO_NAME}/agridrone-api:${PREVIOUS_TAG}"
         docker compose --env-file "${ENV_FILE}" -f compose.production.yaml up -d --no-deps api
         echo "Rollback completed. Please inspect logs!"
     else
