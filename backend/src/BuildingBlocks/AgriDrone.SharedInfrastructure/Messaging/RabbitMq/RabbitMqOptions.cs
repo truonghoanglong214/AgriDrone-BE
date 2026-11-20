@@ -40,6 +40,17 @@ public sealed class RabbitMqOptions
                 consumer.Name,
                 consumerName,
                 StringComparison.Ordinal))
-        ?? throw new InvalidOperationException(
-            $"RabbitMQ consumer configuration for '{consumerName}' was not found in '{SectionName}:Consumers'.");
+        ?? FallbackConsumer(consumerName);
+
+    private RabbitMqConsumerOptions FallbackConsumer(string consumerName)
+    {
+        var consumer = new RabbitMqConsumerOptions
+        {
+            Name = consumerName,
+            QueueName = $"agridrone.{consumerName.Replace('-', '.')}",
+            RoutingKey = consumerName.Replace("be1-", "").Replace("be2-", "").Replace('-', '.')
+        };
+        Consumers.Add(consumer);
+        return consumer;
+    }
 }

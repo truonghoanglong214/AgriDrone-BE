@@ -57,6 +57,12 @@ services:
       Identity__SystemManagerInvitations__AcceptUrl: https://${APP_DOMAIN:-agridrone.vn}/accept-system-manager-invitation
       Identity__TenantInvitations__AcceptUrl: https://${APP_DOMAIN:-agridrone.vn}/accept-invitation
       Identity__PasswordReset__ResetUrl: https://${APP_DOMAIN:-agridrone.vn}/reset-password
+      RabbitMq__Consumers__15__Name: "be2-farm-base-map-internally-approved-v1"
+      RabbitMq__Consumers__15__QueueName: "agridrone.be2.farm-base-map-internally-approved.v1"
+      RabbitMq__Consumers__15__RoutingKey: "farm.base-map.internally-approved.v1"
+      RabbitMq__Consumers__16__Name: "be1-mapping-candidates-ready-v4"
+      RabbitMq__Consumers__16__QueueName: "agridrone.be1.mapping-candidates-ready.v4"
+      RabbitMq__Consumers__16__RoutingKey: "mapping.candidates-ready.v4"
     networks:
       - edge
       - internal
