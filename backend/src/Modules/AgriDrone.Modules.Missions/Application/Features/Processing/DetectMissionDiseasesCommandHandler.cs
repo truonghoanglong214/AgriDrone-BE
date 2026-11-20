@@ -268,9 +268,8 @@ internal sealed class DetectMissionDiseasesCommandHandler(
                     class_id = detection.ClassId,
                     class_name = detection.ClassName,
                     image_name = detection.ImageName,
-                    crop_image_url = detection.CropImageUrl,
-                    annotated_image_url = detection.AnnotatedImageUrl,
-                    // Media đã đăng ký (link xem cấp mới mỗi lần qua .../media/{id}/download-url, không hết hạn như link ký sẵn).
+                    // Không lưu crop/annotated URL từ detector (link ký sẵn 7 ngày, hết hạn là chết).
+                    // Lưu media đã đăng ký; link xem ký mới mỗi lần đọc (ObservationImageLinks, .../media/{id}/download-url).
                     source_storage_key = source?.Media.StorageKey,
                     annotated_media_id = annotatedMediaId,
                     crop_media_id = cropMediaId,

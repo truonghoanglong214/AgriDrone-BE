@@ -1,5 +1,6 @@
 using System.Text.Json;
 using AgriDrone.Modules.Missions.Application.Abstractions.Media;
+using AgriDrone.Modules.Missions.Application.Features.PlantHealth;
 using AgriDrone.Modules.Missions.Infrastructure.Persistence;
 using AgriDrone.SharedKernel.Application;
 using MediatR;
@@ -212,12 +213,16 @@ internal sealed class GetFarmPlantHealthMapQueryHandler(
             var obsByPlant = new Dictionary<Guid, List<PlantObservationItemResult>>();
             var diseaseSummary = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
+            // Link ảnh vết bệnh ký mới mỗi lần đọc (không dùng link ký sẵn 7 ngày lưu trong matching_parameters).
+            var imageIds = obsRows.ToDictionary(obs => obs.Id, obs => ObservationImageLinks.MediaIds(obs.MatchingParametersJson));
+            var signedImages = await ObservationImageLinks.CreateAsync(
+                dbContext, objectStorage, request.FarmId, imageIds.Values, logger, cancellationToken);
+
             foreach (var obs in obsRows)
             {
                 var className = "Unknown";
                 string? imageName = null;
-                string? cropImageUrl = null;
-                string? annotatedImageUrl = null;
+                var images = ObservationImageLinks.Resolve(imageIds[obs.Id], signedImages);
                 string? detectionId = null;
 
                 if (!string.IsNullOrWhiteSpace(obs.MatchingParametersJson))
@@ -228,8 +233,6 @@ internal sealed class GetFarmPlantHealthMapQueryHandler(
                         var root = doc.RootElement;
                         if (root.TryGetProperty("class_name", out var pCls)) className = pCls.GetString() ?? "Unknown";
                         if (root.TryGetProperty("image_name", out var pImg)) imageName = pImg.GetString();
-                        if (root.TryGetProperty("crop_image_url", out var pCrop)) cropImageUrl = pCrop.GetString();
-                        if (root.TryGetProperty("annotated_image_url", out var pAnn)) annotatedImageUrl = pAnn.GetString();
                         if (root.TryGetProperty("detection_id", out var pDet)) detectionId = pDet.GetString();
                     }
                     catch (Exception jsonEx)
@@ -248,8 +251,8 @@ internal sealed class GetFarmPlantHealthMapQueryHandler(
                     Confidence: (double)(obs.DetectionConfidence ?? 0m),
                     GpsDistanceM: (double)(obs.GpsDistanceM ?? 0m),
                     ImageName: imageName,
-                    CropImageUrl: cropImageUrl,
-                    AnnotatedImageUrl: annotatedImageUrl,
+                    CropImageUrl: images.CropImageUrl,
+                    AnnotatedImageUrl: images.AnnotatedImageUrl,
                     DetectionId: detectionId);
 
                 if (obs.SuggestedPlantId.HasValue)

@@ -1,8 +1,10 @@
+using AgriDrone.Modules.Missions.Application.Abstractions.Media;
 using AgriDrone.Modules.Missions.Infrastructure.Persistence;
 using AgriDrone.SharedKernel.Application;
 using AgriDrone.SharedKernel.Application.Abstractions.Authorization;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace AgriDrone.Modules.Missions.Application.Features.PlantHealth;
 
@@ -12,7 +14,9 @@ namespace AgriDrone.Modules.Missions.Application.Features.PlantHealth;
 /// </summary>
 internal sealed class GetFlaggedObservationsQueryHandler(
     MissionsDbContext dbContext,
-    ISystemManagerAccessService managerAccessService)
+    ISystemManagerAccessService managerAccessService,
+    IObjectStorage objectStorage,
+    ILogger<GetFlaggedObservationsQueryHandler> logger)
     : IRequestHandler<GetFlaggedObservationsQuery, Result<GetFlaggedObservationsResult>>
 {
     private sealed record FlaggedRow(
@@ -54,15 +58,26 @@ internal sealed class GetFlaggedObservationsQueryHandler(
             request.FarmId)
             .ToListAsync(cancellationToken);
 
-        var items = rows.Select(r => new FlaggedObservationItem(
-            r.ObservationId,
-            r.MissionId,
-            r.DetectedLat,
-            r.DetectedLon,
-            r.GpsDistanceMeters,
-            r.DetectionConfidence,
-            r.MatchingParametersJson,
-            r.SuggestedPlantId))
+        // Link ảnh ký mới mỗi lần đọc; FE dùng 2 trường này thay vì crop_image_url trong MatchingParametersJson.
+        var imageIds = rows.ToDictionary(r => r.ObservationId, r => ObservationImageLinks.MediaIds(r.MatchingParametersJson));
+        var signedImages = await ObservationImageLinks.CreateAsync(
+            dbContext, objectStorage, request.FarmId, imageIds.Values, logger, cancellationToken);
+
+        var items = rows.Select(r =>
+            {
+                var images = ObservationImageLinks.Resolve(imageIds[r.ObservationId], signedImages);
+                return new FlaggedObservationItem(
+                    r.ObservationId,
+                    r.MissionId,
+                    r.DetectedLat,
+                    r.DetectedLon,
+                    r.GpsDistanceMeters,
+                    r.DetectionConfidence,
+                    r.MatchingParametersJson,
+                    r.SuggestedPlantId,
+                    images.CropImageUrl,
+                    images.AnnotatedImageUrl);
+            })
             .ToList();
 
         return Result.Success(new GetFlaggedObservationsResult(items));

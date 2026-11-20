@@ -40,7 +40,9 @@ public sealed record FlaggedObservationItem(
     double? GpsDistanceMeters,
     double? DetectionConfidence,
     string? MatchingParametersJson,
-    Guid? SuggestedPlantId);
+    Guid? SuggestedPlantId,
+    string? CropImageUrl = null,
+    string? AnnotatedImageUrl = null);
 
 // =========================================================
 // UC-29 (POST): Resolve Flagged Observation
