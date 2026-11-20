@@ -66,12 +66,12 @@ if ! id -u deploy &>/dev/null; then
 fi
 
 INSTALL_DIR="/opt/agridrone"
-install -d -m 0750 -o deploy -g deploy "${INSTALL_DIR}"
+install -d -m 0755 -o deploy -g deploy "${INSTALL_DIR}"
 install -d -m 0700 -o deploy -g deploy "${INSTALL_DIR}/secrets"
-install -d -m 0750 -o deploy -g deploy "${INSTALL_DIR}/backups"
-install -d -m 0750 -o deploy -g deploy "${INSTALL_DIR}/releases"
-install -d -m 0750 -o deploy -g deploy "${INSTALL_DIR}/scripts"
-install -d -m 0750 -o deploy -g deploy "${INSTALL_DIR}/infrastructure/caddy"
+install -d -m 0755 -o deploy -g deploy "${INSTALL_DIR}/backups"
+install -d -m 0755 -o deploy -g deploy "${INSTALL_DIR}/releases"
+install -d -m 0755 -o deploy -g deploy "${INSTALL_DIR}/scripts"
+install -d -m 0755 -o deploy -g deploy "${INSTALL_DIR}/infrastructure/caddy"
 
 echo "Directory structure created under ${INSTALL_DIR}"
 

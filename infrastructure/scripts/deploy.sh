@@ -58,11 +58,7 @@ docker pull "${MIGRATOR_IMAGE}" || echo "Warning: Migrator image pull failed or 
 echo "===> [3/6] Starting core data services (Postgres, RabbitMQ, Redis, MinIO)..."
 docker compose --env-file "${ENV_FILE}" -f compose.production.yaml up -d postgres rabbitmq redis minio
 
-echo "Waiting for PostgreSQL and MinIO to become healthy..."
-docker compose --env-file "${ENV_FILE}" -f compose.production.yaml wait postgres
-docker compose --env-file "${ENV_FILE}" -f compose.production.yaml wait minio
-
-# Run MinIO initialization (Private bucket setup)
+# Run MinIO initialization (Private bucket setup; waits for minio healthy automatically via depends_on)
 docker compose --env-file "${ENV_FILE}" -f compose.production.yaml run --rm minio-init
 
 # 5. One-Shot Database Migration

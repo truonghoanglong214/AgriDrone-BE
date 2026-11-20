@@ -9,7 +9,7 @@ set -euo pipefail
 BASE_DIR="/opt/agridrone"
 ENV_FILE="${BASE_DIR}/secrets/.env.production"
 
-APP_DOMAIN="${1:-$(grep '^APP_DOMAIN=' "${ENV_FILE}" 2>/dev/null | cut -d '=' -f2- || echo 'localhost')}"
+APP_DOMAIN="${1:-$(grep '^API_DOMAIN=' "${ENV_FILE}" 2>/dev/null | cut -d '=' -f2- || grep '^APP_DOMAIN=' "${ENV_FILE}" 2>/dev/null | cut -d '=' -f2- || echo 'localhost')}"
 API_BASE="https://${APP_DOMAIN}"
 
 echo "========================================================================"
