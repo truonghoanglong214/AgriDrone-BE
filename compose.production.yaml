@@ -64,7 +64,9 @@ services:
       redis:
         condition: service_healthy
       minio:
-        condition: service_healthy
+        condition: service_started
+      minio-init:
+        condition: service_completed_successfully
       migrate:
         condition: service_completed_successfully
     healthcheck:
@@ -201,7 +203,7 @@ services:
   # Core Profile: MinIO Object Storage (S3 API via Caddy, Console closed)
   # ============================================================================
   minio:
-    image: quay.io/minio/minio:RELEASE.2025-02-07T23-21-09Z
+    image: cgr.dev/chainguard/minio:latest
     restart: unless-stopped
     environment:
       MINIO_ROOT_USER: ${ObjectStorage__AccessKey}
@@ -214,12 +216,6 @@ services:
     networks:
       - edge
       - internal
-    healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-      start_period: 10s
     deploy:
       resources:
         limits:
@@ -232,18 +228,21 @@ services:
         max-file: "5"
 
   minio-init:
-    image: quay.io/minio/mc:RELEASE.2025-02-08T03-51-17Z
+    image: cgr.dev/chainguard/minio-client:latest-dev
     restart: "no"
     networks:
       - internal
     depends_on:
-      minio:
-        condition: service_healthy
+      - minio
     entrypoint: >
       /bin/sh -c "
-      mc alias set local http://minio:9000 $${ObjectStorage__AccessKey} $${ObjectStorage__SecretKey};
+      until mc alias set local http://minio:9000 $${ObjectStorage__AccessKey} $${ObjectStorage__SecretKey}; do
+        echo 'Waiting for MinIO storage to become ready...';
+        sleep 2;
+      done;
       mc mb --ignore-existing local/$${ObjectStorage__Bucket:-agridrone-media};
       mc anonymous set none local/$${ObjectStorage__Bucket:-agridrone-media};
+      echo 'MinIO initialized successfully!';
       exit 0;
       "
     environment:
