@@ -99,7 +99,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    command: ["./efbundle", "--connection", "${ConnectionStrings__AgriDrone}"]
     logging:
       driver: "json-file"
       options:
