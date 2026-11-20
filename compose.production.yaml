@@ -53,6 +53,10 @@ services:
     restart: unless-stopped
     env_file:
       - ${ENV_FILE:-secrets/.env.production}
+    environment:
+      Identity__SystemManagerInvitations__AcceptUrl: https://${APP_DOMAIN:-agridrone.vn}/accept-system-manager-invitation
+      Identity__TenantInvitations__AcceptUrl: https://${APP_DOMAIN:-agridrone.vn}/accept-invitation
+      Identity__PasswordReset__ResetUrl: https://${APP_DOMAIN:-agridrone.vn}/reset-password
     networks:
       - edge
       - internal
