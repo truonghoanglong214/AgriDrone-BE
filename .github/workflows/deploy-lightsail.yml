@@ -10,6 +10,7 @@ on:
   push:
     branches:
       - 'main'
+      - 'LongTH'
     tags:
       - 'demo-v*'
 
@@ -37,7 +38,7 @@ jobs:
             echo "RELEASE_TAG=${{ github.event.inputs.release_tag }}" >> $GITHUB_OUTPUT
           elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
             echo "RELEASE_TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-          elif [ "${{ github.ref_name }}" = "main" ]; then
+          elif [ "${{ github.ref_name }}" = "main" ] || [ "${{ github.ref_name }}" = "LongTH" ]; then
             echo "RELEASE_TAG=${{ github.sha }}" >> $GITHUB_OUTPUT
           else
             echo "RELEASE_TAG=latest" >> $GITHUB_OUTPUT
@@ -105,7 +106,7 @@ jobs:
             echo "RELEASE_TAG=${{ github.event.inputs.release_tag }}" >> $GITHUB_OUTPUT
           elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
             echo "RELEASE_TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-          elif [ "${{ github.ref_name }}" = "main" ]; then
+          elif [ "${{ github.ref_name }}" = "main" ] || [ "${{ github.ref_name }}" = "LongTH" ]; then
             echo "RELEASE_TAG=${{ github.sha }}" >> $GITHUB_OUTPUT
           else
             echo "RELEASE_TAG=latest" >> $GITHUB_OUTPUT
