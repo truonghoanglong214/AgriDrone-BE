@@ -73,7 +73,7 @@ public sealed class SystemSurveyOrdersController(
     /// <summary>Upload ảnh biên lai PNG/JPEG tối đa 5 MB vào kho riêng tư.</summary>
     [HttpPost("{orderId:guid}/quality-refunds/{caseId:guid}/transfer-evidence")]
     [RequestSizeLimit(6 * 1024 * 1024)]
-    public async Task<IResult> UploadTransferEvidence(Guid orderId, Guid caseId, [FromForm] IFormFile file, CancellationToken cancellationToken)
+    public async Task<IResult> UploadTransferEvidence(Guid orderId, Guid caseId, IFormFile file, CancellationToken cancellationToken)
     {
         if (file.Length is <= 0 or > 5 * 1024 * 1024)
             return Results.BadRequest(new { detail = "Chọn ảnh PNG/JPEG không quá 5 MB." });
