@@ -107,3 +107,4 @@ __pycache__/
 *.pyo
 .venv/
 venv/
+docs/dashboard-frontend-handoff.md
