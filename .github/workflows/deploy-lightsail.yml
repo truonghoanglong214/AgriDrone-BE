@@ -10,7 +10,6 @@ on:
   push:
     branches:
       - 'main'
-      - 'LongTH'
     tags:
       - 'demo-v*'
 
@@ -38,7 +37,7 @@ jobs:
             echo "RELEASE_TAG=${{ github.event.inputs.release_tag }}" >> $GITHUB_OUTPUT
           elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
             echo "RELEASE_TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-          elif [ "${{ github.ref_name }}" = "main" ] || [ "${{ github.ref_name }}" = "LongTH" ]; then
+          elif [ "${{ github.ref_name }}" = "main" ]; then
             echo "RELEASE_TAG=${{ github.sha }}" >> $GITHUB_OUTPUT
           else
             echo "RELEASE_TAG=latest" >> $GITHUB_OUTPUT
@@ -84,7 +83,7 @@ jobs:
 
       - name: Deploy to AWS Lightsail via SSH
         uses: appleboy/ssh-action@v1.0.3
-        if: ${{ secrets.LIGHTSAIL_HOST != '' && secrets.LIGHTSAIL_SSH_KEY != '' }}
+        if: ${{ (github.ref_name == 'main' || startsWith(github.ref, 'refs/tags/')) && secrets.LIGHTSAIL_HOST != '' && secrets.LIGHTSAIL_SSH_KEY != '' }}
         with:
           host: ${{ secrets.LIGHTSAIL_HOST }}
           username: ${{ secrets.LIGHTSAIL_USER || 'ubuntu' }}
@@ -106,7 +105,7 @@ jobs:
             echo "RELEASE_TAG=${{ github.event.inputs.release_tag }}" >> $GITHUB_OUTPUT
           elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
             echo "RELEASE_TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-          elif [ "${{ github.ref_name }}" = "main" ] || [ "${{ github.ref_name }}" = "LongTH" ]; then
+          elif [ "${{ github.ref_name }}" = "main" ]; then
             echo "RELEASE_TAG=${{ github.sha }}" >> $GITHUB_OUTPUT
           else
             echo "RELEASE_TAG=latest" >> $GITHUB_OUTPUT
