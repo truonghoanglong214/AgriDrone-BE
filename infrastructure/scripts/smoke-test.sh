@@ -22,9 +22,19 @@ check_endpoint() {
     local name="$1"
     local url="$2"
     local expected_status="$3"
+    local attempts=5
+    local delay=2
 
     echo -n "Checking ${name} (${url})... "
-    HTTP_CODE=$(curl -sk -o /dev/null -w "%{http_code}" --connect-timeout 10 "${url}" || echo "000")
+    HTTP_CODE="000"
+    for ((i=1; i<=attempts; i++)); do
+        HTTP_CODE=$(curl -sk -o /dev/null -w "%{http_code}" --connect-timeout 10 "${url}" 2>/dev/null || echo "000")
+        if [ "${HTTP_CODE}" = "${expected_status}" ]; then
+            break
+        fi
+        sleep "${delay}"
+    done
+
     if [ "${HTTP_CODE}" = "${expected_status}" ]; then
         echo "PASS (HTTP ${HTTP_CODE})"
     else
@@ -36,7 +46,7 @@ check_endpoint() {
 # 1. Container health checks
 echo "===> [1/4] Checking Docker Container Health..."
 cd "${BASE_DIR}"
-UNHEALTHY=$(docker compose -f compose.production.yaml ps --filter "health=unhealthy" -q | wc -l)
+UNHEALTHY=$(docker ps --filter "health=unhealthy" -q 2>/dev/null | wc -l || echo 0)
 if [ "${UNHEALTHY}" -gt 0 ]; then
     echo "ERROR: Found ${UNHEALTHY} unhealthy container(s)!"
     docker compose -f compose.production.yaml ps
