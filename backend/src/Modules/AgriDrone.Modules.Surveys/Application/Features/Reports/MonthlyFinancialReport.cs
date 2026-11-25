@@ -8,17 +8,28 @@ public sealed record MonthlyFinancialReport(
     DateTimeOffset EndUtc, DateTimeOffset GeneratedAt, DateTimeOffset HistoryAvailableFrom,
     bool HistoricalBalancesComplete, IReadOnlyList<FinancialReportLine> Lines)
 {
+    public Guid? SnapshotId { get; init; }
+    public DateTimeOffset? SnapshotExpiresAt { get; init; }
+    public DateTimeOffset AsOfUtc => GeneratedAt < EndUtc ? GeneratedAt : EndUtc;
     public string ReportFingerprint => Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new
     {
-        Year, Month, Service, FormulaVersion, StartUtc, EndUtc, HistoryAvailableFrom,
+        Year, Month, Service, FormulaVersion, StartUtc, EndUtc, AsOfUtc, HistoryAvailableFrom,
         HistoricalBalancesComplete, Lines
     })));
     public decimal PendingPayments => Lines.Sum(x => x.PendingPayments);
     public decimal PublishedServiceValue => Lines.Sum(x => x.PublishedServiceValue);
     public decimal ServiceRefunds => Lines.Sum(x => x.ServiceRefunds);
     public decimal NetServiceRevenue => PublishedServiceValue - ServiceRefunds;
+    public decimal OverpaymentRefunds => Lines.Sum(x => x.OverpaymentRefunds);
+    public decimal CancellationRefunds => Lines.Sum(x => x.CancellationRefunds);
+    public decimal ServiceFailureRefunds => Lines.Sum(x => x.ServiceFailureRefunds);
+    public decimal ComplaintRefunds => Lines.Sum(x => x.ComplaintRefunds);
+    public decimal UnclassifiedRefunds => Lines.Sum(x => x.UnclassifiedRefunds);
+    public decimal CompletedRefunds => Lines.Sum(x => x.CompletedRefunds);
+    public decimal NetRevenue => PublishedServiceValue - CompletedRefunds;
     public decimal CashReceipts => Lines.Sum(x => x.CashReceipts);
     public decimal CashRefunds => Lines.Sum(x => x.CashRefunds);
+    public decimal FundingReversals => CashRefunds - CompletedRefunds;
     public decimal NetCash => CashReceipts - CashRefunds;
     public decimal DepositsHeld => Lines.Sum(x => x.DepositsHeld);
     public decimal RefundableExcess => Lines.Sum(x => x.RefundableExcess);

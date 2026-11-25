@@ -22,16 +22,28 @@ internal static class RevenueWorkbook
             xml.WriteStartElement("sheetData");
             Row(xml, "Period", $"{report.Year:D4}-{report.Month:D2}", "Service", report.Service ?? "ALL", "Timezone", "UTC+7", "Currency", "VND");
             Row(xml, "Fingerprint", report.ReportFingerprint, "PendingPayments", report.PendingPayments);
-            Row(xml, "Formula", report.FormulaVersion, "GeneratedAt", report.GeneratedAt.ToString("O", CultureInfo.InvariantCulture));
+            Row(xml, "Formula", report.FormulaVersion, "AsOfUtc", report.AsOfUtc.ToString("O", CultureInfo.InvariantCulture));
+            Row(xml, "GeneratedAt", report.GeneratedAt.ToString("O", CultureInfo.InvariantCulture));
             Row(xml, "HistoryAvailableFrom", report.HistoryAvailableFrom.ToString("O", CultureInfo.InvariantCulture), "HistoricalBalancesComplete", report.HistoricalBalancesComplete.ToString());
             Row(xml, "PublishedServiceValue", report.PublishedServiceValue, "ServiceRefunds", report.ServiceRefunds, "NetServiceRevenue", report.NetServiceRevenue);
-            Row(xml, "CashReceipts", report.CashReceipts, "CashRefunds", report.CashRefunds, "NetCash", report.NetCash);
+            Row(xml, "CompletedRefunds", report.CompletedRefunds, "NetRevenue", report.NetRevenue);
+            Row(xml, "OverpaymentRefunds", report.OverpaymentRefunds, "CancellationRefunds", report.CancellationRefunds, "ServiceFailureRefunds", report.ServiceFailureRefunds);
+            Row(xml, "ComplaintRefunds", report.ComplaintRefunds, "UnclassifiedRefunds", report.UnclassifiedRefunds);
+            Row(xml, "CashReceipts", report.CashReceipts, "CashRefunds", report.CashRefunds, "FundingReversals", report.FundingReversals, "NetCash", report.NetCash);
             Row(xml, "DepositsHeld", report.DepositsHeld, "RefundableExcess", report.RefundableExcess, "RefundPayable", report.RefundPayable);
             Row(xml, "Retention", report.CancellationRetention, "Outstanding", report.OutstandingBalances, "PublishedOrders", report.PublishedOrders);
             Row(xml, "UnpricedOrders", report.UnpricedOrders, "ReconciliationOrders", report.ReconciliationOrders);
-            Row(xml, "OrderId", "Order", "Service", "ServiceValue", "ServiceRefunds", "CashReceipts", "CashRefunds", "DepositsHeld", "RefundableExcess", "RefundPayable", "Retention", "Outstanding", "Published", "Unpriced", "Reconciliation");
+            Row(xml, "OrderId", "Order", "Service", "ServiceValue", "ServiceRefunds", "NetRevenue", "CashReceipts", "CashRefunds",
+                "OverpaymentRefunds", "CancellationRefunds", "ServiceFailureRefunds", "ComplaintRefunds", "UnclassifiedRefunds", "FundingReversals",
+                "DepositsHeld", "RefundableExcess", "RefundPayable", "Retention", "Outstanding", "Published", "Unpriced", "Reconciliation");
             foreach (var line in report.Lines)
-                Row(xml, line.OrderId.ToString(), line.OrderNumber, line.Service, line.PublishedServiceValue, line.ServiceRefunds, line.CashReceipts, line.CashRefunds, line.DepositsHeld, line.RefundableExcess, line.RefundPayable, line.CancellationRetention, line.OutstandingBalance, line.PublishedInPeriod.ToString(), line.Unpriced.ToString(), line.NeedsReconciliation.ToString());
+            {
+                Row(xml, line.OrderId.ToString(), line.OrderNumber, line.Service, line.PublishedServiceValue, line.ServiceRefunds, line.NetRevenue,
+                    line.CashReceipts, line.CashRefunds, line.OverpaymentRefunds, line.CancellationRefunds, line.ServiceFailureRefunds,
+                    line.ComplaintRefunds, line.UnclassifiedRefunds, line.FundingReversals, line.DepositsHeld, line.RefundableExcess,
+                    line.RefundPayable, line.CancellationRetention, line.OutstandingBalance, line.PublishedInPeriod.ToString(),
+                    line.Unpriced.ToString(), line.NeedsReconciliation.ToString());
+            }
             xml.WriteEndElement(); xml.WriteEndElement();
         }
         return stream.ToArray();

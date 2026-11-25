@@ -34,6 +34,8 @@ public sealed class FinancialReportTests
         rows.Add(Row(5, "survey_refund_obligations", new { amount = 40000, completed_at = "2026-11-05T00:00:00Z", origin_kind = "OVERPAYMENT" }));
         var line = Calculate(rows);
         Assert.Equal(60000m, line.PublishedServiceValue - line.ServiceRefunds);
+        Assert.Equal(20000m, line.NetRevenue);
+        Assert.Equal(40000m, line.OverpaymentRefunds);
         Assert.Equal(60000m, line.CashReceipts - line.CashRefunds);
         Assert.Equal(0m, line.RefundableExcess);
     }
@@ -59,11 +61,27 @@ public sealed class FinancialReportTests
     }
 
     [Fact]
+    public void PublishedLegacyComboUsesOriginalInvoiceAndLockedService()
+    {
+        var rows = BaseRows();
+        rows.RemoveAt(1);
+        rows.Add(Row(3, "survey_orders", new { order_number = "ORD-1", booked_service_code = "COMBO",
+            final_price = 80000, status = "COMPLETED", created_at = "2026-10-01T00:00:00Z" }));
+        rows.Add(Row(4, "legacy_service_publication", new { amount = 60000, published_at = "2026-11-04T00:00:00Z" }));
+        var line = Calculate(rows);
+
+        Assert.Equal("COMBO", line.Service);
+        Assert.True(line.PublishedInPeriod);
+        Assert.Equal(60000m, line.PublishedServiceValue);
+        Assert.Equal(0m, line.OutstandingBalance);
+    }
+
+    [Fact]
     public void UnpricedDepositIsHeldWithoutInventingReceivable()
     {
         var rows = BaseRows();
         rows.Add(Row(3, "survey_orders", new { order_number = "ORD-1", status = "AWAITING_PRICING", created_at = "2026-10-01T00:00:00Z" }));
-        rows.Add(Row(4, "survey_funding_receipts", new { amount = 10000, received_at = "2026-11-02T00:00:00Z" }));
+        rows.Add(Row(4, "survey_funding_receipts", new { amount = 10000, deposit_obligation_id = OrderId, received_at = "2026-11-02T00:00:00Z" }));
         var line = Calculate(rows);
         Assert.Equal(10000m, line.DepositsHeld);
         Assert.Equal(0m, line.OutstandingBalance);
@@ -107,7 +125,7 @@ public sealed class FinancialReportTests
     public void PriorMonthDepositDoesNotBecomeThisMonthsCashReceipt()
     {
         var rows = BaseRows();
-        rows.Add(Row(3, "survey_funding_receipts", new { amount = 10000, received_at = "2026-10-02T00:00:00Z" }));
+        rows.Add(Row(3, "survey_funding_receipts", new { amount = 10000, deposit_obligation_id = OrderId, received_at = "2026-10-02T00:00:00Z" }));
         var line = Calculate(rows);
         Assert.Equal(0m, line.CashReceipts);
         Assert.Equal(10000m, line.DepositsHeld);
@@ -121,6 +139,19 @@ public sealed class FinancialReportTests
         rows.Add(Row(3, "survey_funding_receipts", new { amount = 70000, received_at = "2026-11-02T00:00:00Z" }));
         rows.Add(Row(4, "survey_payments", new { amount = 60000, confirmed_at = "2026-11-02T00:00:00Z", purpose = "FinalBalance" }));
         Assert.Equal(70000m, Calculate(rows).CashReceipts);
+    }
+
+    [Fact]
+    public void ReceivedBalanceDoesNotIncreaseDepositsHeldBeforePublication()
+    {
+        var rows = BaseRows();
+        rows.Add(Row(3, "survey_payments", new { amount = 10000, confirmed_at = "2026-11-02T00:00:00Z", purpose = "BaselineDeposit" }));
+        rows.Add(Row(4, "survey_funding_receipts", new { amount = 50000, received_at = "2026-11-03T00:00:00Z" }));
+        var line = Calculate(rows);
+
+        Assert.Equal(60000m, line.CashReceipts);
+        Assert.Equal(10000m, line.DepositsHeld);
+        Assert.Equal(0m, line.OutstandingBalance);
     }
 
     [Fact]
