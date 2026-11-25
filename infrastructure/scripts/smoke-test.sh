@@ -63,11 +63,32 @@ done
 
 # 4. Safety flags check
 echo "===> [4/4] Verifying Business Safety Flags..."
-if grep -q "SurveyPayments__Enabled=true" "${ENV_FILE}"; then
-    echo "CRITICAL ERROR: SurveyPayments__Enabled is set to true before Phase V3-10!"
+# Set SMOKE_EXPECTED_SURVEY_PAYMENTS_ENABLED=true in the deployment environment
+# only after enabling payments has been approved. The default is false.
+if ! PAYMENT_FLAGS=$(docker compose --env-file "${ENV_FILE}" -f compose.production.yaml exec -T api sh -c '
+    printf "%s:%s\n" "${SMOKE_EXPECTED_SURVEY_PAYMENTS_ENABLED-false}" "${SurveyPayments__Enabled-}"
+'); then
+    echo "CRITICAL ERROR: Could not read SurveyPayments settings from the API container."
     FAILED=$((FAILED + 1))
 else
-    echo "Safety Gate: SurveyPayments is FAIL-CLOSED (false). OK."
+    EXPECTED_PAYMENTS="${PAYMENT_FLAGS%%:*}"
+    ACTUAL_PAYMENTS="${PAYMENT_FLAGS#*:}"
+    EXPECTED_PAYMENTS="${EXPECTED_PAYMENTS,,}"
+    ACTUAL_PAYMENTS="${ACTUAL_PAYMENTS,,}"
+
+    case "${EXPECTED_PAYMENTS}:${ACTUAL_PAYMENTS}" in
+        false:false|true:true)
+            echo "Safety Gate: SurveyPayments is ${ACTUAL_PAYMENTS}, matching the deployment expectation. OK."
+            ;;
+        false:true|true:false)
+            echo "CRITICAL ERROR: SurveyPayments is ${ACTUAL_PAYMENTS}, expected ${EXPECTED_PAYMENTS}."
+            FAILED=$((FAILED + 1))
+            ;;
+        *)
+            echo "CRITICAL ERROR: SurveyPayments__Enabled and SMOKE_EXPECTED_SURVEY_PAYMENTS_ENABLED must resolve to true or false."
+            FAILED=$((FAILED + 1))
+            ;;
+    esac
 fi
 
 echo "========================================================================"
