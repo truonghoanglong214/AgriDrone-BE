@@ -83,7 +83,7 @@ namespace AgriDrone.Database.Migrations
                     table.ForeignKey(
                         name: "fk_survey_combo_import_batches_mapping_batch",
                         columns: x => new { x.mapping_candidate_batch_id, x.tenant_id, x.farm_id },
-                        principalSchema: "mapping",
+                        principalSchema: "farm",
                         principalTable: "mapping_candidate_batches",
                         principalColumns: new[] { "id", "tenant_id", "farm_id" },
                         onDelete: ReferentialAction.Restrict);
