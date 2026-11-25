@@ -66,4 +66,7 @@ public static class IntegrationConsumerNames
 
     public const string Be1BaselineOrthophotoCompletedV1 =
         "be1-baseline-orthophoto-completed-v1";
+
+    public const string Be1SurveyReleaseEvaluationRequestedV1 =
+        "be1-survey-release-evaluation-requested-v1";
 }

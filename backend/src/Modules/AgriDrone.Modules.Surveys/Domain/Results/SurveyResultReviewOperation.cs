@@ -9,6 +9,11 @@ public sealed class SurveyResultReviewOperation : Entity
 {
     public const string ActionRecordComboReview = "RecordComboReview";
     public const string ActionFreezeInternalResult = "FreezeInternalResult";
+    public const string ActionFinalizeInvoice = "FinalizeInvoice";
+    public const string ActionCorrectPreReleaseInvoice = "CorrectPreReleaseInvoice";
+    public const string ActionBeginBalanceCheckout = "BeginBalanceCheckout";
+    public const string ActionCompleteBalanceCheckout = "CompleteBalanceCheckout";
+    public const string ActionBalanceCheckoutUncertain = "BalanceCheckoutUncertain";
     public const string ApiVersionV3 = "v3";
 
     private static readonly Regex Hex64Regex = new("^[0-9a-f]{64}$", RegexOptions.Compiled);
@@ -26,6 +31,7 @@ public sealed class SurveyResultReviewOperation : Entity
     public Guid? ComboBatchId { get; private set; }
     public Guid? ReviewRevisionId { get; private set; }
     public Guid? ApprovedResultRevisionId { get; private set; }
+    public Guid? InvoiceRevisionId { get; private set; }
     public Guid? CaptureAttemptId { get; private set; }
     public Guid? PoleCountSnapshotId { get; private set; }
     public JsonDocument Outcome { get; private set; } = null!;
@@ -46,7 +52,8 @@ public sealed class SurveyResultReviewOperation : Entity
         Guid? reviewRevisionId = null,
         Guid? approvedResultRevisionId = null,
         Guid? captureAttemptId = null,
-        Guid? poleCountSnapshotId = null)
+        Guid? poleCountSnapshotId = null,
+        Guid? invoiceRevisionId = null)
     {
         if (tenantId == Guid.Empty) return Result.Failure<SurveyResultReviewOperation>(AppError.Validation("TenantId.Required", "Tenant identifier is required."));
         if (farmId == Guid.Empty) return Result.Failure<SurveyResultReviewOperation>(AppError.Validation("FarmId.Required", "Farm identifier is required."));
@@ -55,7 +62,14 @@ public sealed class SurveyResultReviewOperation : Entity
         if (operationId == Guid.Empty) return Result.Failure<SurveyResultReviewOperation>(AppError.Validation("OperationId.Required", "Operation identifier is required."));
 
         var normalizedAction = action?.Trim() ?? string.Empty;
-        if (normalizedAction is not (ActionRecordComboReview or ActionFreezeInternalResult))
+        if (normalizedAction is not (
+            ActionRecordComboReview or
+            ActionFreezeInternalResult or
+            ActionFinalizeInvoice or
+            ActionCorrectPreReleaseInvoice or
+            ActionBeginBalanceCheckout or
+            ActionCompleteBalanceCheckout or
+            ActionBalanceCheckoutUncertain))
             return Result.Failure<SurveyResultReviewOperation>(AppError.Validation("Action.Invalid", $"Unsupported review action '{action}'."));
 
         var normalizedApiVersion = apiVersion?.Trim() ?? string.Empty;
@@ -86,6 +100,7 @@ public sealed class SurveyResultReviewOperation : Entity
             ComboBatchId = comboBatchId,
             ReviewRevisionId = reviewRevisionId,
             ApprovedResultRevisionId = approvedResultRevisionId,
+            InvoiceRevisionId = invoiceRevisionId,
             CaptureAttemptId = captureAttemptId,
             PoleCountSnapshotId = poleCountSnapshotId,
             Outcome = JsonDocument.Parse(outcome.RootElement.GetRawText()),

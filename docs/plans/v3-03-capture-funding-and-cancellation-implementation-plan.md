@@ -1,5 +1,16 @@
 # V3-03 — Appointment, deposit, CaptureAttempt, Re-flight và cancellation
 
+**Checkpoint 2026-11-25.** Đã có source appointment, funding cọc, CaptureAttempt/re-flight và quyết định hủy/hoàn cọc.
+
+- [ ] Nghiệm thu `03H-2/3` tại V3-10, gồm các ca còn mở trong 03-T01–13, race, rollback, object storage và broker. Sửa cap hủy có reversal trong [A2.2](../plans/v3-05e-to-v3-10-settlement-release-plan.md#a22--settlement-và-cap-hoàn-sau-reversal). [Acceptance matrix](../testing/v3-business-acceptance.md)
+
+[Backlog V3-06 đến V3-10](../../Codex-Plan/BE1-Core-Business-Implementation-Plan.md#4-status-và-dependency-roadmap)
+
+<details>
+<summary>Hồ sơ triển khai và evidence theo từng checkpoint</summary>
+
+Các trạng thái, checklist và số liệu bên dưới ghi theo thời điểm lập từng phần.
+
 Plan date: **2026-11-13**. Updated: **2026-11-16**. Status: **source implementation complete through 03H-1; 03B persistence accepted; 03H-2 remains InProgress pending complete real-path/race/object-storage/broker evidence and V3-02 prerequisites; public activation strictly off**. [Execution baseline](../operations/v3-03-execution-baseline.md) và [ADR 0020](../adr/0020-v3-capture-execution-and-funding-boundaries.md) đã chốt decisions/file manifest. Funding/cancellation, appointment/payment, capture/Re-flight/cancellation coordinator và V3 APIs đã triển khai; public activation vẫn off. Xem execution checklist section 15 để lấy evidence và các gate còn mở.
 
 Nguồn nghiệp vụ: [Business Rules v3](../../Codex-Plan/Business-Rules-v3.md), [BE1 master plan](../../Codex-Plan/BE1-Core-Business-Implementation-Plan.md), [V3-01 locked design](../domain/v3-01-locked-design.md). Contracts: [business coordination](../contracts/survey-business-v3.md), [HTTP intent](../openapi/survey-business-v3.openapi-intent.md). Work tracking: [V3-03 execution checklist](v3-03-execution-checklist.md). Acceptance gốc: [V3-T05–08, T14, T17, T21, T26, T28, T33–34](../testing/v3-business-acceptance.md).
@@ -188,3 +199,5 @@ V3-03 chỉ accepted khi deposit/appointment/capture/Re-flight/cancel invariants
 **Source implementation 03-00 → 03H-1 hoàn thành; 03B-1/03B-2 persistence accepted; 03H-2 phase acceptance đang in progress.** Hiện đã có baseline coverage PostgreSQL, nhưng deterministic races, post-write rollback qua fault probe, media/checksum freeze thật, và V3-02 prerequisites vẫn đang được hoàn thiện. Public activation vẫn off. Sẵn sàng hoàn tất các khoảng trống nghiệp vụ trước khi ký 03H-2 và 03H-3 bàn giao cho Phase V3-04.
 
 V3-04 nhận exact attempt/Mission, approved immutable input manifest, operational/source versions và locked first/follow-up mapping basis. V3-06 nhận funding facts và release-proof adapter seam. V3-08 nhận canonical cancellation/return obligations với evidence/cap basis; không dựng lại hoặc thanh toán lần hai từ events lịch sử.
+
+</details>

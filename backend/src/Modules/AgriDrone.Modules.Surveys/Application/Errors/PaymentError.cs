@@ -14,6 +14,11 @@ public static class PaymentError
     public const string OrderNotReadyCode = "Payment.OrderNotReady";
     public const string ActivePaymentExistsCode = "Payment.ActivePaymentExists";
     public const string ProviderUnavailableCode = "Payment.ProviderUnavailable";
+    public const string ProviderOutcomeUncertainCode = "Payment.ProviderOutcomeUncertain";
+
+    public static AppError ProviderOutcomeUncertain() => AppError.Failure(
+        ProviderOutcomeUncertainCode,
+        "The provider may have created the checkout. Reconcile the stored reference before retrying.");
     public const string ProviderMismatchCode = "Payment.ProviderMismatch";
     public const string UnsupportedEventCode = "Payment.UnsupportedEvent";
     public const string PersistenceConflictCode = "Payment.PersistenceConflict";

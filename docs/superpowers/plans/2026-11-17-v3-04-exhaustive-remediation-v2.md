@@ -1,5 +1,16 @@
 # V3-04 Canonical Remediation V2 — Kế hoạch khắc phục triệt để
 
+**Checkpoint 2026-11-25.** Đã triển khai mapping, spatial policy, lineage trụ và count snapshot. Remediation G0–G18 đã đóng ở checkpoint V3-04.
+
+- [ ] Nghiệm thu mapping/Baseline, lineage, PostGIS, migration/preflight và race ở V3-10. [Acceptance matrix](../../testing/v3-business-acceptance.md)
+
+[Backlog V3-06 đến V3-10](../../../Codex-Plan/BE1-Core-Business-Implementation-Plan.md#4-status-và-dependency-roadmap)
+
+<details>
+<summary>Hồ sơ triển khai và evidence theo từng checkpoint</summary>
+
+Các trạng thái, checklist và số liệu bên dưới ghi theo thời điểm lập từng phần.
+
 > **Trạng thái:** `COMPLETED 2026-11-18` — V3-04 đã đạt G0–G18 theo Nhánh A.
 > **Phạm vi:** Domain → Persistence → Application → Integration → API → Migrations → Documentation.  
 > **Không chạy test:** tuyệt đối không chạy `dotnet test`; chỉ được chạy build theo quy định dự án ở bước cuối.  
@@ -797,3 +808,5 @@ V3-04 chỉ được ghi `Done (Remediated)` khi đồng thời:
 - Không chạy `dotnet test`; toàn bộ integration/acceptance test để V3-10.
 
 Nếu một gate chưa đạt, trạng thái vẫn là `Remediation In Progress`; không chuyển sang V3-05 dựa trên `VerifiedBillablePoleCount` chưa được chứng minh canonical.
+
+</details>

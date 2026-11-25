@@ -11,8 +11,14 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.ToTable(
             "users",
             "identity",
-            tableBuilder => tableBuilder.HasComment(
-                "System user accounts. If ASP.NET Core Identity is used, map/replace this table with AspNetUsers."));
+            tableBuilder =>
+            {
+                tableBuilder.HasComment(
+                    "System user accounts. If ASP.NET Core Identity is used, map/replace this table with AspNetUsers.");
+                tableBuilder.HasCheckConstraint(
+                    "ck_users_authentication_version",
+                    "authentication_version >= 1");
+            });
 
         builder.HasKey(user => user.Id).HasName("pk_users");
 
@@ -48,6 +54,12 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
             .HasColumnType("system.user_status")
             .HasSentinel((UserStatus)(-1))
             .HasDefaultValueSql("'ACTIVE'::system.user_status")
+            .IsRequired();
+
+        builder.Property(user => user.AuthenticationVersion)
+            .HasColumnName("authentication_version")
+            .HasColumnType("integer")
+            .HasDefaultValue(1)
             .IsRequired();
 
         builder.Property(user => user.LastLoginAt)

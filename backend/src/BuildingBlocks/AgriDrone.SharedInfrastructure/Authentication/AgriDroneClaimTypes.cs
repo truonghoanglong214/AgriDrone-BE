@@ -11,4 +11,6 @@ public static class AgriDroneClaimTypes
     public const string TenantRole = "tenant_role";
 
     public const string TokenPurpose = "token_purpose";
+
+    public const string AuthenticationVersion = "auth_version";
 }

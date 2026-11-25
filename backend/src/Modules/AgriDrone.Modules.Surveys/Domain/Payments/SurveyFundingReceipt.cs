@@ -9,6 +9,10 @@ public sealed class SurveyFundingReceipt : Entity
     public Guid TenantId { get; private set; }
     public Guid SurveyOrderId { get; private set; }
     public Guid? DepositObligationId { get; private set; }
+    public Guid? SurveyPaymentId { get; private set; }
+    public Guid? InvoiceRevisionId { get; private set; }
+    public bool RequiresReconciliation { get; private set; }
+    public string? ReconciliationReason { get; private set; }
     public string Provider { get; private set; } = null!;
     public string ProviderTransactionId { get; private set; } = null!;
     public decimal Amount { get; private set; }
@@ -30,7 +34,11 @@ public sealed class SurveyFundingReceipt : Entity
         string paymentReference,
         string payloadFingerprint,
         DateTimeOffset receivedAt,
-        DateTimeOffset createdAt)
+        DateTimeOffset createdAt,
+        Guid? surveyPaymentId = null,
+        Guid? invoiceRevisionId = null,
+        bool requiresReconciliation = false,
+        string? reconciliationReason = null)
     {
         DomainGuard.NotEmpty(id, nameof(id));
         DomainGuard.NotEmpty(tenantId, nameof(tenantId));
@@ -38,6 +46,18 @@ public sealed class SurveyFundingReceipt : Entity
         if (depositObligationId.HasValue)
         {
             DomainGuard.NotEmpty(depositObligationId.Value, nameof(depositObligationId));
+        }
+        if (surveyPaymentId.HasValue)
+        {
+            DomainGuard.NotEmpty(surveyPaymentId.Value, nameof(surveyPaymentId));
+        }
+        if (invoiceRevisionId.HasValue)
+        {
+            DomainGuard.NotEmpty(invoiceRevisionId.Value, nameof(invoiceRevisionId));
+            if (!surveyPaymentId.HasValue)
+            {
+                throw new ArgumentException("InvoiceRevisionId requires a linked SurveyPaymentId.", nameof(invoiceRevisionId));
+            }
         }
         DomainGuard.Utc(receivedAt, nameof(receivedAt));
         DomainGuard.Utc(createdAt, nameof(createdAt));
@@ -50,6 +70,17 @@ public sealed class SurveyFundingReceipt : Entity
         var normalizedTxId = PolicyValidationGuard.NormalizeRequired(providerTransactionId, 150, nameof(providerTransactionId));
         var normalizedRef = PolicyValidationGuard.NormalizeRequired(paymentReference, 150, nameof(paymentReference));
         var normalizedFingerprint = PolicyValidationGuard.NormalizeRequired(payloadFingerprint, 128, nameof(payloadFingerprint));
+        var normalizedReconciliationReason = PolicyValidationGuard.NormalizeOptional(reconciliationReason, 500, nameof(reconciliationReason));
+
+        if (requiresReconciliation && normalizedReconciliationReason is null)
+        {
+            throw new ArgumentException("ReconciliationReason is required when RequiresReconciliation is true.", nameof(reconciliationReason));
+        }
+
+        if (!requiresReconciliation && normalizedReconciliationReason is not null)
+        {
+            throw new ArgumentException("ReconciliationReason must be null when RequiresReconciliation is false.", nameof(reconciliationReason));
+        }
 
         return new SurveyFundingReceipt
         {
@@ -57,6 +88,10 @@ public sealed class SurveyFundingReceipt : Entity
             TenantId = tenantId,
             SurveyOrderId = surveyOrderId,
             DepositObligationId = depositObligationId,
+            SurveyPaymentId = surveyPaymentId,
+            InvoiceRevisionId = invoiceRevisionId,
+            RequiresReconciliation = requiresReconciliation,
+            ReconciliationReason = normalizedReconciliationReason,
             Provider = normalizedProvider,
             ProviderTransactionId = normalizedTxId,
             Amount = validatedAmount,

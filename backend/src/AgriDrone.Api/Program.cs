@@ -113,6 +113,24 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 // CORS
 builder.Services.AddCors(options =>
 {
+    var corsOrigins = builder.Configuration
+        .GetSection("Cors:AllowedOrigins")
+        .Get<string[]>()?
+        .Where(origin => !string.IsNullOrWhiteSpace(origin))
+        .Select(origin => origin.Trim().TrimEnd('/'))
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .ToArray() ?? [];
+
+    var refreshAuthOrigins = builder.Configuration
+        .GetSection("RefreshSession:AllowedOrigins")
+        .Get<string[]>()?
+        .Where(origin => !string.IsNullOrWhiteSpace(origin))
+        .Select(origin => origin.Trim().TrimEnd('/'))
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .ToArray() ?? [];
+
+    var effectiveAuthOrigins = refreshAuthOrigins.Length > 0 ? refreshAuthOrigins : corsOrigins;
+
     options.AddPolicy("Frontend", policy =>
     {
         if (builder.Environment.IsDevelopment())
@@ -125,17 +143,10 @@ builder.Services.AddCors(options =>
         }
         else
         {
-            var allowedOrigins = builder.Configuration
-                .GetSection("Cors:AllowedOrigins")
-                .Get<string[]>()?
-                .Where(origin => !string.IsNullOrWhiteSpace(origin))
-                .Distinct()
-                .ToArray() ?? [];
-
-            if (allowedOrigins.Length > 0)
+            if (corsOrigins.Length > 0)
             {
                 policy
-                    .WithOrigins(allowedOrigins)
+                    .WithOrigins(corsOrigins)
                     .AllowCredentials()
                     .AllowAnyHeader()
                     .AllowAnyMethod();
@@ -145,6 +156,23 @@ builder.Services.AddCors(options =>
                 // Fail-closed: No origins permitted when not configured
                 policy.WithOrigins();
             }
+        }
+    });
+
+    options.AddPolicy("Auth", policy =>
+    {
+        if (effectiveAuthOrigins.Length > 0)
+        {
+            policy
+                .WithOrigins(effectiveAuthOrigins)
+                .AllowCredentials()
+                .WithHeaders("Content-Type", "Authorization", "X-AgriDrone-Session")
+                .WithMethods("POST", "OPTIONS");
+        }
+        else
+        {
+            // Fail-closed: Auth cookie routes never use wildcard origins
+            policy.WithOrigins();
         }
     });
 });

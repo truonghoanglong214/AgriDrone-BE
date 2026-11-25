@@ -27,4 +27,12 @@ namespace AgriDrone.Modules.Identity.Application.Features.LoginUser
         string Code,
         string Name,
         TenantMemberRole Role);
+
+    public sealed record IssuedRefreshCookie(
+        string RawToken,
+        DateTimeOffset ExpiresAt);
+
+    public sealed record AuthenticationCommandResult(
+        LoginUserResponse Payload,
+        IssuedRefreshCookie? RefreshCookie = null);
 }

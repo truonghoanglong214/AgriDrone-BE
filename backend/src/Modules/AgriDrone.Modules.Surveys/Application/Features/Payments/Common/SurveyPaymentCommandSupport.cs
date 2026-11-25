@@ -41,6 +41,7 @@ internal static class SurveyPaymentCommandSupport
         SurveyPaymentStatus.Failed => "FAILED",
         SurveyPaymentStatus.Refunded => "REFUNDED",
         SurveyPaymentStatus.AdjustmentRequired => "ADJUSTMENT_REQUIRED",
+        SurveyPaymentStatus.Invalidated => "INVALIDATED",
         _ => throw new ArgumentOutOfRangeException(nameof(status))
     };
 

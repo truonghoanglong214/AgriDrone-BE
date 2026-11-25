@@ -65,7 +65,15 @@ public sealed record SurveyPaymentEventState(
     SurveyPayment Payment,
     bool EventAlreadyProcessed,
     SurveyDepositObligation? DepositObligation,
-    SurveyCancellationReceiptDisposition? CancellationDecision);
+    SurveyCancellationReceiptDisposition? CancellationDecision,
+    SurveyDepositReversalSource? ReversalSource = null);
+
+public sealed record SurveyDepositReversalSource(
+    Guid FundingReceiptId,
+    decimal ReceivedAmount,
+    decimal AllocatedAmount,
+    decimal PriorCashReversed,
+    decimal PriorAllocationReversed);
 
 public sealed record SurveyCancellationReceiptDisposition(
     Guid DecisionId,

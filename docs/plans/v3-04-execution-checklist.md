@@ -1,5 +1,16 @@
 # V3-04 — Execution Checklist: Mapping, Spatial Policy, Plant Identity & Billable Pole Count
 
+**Checkpoint 2026-11-25.** Đã triển khai mapping, spatial policy, lineage trụ và count snapshot. Remediation G0–G18 đã đóng ở checkpoint V3-04.
+
+- [ ] Nghiệm thu mapping/Baseline, lineage, PostGIS, migration/preflight và race ở V3-10. [Acceptance matrix](../testing/v3-business-acceptance.md)
+
+[Backlog V3-06 đến V3-10](../../Codex-Plan/BE1-Core-Business-Implementation-Plan.md#4-status-và-dependency-roadmap)
+
+<details>
+<summary>Hồ sơ triển khai và evidence theo từng checkpoint</summary>
+
+Các trạng thái, checklist và số liệu bên dưới ghi theo thời điểm lập từng phần.
+
 Date: **2026-11-18**. Status: **[x] Done (Remediated) — G0–G18 closed; build clean; tests deferred to V3-10**.
 [Implementation Plan](v3-04-mapping-and-plant-identity-implementation-plan.md), [Remediation Plan V2](../superpowers/plans/2026-11-17-v3-04-exhaustive-remediation-v2.md), [Master Plan](../../Codex-Plan/BE1-Core-Business-Implementation-Plan.md), [Business Rules](../../Codex-Plan/Business-Rules-v3.md).
 
@@ -69,3 +80,5 @@ Local environment được kiểm tra read-only lúc **11:05 Asia/Bangkok** bằ
 - `SurveyPayments:Enabled` đã được đưa về `false` trong Development để giữ fail-closed đến V3-10.
 
 Script dùng lại cho mọi môi trường: `docs/operations/v3-04-remediation-preflight.sql`.
+
+</details>

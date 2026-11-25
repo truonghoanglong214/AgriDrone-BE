@@ -147,17 +147,41 @@ internal sealed class GetFarmPlantHealthMapQueryHandler(
                     "The farm survey results are locked. Please complete the remaining payment to unlock results."));
             }
 
-            // 1. Lấy thông tin bản đồ nền đã công bố của Farm
+            // 1. Lấy thông tin bản đồ nền đã công bố của Farm (không rơi về DRAFT/INTERNAL_APPROVED/V3)
             var baseMapRow = await dbContext.Database.SqlQueryRaw<BaseMapRow>(
-                @"SELECT id AS ""Id"", tenant_id AS ""TenantId"", source_mission_id AS ""SourceMissionId"",
-                         status::text AS ""Status"", grid_bearing_deg AS ""GridBearingDeg"",
-                         plant_spacing_m AS ""PlantSpacingM"", row_spacing_m AS ""RowSpacingM""
-                  FROM farm.farm_base_map_versions
-                  WHERE farm_id = {0}
-                  ORDER BY CASE WHEN status = 'PUBLISHED' THEN 1 ELSE 2 END, created_at DESC
+                @"SELECT m.id AS ""Id"", m.tenant_id AS ""TenantId"", m.source_mission_id AS ""SourceMissionId"",
+                         m.status::text AS ""Status"", m.grid_bearing_deg AS ""GridBearingDeg"",
+                         m.plant_spacing_m AS ""PlantSpacingM"", m.row_spacing_m AS ""RowSpacingM""
+                  FROM farm.farm_base_map_versions m
+                  JOIN survey.survey_orders o ON o.id = m.source_survey_order_id
+                  WHERE m.farm_id = {0}
+                    AND m.status IN ('PUBLISHED', 'SUPERSEDED')
+                    AND o.scope = 'LEGACY'::system.contract_scope
+                  ORDER BY CASE WHEN m.status = 'PUBLISHED' THEN 1 ELSE 2 END, m.created_at DESC
                   LIMIT 1",
                 request.FarmId)
                 .FirstOrDefaultAsync(cancellationToken);
+
+            if (baseMapRow is null)
+            {
+                var hasUnreleasedV3 = await dbContext.Database.SqlQueryRaw<bool>(
+                    @"SELECT EXISTS (
+                        SELECT 1
+                        FROM survey.survey_orders o
+                        WHERE o.farm_id = {0}
+                          AND o.scope = 'V3'::system.contract_scope
+                          AND UPPER(o.status::text) <> 'CANCELLED'
+                      ) AS ""Value""",
+                    request.FarmId)
+                    .FirstOrDefaultAsync(cancellationToken);
+
+                if (hasUnreleasedV3)
+                {
+                    return Result.Failure<FarmPlantHealthMapResult>(AppError.Conflict(
+                        "FarmPlantHealthMap.PaymentRequired",
+                        "Reviewed V3 survey results remain locked until settlement and release proof."));
+                }
+            }
 
             var resolvedTenantId = request.TenantId ?? baseMapRow?.TenantId ?? Guid.Empty;
 
@@ -181,30 +205,48 @@ internal sealed class GetFarmPlantHealthMapQueryHandler(
                 }
             }
 
-            // 2. Lấy danh sách toàn bộ trụ cây thuộc Farm
+            // 2. Lấy danh sách toàn bộ trụ cây thuộc Farm đã phát hành Legacy (không rò rỉ dữ liệu V3 chưa phát hành)
             var plantRows = await dbContext.Database.SqlQueryRaw<PlantRow>(
-                @"SELECT id AS ""Id"", plant_code AS ""PlantCode"",
-                         row_index AS ""RowIndex"", column_index AS ""ColumnIndex"",
-                         ST_Y(location::geometry) AS ""Latitude"",
-                         ST_X(location::geometry) AS ""Longitude"",
-                         lifecycle_status::text AS ""LifecycleStatus""
-                  FROM plant.plants
-                  WHERE farm_id = {0}
-                  ORDER BY row_index, column_index",
+                @"SELECT p.id AS ""Id"", p.plant_code AS ""PlantCode"",
+                         p.row_index AS ""RowIndex"", p.column_index AS ""ColumnIndex"",
+                         ST_Y(p.location::geometry) AS ""Latitude"",
+                         ST_X(p.location::geometry) AS ""Longitude"",
+                         p.lifecycle_status::text AS ""LifecycleStatus""
+                  FROM plant.plants p
+                  WHERE p.farm_id = {0}
+                    AND (
+                        p.farm_base_map_version_id IS NULL
+                        OR EXISTS (
+                            SELECT 1
+                            FROM farm.farm_base_map_versions m
+                            JOIN survey.survey_orders so ON so.id = m.source_survey_order_id
+                            WHERE m.id = p.farm_base_map_version_id
+                              AND m.status IN ('PUBLISHED', 'SUPERSEDED')
+                              AND so.scope = 'LEGACY'::system.contract_scope
+                        )
+                    )
+                  ORDER BY p.row_index, p.column_index",
                 request.FarmId)
                 .ToListAsync(cancellationToken);
 
-            // 3. Lấy toàn bộ quan sát bệnh & quả thuộc Farm
+            // 3. Lấy toàn bộ quan sát bệnh & quả thuộc Farm (loại trừ dữ liệu mission thuộc đơn V3 chưa phát hành)
             var obsRows = await dbContext.Database.SqlQueryRaw<ObservationRow>(
-                @"SELECT id AS ""Id"", mission_id AS ""MissionId"",
-                         COALESCE(resolved_plant_id, suggested_plant_id) AS ""SuggestedPlantId"",
-                         detection_confidence AS ""DetectionConfidence"",
-                         gps_distance_m AS ""GpsDistanceM"",
-                         matching_parameters::text AS ""MatchingParametersJson""
-                  FROM mission.mission_plant_observations
-                  WHERE farm_id = {0}
-                    AND review_status::text <> 'REJECTED'
-                  ORDER BY created_at DESC",
+                @"SELECT obs.id AS ""Id"", obs.mission_id AS ""MissionId"",
+                         COALESCE(obs.resolved_plant_id, obs.suggested_plant_id) AS ""SuggestedPlantId"",
+                         obs.detection_confidence AS ""DetectionConfidence"",
+                         obs.gps_distance_m AS ""GpsDistanceM"",
+                         obs.matching_parameters::text AS ""MatchingParametersJson""
+                  FROM mission.mission_plant_observations obs
+                  WHERE obs.farm_id = {0}
+                    AND obs.review_status::text <> 'REJECTED'
+                    AND NOT EXISTS (
+                        SELECT 1
+                        FROM mission.drone_missions dm
+                        JOIN survey.survey_orders so ON so.id = dm.survey_order_id
+                        WHERE dm.id = obs.mission_id
+                          AND so.scope = 'V3'::system.contract_scope
+                    )
+                  ORDER BY obs.created_at DESC",
                 request.FarmId)
                 .ToListAsync(cancellationToken);
 

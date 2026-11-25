@@ -1,6 +1,7 @@
 using System.Text.Json;
 using AgriDrone.IntegrationContracts.Health;
 using AgriDrone.IntegrationContracts.Messaging;
+using AgriDrone.IntegrationContracts.Surveys;
 using AgriDrone.Modules.Surveys.Domain;
 using AgriDrone.Modules.Plants.Domain.Health;
 using Microsoft.EntityFrameworkCore;

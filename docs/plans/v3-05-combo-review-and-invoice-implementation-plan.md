@@ -1,5 +1,16 @@
 # V3-05 — Combo Review, Verified Pole Count và Invoice Finalization
 
+**Checkpoint 2026-11-25.** Đã triển khai V3-05A–F. Build chuẩn đạt 0 warning, 0 error tại checkpoint review V3-05F.
+
+- [ ] Xác minh cấu hình COMBO trên môi trường đích, migration PostgreSQL, broker/object storage, review/invoice/correction và scope API tại V3-10. [Acceptance matrix](../testing/v3-business-acceptance.md)
+
+[Backlog V3-06 đến V3-10](../../Codex-Plan/BE1-Core-Business-Implementation-Plan.md#4-status-và-dependency-roadmap)
+
+<details>
+<summary>Hồ sơ triển khai và evidence theo từng checkpoint</summary>
+
+Các trạng thái, checklist và số liệu bên dưới ghi theo thời điểm lập từng phần.
+
 **Trạng thái:** In Progress — V3-05A/B remediation pending theo checklist kiểm tra cuối tài liệu; build chưa được xác minh tại môi trường review; DB acceptance pending. **Phụ thuộc:** V3-04 và processing contract. **Bàn giao:** V3-06.
 
 Nguồn: [BE1 Master Plan](../../Codex-Plan/BE1-Core-Business-Implementation-Plan.md#8-v3-0405--mapping-identity-combo-và-countinvoice), [Business Rules](../../Codex-Plan/Business-Rules-v3.md), [Target Contracts](../contracts/survey-business-v3.md), [V3-01 Locked Design](../domain/v3-01-locked-design.md), [Project Memory](../../PROJECT_MEMORY.md).
@@ -420,18 +431,138 @@ Các đường dẫn dưới đây tương đối với `backend/src`. Tên file
 - **D04 → D05** — Trace một freeze mới, một replay và một rollback. Chứng minh Order pointer, approved revision, attempt acceptance/history và receipt đi cùng một commit. Kiểm conflict stale, key đổi body và quyền đã bị thu hồi trước replay.
 - **Đóng 05D** — Build chuẩn sạch, handoff 05E ghi exact IDs/fingerprints và các ca runtime được ghi vào V3-10.
 
-## V3-05E — Count, finalization và correction
+## V3-05E — Count, finalization và correction (Đã sửa sau review, nghiệm thu runtime tại V3-10)
 
-- [ ] Thêm command trong Surveys/Application và transaction adapter trong Database. Đọc `SurveyOrderPoleCountSnapshot` đúng Order/attempt/map/boundary; đếm profile phân biệt đã xác minh trong ranh. Giải quyết boundary exceptions trước khi chốt. Count = 0 cần quyết định có actor, lý do và bằng chứng.
-- [ ] Trong một transaction, lock Order và phụ thuộc theo ADR 0020; kiểm tra quyền trước replay; recheck revision, count, trạng thái hủy và approval COMBO nếu có; tính tổng từ giá pin; ghi invoice revision, current pointer, audit và history nếu đổi trạng thái. Dùng Result/AppError cho lỗi nghiệp vụ.
-- [ ] Correction trước release tạo count snapshot và invoice revision mới khi count đổi. Nếu đã tồn tại nghĩa vụ checkout cho revision cũ, vô hiệu hóa nó trong cùng transaction. Bảo toàn liên kết callback tới checkout gốc để đối soát tiền đến muộn. Cùng operation và fingerprint trả revision cũ; stale request hoặc đổi payload trả conflict.
+**Đầu ra.** Chốt hóa đơn V3 cho First và Follow-up, MAP và COMBO, bằng đúng bằng chứng đã freeze ở V3-05D. Lần chốt đầu chuyển Order từ `Processing` sang `AwaitingSettlement`. Correction trước release thay revision có truy vết. V3-05F nối API và V3-06 thực hiện settlement/release.
+
+### E01 — Chốt nguồn dữ liệu và các bất biến
+
+- [x] Rà `Domain/Orders/SurveyOrder.cs`, `SurveyInvoiceRevision.cs`, `SurveyOrderPoleCountSnapshot.cs`, `SurveyOrderPoleCountSnapshotItem.cs` và `Domain/Results/SurveyInternalApprovedResultRevision.cs`. Tái sử dụng `RecordInternalApprovedResult` và `FinalizeInvoiceRevision`. Bổ sung lineage guard cho `SurveyOrderPoleCountSnapshot.Create` (`revision >= 2` bắt buộc `PredecessorSnapshotId`).
+- [x] Đếm các `PlantProfileId` phân biệt đủ điều kiện trên snapshot đã xác minh, đối chiếu tổng với approval và aggregate. Chặn khi sai lineage, bằng chứng đã lỗi thời hoặc còn `farm.boundary_exceptions` chưa `RESOLVED`. COMBO khớp batch/review revision và fingerprint đã approve.
+- [x] Chốt thẩm quyền ngoại lệ zero-pole (R1 / BR-PAY-08): approver dẫn xuất từ `ActorId` phía server, kiểm tra & khóa ở Rank 1 là `ACTIVE` user có vai trò `SYSTEM_ADMIN` hoặc active assigned `SystemManager` cho `(TenantId, FarmId)`, kèm `ZeroPoleReasonCode` (1–64) và `ZeroPoleEvidenceReference` (1–500). Tính `ValidAllocatedDepositNet` từ `SurveyFundingAllocation` tách biệt với `ConfirmedNetReceipts` (chặn `RefundReconciliationHold` nếu âm sau khi trừ `ActiveReservations` hoặc thiếu linkage) và dùng `SurveyInvoiceRevision.Create` tính total, due và excess.
+
+### E02 — Contract ứng dụng và receipt
+
+- [x] Trong `Surveys/Application/Features/Invoices/` (tách theo feature module `Invoices` cùng port `ISurveyInvoiceTransaction` trong `Surveys/Application/Abstractions/Invoices/`), thêm `FinalizeSurveyOrderInvoiceCommand` và `CorrectSurveyOrderPreReleaseInvoiceCommand` kèm validators và handlers dùng `IExecutionContext`.
+- [x] Mở rộng `SurveyResultReviewOperation` (`ActionFinalizeInvoice`, `ActionCorrectPreReleaseInvoice`, `InvoiceRevisionId`) và `SurveyResultReviewOperationConfiguration`. Kiểm tra quyền Rank 1 trước khi tra replay; cùng Order và fingerprint trả outcome đã lưu (`IsReplay = true`), tái dùng key cho Order hoặc payload khác trả `Operation.Conflict`.
+- [x] Response nội bộ gồm Order ID/version/status, approval ID/fingerprint, count ID/fingerprint, invoice ID/revision/fingerprint, commercial snapshot references, count/price/currency/total/`ValidAllocatedDepositNet`/`ConfirmedNetReceipts`/due/excess, zero-pole metadata và `InvalidatedCheckoutPaymentIds`.
+
+### E03 — Transaction chốt hóa đơn lần đầu
+
+- [x] Thêm `SurveyInvoiceTransaction` trong `AgriDrone.Database/Surveys/` và đăng ký scoped ở `AgriDrone.Database/DependencyInjection.cs`.
+- [x] Chạy `IsolationLevel.Serializable` với khóa ADR 0020 (Rank 1 Actor/Assignment -> Rank 2 Order(s) -> Rank 3 Receipt -> Rank 5 DepositObligation/Payments/FundingAllocations/FundingReceipts/Reversals/RefundObligations -> Rank 6 ApprovedResult/Snapshot/InvoiceRevision/MappingBatch/BaseMap/Boundary/BoundaryExceptions -> Rank 7 CaptureAttempt -> Rank 8 Mission/ComboBatch/ComboReview).
+- [x] Tạo `SurveyInvoiceRevision` revision 1, chuyển Order sang `AwaitingSettlement`, append `OrderStateHistory` (`TransitionSequence`, `PredecessorHistoryId`), `AuditLog`, `OutboxMessage` và `SurveyResultReviewOperation` nguyên tử (kể cả khi `DueAmount = 0`).
+
+### E04 — Correction và đối soát checkout
+
+- [x] Kết nối correction count nguyên tử: tái dựng `SurveyOrderPoleCountSnapshot` mới (`RevisionNumber + 1`) từ snapshot/batch/mapping provenance hiện tại + `ItemCorrections` (`ExpectedPlantProfileId`, kiểm `ST_Within` trên `FarmBoundary`, `plant.plant_profiles` và bằng chứng `SurveyComboReviewRevision` cho COMBO), yêu cầu count thay đổi, supersede cặp approval/invoice cũ trước khi insert snapshot/approval/invoice mới trong cùng physical transaction (R5/C4), cập nhật `SurveyOrder` qua `RecordInternalApprovedResult` + `FinalizeInvoiceRevision`.
+- [x] Mở rộng `SurveyPayment` & `SurveyPaymentStatus` (`Invalidated`, `InvoiceRevisionId`, `InvalidatedAt`, `InvalidatedBy`, `InvalidationReason`, `SupersededByInvoiceRevisionId`) cùng migration `20261125120000_V3_05EInvoiceFinalizationAndCorrection` và `AgriDroneSchemaDbContextModelSnapshot.cs`. Vô hiệu hóa các checkout `FinalBalance` đang mở (`Pending`/`Processing`/`AdjustmentRequired`) trong transaction correction mà vẫn bảo toàn `Provider`/`ProviderReference`/`InvoiceRevisionId` cho đối soát late receipt.
+- [x] Serialize correction và callback qua Order/funding locks (`SurveyOrder` `FOR UPDATE`), giữ thao tác gọi provider ngoài SQL transaction.
+- [x] Rà `ConfirmSurveyOrderPoleCountCommandHandler` và guard domain (`SurveyOrder`) để writer xác nhận số trụ legacy chỉ áp dụng cho `ContractScope.Legacy`; giữ `PublicIntakeEnabled = false` và `SurveyPayments:Enabled = false`.
+
+### E05 — Kiểm tra và bàn giao
+
+- [x] Rà luồng từ command đến receipt, đối chiếu schema/migration/Designer/ModelSnapshot parity và fail-closed flags. Build .NET 10 đạt 0 warning, 0 error.
+- [x] Ghi contract chi tiết V3-05E (kèm quyết định zero-pole authorization) vào `docs/contracts/survey-business-v3.md` mục 6.2. Bàn giao sang V3-05F/V3-06 exact ID/fingerprint, funding và checkout references.
+- [x] Các ca runtime (zero-pole có/thiếu bằng chứng, quyền bị thu hồi trước replay, stale version, operation trùng/đổi payload, chốt đồng thời, hủy/approval đua finalization, cọc thiếu/đủ/thừa/bị đảo, correction đua callback, rollback) được giữ cho nghiệm thu V3-10.
+
+**Điều kiện đóng V3-05E.** Bốn tổ hợp Order dùng cùng luồng chốt với bằng chứng đúng scope. Correction giữ đầy đủ lineage và tối đa một checkout balance có hiệu lực. Replay trả receipt gốc. Build sạch và handoff đủ dữ liệu để V3-05F nối API và V3-06 đối soát.
+
+### Sửa sau review V3-05E
+
+Thực hiện theo thứ tự R05E-01 → R05E-05 để chốt giao thức khóa trước khi sửa các writer. Checklist E01–E05 ở trên mô tả lần triển khai đầu. Dùng các tiêu chí dưới đây để quyết định đóng phase và bàn giao V3-05F.
+
+#### R05E-01 — Sửa thứ tự khóa theo ADR 0020 (P2)
+
+- [x] Trong `SurveyInvoiceTransaction.cs`, đưa kiểm tra và khóa quyền operator/approver về rank 1, trước Order rank 2. Kiểm quyền Order trước khi tra receipt rank 3. Giữ replay trước kiểm tra version và trạng thái mutable.
+- [x] Tách phần đọc/khóa funding và checkout khỏi phần xác minh evidence. Ở rank 5, khóa deposit obligation → checkout → funding/allocation/refund facts theo subset cần thiết. Với correction, lấy danh sách checkout cần vô hiệu tại đây. Sau đó mới khóa current invoice/approval/count/map và review evidence ở rank 6, attempt/mission ở rank 7/8 và input proof ở rank 10 khi cần. Các kiểm tra cuối chỉ dùng dữ liệu đã khóa theo rank, hoặc bắt đầu lại giao dịch nếu discovery thay đổi.
+- [x] Đối chiếu `ProcessSurveyPaymentEventCommandHandler` và repository ghi callback (`SurveyPaymentProcessingRepository.GetForProviderEventAsync`) với cùng thứ tự Order (Rank 2) → deposit obligation → checkout → funding facts (Rank 5) theo ADR. *(Kiểm tra runtime race callback/correction và thu hồi quyền/finalization thực hiện trong V3-10).*
+
+#### R05E-02 — Tính cọc từ allocation thực tế (P1)
+
+- [x] Sửa `SurveyInvoiceTransaction` (`LockAndEvaluateFundingAsync`) và luồng gọi từ finalization/correction. Lấy allocation của deposit obligation đã pin cho đúng Order; đối chiếu receipt, scope và currency. Phân biệt `ValidAllocatedDepositNet` (tính invoice) với `ConfirmedNetReceipts` (tổng tiền thực nhận dùng đối soát khoản phải hoàn).
+- [x] Rà `SurveyFundingAllocation`, `SurveyFundingReversal`, `SurveyRefundObligation` và writer của chúng để áp dụng reversal/refund theo liên kết thực tế (`FundingReceiptId` và allocation thuộc receipt đó). `CashAmount` lưu tiền thực bị đảo, `Amount` lưu phần giảm allocation; migration tiếp nối giữ nguyên reversal cũ. Chỉ giảm cọc khi fact làm mất phần đã phân bổ; tránh trừ hai lần; với fact thiếu linkage và ảnh hưởng chưa xác định, fail-closed với `InvoiceFinalization.RefundReconciliationHold`. Giữ refund cap và reconciliation hold theo các fact tiền thực nhận.
+- [ ] Xác nhận runtime receipt 150, allocation 100, total 200 cho `Due = 100` (cùng đơn vị, chưa có reversal/refund) cùng các ca allocation partial, reversal phần đã phân bổ, hoàn phần dư và callback trùng trong ma trận nghiệm thu V3-10.
+
+#### R05E-03 — Giữ tiền nhận muộn của checkout bị vô hiệu (P1)
+
+- [x] Trong `ProcessSurveyPaymentEventCommandHandler`, `InitiateSurveyPaymentCommandHandler` và `SurveyPaymentProcessingRepository`, tách nhánh callback thành công của V3 `FinalBalance` đã `Invalidated` trước các guard của luồng legacy (và chạy `EventAlreadyProcessed` + `Provider`/`ProviderReference` trước scope guard). Xác minh provider reference, transaction ID, amount/currency và scope; yêu cầu transaction tạo checkout V3 `FinalBalance` ở V3-06 gọi `SurveyPayment.BindInvoiceRevision` trước khi lưu mới. SePay yêu cầu transaction ID thực để dedup. Với checkout cũ thiếu linkage, lưu dữ kiện nhận tiền có thể xác minh và đánh dấu `RequiresReconciliation = true`, không gán vào invoice hiện hành theo mặc định.
+- [x] Ghi payment event và `SurveyFundingReceipt` bất biến cùng giao dịch, liên kết ngược `SurveyPaymentId` và `InvoiceRevisionId` (+ flag `RequiresReconciliation`/`ReconciliationReason`). Dedup theo provider transaction, giữ riêng các giao dịch thực có transaction ID khác nhau. Giữ checkout ở `Invalidated`, không credit hóa đơn thay thế qua đường callback này. Cập nhật EF (`SurveyPaymentConfiguration`, `SurveyFundingReceiptConfiguration`) và migration `20261125120000_V3_05EInvoiceFinalizationAndCorrection`.
+- [ ] Xác nhận runtime callback đến sau correction, callback bị gửi lại và hai khoản tiền thực khác nhau vào cùng reference trong V3-10.
+
+#### R05E-04 — Ràng buộc correction với bằng chứng đã review (P1)
+
+- [x] Rà `CorrectSurveyOrderPreReleaseInvoiceCommand` (`ExpectedPlantProfileId`), validator, `BuildCorrectedSnapshotItemsAsync`, snapshot item factory và source review V3-05D. Dựng corrected snapshot từ quyết định versioned (`MappingCandidateBatch` / `MappingReviewDecision`) đúng Order/attempt/map/boundary và đúng cặp candidate/profile; chặn đổi profile ngoài mapping review provenance.
+- [x] Với COMBO, kiểm lại findings và zone memberships (`VerifyComboReviewAgainstCorrectedItems`) theo tập trụ mới; giữ review hiện tại khi các liên kết vẫn khớp. Khi bằng chứng không còn khớp, nhận `ReplacementComboReview` trong command correction, validate theo rule V3-05D và append revision mới trong cùng transaction. Candidate `Reject` ngoài thay đổi được giữ nguyên. Trả `Result/AppError` khi cặp candidate/profile hoặc dữ liệu snapshot sai.
+- [x] Giữ transaction thay snapshot/approval/invoice và vô hiệu checkout nguyên tử. *(Kiểm tra runtime gán profile ngoài cặp đã duyệt, dùng COMBO review cũ sau khi đổi tập trụ, correction hợp lệ và rollback giữa các lần ghi thực hiện trong V3-10).*
+
+#### R05E-05 — Ràng buộc người duyệt zero-pole với quyết định thực tế (P2)
+
+- [x] Sửa `FinalizeSurveyOrderInvoiceCommand`, `CorrectSurveyOrderPreReleaseInvoiceCommand`, validators và `ValidateZeroPoleDecision` trong `SurveyInvoiceTransaction.cs`: bỏ client `ZeroPoleApprovedBy`, dẫn xuất approver trực tiếp từ `ActorId` phía server đã khóa & kiểm quyền ở Rank 1 theo R05E-01 (Manager đang hoạt động và có `FarmManagerAssignment` hiện hành), kèm `ZeroPoleReasonCode` và `ZeroPoleEvidenceReference`.
+- [x] Chuẩn hóa payload fingerprint và receipt theo quyết định thực tế (`ZeroPoleApprovedBy = actorId`), kiểm lại quyền trước replay ở Rank 1. *(Kiểm tra runtime duyệt đúng quyền, thiếu evidence, tự khai người khác, mismatch count và replay sau thu hồi quyền thực hiện trong V3-10).*
+
+#### Xác minh trước khi bàn giao
+
+- [x] Cập nhật ví dụ initial/correction/replay/allocation-vs-receipt và callback muộn trong `docs/contracts/survey-business-v3.md`. Rà configuration, migration, designer và model snapshot; bảo toàn dữ liệu checkout tạo trước thay đổi (nullable `survey_payment_id` / `invoice_revision_id`, backward-compatible check constraint).
+- [x] `git diff --check` và `dotnet build backend/AgriDrone.sln --no-restore --nologo` với SDK 10.0.404 đạt 0 warning, 0 error. Migration designer và model snapshot khớp. Giữ `PublicIntakeEnabled = false` và `SurveyPayments:Enabled = false`.
+- [ ] Nghiệm thu migration trên PostgreSQL và các ca callback đồng thời, rollback, reversal và replacement review ở V3-10. Migration reversal từ chối rollback nếu đã ghi cash evidence mới để giữ audit tài chính.
 
 ## V3-05F — API, xác minh và bàn giao
 
-- [ ] Bổ sung endpoints và DTO dưới `/api/v3/...` cho Manager review/approval và invoice. Owner đúng quyền có thể xem count, đơn giá, total và due trước release. Giữ dữ liệu từng trụ, geometry, findings và media sau cổng release.
-- [ ] Rà đường legacy xác nhận count theo current inventory, publish và checkout để chặn writer sai scope. Giữ `PublicIntakeEnabled = false` và `SurveyPayments:Enabled = false`.
-- [ ] Bàn giao V3-06 exact IDs/fingerprints của Order, approved result, invoice, count, commercial policy, source và checkout liên quan.
-- [ ] Rà source và migration diff. Chạy `dotnet build backend/AgriDrone.sln --no-restore --nologo`, mục tiêu 0 warning, 0 error. Nghiệm thu tích hợp và `dotnet test` tập trung tại V3-10.
+**Đầu ra.** Manager được phân công có thể đi từ review đến chốt và sửa hóa đơn qua API V3, kể cả tải lại màn hình giữa các bước. Tenant Owner đúng quyền chỉ đọc metadata hóa đơn hiện hành trước phát hành. V3-06 nhận đủ khóa phiên bản để đối soát, tạo checkout số dư và phát hành. Dùng command và transaction V3-05D/E đã build sạch làm nguồn nghiệp vụ.
+
+### F01 — Chốt route và hợp đồng HTTP
+
+Dùng các prefix đang có trong `V3SystemManagerSurveyOrdersController.cs` và `V3TenantOwnerSurveyOrdersController.cs`. Tên route dưới đây là đề xuất triển khai. Mỗi suffix nằm sau `/{orderId:guid}`.
+
+| Vai trò | Method và suffix | Application entry point |
+|---|---|---|
+| Manager | `GET /result-review` | `GetSurveyResultReviewQuery` |
+| Manager | `POST /result-review/combo-reviews` | `RecordSurveyComboReviewCommand` |
+| Manager | `POST /result-review/freeze` | `FreezeSurveyInternalResultCommand` |
+| Manager | `GET /invoice` | `GetManagerSurveyOrderInvoiceQuery` |
+| Manager | `POST /invoice/finalize` | `FinalizeSurveyOrderInvoiceCommand` |
+| Manager | `POST /invoice/corrections` | `CorrectSurveyOrderPreReleaseInvoiceCommand` |
+| Tenant Owner | `GET /invoice` | `GetTenantOwnerSurveyOrderInvoiceQuery` |
+
+- [x] Tạo request/response DTO trong `AgriDrone.Api/Contracts/Surveys/V3/V3SurveyResultAndInvoiceContracts.cs` và mapper `V3SurveyResultAndInvoiceMapper.cs` theo cấu trúc repo. Lấy Order ID từ route và actor/tenant từ `IExecutionContext`. Mutation dùng `OperationId` dạng UUID trong body theo quy ước capture V3. Map expected Order version, exact revision IDs/fingerprints và evidence inputs vào command. Server tính request fingerprint và lấy người duyệt zero-pole từ actor đã xác thực.
+- [x] Dùng `ToHttpResult` và ProblemDetails theo mapper hiện có. Ghi rõ status trong OpenAPI (`200` cho GET/replay hợp lệ giữ `isReplay`, `201` cho mutation tạo revision lần đầu, `400`/`422` cho validation, `401`/`403` theo policy, `404` cho không khả kiến, `409` cho stale/operation conflict/chưa có invoice). Ghi rõ luồng UI đọc lại token khi gặp conflict tại `docs/contracts/survey-business-v3.md` mục 6.3.
+
+### F02 — Nối luồng Manager và đọc lại token
+
+- [x] Trong `V3SystemManagerSurveyOrdersController.cs`, dispatch bốn mutation và hai query qua MediatR với policy `SystemManager`. Transaction kiểm assignment hiện hành trước đọc review hoặc receipt, kiểm lại version và chứng cứ, rồi ghi đúng action hiện có. DTO correction map `ExpectedPlantProfileId`, `ReplacementComboReview` (COMBO only) và reason/evidence zero-pole.
+- [x] Rà `GetSurveyResultReviewQuery` và `SurveyResultReviewTransaction.cs`. GET review tiếp tục cấp freeze tokens của attempt/count/COMBO, bổ sung `CurrentApprovedResultFingerprint`, và cho phép đọc lại khi attempt đã chuyển `Accepted` (`FindAttemptForReviewReadAsync`) để Manager tải lại rồi finalize.
+- [x] Tạo `GetManagerSurveyOrderInvoiceQuery` + handler/validator trong `Surveys/Application/Features/Invoices/GetManagerSurveyOrderInvoice/` cùng read adapter `SurveyInvoiceQueries` (`ISurveyInvoiceQueries`) trong `AgriDrone.Database/Surveys/`. Đọc dưới `IsolationLevel.RepeatableRead`, kiểm assignment Rank 1 và `ContractScope.V3`, project từ `CurrentInvoiceRevisionId` đã đối chiếu với current approval và count, trả exact tokens/amounts/open checkouts hoặc `409 Invoice.NotFinalized` để UI quay lại `GET /result-review`.
+
+### F03 — Metadata invoice dành cho Owner
+
+- [x] Tạo `GetTenantOwnerSurveyOrderInvoiceQuery` + handler/validator và DTO `V3TenantOwnerInvoiceApiResponse`, gắn route `GET /{orderId:guid}/invoice` vào `V3TenantOwnerSurveyOrdersController.cs` với policy `TenantOwner`. Đối chiếu quyền Owner (`HasOwnerAccessAsync`) và tenant/farm/order scope.
+- [x] `SurveyInvoiceQueries.GetTenantOwnerInvoiceAsync` lọc tenant/farm/Owner/`ContractScope.V3` và xác minh current invoice/approval/snapshot hợp lệ trước khi trả metadata tối giản (`OrderId`, `OrderNumber`, `OrderStatus`, `InvoiceRevisionNumber`, `VerifiedBillablePoleCount`, `PricePerPole`, `Currency`, `TotalAmount`, `DueAmount`, `FinalizedAt`). Trả `404 Invoice.NotFound` nếu đơn không khả kiến hoặc chưa có invoice hiện hành hợp lệ (`403` nếu revoked Owner).
+- [x] Rà các đường đọc Owner trước release: giữ `GetTenantOwnerSurveyOrders*` ở `ContractScope.Legacy`; bổ sung `FarmBaseMapReadAccess` + `IFarmBaseMapPreviewReader.CanOwnerReadAsync` vào `CompareFarmBaseMapsQueryHandler` và `GetFarmBaseMapAnalyticsQueryHandler`; chặn fallback `InternalApproved`/`Draft`/dữ liệu V3 trong `GetFarmPlantHealthMapQueryHandler`; và ghi đầy đủ inventory bề mặt đọc (`FarmPlants`, `MissionMedia`, `FarmPlantHealth`) vào `docs/plans/v3-07-to-v3-10-owner-claims-reporting-plan.md` để B1/V3-07 nối release proof.
+
+### F04 — Rà các đường ghi legacy và ranh giới phase
+
+- [x] Trace và xác minh scope guard trên các đường ghi legacy: `ConfirmSurveyOrderPoleCountCommandHandler` (`Scope != Legacy`), bổ sung `Scope != ContractScope.Legacy` trong `PlantHealthReviewService.AuthorizeAsync` (bảo vệ `ApproveResultAsync`, `PublishResultAsync` và review legacy), `InitiateSurveyPaymentCommandHandler`, `ReconcileSurveyPaymentCommandHandler`, và `SurveyPaymentProcessingRepository` (giữ Legacy, V3 `OrderDeposit`, và late receipt của V3 `FinalBalance` checkout `Invalidated`).
+- [x] Giữ `PublicIntakeEnabled = false` và `SurveyPayments:Enabled = false`. Không mở checkout số dư V3, release/notice hay Owner comparison/media trong 05F; không thêm thay đổi schema/migration ngoài V3-05D/E.
+
+### F05 — Xác minh và bàn giao V3-06
+
+- [x] Cập nhật `docs/contracts/survey-business-v3.md` (mục 6.3) với route, payload mẫu MAP/COMBO, token sau mỗi bước, Owner allowlist, ProblemDetails và retry flow; kiểm tra tĩnh cú pháp C# / `git diff --check`.
+- [x] Bàn giao V3-06 exact Order ID/version/scope/status, approval/count/invoice IDs và fingerprints, commercial snapshot/policy/source references, `ValidAllocatedDepositNet` vs `ConfirmedNetReceipts` và checkout linkage (`SurveyPayment.BindInvoiceRevision`). Chốt với Plan 2 các trường release-proof và ledger read trong `docs/plans/v3-07-to-v3-10-owner-claims-reporting-plan.md` (`A1 -> B1/B3`).
+- [x] Ghi fixture và ca nghiệm thu (`V3-T36`–`V3-T43`) vào `docs/testing/v3-business-acceptance.md`.
+- [x] `dotnet build backend/AgriDrone.sln --no-restore --nologo` với SDK 10.0.404 đạt 0 warning, 0 error sau sửa review. Các ca runtime và integration suite chạy tập trung tại V3-10.
+
+**Điều kiện bàn giao 05F.** Manager có thể chạy và tiếp tục toàn bộ luồng chỉ bằng API cùng các token đọc lại. Owner nhận đúng metadata invoice hiện hành theo quyền. Không có đường ghi legacy vượt scope. Build sạch và hợp đồng bàn giao V3-06/Plan 2 đã ghi rõ.
+
+Trong đợt triển khai tiếp theo, Identity bổ sung refresh token để frontend tự khôi phục phiên khi mở lại luồng review hoặc invoice. [Kế hoạch triển khai Identity](v3-05e-to-v3-10-settlement-release-plan.md#identity--refresh-token-và-khôi-phục-phiên)
+
+### Sửa sau review V3-05F
+
+- [x] Trong `SurveyInvoiceQueries.cs`, thay aggregate khóa hàng bằng kiểm quyền trên bản ghi thật. Tái sử dụng kiểm assignment của review cho Manager và giữ kiểm membership Owner trước khi đọc Order.
+- [x] Đưa logic đối soát của `SurveyInvoiceTransaction.cs` vào `SurveyInvoiceFunding.cs` để dùng chung cho GET Manager. Giữ truy vấn read-only trong snapshot nhất quán, giữ lock của writer và trả `409 InvoiceFinalization.RefundReconciliationHold` khi thiếu liên kết hoặc số tiền chưa đối soát. Xác nhận scope của reversal qua Order, checkout và receipt.
+- [x] Trong `GetPlantLifecycleHistoryQueryHandler.cs`, kiểm farm access trước khi đọc trụ. Chặn thông tin hiện tại và timeline V3 đối với người đọc phía tenant trước khi có release proof. Giữ quyền đọc nội bộ của Manager được phân công và dữ liệu Legacy đủ điều kiện.
+- [x] Cập nhật contract, inventory Plan 2 và acceptance V3-T39/T42.
+- [ ] Nghiệm thu PostgreSQL, bao gồm reversal thiếu linkage và trụ Legacy bị sửa bởi V3, tại V3-10.
 
 ## Kịch bản nghiệm thu dành cho V3-10
 
@@ -439,8 +570,8 @@ Các đường dẫn dưới đây tương đối với `backend/src`. Tên file
 |---|---|
 | Bốn loại Order | First MAP/COMBO và Follow-up chéo gói đều có hóa đơn từ đúng lượt khảo sát. Follow-up giữ Baseline đã pin. |
 | Bằng chứng và quyền | Từ chối sai tenant/order/attempt, nguồn lượt bay đã thay thế, boundary exception còn mở, thiếu review và assignment bị thu hồi. |
-| Pricing và funding | Thay giá catalogue không làm đổi giá đã pin. Bao phủ cọc thiếu, đủ, thừa, bị đảo và callback trùng. Zero-pole đi qua ngoại lệ có kiểm soát. |
-| Revision và checkout | Correction giữ hóa đơn cũ, chỉ có một revision hiện hành; checkout cũ không còn hiệu lực và late receipt giữ liên kết với checkout gốc. |
+| Pricing và funding | Thay giá catalogue không làm đổi giá đã pin. Bao phủ cọc thiếu, đủ, thừa, bị đảo và callback trùng. Checkout A nhận 150 và phân bổ 100, B phân bổ 100: đảo 150 từ A chỉ giảm cọc 100. Reversal thiếu receipt, refund/reversal chồng bằng chứng và rollback migration sau khi có reversal mới phải fail closed. Zero-pole đi qua ngoại lệ có kiểm soát. |
+| Revision và checkout | Correction giữ candidate reject ngoài phạm vi yêu cầu và append review COMBO thay thế khi cần, cùng transaction với snapshot/approval/invoice. Chỉ một revision hiện hành. Checkout cũ bị vô hiệu và late receipt giữ liên kết với checkout gốc. |
 | Race và rollback | Import trùng, chốt đồng thời, approval hoặc hủy đua với chốt, correction đua với callback. Lỗi giữa các lần ghi rollback toàn bộ giao dịch. |
 | Release boundary | Trước release, Owner chỉ thấy metadata hóa đơn theo quyền. |
 
@@ -594,3 +725,5 @@ JSON đã giải quyết delimiter ambiguity. Còn khác biệt giữa hash help
 - [x] Giữ integration tests ở V3-10. Rà source/build không đủ chứng minh database migration, timestamp round-trip, unique-index ordering và rollback/races đã pass.
 
 Phạm vi review này là source A/B hiện tại và các dependency đã nêu. Hoàn thành checklist cho phép đóng mức source/build tương ứng; nghiệm thu runtime cần evidence V3-10.
+
+</details>

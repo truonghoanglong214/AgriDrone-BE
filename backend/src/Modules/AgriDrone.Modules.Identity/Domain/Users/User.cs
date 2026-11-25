@@ -40,6 +40,8 @@ public sealed class User : AggregateRoot
 
     public UserStatus Status { get; private set; }
 
+    public int AuthenticationVersion { get; private set; } = 1;
+
     public DateTimeOffset? LastLoginAt { get; private set; }
 
     public DateTimeOffset CreatedAt { get; private set; }
@@ -125,6 +127,7 @@ public sealed class User : AggregateRoot
             return;
 
         Status = UserStatus.Inactive;
+        AuthenticationVersion = checked(AuthenticationVersion + 1);
         UpdatedAt = updatedAt;
     }
 
@@ -135,6 +138,15 @@ public sealed class User : AggregateRoot
         DomainGuard.Utc(updatedAt);
 
         PasswordHash = passwordHash;
+        AuthenticationVersion = checked(AuthenticationVersion + 1);
+        UpdatedAt = updatedAt;
+    }
+
+    public void BumpAuthenticationVersion(DateTimeOffset updatedAt)
+    {
+        DomainGuard.Utc(updatedAt);
+
+        AuthenticationVersion = checked(AuthenticationVersion + 1);
         UpdatedAt = updatedAt;
     }
 }

@@ -6,6 +6,8 @@ public interface ISurveyPaymentGateway
 {
     string Provider { get; }
 
+    string? GetBalanceCheckoutReference(Guid paymentId) => null;
+
     Task<Result<PaymentSessionResult>> CreateSessionAsync(
         CreatePaymentSession request,
         CancellationToken cancellationToken = default);
@@ -17,7 +19,8 @@ public sealed record CreatePaymentSession(
     string OrderNumber,
     decimal Amount,
     string Currency,
-    DateTimeOffset RequestedAt);
+    DateTimeOffset RequestedAt,
+    string? BalanceCheckoutReference = null);
 
 public sealed record PaymentSessionResult(
     string ProviderReference,

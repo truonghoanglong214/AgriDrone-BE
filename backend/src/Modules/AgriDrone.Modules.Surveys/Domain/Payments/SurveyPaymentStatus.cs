@@ -7,5 +7,6 @@ public enum SurveyPaymentStatus
     Paid,
     Failed,
     Refunded,
-    AdjustmentRequired
+    AdjustmentRequired,
+    Invalidated
 }

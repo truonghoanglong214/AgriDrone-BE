@@ -1,5 +1,16 @@
 # V3-03 — Checklist triển khai và nghiệm thu
 
+**Checkpoint 2026-11-25.** Đã có source appointment, funding cọc, CaptureAttempt/re-flight và quyết định hủy/hoàn cọc.
+
+- [ ] Nghiệm thu `03H-2/3` tại V3-10, gồm các ca còn mở trong 03-T01–13, race, rollback, object storage và broker. Sửa cap hủy có reversal trong [A2.2](../plans/v3-05e-to-v3-10-settlement-release-plan.md#a22--settlement-và-cap-hoàn-sau-reversal). [Acceptance matrix](../testing/v3-business-acceptance.md)
+
+[Backlog V3-06 đến V3-10](../../Codex-Plan/BE1-Core-Business-Implementation-Plan.md#4-status-và-dependency-roadmap)
+
+<details>
+<summary>Hồ sơ triển khai và evidence theo từng checkpoint</summary>
+
+Các trạng thái, checklist và số liệu bên dưới ghi theo thời điểm lập từng phần.
+
 Date: **2026-11-13**. Updated: **2026-11-16**. Status: **V3-03 source implementation complete through 03H-1; 03B-1/03B-2 database expansion accepted; 03H-2 remains InProgress while the full 03-T01–13 real-path matrix, shared-writer races, object-storage/broker evidence and V3-02 prerequisites are completed; public activation strictly off**. [Technical plan A–H](v3-03-capture-funding-and-cancellation-implementation-plan.md), [execution baseline](../operations/v3-03-execution-baseline.md), [ADR 0020](../adr/0020-v3-capture-execution-and-funding-boundaries.md), [master plan](../../Codex-Plan/BE1-Core-Business-Implementation-Plan.md), [locked design](../domain/v3-01-locked-design.md), [Business Rules](../../Codex-Plan/Business-Rules-v3.md).
 
 Tài liệu ban đầu được lập ở giai đoạn planning; các completion records bên dưới ghi implementation/remediation sau đó. Section 13 giữ evidence lịch sử của 03B-1; section 14 ghi implementation checkpoint ngày 2026-11-15; section 15 ghi nhận hiện trạng và các khoảng trống cần hoàn thiện cho 03H-2 (sửa manifest freeze đọc media/checksum thật, fault-injection post-write rollback qua probe, deterministic barrier races, shared-writer locks và tách đầy đủ 13 scenarios tests). Public activation và public intake vẫn giữ trạng thái off theo đúng kiến trúc an toàn.
@@ -366,3 +377,5 @@ Toàn bộ các bộ kiểm thử đã được chạy và vượt qua 100% trê
 - **Phụ thuộc ngoại vi**: Prerequisite V3-02 database upgrade/rollback/race acceptance và harness MinIO/S3 tiếp tục giữ trạng thái pending độc lập.
 - **Kích hoạt công khai**: Cờ `PublicIntakeEnabled` và `SurveyPayments.Enabled` tiếp tục giữ ở trạng thái **OFF** (`false`) theo đúng quy định an toàn.
 - **Sẵn sàng bàn giao (Handoff to V3-04)**: Sẵn sàng cung cấp `OrderId`, `AttemptId`, `DroneMissionId`, và frozen `CaptureInputManifest` đã được approved cho pipeline phân tích bản đồ nội bộ và baseline mapping của Phase V3-04.
+
+</details>

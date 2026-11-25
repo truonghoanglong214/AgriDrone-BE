@@ -8,7 +8,7 @@ namespace AgriDrone.UnitTests.Infrastructure.Identity;
 public sealed class TenantSelectionTokenServiceTests
 {
     [Fact]
-    public void GenerateThenValidateReturnsOriginalUserId()
+    public void GenerateThenValidateReturnsOriginalUserIdAuthVersionAndSignedExpiry()
     {
         var userId = Guid.NewGuid();
         var service = new TenantSelectionTokenService(
@@ -21,10 +21,13 @@ public sealed class TenantSelectionTokenServiceTests
                     TenantSelectionTokenExpirationMinutes = 5
                 }));
 
-        var token = service.Generate(userId);
+        var token = service.Generate(userId, authenticationVersion: 3);
 
-        var validatedUserId = service.Validate(token.Token);
+        var validated = service.Validate(token.Token);
 
-        Assert.Equal(userId, validatedUserId);
+        Assert.NotNull(validated);
+        Assert.Equal(userId, validated.UserId);
+        Assert.Equal(3, validated.AuthenticationVersion);
+        Assert.Equal(token.ExpiresAt, validated.ExpiresAt);
     }
 }

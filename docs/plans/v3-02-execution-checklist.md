@@ -1,5 +1,16 @@
 # V3-02 — Checklist thực thi theo từng phần
 
+**Checkpoint 2026-11-25.** Đã có source catalogue, versioned price/deposit, request và atomic approval.
+
+- [ ] Nghiệm thu `02A-2`, `02D-3`, `02F-1` và lưu evidence `02F-2` tại V3-10. Gồm PostgreSQL fresh/populated-Legacy, locking/races, approval rollback và release proof V3-06 cho Follow-up. [Acceptance matrix](../testing/v3-business-acceptance.md)
+
+[Backlog V3-06 đến V3-10](../../Codex-Plan/BE1-Core-Business-Implementation-Plan.md#4-status-và-dependency-roadmap)
+
+<details>
+<summary>Hồ sơ triển khai và evidence theo từng checkpoint</summary>
+
+Các trạng thái, checklist và số liệu bên dưới ghi theo thời điểm lập từng phần.
+
 Date: **2026-11-12**. Status: **Implementation present — PostgreSQL integration acceptance pending; public activation remains off**. [Kế hoạch kỹ thuật A–F](v3-02-catalogue-and-approval-implementation-plan.md), [locked design](../domain/v3-01-locked-design.md), [source audit](../operations/v3-01-source-audit.md), [Business Rules](../../Codex-Plan/Business-Rules-v3.md).
 
 Các evidence/test counts bên dưới ghi nhận từng đợt triển khai, không thay thế PostgreSQL acceptance. V3 Follow-up production hiện fail closed khi chưa có nguồn durable release proof của V3-06; `Completed` + `Published` không chứng minh đã bàn giao.
@@ -347,3 +358,4 @@ PostgreSQL fixture `127.0.0.1:55432` chưa có listener khi kiểm tra. 02A-2 da
 - Public V3 submit và tracking dùng hai named fixed-window rate-limit policies riêng, partition theo remote client address; giới hạn cấu hình tại `RateLimiting:V3PublicSurvey` và trả HTTP 429 khi vượt ngưỡng.
 - Regression coverage kiểm tra endpoint rate-limit metadata. Verification: build PASS 0 warnings/errors; UnitTests **935/935**; ArchitectureTests **87/87**; filtered V3 no-DB component/model tests **15/15**. PostgreSQL fixture vẫn không reachable, vì vậy acceptance vẫn pending.
 
+</details>

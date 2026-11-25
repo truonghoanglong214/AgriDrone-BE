@@ -1420,5 +1420,13 @@ internal static class CrossModuleRelationshipConfiguration
             .HasForeignKey(o => o.ActorId)
             .OnDelete(DeleteBehavior.Restrict)
             .HasConstraintName("fk_survey_result_review_operations_actor");
+
+        modelBuilder.Entity<SurveyPayment>()
+            .HasOne<User>()
+            .WithMany()
+            .HasForeignKey(p => p.InvalidatedBy)
+            .IsRequired(false)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_survey_payments_invalidated_by");
     }
 }

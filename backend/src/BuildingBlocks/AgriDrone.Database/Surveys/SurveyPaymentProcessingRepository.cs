@@ -108,6 +108,11 @@ internal sealed class SurveyPaymentProcessingRepository(
                 PaymentError.OrderNotReady());
         }
 
+        var depositObligation = await ReadDepositObligationForUpdateAsync(
+            order.DepositObligationId,
+            order.Id,
+            cancellationToken);
+
         var purposeString = purpose.ToString();
         var activePayments = await context.SurveyPayments
             .FromSqlInterpolated($$"""
@@ -123,10 +128,6 @@ internal sealed class SurveyPaymentProcessingRepository(
                 FOR UPDATE OF payment
                 """)
             .ToListAsync(cancellationToken);
-
-        var depositObligation = await ReadDepositObligationForUpdateAsync(
-            order.DepositObligationId,
-            cancellationToken);
 
         return Result.Success(new SurveyPaymentOwnerState(
             order,
@@ -145,15 +146,13 @@ internal sealed class SurveyPaymentProcessingRepository(
         context.EnsureTransaction();
         Guid paymentId;
         Guid orderId;
+        // ADR 0020 Rank 2 -> Rank 5: nonlocking lookup first, then lock Order FOR UPDATE before Payment FOR UPDATE.
         await using (var command = CreateCommand(
             """
-            SELECT payment.id, survey_order.id
+            SELECT payment.id, payment.survey_order_id
             FROM survey.survey_payments AS payment
-            JOIN survey.survey_orders AS survey_order
-              ON survey_order.id = payment.survey_order_id
             WHERE payment.provider = @provider
               AND payment.provider_reference = @provider_reference
-            FOR UPDATE OF payment, survey_order
             """,
             Text("provider", provider),
             Text("provider_reference", providerReference)))
@@ -170,15 +169,39 @@ internal sealed class SurveyPaymentProcessingRepository(
             orderId = reader.GetGuid(1);
         }
 
-        var payment = await context.SurveyPayments.SingleAsync(
-            item => item.Id == paymentId,
-            cancellationToken);
+        if (!await LockOrderAsync(orderId, cancellationToken))
+        {
+            return Result.Failure<SurveyPaymentEventState>(
+                SurveyOrderError.NotFound(orderId));
+        }
+
         var order = await context.SurveyOrders.SingleAsync(
             item => item.Id == orderId,
             cancellationToken);
         var depositObligation = await ReadDepositObligationForUpdateAsync(
-            payment.DepositObligationId,
+            order.Scope == ContractScope.V3 ? order.DepositObligationId : null,
+            order.Id,
             cancellationToken);
+
+        var lockedPayments = await context.SurveyPayments
+            .FromSqlInterpolated($$"""
+                SELECT payment.*, payment.xmin
+                FROM survey.survey_payments AS payment
+                WHERE payment.id = {{paymentId}}
+                  AND payment.survey_order_id = {{orderId}}
+                  AND payment.provider = {{provider}}
+                  AND payment.provider_reference = {{providerReference}}
+                FOR UPDATE OF payment
+                """)
+            .ToListAsync(cancellationToken);
+
+        var payment = lockedPayments.SingleOrDefault();
+        if (payment is null)
+        {
+            return Result.Failure<SurveyPaymentEventState>(
+                PaymentError.PersistenceConflict());
+        }
+
         var cancellationDecision = order.Status == SurveyOrderStatus.Cancelled
             ? await ReadCancellationDispositionForUpdateAsync(
                 order.Id,
@@ -189,12 +212,53 @@ internal sealed class SurveyPaymentProcessingRepository(
                     item.DeduplicationKey == deduplicationKey,
             cancellationToken);
 
+        var reversalSource = !duplicate && payment.Purpose == PaymentPurpose.OrderDeposit &&
+            depositObligation is not null && payment.DepositObligationId == depositObligation.Id
+            ? await ReadDepositReversalSourceAsync(order, payment, depositObligation, cancellationToken)
+            : null;
+
         return Result.Success(new SurveyPaymentEventState(
             order,
             payment,
             duplicate,
             depositObligation,
-            cancellationDecision));
+            cancellationDecision,
+            reversalSource));
+    }
+
+    private async Task<SurveyDepositReversalSource?> ReadDepositReversalSourceAsync(
+        SurveyOrder order,
+        SurveyPayment payment,
+        SurveyDepositObligation obligation,
+        CancellationToken cancellationToken)
+    {
+        var receipts = await context.Set<SurveyFundingReceipt>().AsNoTracking()
+            .Where(r => r.SurveyOrderId == order.Id && r.TenantId == order.TenantId &&
+                r.DepositObligationId == obligation.Id && r.Provider == payment.Provider &&
+                r.Currency == obligation.Currency && r.PaymentReference == payment.ProviderReference &&
+                (r.SurveyPaymentId == payment.Id || r.SurveyPaymentId == null))
+            .Take(2)
+            .ToListAsync(cancellationToken);
+        if (receipts.Count != 1)
+            return null;
+
+        var receipt = receipts[0];
+        var prior = await context.Set<SurveyFundingReversal>().AsNoTracking()
+            .Where(r => r.SurveyOrderId == order.Id && r.SurveyPaymentId == payment.Id)
+            .ToListAsync(cancellationToken);
+        if (prior.Any(r => r.FundingReceiptId != receipt.Id || r.CashAmount is null ||
+            r.DepositObligationId != obligation.Id || r.Currency != obligation.Currency))
+            return null;
+
+        var allocated = await context.Set<SurveyFundingAllocation>().AsNoTracking()
+            .Where(a => a.FundingReceiptId == receipt.Id && a.SurveyOrderId == order.Id &&
+                a.DepositObligationId == obligation.Id && a.Currency == receipt.Currency)
+            .SumAsync(a => a.AllocatedAmount, cancellationToken);
+        if (allocated > receipt.Amount)
+            return null;
+
+        return new SurveyDepositReversalSource(
+            receipt.Id, receipt.Amount, allocated, prior.Sum(r => r.CashAmount!.Value), prior.Sum(r => r.Amount));
     }
 
     public async Task<Result<SurveyPriceAdjustmentRequestState>>
@@ -553,6 +617,7 @@ internal sealed class SurveyPaymentProcessingRepository(
 
     private async Task<SurveyDepositObligation?> ReadDepositObligationForUpdateAsync(
         Guid? depositObligationId,
+        Guid orderId,
         CancellationToken cancellationToken)
     {
         if (!depositObligationId.HasValue)
@@ -565,6 +630,7 @@ internal sealed class SurveyPaymentProcessingRepository(
                 SELECT obligation.*
                 FROM survey.survey_deposit_obligations AS obligation
                 WHERE obligation.id = {{depositObligationId.Value}}
+                  AND obligation.survey_order_id = {{orderId}}
                 FOR UPDATE OF obligation
                 """)
             .ToListAsync(cancellationToken);

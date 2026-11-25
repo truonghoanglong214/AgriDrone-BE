@@ -3,6 +3,7 @@ using AgriDrone.Modules.Identity.Application.Abstractions.Persistence;
 using AgriDrone.Modules.Identity.Application.Abstractions.Services;
 using AgriDrone.Modules.Identity.Application.PasswordReset.EmailDelivery;
 using AgriDrone.Modules.Identity.Domain.PasswordResetTokens;
+using AgriDrone.Modules.Identity.Domain.RefreshSessions;
 using AgriDrone.Modules.Identity.Domain.Users;
 using AgriDrone.SharedKernel.Application;
 using MediatR;
@@ -12,13 +13,14 @@ using Microsoft.Extensions.Options;
 namespace AgriDrone.Modules.Identity.Application.Features.ForgotPassword;
 
 internal sealed partial class ForgotPasswordCommandHandler(
-    IUserRepository userRepository,
+    IRefreshSessionRepository refreshSessionRepository,
     IPasswordResetTokenRepository passwordResetTokenRepository,
     IPasswordResetTokenService passwordResetTokenService,
     IPasswordResetEmailDelivery passwordResetEmailDelivery,
     IOptions<PasswordResetOptions> passwordResetOptions,
     IIdentityUnitOfWork unitOfWork,
-    ILogger<ForgotPasswordCommandHandler> logger)
+    ILogger<ForgotPasswordCommandHandler> logger,
+    TimeProvider timeProvider)
     : IRequestHandler<ForgotPasswordCommand, Result<ForgotPasswordResponse>>
 {
     private const string GenericMessage =
@@ -32,20 +34,23 @@ internal sealed partial class ForgotPasswordCommandHandler(
         CancellationToken cancellationToken)
     {
         var email = request.Email.Trim().ToLowerInvariant();
-        var user = await userRepository.GetByEmailAsync(email, cancellationToken);
-
-        if (user is null || user.Status != UserStatus.Active)
-        {
-            return CreateGenericSuccess();
-        }
-
-        var now = DateTimeOffset.UtcNow;
-        var generatedToken = passwordResetTokenService.Generate();
-        var expiresAt = now.AddMinutes(_passwordResetOptions.ExpirationMinutes);
-
-        await unitOfWork.ExecuteInTransactionAsync(
+        var issued = await unitOfWork.ExecuteInTransactionAsync<(
+            User Recipient, string PlainTextToken, DateTimeOffset ExpiresAt)?>(
             async transactionCancellationToken =>
             {
+                // Follow the same lock order as reset: user before password reset tokens.
+                var user = await refreshSessionRepository.LockUserByEmailForUpdateAsync(
+                    email,
+                    transactionCancellationToken);
+                if (user is null || user.Status != UserStatus.Active)
+                {
+                    return null;
+                }
+
+                var now = timeProvider.GetUtcNow();
+                var generatedToken = passwordResetTokenService.Generate();
+                var expiresAt = now.AddMinutes(_passwordResetOptions.ExpirationMinutes);
+
                 await passwordResetTokenRepository.RevokeActiveForUserAsync(
                     user.Id,
                     now,
@@ -60,22 +65,27 @@ internal sealed partial class ForgotPasswordCommandHandler(
                 passwordResetTokenRepository.Add(passwordResetToken);
                 await unitOfWork.SaveChangesAsync(transactionCancellationToken);
 
-                return passwordResetToken.Id;
+                return (user, generatedToken.PlainTextToken, expiresAt);
             },
             cancellationToken);
+
+        if (issued is not { } resetEmail)
+        {
+            return CreateGenericSuccess();
+        }
 
         try
         {
             await passwordResetEmailDelivery.DeliverAsync(
-                user.Email,
-                user.FullName,
-                generatedToken.PlainTextToken,
-                expiresAt,
+                resetEmail.Recipient.Email,
+                resetEmail.Recipient.FullName,
+                resetEmail.PlainTextToken,
+                resetEmail.ExpiresAt,
                 cancellationToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            LogPasswordResetEmailFailure(logger, user.Id, exception);
+            LogPasswordResetEmailFailure(logger, resetEmail.Recipient.Id, exception);
         }
 
         return CreateGenericSuccess();

@@ -1826,6 +1826,13 @@ public sealed class SurveyOrder : AggregateRoot
 
     private void EnsurePricingAllowed(DateTimeOffset confirmedAt)
     {
+        if (Scope != ContractScope.Legacy)
+        {
+            throw new SurveyDomainException(
+                SurveyOrderDomainErrorCodes.InvalidTransition,
+                "V3 orders use their pinned commercial snapshot and V3 invoice finalization.");
+        }
+
         if (!PostFlightSettlement)
         {
             EnsureTransitionTo(SurveyOrderStatus.AwaitingPaidAppointment, confirmedAt);

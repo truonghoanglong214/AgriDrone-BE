@@ -1,12 +1,18 @@
+using System.Data;
 using AgriDrone.Modules.Plants.Infrastructure.Persistence;
 using AgriDrone.SharedKernel.Application;
+using AgriDrone.SharedKernel.Application.Abstractions.Authorization;
+using AgriDrone.SharedKernel.Application.Abstractions.Execution;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
 namespace AgriDrone.Modules.Plants.Application.Features.GetPlantLifecycleHistory;
 
 internal sealed class GetPlantLifecycleHistoryQueryHandler(
-    PlantsDbContext dbContext)
+    PlantsDbContext dbContext,
+    IExecutionContext executionContext,
+    IEffectiveAccessService effectiveAccess,
+    ISystemManagerAccessService managerAccess)
     : IRequestHandler<GetPlantLifecycleHistoryQuery, Result<PlantLifecycleHistoryResponse>>
 {
     private sealed record PlantRow(
@@ -45,24 +51,95 @@ internal sealed class GetPlantLifecycleHistoryQueryHandler(
         GetPlantLifecycleHistoryQuery request,
         CancellationToken cancellationToken)
     {
-        // 1. Lấy thông tin cây hiện tại
-        var plant = await dbContext.Database.SqlQueryRaw<PlantRow>(
-            @"SELECT id AS ""Id"", farm_id AS ""FarmId"", plant_code AS ""PlantCode"",
-                     row_index AS ""RowIndex"", column_index AS ""ColumnIndex"",
-                     ST_Y(location::geometry) AS ""Lat"", ST_X(location::geometry) AS ""Lon"",
-                     lifecycle_status::text AS ""LifecycleStatus"",
-                     farm_base_map_version_id AS ""CurrentMapVersionId"",
-                     mapped_at AS ""MappedAt"", created_at AS ""CreatedAt""
-              FROM plant.plants
-              WHERE id = {0} AND farm_id = {1}",
-            request.PlantId, request.FarmId)
-            .FirstOrDefaultAsync(cancellationToken);
+        if (executionContext.ActorId is not Guid actorId)
+            return PlantNotFound();
+
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(
+            IsolationLevel.RepeatableRead, cancellationToken);
+
+        var farmTenant = await dbContext.Database.SqlQuery<Guid?>($"""
+            SELECT tenant_id AS "Value"
+            FROM farm.farms
+            WHERE id = {request.FarmId} AND status = 'ACTIVE' AND deleted_at IS NULL
+            """).SingleOrDefaultAsync(cancellationToken);
+        if (farmTenant is not Guid tenantId)
+            return PlantNotFound();
+
+        var manager = await managerAccess.ResolveFarmAccessAsync(request.FarmId, cancellationToken);
+        var canReadInternal = manager.IsAllowed && manager.TenantId == tenantId && manager.FarmId == request.FarmId;
+        if (!canReadInternal &&
+            (executionContext.TenantId != tenantId ||
+             !(await effectiveAccess.CheckFarmAsync(
+                 actorId, tenantId, request.FarmId, FarmAccessLevel.Member, cancellationToken)).IsAllowed))
+        {
+            return PlantNotFound();
+        }
+
+        // V3 internal approval can mutate a legacy plant before release. Keep its
+        // live row and timeline together behind the same gate.
+        var plant = await dbContext.Database.SqlQuery<PlantRow>($"""
+            SELECT p.id AS "Id", p.farm_id AS "FarmId", p.plant_code AS "PlantCode",
+                   p.row_index AS "RowIndex", p.column_index AS "ColumnIndex",
+                   ST_Y(p.location::geometry) AS "Lat", ST_X(p.location::geometry) AS "Lon",
+                   p.lifecycle_status::text AS "LifecycleStatus",
+                   p.farm_base_map_version_id AS "CurrentMapVersionId",
+                   p.mapped_at AS "MappedAt", p.created_at AS "CreatedAt"
+            FROM plant.plants p
+            WHERE p.id = {request.PlantId} AND p.farm_id = {request.FarmId}
+              AND (
+                  {canReadInternal}
+                  OR (
+                      (
+                          p.farm_base_map_version_id IS NULL
+                          OR EXISTS (
+                              SELECT 1
+                              FROM farm.farm_base_map_versions m
+                              JOIN survey.survey_orders o ON o.id = m.source_survey_order_id
+                                  AND o.tenant_id = m.tenant_id AND o.farm_id = m.farm_id
+                              WHERE m.id = p.farm_base_map_version_id
+                                AND m.tenant_id = {tenantId} AND m.farm_id = p.farm_id
+                                AND m.status IN ('PUBLISHED', 'SUPERSEDED')
+                                AND o.scope = 'LEGACY'::system.contract_scope
+                                AND o.status <> 'CANCELLED'
+                          )
+                      )
+                      AND NOT EXISTS (
+                          SELECT 1
+                          FROM mission.drone_missions dm
+                          LEFT JOIN survey.survey_orders o ON o.id = dm.survey_order_id
+                          WHERE dm.id = p.created_from_mission_id
+                            AND (dm.capture_attempt_id IS NOT NULL OR o.scope = 'V3'::system.contract_scope)
+                      )
+                      AND NOT EXISTS (
+                          SELECT 1
+                          FROM plant.plant_change_events e
+                          LEFT JOIN farm.farm_base_map_versions em ON em.id = e.farm_base_map_version_id
+                          LEFT JOIN mission.drone_missions dm ON dm.id = e.mission_id
+                          WHERE e.farm_id = p.farm_id
+                            AND (
+                                e.plant_id = p.id
+                                OR e.plant_id IN (
+                                    SELECT replacement.id
+                                    FROM plant.plants replacement
+                                    WHERE replacement.replaced_plant_id = p.id AND replacement.farm_id = p.farm_id
+                                )
+                            )
+                            AND (
+                                dm.capture_attempt_id IS NOT NULL
+                                OR EXISTS (
+                                    SELECT 1
+                                    FROM survey.survey_orders o
+                                    WHERE o.id IN (e.source_survey_order_id, em.source_survey_order_id, dm.survey_order_id)
+                                      AND o.scope = 'V3'::system.contract_scope
+                                )
+                            )
+                      )
+                  )
+              )
+            """).SingleOrDefaultAsync(cancellationToken);
 
         if (plant is null)
-        {
-            return Result.Failure<PlantLifecycleHistoryResponse>(
-                AppError.NotFound("Plant.NotFound", $"Plant {request.PlantId} not found in farm {request.FarmId}."));
-        }
+            return PlantNotFound();
 
         // 2. Lấy toàn bộ sự kiện biến động (events) của cây này (bao gồm cả biến động từ bảng phụ farm_base_map_version_id)
         var events = await dbContext.Database.SqlQueryRaw<ChangeEventRow>(
@@ -81,6 +158,8 @@ internal sealed class GetPlantLifecycleHistoryQueryHandler(
               ORDER BY e.created_at ASC",
             request.PlantId, request.FarmId)
             .ToListAsync(cancellationToken);
+
+        await transaction.CommitAsync(cancellationToken);
 
         var timeline = new List<PlantLifecycleEventItemDto>();
 
@@ -147,6 +226,10 @@ internal sealed class GetPlantLifecycleHistoryQueryHandler(
 
         return Result.Success(response);
     }
+
+    private static Result<PlantLifecycleHistoryResponse> PlantNotFound() =>
+        Result.Failure<PlantLifecycleHistoryResponse>(
+            AppError.NotFound("Plant.NotFound", "Plant was not found."));
 
     private static string GenerateHumanReadableSummary(ChangeEventRow e)
     {

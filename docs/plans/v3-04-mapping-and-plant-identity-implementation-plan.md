@@ -1,5 +1,16 @@
 # V3-04 — Mapping, Spatial Policy, Plant Identity & Billable Pole Count Implementation Plan
 
+**Checkpoint 2026-11-25.** Đã triển khai mapping, spatial policy, lineage trụ và count snapshot. Remediation G0–G18 đã đóng ở checkpoint V3-04.
+
+- [ ] Nghiệm thu mapping/Baseline, lineage, PostGIS, migration/preflight và race ở V3-10. [Acceptance matrix](../testing/v3-business-acceptance.md)
+
+[Backlog V3-06 đến V3-10](../../Codex-Plan/BE1-Core-Business-Implementation-Plan.md#4-status-và-dependency-roadmap)
+
+<details>
+<summary>Hồ sơ triển khai và evidence theo từng checkpoint</summary>
+
+Các trạng thái, checklist và số liệu bên dưới ghi theo thời điểm lập từng phần.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` (recommended) or `superpowers:executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Triển khai toàn diện hạ tầng bản đồ số (Mapping Lineage), chính sách không gian có phiên bản (`SpatialPolicy`), định danh cây trồng bất biến (`PlantProfile` & `PlantChangeEvent`) và cơ chế chốt số lượng trụ tính tiền (`VerifiedBillablePoleCount`) chuẩn bị dữ liệu đầu vào bất biến cho lập hóa đơn ở Phase V3-05.
@@ -8,7 +19,7 @@
 
 **Tech Stack:** .NET 10, C# 14, Entity Framework Core, PostgreSQL 17 + PostGIS 3.5, NetTopologySuite, MediatR, Result Pattern.
 
-**Spec:** [BE1-Core-Business-Implementation-Plan.md Mục 8](../../Codex-Plan/BE1-Core-Business-Implementation-Plan.md#L135), [Business-Rules-v3.md Mục 5](../../Codex-Plan/Business-Rules-v3.md#L75-L87), [v3-01-locked-design.md](../domain/v3-01-locked-design.md).
+**Spec:** [BE1-Core-Business-Implementation-Plan.md Mục 8](../../Codex-Plan/BE1-Core-Business-Implementation-Plan.md#8-v3-0405--mapping-identity-combo-và-countinvoice), [Business-Rules-v3.md Mục 5](../../Codex-Plan/Business-Rules-v3.md#L75-L87), [v3-01-locked-design.md](../domain/v3-01-locked-design.md).
 
 ---
 
@@ -193,3 +204,5 @@
 **Steps:**
 - [ ] 7.1 Cập nhật `PROJECT_MEMORY.md`: Ghi nhận tiến độ hoàn thành các tasks của V3-04.
 - [ ] 7.2 Commit toàn bộ code sạch lên nhánh `LongTH`.
+
+</details>

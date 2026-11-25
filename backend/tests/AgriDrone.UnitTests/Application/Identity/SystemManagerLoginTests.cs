@@ -36,8 +36,9 @@ public sealed class SystemManagerLoginTests
             CancellationToken.None);
 
         Assert.True(result.IsSuccess);
-        Assert.NotNull(result.Value.Session);
-        Assert.Null(result.Value.TenantSelection);
+        Assert.NotNull(result.Value.Payload.Session);
+        Assert.Null(result.Value.Payload.TenantSelection);
+        Assert.Null(result.Value.RefreshCookie);
         Assert.False(memberships.WasCalled);
         Assert.NotNull(tokens.Request);
         Assert.Null(tokens.Request.TenantId);
@@ -113,9 +114,9 @@ public sealed class SystemManagerLoginTests
     private sealed class UnusedTenantSelectionTokenService
         : ITenantSelectionTokenService
     {
-        public TenantSelectionTokenResult Generate(Guid userId) =>
+        public TenantSelectionTokenResult Generate(Guid userId, int authenticationVersion) =>
             throw new InvalidOperationException("Tenant selection must not be used for a SystemManager.");
 
-        public Guid? Validate(string token) => null;
+        public TenantSelectionValidationResult? Validate(string token) => null;
     }
 }

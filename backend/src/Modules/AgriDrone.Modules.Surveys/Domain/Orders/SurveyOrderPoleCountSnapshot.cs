@@ -146,6 +146,16 @@ public sealed class SurveyOrderPoleCountSnapshot : Entity
             throw new ArgumentOutOfRangeException(nameof(revisionNumber), "Revision number must be >= 1.");
         }
 
+        if (revisionNumber == 1 && predecessorSnapshotId.HasValue)
+        {
+            throw new ArgumentException("Initial pole count snapshot cannot have a predecessor.", nameof(predecessorSnapshotId));
+        }
+
+        if (revisionNumber > 1 && (!predecessorSnapshotId.HasValue || predecessorSnapshotId.Value == Guid.Empty || predecessorSnapshotId.Value == id))
+        {
+            throw new ArgumentException("Subsequent pole count snapshot must reference a valid distinct predecessor.", nameof(predecessorSnapshotId));
+        }
+
         foreach (var item in items)
         {
             if (item.SnapshotId != id)

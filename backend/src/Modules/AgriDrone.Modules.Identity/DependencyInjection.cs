@@ -13,6 +13,7 @@ using AgriDrone.Modules.Identity.Application.PasswordReset.EmailDelivery;
 using AgriDrone.Modules.Identity.Application.Provisioning;
 using AgriDrone.Modules.Identity.Domain.FarmMemberships;
 using AgriDrone.Modules.Identity.Domain.PasswordResetTokens;
+using AgriDrone.Modules.Identity.Domain.RefreshSessions;
 using AgriDrone.Modules.Identity.Domain.Roles;
 using AgriDrone.Modules.Identity.Domain.SystemManagerInvitations;
 using AgriDrone.Modules.Identity.Domain.SystemManagers;
@@ -73,6 +74,15 @@ public static class DependencyInjection
                 SystemManagerInvitationOptions.SectionName))
             .ValidateOnStart();
 
+        services
+            .AddOptions<RefreshSessionOptions>()
+            .Bind(configuration.GetSection(RefreshSessionOptions.SectionName))
+            .ValidateOnStart();
+
+        services.AddSingleton<
+            IValidateOptions<RefreshSessionOptions>,
+            RefreshSessionOptionsValidator>();
+
         services.AddSingleton<
             IValidateOptions<SystemAdminBootstrapOptions>,
             SystemAdminBootstrapOptionsValidator>();
@@ -129,6 +139,7 @@ public static class DependencyInjection
         services.AddScoped<ITenantMembershipRepository, TenantMembershipRepository>();
         services.AddScoped<ITenantInvitationRepository, TenantInvitationRepository>();
         services.AddScoped<IPasswordResetTokenRepository, PasswordResetTokenRepository>();
+        services.AddScoped<IRefreshSessionRepository, RefreshSessionRepository>();
         services.AddScoped<IPasswordResetEmailDelivery, PasswordResetEmailDelivery>();
         services.AddScoped<ITenantInvitationService, TenantInvitationService>();
         services.AddScoped<ITenantProvisioningPort, TenantProvisioningPort>();
@@ -138,6 +149,7 @@ public static class DependencyInjection
         services.AddScoped<IIdentityIntegrationOutbox, IdentityIntegrationOutbox>();
         services.AddSingleton<IInvitationTokenService, InvitationTokenService>();
         services.AddSingleton<IPasswordResetTokenService, PasswordResetTokenService>();
+        services.AddSingleton<IRefreshTokenService, RefreshTokenService>();
         services.AddIntegrationConsumer<TenantInvitationEmailRequestedProcessor>(IntegrationConsumerNames.EmailTenantInvitationV1);
         services.AddScoped<ISystemManagerInvitationEmailDelivery, SystemManagerInvitationEmailDelivery>();
         var assembly = typeof(DependencyInjection).Assembly;

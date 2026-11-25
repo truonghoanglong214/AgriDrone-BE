@@ -62,3 +62,12 @@ Chỉ Admin xem/export. Không đưa bank details/proof URLs nhạy cảm vào e
 ## 8. Integration gate
 
 Current JSON snapshots và handoff 2026-11-04 chỉ là baseline. Frontend triển khai v3 khi có actual reviewed API/schema implementation; không đổi enum/route client theo tài liệu target rồi giả định backend đã hỗ trợ. Các repository FE/Mobile không hiện diện trong workspace này chưa được sửa; tài liệu này là handoff yêu cầu cho chúng.
+
+## 9. Khôi phục phiên đăng nhập
+
+Hợp đồng dự kiến cho web sau khi mục Identity được triển khai. [Kế hoạch refresh token](../plans/v3-05e-to-v3-10-settlement-release-plan.md#identity--refresh-token-và-khôi-phục-phiên)
+
+- Login và chọn tenant giữ JSON hiện tại. Khi có `tenantSelection`, FE mở màn hình chọn tenant. Khi có `session`, FE giữ access JWT trong bộ nhớ và đọc `session.expiresAt`. Trình duyệt nhận refresh token qua cookie `HttpOnly`.
+- Gửi `X-AgriDrone-Session: 1` và `credentials: 'include'` khi gọi login, select-tenant, refresh và logout theo hợp đồng web dự kiến. Khi reload mà chưa có access JWT, gọi `POST /api/auth/refresh` trước khi mở trang cần đăng nhập. Access JWT mới tiếp tục đi trong header `Authorization: Bearer ...` của các API nghiệp vụ. [Chi tiết RT-05](../plans/v3-05e-to-v3-10-settlement-release-plan.md#rt-05--nối-authcontroller-và-bảo-vệ-cookie)
+- Khi access JWT hết hạn hoặc API cần đăng nhập trả `401`, các request chờ dùng chung một lần refresh. Phối hợp refresh giữa các tab dùng chung cookie. Với `409` do refresh đồng thời, chờ request thắng cập nhật phiên rồi thử lại có giới hạn. Chỉ gửi lại request nghiệp vụ an toàn tối đa một lần và giữ operation ID cũ ở luồng có idempotency. `403` đi theo luồng báo lỗi quyền.
+- Khi refresh xác nhận `401`, xóa trạng thái frontend và mở trang đăng nhập. Lỗi mạng hoặc server tạm thời giữ trạng thái chờ để thử lại có giới hạn. Khi logout, gọi `POST /api/auth/logout` rồi xóa trạng thái và phát tín hiệu logout sang các tab. Kết quả refresh đang chạy dở phải bị bỏ qua nếu phiên frontend đã đổi hoặc người dùng đã logout.

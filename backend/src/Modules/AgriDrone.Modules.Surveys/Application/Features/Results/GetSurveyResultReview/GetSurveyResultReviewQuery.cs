@@ -31,4 +31,5 @@ public sealed record SurveyResultReviewResponse(
     Guid? CurrentApprovedResultRevisionId,
     SurveyComboPendingReviewBatch? ComboPendingBatch,
     SurveyComboReviewSummaryDto? CurrentComboReview,
-    SurveyExpectedFreezeTokensDto ExpectedFreezeTokens);
+    SurveyExpectedFreezeTokensDto ExpectedFreezeTokens,
+    string? CurrentApprovedResultFingerprint = null);

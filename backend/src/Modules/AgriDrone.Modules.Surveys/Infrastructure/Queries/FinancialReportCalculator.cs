@@ -39,10 +39,12 @@ internal static class FinancialReportCalculator
         var quality = latest.Where(x => x.Source == "quality_refund_cases" && x.Time("transferred_at") is not null &&
             !refunds.Any(r => r.Text("origin_decision_id") == x.SourceId.ToString())).ToArray();
         var reversals = latest.Where(x => x.Source == "survey_funding_reversals").ToArray();
-        var refunded = completed.Sum(x => x.Money("amount")) + quality.Sum(x => x.Money("approved_amount")) + reversals.Sum(x => x.Money("amount"));
+        reconciles |= receipts.Any(r => string.Equals(r.Text("requires_reconciliation"), "true", StringComparison.OrdinalIgnoreCase)) ||
+            reversals.Any(r => r.Text("cash_amount") is not null && r.Text("funding_receipt_id") is null);
+        var refunded = completed.Sum(x => x.Money("amount")) + quality.Sum(x => x.Money("approved_amount")) + reversals.Sum(ReconciledReversalCash);
         var cashOut = completed.Where(x => period.Contains(x.Time("completed_at"))).Sum(x => x.Money("amount")) +
             quality.Where(x => period.Contains(x.Time("transferred_at"))).Sum(x => x.Money("approved_amount")) +
-            reversals.Where(x => period.Contains(x.Time("occurred_at"))).Sum(x => x.Money("amount"));
+            reversals.Where(x => period.Contains(x.Time("occurred_at"))).Sum(ReconciledReversalCash);
         var serviceRefunds = completed.Where(x => period.Contains(x.Time("completed_at")) &&
             x.Text("origin_kind") is "COMPLAINT_REFUND" or "ComplaintRefund").Sum(x => x.Money("amount")) +
             quality.Where(x => period.Contains(x.Time("transferred_at"))).Sum(x => x.Money("approved_amount"));
@@ -64,4 +66,9 @@ internal static class FinancialReportCalculator
             retentions.Where(x => period.Contains(x.Time("recorded_at"))).Sum(x => x.Money("amount")),
             outstanding, pendingPayments, period.Contains(saleAt), !cancelled && !released && unpriced, reconciles);
     }
+
+    private static decimal ReconciledReversalCash(FinancialHistoryRow reversal) =>
+        reversal.Text("cash_amount") is null
+            ? reversal.Money("amount")
+            : reversal.Text("funding_receipt_id") is not null ? reversal.Money("cash_amount") : 0;
 }

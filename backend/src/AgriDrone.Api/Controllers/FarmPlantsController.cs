@@ -23,6 +23,7 @@ public sealed class FarmPlantsController(ISender sender) : ControllerBase
     /// </remarks>
     [HttpGet("{plantId:guid}/lifecycle")]
     [ProducesResponseType<PlantLifecycleHistoryResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IResult> GetPlantLifecycle(
         [FromRoute] Guid farmId,

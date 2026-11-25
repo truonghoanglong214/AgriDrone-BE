@@ -6,4 +6,5 @@ namespace AgriDrone.Modules.Identity.Application.Features.SelectTenant;
 
 public sealed record SelectTenantCommand(
     string SelectionToken,
-    Guid TenantId) : IRequest<Result<LoginUserResponse>>;
+    Guid TenantId,
+    bool IssueRefreshSession = false) : IRequest<Result<AuthenticationCommandResult>>;

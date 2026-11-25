@@ -16,6 +16,10 @@ public sealed class SurveyOrderPoleCountSnapshotConfiguration
             {
                 table.HasCheckConstraint("ck_survey_order_pole_count_snapshots_count", "verified_billable_pole_count >= 0");
                 table.HasCheckConstraint("ck_survey_order_pole_count_snapshots_rev", "revision_number >= 1");
+                table.HasCheckConstraint(
+                    "ck_survey_order_pole_count_snapshots_lineage",
+                    "(revision_number = 1 AND predecessor_snapshot_id IS NULL) OR " +
+                    "(revision_number > 1 AND predecessor_snapshot_id IS NOT NULL AND predecessor_snapshot_id <> id)");
             });
 
         builder.HasKey(s => s.Id).HasName("pk_survey_order_pole_count_snapshots");
@@ -53,6 +57,17 @@ public sealed class SurveyOrderPoleCountSnapshotConfiguration
 
         builder.HasIndex(s => s.MappingCandidateBatchId)
             .HasDatabaseName("ix_survey_order_pole_count_snapshots_batch");
+
+        builder.HasIndex(s => new { s.PredecessorSnapshotId, s.SurveyOrderId })
+            .HasDatabaseName("ix_survey_order_pole_count_snapshots_predecessor_scope");
+
+        builder.HasOne<SurveyOrderPoleCountSnapshot>()
+            .WithMany()
+            .HasForeignKey(s => new { s.PredecessorSnapshotId, s.SurveyOrderId })
+            .HasPrincipalKey(p => new { p.Id, p.SurveyOrderId })
+            .IsRequired(false)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_survey_order_pole_count_snapshots_predecessor_scope");
 
         builder.HasMany(s => s.Items)
             .WithOne()

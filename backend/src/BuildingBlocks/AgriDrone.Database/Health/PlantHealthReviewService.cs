@@ -60,6 +60,8 @@ internal sealed partial class PlantHealthReviewService : IPlantHealthReviewServi
             ? await _db.SurveyOrders.FromSqlInterpolated($"SELECT *, xmin FROM survey.survey_orders WHERE id = {orderId} FOR UPDATE").SingleOrDefaultAsync(token)
             : await _db.SurveyOrders.AsNoTracking().SingleOrDefaultAsync(o => o.Id == orderId, token);
         if (order is null || !await _authorization.AuthorizeAsync(order.TenantId, order.FarmId, actor, token)) NotFound();
+        if (order!.Scope != ContractScope.Legacy)
+            throw new ReviewFault(AppError.Conflict("SurveyOrder.ScopeInvalid", $"Order '{order.Id}' uses V3 result review and invoice finalization rather than legacy Plant Health review/publication."));
         var result = mutation
             ? await _db.SurveyResults.FromSqlInterpolated($"SELECT *, xmin FROM survey.survey_results WHERE survey_order_id = {orderId} FOR UPDATE").SingleOrDefaultAsync(token)
             : await _db.SurveyResults.AsNoTracking().SingleOrDefaultAsync(r => r.SurveyOrderId == orderId, token);

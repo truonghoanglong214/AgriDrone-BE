@@ -1,3 +1,5 @@
+using AgriDrone.Modules.Farms.Application.Abstractions.Maps;
+using AgriDrone.Modules.Farms.Application.Services;
 using AgriDrone.Modules.Farms.Domain.Maps;
 using AgriDrone.Modules.Farms.Infrastructure.Persistence;
 using AgriDrone.SharedKernel.Application;
@@ -7,7 +9,9 @@ using Microsoft.EntityFrameworkCore;
 namespace AgriDrone.Modules.Farms.Application.Features.Maps.CompareFarmBaseMaps;
 
 internal sealed class CompareFarmBaseMapsQueryHandler(
-    FarmsDbContext dbContext)
+    FarmsDbContext dbContext,
+    FarmBaseMapReadAccess readAccess,
+    IFarmBaseMapPreviewReader previewReader)
     : IRequestHandler<CompareFarmBaseMapsQuery, Result<CompareFarmBaseMapsResponse>>
 {
     private sealed record CandidateRow(
@@ -39,10 +43,40 @@ internal sealed class CompareFarmBaseMapsQueryHandler(
         CompareFarmBaseMapsQuery request,
         CancellationToken cancellationToken)
     {
+        var farm = await dbContext.Farms.AsNoTracking()
+            .SingleOrDefaultAsync(f => f.Id == request.FarmId, cancellationToken);
+        if (farm is null)
+        {
+            return Result.Failure<CompareFarmBaseMapsResponse>(
+                AppError.NotFound("Farm.NotFound", $"Farm with ID {request.FarmId} was not found."));
+        }
+
+        var access = await readAccess.CheckAsync(farm.TenantId, farm.Id, cancellationToken);
+        if (!access.IsAllowed)
+        {
+            return Result.Failure<CompareFarmBaseMapsResponse>(
+                AppError.NotFound("Farm.NotFound", "Farm was not found."));
+        }
+
         var allVersions = await dbContext.FarmBaseMapVersions.AsNoTracking()
             .Where(v => v.FarmId == request.FarmId && v.Status != FarmBaseMapStatus.Draft)
             .OrderBy(v => v.VersionNumber)
             .ToListAsync(cancellationToken);
+
+        if (!access.CanReadDraft)
+        {
+            var readable = new List<FarmBaseMapVersion>(allVersions.Count);
+            foreach (var version in allVersions)
+            {
+                if (await previewReader.CanOwnerReadAsync(
+                        version.TenantId, version.FarmId, version.SourceSurveyOrderId, cancellationToken))
+                {
+                    readable.Add(version);
+                }
+            }
+
+            allVersions = readable;
+        }
 
         if (allVersions.Count < 2 && (request.FromVersionId == null || request.ToVersionId == null))
         {
@@ -55,10 +89,29 @@ internal sealed class CompareFarmBaseMapsQueryHandler(
 
         if (request.FromVersionId.HasValue && request.ToVersionId.HasValue)
         {
-            fromVersion = allVersions.FirstOrDefault(v => v.Id == request.FromVersionId.Value)
-                ?? await dbContext.FarmBaseMapVersions.AsNoTracking().FirstOrDefaultAsync(v => v.Id == request.FromVersionId.Value && v.FarmId == request.FarmId, cancellationToken);
-            toVersion = allVersions.FirstOrDefault(v => v.Id == request.ToVersionId.Value)
-                ?? await dbContext.FarmBaseMapVersions.AsNoTracking().FirstOrDefaultAsync(v => v.Id == request.ToVersionId.Value && v.FarmId == request.FarmId, cancellationToken);
+            fromVersion = allVersions.FirstOrDefault(v => v.Id == request.FromVersionId.Value);
+            toVersion = allVersions.FirstOrDefault(v => v.Id == request.ToVersionId.Value);
+            if (access.CanReadDraft)
+            {
+                fromVersion ??= await dbContext.FarmBaseMapVersions.AsNoTracking()
+                    .FirstOrDefaultAsync(v => v.Id == request.FromVersionId.Value && v.FarmId == request.FarmId, cancellationToken);
+                toVersion ??= await dbContext.FarmBaseMapVersions.AsNoTracking()
+                    .FirstOrDefaultAsync(v => v.Id == request.ToVersionId.Value && v.FarmId == request.FarmId, cancellationToken);
+            }
+            else if (fromVersion is null || toVersion is null)
+            {
+                var requestedExist = await dbContext.FarmBaseMapVersions.AsNoTracking()
+                    .AnyAsync(v => v.FarmId == request.FarmId &&
+                                   v.Status != FarmBaseMapStatus.Draft &&
+                                   (v.Id == request.FromVersionId.Value || v.Id == request.ToVersionId.Value),
+                        cancellationToken);
+                if (requestedExist)
+                {
+                    return Result.Failure<CompareFarmBaseMapsResponse>(AppError.Conflict(
+                        "FarmBaseMapVersion.PaymentRequired",
+                        "Reviewed survey results remain locked until final settlement."));
+                }
+            }
         }
         else if (request.FromVersionNumber.HasValue && request.ToVersionNumber.HasValue)
         {

@@ -180,6 +180,13 @@ public static class IntegrationEventDescriptors
             IntegrationSchemaVersions.V1,
             RequiresActorId: false);
 
+    public static IntegrationEventDescriptor<SurveyReleaseEvaluationRequestedV1>
+        SurveyReleaseEvaluationRequestedV1 { get; } =
+        new(
+            IntegrationEventTypes.SurveyReleaseEvaluationRequestedV1,
+            IntegrationSchemaVersions.V1,
+            RequiresActorId: false);
+
     public static IntegrationEventDescriptor<SurveyPriceAdjustmentChangedV1>
         SurveyPriceAdjustmentChangedV1 { get; } =
         new(

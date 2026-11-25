@@ -1,19 +1,22 @@
-using AgriDrone.Modules.Identity.Application.Errors;
 using AgriDrone.Modules.Identity.Application.Abstractions.Persistence;
 using AgriDrone.Modules.Identity.Application.Abstractions.Services;
+using AgriDrone.Modules.Identity.Application.Errors;
 using AgriDrone.Modules.Identity.Domain.PasswordResetTokens;
+using AgriDrone.Modules.Identity.Domain.RefreshSessions;
 using AgriDrone.Modules.Identity.Domain.Users;
 using AgriDrone.SharedKernel.Application;
 using MediatR;
+using DomainRefreshSession = AgriDrone.Modules.Identity.Domain.RefreshSessions.RefreshSession;
 
 namespace AgriDrone.Modules.Identity.Application.Features.ResetPassword;
 
 internal sealed class ResetPasswordCommandHandler(
     IPasswordResetTokenService passwordResetTokenService,
     IPasswordResetTokenRepository passwordResetTokenRepository,
-    IUserRepository userRepository,
+    IRefreshSessionRepository refreshSessionRepository,
     IPasswordService passwordService,
-    IIdentityUnitOfWork unitOfWork)
+    IIdentityUnitOfWork unitOfWork,
+    TimeProvider? timeProvider = null)
     : IRequestHandler<ResetPasswordCommand, Result<ResetPasswordResponse>>
 {
     public Task<Result<ResetPasswordResponse>> Handle(
@@ -39,19 +42,25 @@ internal sealed class ResetPasswordCommandHandler(
         var resetToken = await passwordResetTokenRepository.GetByTokenHashAsync(
             tokenHash,
             cancellationToken);
-        var now = DateTimeOffset.UtcNow;
-
-        if (resetToken is null || !resetToken.CanBeUsed(now))
+        if (resetToken is null)
         {
             return Result.Failure<ResetPasswordResponse>(
                 PasswordResetError.InvalidOrExpiredToken());
         }
 
-        var user = await userRepository.GetByIdAsync(
+        // Lock user row before rotating credentials and revoking active refresh sessions
+        var user = await refreshSessionRepository.LockUserForUpdateAsync(
             resetToken.UserId,
             cancellationToken);
 
-        if (user is null || user.Status != UserStatus.Active)
+        if (user is null || user.Status != UserStatus.Active || user.DeletedAt is not null)
+        {
+            return Result.Failure<ResetPasswordResponse>(
+                PasswordResetError.InvalidOrExpiredToken());
+        }
+
+        var now = (timeProvider ?? TimeProvider.System).GetUtcNow();
+        if (!resetToken.CanBeUsed(now))
         {
             return Result.Failure<ResetPasswordResponse>(
                 PasswordResetError.InvalidOrExpiredToken());
@@ -70,6 +79,11 @@ internal sealed class ResetPasswordCommandHandler(
 
         var passwordHash = passwordService.HashPassword(newPassword);
         user.ChangePassword(passwordHash, now);
+        await refreshSessionRepository.RevokeAllActiveByUserIdAsync(
+            user.Id,
+            DomainRefreshSession.RevokeReasonPasswordReset,
+            now,
+            cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         return Result.Success(

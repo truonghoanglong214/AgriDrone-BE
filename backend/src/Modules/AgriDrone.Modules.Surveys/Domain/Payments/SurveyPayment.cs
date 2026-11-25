@@ -1,3 +1,4 @@
+using AgriDrone.SharedKernel.Application;
 using AgriDrone.SharedKernel.Domain;
 
 namespace AgriDrone.Modules.Surveys.Domain;
@@ -36,6 +37,7 @@ public sealed class SurveyPayment : Entity
 
     public Guid SurveyOrderId { get; private set; }
     public Guid? DepositObligationId { get; private set; }
+    public Guid? InvoiceRevisionId { get; private set; }
     public decimal Amount { get; private set; }
     public string Currency { get; private set; } = null!;
     public string Provider { get; private set; } = null!;
@@ -43,6 +45,10 @@ public sealed class SurveyPayment : Entity
     public SurveyPaymentStatus Status { get; private set; }
     public PaymentPurpose Purpose { get; private set; } = PaymentPurpose.FinalBalance;
     public DateTimeOffset? ConfirmedAt { get; private set; }
+    public DateTimeOffset? InvalidatedAt { get; private set; }
+    public Guid? InvalidatedBy { get; private set; }
+    public string? InvalidationReason { get; private set; }
+    public Guid? SupersededByInvoiceRevisionId { get; private set; }
     public uint Version { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
     public DateTimeOffset UpdatedAt { get; private set; }
@@ -143,6 +149,181 @@ public sealed class SurveyPayment : Entity
 
     public void Refund(DateTimeOffset occurredAt) =>
         TransitionTo(SurveyPaymentStatus.Refunded, occurredAt);
+
+    public Result BindInvoiceRevision(Guid invoiceRevisionId)
+    {
+        if (Purpose != PaymentPurpose.FinalBalance)
+        {
+            return Result.Failure(AppError.Validation(
+                "SurveyPayment.InvoiceBindingInvalidPurpose",
+                "Only FinalBalance payments can bind to an invoice revision."));
+        }
+
+        if (invoiceRevisionId == Guid.Empty)
+        {
+            return Result.Failure(AppError.Validation(
+                "SurveyPayment.InvoiceRevisionIdRequired",
+                "InvoiceRevisionId is required."));
+        }
+
+        if (InvoiceRevisionId.HasValue && InvoiceRevisionId.Value != invoiceRevisionId)
+        {
+            return Result.Failure(AppError.Conflict(
+                "SurveyPayment.InvoiceRevisionAlreadyBound",
+                "Payment is already bound to a different invoice revision."));
+        }
+
+        InvoiceRevisionId = invoiceRevisionId;
+        return Result.Success();
+    }
+
+    public Result InvalidateForInvoiceCorrection(
+        Guid actorId,
+        DateTimeOffset invalidatedAt,
+        string reason,
+        Guid? supersededByInvoiceRevisionId)
+    {
+        if (actorId == Guid.Empty)
+        {
+            return Result.Failure(AppError.Validation(
+                "ActorId.Required",
+                "Actor identifier is required to invalidate checkout obligation."));
+        }
+
+        if (invalidatedAt == default || invalidatedAt.Offset != TimeSpan.Zero)
+        {
+            return Result.Failure(AppError.Validation(
+                "InvalidatedAt.Invalid",
+                "InvalidatedAt must be a valid UTC timestamp."));
+        }
+
+        var normalizedReason = reason?.Trim();
+        if (string.IsNullOrWhiteSpace(normalizedReason) || normalizedReason.Length > 500)
+        {
+            return Result.Failure(AppError.Validation(
+                "InvalidationReason.Invalid",
+                "Invalidation reason must be between 1 and 500 characters."));
+        }
+
+        if (supersededByInvoiceRevisionId.HasValue && supersededByInvoiceRevisionId.Value == Guid.Empty)
+        {
+            return Result.Failure(AppError.Validation(
+                "SupersededByInvoiceRevisionId.Invalid",
+                "SupersededByInvoiceRevisionId cannot be empty when supplied."));
+        }
+
+        if (Status == SurveyPaymentStatus.Invalidated)
+        {
+            if (InvalidatedBy == actorId &&
+                InvalidatedAt == invalidatedAt &&
+                string.Equals(InvalidationReason, normalizedReason, StringComparison.Ordinal) &&
+                SupersededByInvoiceRevisionId == supersededByInvoiceRevisionId)
+            {
+                return Result.Success();
+            }
+
+            return Result.Failure(AppError.Conflict(
+                "SurveyPayment.AlreadyInvalidated",
+                "Checkout payment has already been invalidated with different audit metadata."));
+        }
+
+        if (Status is not (
+            SurveyPaymentStatus.Pending or
+            SurveyPaymentStatus.Processing or
+            SurveyPaymentStatus.AdjustmentRequired))
+        {
+            return Result.Failure(AppError.Conflict(
+                "SurveyPayment.CannotInvalidate",
+                $"Checkout payment in status '{Status}' cannot be invalidated by invoice correction."));
+        }
+
+        if (invalidatedAt < UpdatedAt)
+        {
+            return Result.Failure(AppError.Validation(
+                "InvalidatedAt.BeforeUpdatedAt",
+                "InvalidatedAt cannot be earlier than payment UpdatedAt."));
+        }
+
+        Status = SurveyPaymentStatus.Invalidated;
+        InvalidatedAt = invalidatedAt;
+        InvalidatedBy = actorId;
+        InvalidationReason = normalizedReason;
+        SupersededByInvoiceRevisionId = supersededByInvoiceRevisionId;
+        UpdatedAt = invalidatedAt;
+        Version++;
+        return Result.Success();
+    }
+
+    /// <summary>
+    /// Preserves an external provider reference returned after a concurrent pre-release invoice
+    /// correction invalidated a pending V3 FinalBalance checkout, keeping the checkout Invalidated
+    /// so late callbacks can still route into reconciliation without crediting replacement invoices.
+    /// </summary>
+    public Result AttachProviderReferenceForInvalidatedCheckout(
+        string providerReference,
+        DateTimeOffset occurredAt)
+    {
+        if (Status != SurveyPaymentStatus.Invalidated)
+        {
+            return Result.Failure(AppError.Conflict(
+                "SurveyPayment.NotInvalidated",
+                "Only an already invalidated checkout can preserve a late provider reference."));
+        }
+
+        var normalizedReference = providerReference?.Trim();
+        if (string.IsNullOrWhiteSpace(normalizedReference) || normalizedReference.Length > 150)
+        {
+            return Result.Failure(AppError.Validation(
+                "SurveyPayment.ProviderReferenceInvalid",
+                "ProviderReference must be between 1 and 150 characters."));
+        }
+
+        if (occurredAt == default || occurredAt.Offset != TimeSpan.Zero)
+        {
+            return Result.Failure(AppError.Validation(
+                "OccurredAt.Invalid",
+                "OccurredAt must be a valid UTC timestamp."));
+        }
+
+        if (ProviderReference is not null)
+        {
+            return string.Equals(ProviderReference, normalizedReference, StringComparison.Ordinal)
+                ? Result.Success()
+                : Result.Failure(AppError.Conflict(
+                    "SurveyPayment.ProviderReferenceMismatch",
+                    "Invalidated checkout already holds a different provider reference."));
+        }
+
+        ProviderReference = normalizedReference;
+        if (occurredAt > UpdatedAt)
+        {
+            UpdatedAt = occurredAt;
+        }
+        Version++;
+        return Result.Success();
+    }
+
+    public Result BindBalanceCheckoutReference(string? providerReference)
+    {
+        if (Purpose != PaymentPurpose.FinalBalance || InvoiceRevisionId is null ||
+            Status != SurveyPaymentStatus.Pending || ProviderReference is not null)
+        {
+            return Result.Failure(AppError.Conflict(
+                "SurveyPayment.InvalidBalanceIntent",
+                "Only a pending invoice-bound balance intent without a reference can bind a provider reference."));
+        }
+
+        var reference = providerReference?.Trim();
+        if (string.IsNullOrEmpty(reference) || reference.Length > 150)
+        {
+            return Result.Failure(AppError.Validation(
+                "SurveyPayment.ProviderReferenceInvalid",
+                "ProviderReference must be between 1 and 150 characters."));
+        }
+
+        SetProviderReference(reference);
+        return Result.Success();
+    }
 
     public void Reconcile(
         Money settledAmount,

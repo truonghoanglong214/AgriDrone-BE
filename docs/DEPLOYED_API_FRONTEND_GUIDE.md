@@ -81,7 +81,12 @@ Accept: application/json
 
 ---
 
-### 4.2. Luồng Đăng nhập (Multi-Tenant Login Flow)
+### 4.2. Luồng Đăng nhập & Khôi phục phiên (Multi-Tenant Login & Refresh Cookie Flow)
+
+Backend hỗ trợ cấp access JWT (mặc định 15 phút) kèm cookie refresh `agridrone_refresh` (`HttpOnly`, `SameSite=Lax`, `Path=/api/auth`, `Secure` trên HTTPS; thời hạn mặc định 7 ngày không hoạt động, tối đa 30 ngày) cho web frontend khi gửi header `X-AgriDrone-Session: 1`. Client mobile/API không gửi header này vẫn nhận `LoginUserResponse` chứa access JWT như trước.
+
+> [!IMPORTANT]
+> Với môi trường deploy thực tế, các route cookie `/api/auth/*` dùng allowlist `RefreshSession:AllowedOrigins` (hoặc fallback `Cors:AllowedOrigins` nếu chưa tách riêng). Nếu Frontend và Backend thuộc hai site khác nhau (tránh bị chặn bởi trình duyệt / WebKit ITP), cần đặt API qua reverse proxy cùng site hoặc cùng domain/subdomain với Frontend.
 
 ```mermaid
 sequenceDiagram
@@ -91,23 +96,26 @@ sequenceDiagram
     participant BE as Backend API
 
     User->>FE: Nhập Email & Mật khẩu
-    FE->>BE: POST /api/auth/login
-    alt Tài khoản chỉ thuộc 1 Tenant duy nhất
-        BE-->>FE: Trả về 200 OK kèm accessToken, refreshToken, tenantId, roles
-        FE->>FE: Lưu token & chuyển vào Dashboard chính
+    FE->>BE: POST /api/auth/login (Header X-AgriDrone-Session: 1)
+    alt Tài khoản hệ thống hoặc thuộc một tenant
+        BE-->>FE: 200 OK (LoginUserResponse + Set-Cookie: agridrone_refresh)
+        FE->>FE: Lưu session.accessToken trong memory
     else Tài khoản thuộc nhiều Tenant
-        BE-->>FE: Trả về 200 OK kèm selectionToken & danh sách tenants[]
+        BE-->>FE: 200 OK (tenantSelection, session = null)
         FE->>User: Hiển thị màn hình chọn Nông trại/Doanh nghiệp làm việc
         User->>FE: Chọn Tenant
-        FE->>BE: POST /api/auth/select-tenant (selectionToken, tenantId)
-        BE-->>FE: Trả về 200 OK kèm accessToken chính thức
-        FE->>FE: Chuyển vào Dashboard
+        FE->>BE: POST /api/auth/select-tenant (X-AgriDrone-Session: 1)
+        BE-->>FE: 200 OK (LoginUserResponse + Set-Cookie: agridrone_refresh)
     end
+    Note over FE,BE: Khi tải lại trang hoặc access JWT hết hạn
+    FE->>BE: POST /api/auth/refresh (credentials: include, Header X-AgriDrone-Session: 1)
+    BE-->>FE: 200 OK (LoginUserResponse mới + rotate cookie agridrone_refresh)
 ```
 
 #### API 1: Đăng nhập
 - **Method**: `POST`
 - **Endpoint**: `/api/auth/login`
+- **Headers (tùy chọn cho web cookie session)**: `X-AgriDrone-Session: 1` (kèm `credentials: 'include'` ở browser).
 - **Request Body**:
   ```json
   {
@@ -115,38 +123,51 @@ sequenceDiagram
     "password": "Password123!"
   }
   ```
-- **Response (Trường hợp 1 Tenant)**:
+- **Response (Trường hợp 1 Tenant hoặc Hệ thống)**:
   ```json
   {
-    "requiresTenantSelection": false,
-    "accessToken": "eyJhbGciOiJIUzI1NiIsIn...",
-    "refreshToken": "d8f92a10...",
-    "expiresAt": "2026-11-21T06:00:00Z",
-    "tenantId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-    "roles": ["TenantOwner"]
+    "email": "owner@example.com",
+    "fullName": "Chủ nông trại",
+    "phone": null,
+    "session": {
+      "accessToken": "eyJhbGciOiJIUzI1NiIsIn...",
+      "expiresAt": "2026-11-25T15:15:00Z",
+      "tenant": {
+        "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+        "code": "FARM-01",
+        "name": "Nông trại Thanh Long Hoàng Long 1",
+        "role": "OWNER"
+      }
+    },
+    "tenantSelection": null
   }
   ```
 - **Response (Trường hợp nhiều Tenant)**:
   ```json
   {
-    "requiresTenantSelection": true,
-    "selectionToken": "eyJhbGciOiJIUzI1NiIsIn...",
-    "tenants": [
-      {
-        "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-        "name": "Nông trại Thanh Long Hoàng Long 1"
-      },
-      {
-        "id": "7ca95f64-1111-2222-3333-4c963f66bba7",
-        "name": "Hợp tác xã Nông nghiệp Hàm Thuận Bắc"
-      }
-    ]
+    "email": "owner@example.com",
+    "fullName": "Chủ nông trại",
+    "phone": null,
+    "session": null,
+    "tenantSelection": {
+      "selectionToken": "eyJhbGciOiJIUzI1NiIsIn...",
+      "expiresAt": "2026-11-25T15:05:00Z",
+      "tenants": [
+        {
+          "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+          "code": "FARM-01",
+          "name": "Nông trại Thanh Long Hoàng Long 1",
+          "role": "OWNER"
+        }
+      ]
+    }
   }
   ```
 
 #### API 2: Chọn Tenant (Nếu cần)
 - **Method**: `POST`
 - **Endpoint**: `/api/auth/select-tenant`
+- **Headers (web cookie session)**: `X-AgriDrone-Session: 1`
 - **Request Body**:
   ```json
   {
@@ -154,13 +175,29 @@ sequenceDiagram
     "tenantId": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
   }
   ```
-- **Response**: Trả về `accessToken` và `roles` chính thức theo tenant đã chọn.
+- **Response**: Trả về `LoginUserResponse` với `session` theo tenant đã chọn (`tenantSelection: null`) và `Set-Cookie: agridrone_refresh=...` nếu có `X-AgriDrone-Session: 1`. Đăng nhập hệ thống trả `session.tenant: null`.
 
-#### API 3: Quên mật khẩu & Đặt lại mật khẩu
+#### API 3: Khôi phục phiên / Làm mới Access JWT
+- **Method**: `POST`
+- **Endpoint**: `/api/auth/refresh`
+- **Yêu cầu bắt buộc**: Cookie `agridrone_refresh`, header `X-AgriDrone-Session: 1`, `Origin` hợp lệ trong allowlist auth (`credentials: 'include'`). Không yêu cầu access JWT còn hạn.
+- **Response `200 OK`**: Cùng JSON `LoginUserResponse` (`email`, `fullName`, `phone`, `session`, `tenantSelection: null`), `Cache-Control: no-store` và cookie `agridrone_refresh` đã rotate.
+- **Lỗi chuẩn**:
+  - `401 Unauthorized` (`Authentication.InvalidRefreshSession`): thiếu cookie, hết hạn, thu hồi hoặc tái sử dụng token.
+  - `403 Forbidden` (`Authentication.InvalidOrigin` / `Authentication.SessionHeaderRequired`): sai `Origin` hoặc thiếu `X-AgriDrone-Session: 1`.
+  - `409 Conflict` (`Authentication.RefreshConflict`): request song song rotate thua (cookie hiện tại giữ nguyên, FE có thể retry với cookie mới).
+
+#### API 4: Đăng xuất
+- **Method**: `POST`
+- **Endpoint**: `/api/auth/logout`
+- **Yêu cầu bắt buộc**: Header `X-AgriDrone-Session: 1`, `Origin` hợp lệ trong allowlist auth (`credentials: 'include'`).
+- **Response `204 No Content`**: Thu hồi phiên trên server (nếu tìm thấy) và xóa cookie `agridrone_refresh`.
+
+#### API 5: Quên mật khẩu & Đặt lại mật khẩu
 - **Quên mật khẩu**: `POST /api/auth/forgot-password`  
   `Body: { "email": "user@example.com" }` -> Trả về HTTP 202 Accepted.
 - **Đặt lại mật khẩu**: `POST /api/auth/reset-password`  
-  `Body: { "token": "...", "newPassword": "...", "confirmPassword": "..." }` -> Trả về HTTP 200 OK.
+  `Body: { "token": "...", "newPassword": "...", "confirmPassword": "..." }` -> Trả về HTTP 200 OK và thu hồi các refresh session hiện có.
 
 ---
 

@@ -1,5 +1,16 @@
 # V3-02 — Catalogue, shared policies và atomic Order approval
 
+**Checkpoint 2026-11-25.** Đã có source catalogue, versioned price/deposit, request và atomic approval.
+
+- [ ] Nghiệm thu `02A-2`, `02D-3`, `02F-1` và lưu evidence `02F-2` tại V3-10. Gồm PostgreSQL fresh/populated-Legacy, locking/races, approval rollback và release proof V3-06 cho Follow-up. [Acceptance matrix](../testing/v3-business-acceptance.md)
+
+[Backlog V3-06 đến V3-10](../../Codex-Plan/BE1-Core-Business-Implementation-Plan.md#4-status-và-dependency-roadmap)
+
+<details>
+<summary>Hồ sơ triển khai và evidence theo từng checkpoint</summary>
+
+Các trạng thái, checklist và số liệu bên dưới ghi theo thời điểm lập từng phần.
+
 Plan date: **2026-11-11**. Implementation status (2026-11-12): **Implementation present — PostgreSQL integration acceptance pending**. Design gate: [V3-01 locked design](../domain/v3-01-locked-design.md), [ADR 0019](../adr/0019-v3-01-model-contract-and-migration-design.md). Business source: [rules](../../Codex-Plan/Business-Rules-v3.md); source evidence: [audit](../operations/v3-01-source-audit.md).
 
 Tài liệu này được ban hành ở giai đoạn lập kế hoạch. Các mục “future work”/“chưa tạo” bên dưới mô tả thời điểm ban hành; trạng thái triển khai và evidence hiện tại nằm trong execution checklist. Public activation vẫn off. V3 Follow-up chưa thể mở production khi chưa có durable release proof; không dùng `Completed` + `Published` thay bằng chứng bàn giao.
@@ -187,3 +198,5 @@ Ranh giới 02A-1: chỉ new versioned domain/policy models và focused domain c
 V3-02 đủ technical acceptance khi valid MAP/COMBO configuration có thể tạo đúng three-kind requests/Orders/snapshots/history atomic qua tested v3 contracts, replay giữ terms gốc và legacy behavior được isolate. No runtime hardcoded business defaults, no false paid/full count/release fields.
 
 Ghi rõ public activation vẫn off nếu full flow chưa accepted. V3-03 tiếp theo là appointment + all-Order deposit readiness + new CaptureAttempt/new Mission/attempt-scoped media + cancellation/Re-flight policy; V3-06 mới là settlement/release. Các bước đó không là code đã hoàn thành chỉ vì V3-02 plan hoặc schema đã có.
+
+</details>

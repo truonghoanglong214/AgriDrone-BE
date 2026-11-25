@@ -1,10 +1,11 @@
 # BE1 — V3 Business Rebaseline và .NET Implementation Plan
 
-Ngày cập nhật: **2026-11-16**. Business policy **Approved**; V3-01 **DesignLocked / SourceAuditComplete**; V3-02 **Implementation present / lock + public rate-limit remediation applied / DB acceptance pending**; V3-03 **source implementation complete through 03H-1, 03B persistence accepted, 03H-2 InProgress pending complete real-path/race/object-storage/broker evidence and V3-02 prerequisites**. Build, Unit/Architecture và model-drift verification pass tại checkpoint audit; public activation vẫn tắt. Follow-up production chờ release proof V3-06.
+**Cập nhật 2026-11-25. Trọng tâm hiện tại là V3-06.** Backlog dưới đây theo code trong working tree `LongTH`. V3-00/01 đã chốt tài liệu và thiết kế. V3-02–05 đã có implementation. V3-09 đã có API báo cáo và Excel. Nghiệm thu runtime tập trung tại V3-10.
 
-Sources: [proposal v3](Be-Plan-v3.md), [approved rules](Business-Rules-v3.md), [BE1 use cases](BE1-Use-Case-Specification.md), [BE2 use cases](BE2-Use-Case-Specification.md), [ADR 0018](../docs/adr/0018-v3-paid-map-combo-business-policy.md).
+[Business Rules V3](Business-Rules-v3.md) · [Use cases BE1](BE1-Use-Case-Specification.md) · [Use cases BE2](BE2-Use-Case-Specification.md) · [Acceptance matrix](../docs/testing/v3-business-acceptance.md)
 
-## Lịch sử sửa đổi tài liệu (Document Revision History)
+<details>
+<summary>Lịch sử cập nhật trước checkpoint hiện tại</summary>
 
 | Phiên bản | Ngày cập nhật | Người thực hiện | Nội dung sửa đổi chính & Lý do điều chỉnh |
 |---|---|---|---|
@@ -18,204 +19,79 @@ Sources: [proposal v3](Be-Plan-v3.md), [approved rules](Business-Rules-v3.md), [
 | **v3.7** | 2026-11-14 | Thực hiện 03B-1 theo kế hoạch | Thêm EF mappings và expand migration cho CaptureAttempt/history/manifest/approval, canonical Mission binding, same-owner/lineage/V3-scope constraints; nghiệm thu fresh và populated-Legacy PostgreSQL, rollback khi expand artifacts rỗng và negative Legacy insert. Bước kế tiếp là 03B-2; không đổi các V3-02 race gates hay public activation. |
 | **v3.8** | 2026-11-15 | Hoàn tất source implementation V3-03 | Thêm funding/cancellation persistence, deposit callback/allocation, V3 appointments, atomic capture coordinator, manifest/input approval, quality Re-flight, cancellation liabilities, V3 APIs, audit/Outbox và old-route guards. Build, Unit 937/937, Architecture 87/87, Integration 39/39 và model-drift check pass. 03H-2 chưa ký vì race/fault/object-storage evidence cùng V3-02 DB prerequisite còn mở; public activation off. |
 
+</details>
+
 ## 1. Kết quả cần đạt
 
-```text
-MAP/COMBO request → approval + price/deposit snapshots → appointment + deposit
-→ safe authorized capture → processing/review → verified count/finalized invoice
-→ remaining balance → atomic publish/unlock/notice/service value
-→ Baseline/Follow-up/profile history → claims/correction/refund → revenue/Excel
-```
-
-First survey và Follow-up đều paid Order. Quality Re-flight cùng Order không thêm phí. Demo rates Map/Combo 1.000/2.000 VND/trụ, common deposit 100.000 VND, cấu hình có version động. Online-only Manager Mobile. .NET owns business state; FastAPI owns imagery/AI processing; existing SePay retained.
+Hóa đơn V3 đã chốt → đối soát và thu số dư → tự động phát hành và thông báo → Owner xem kết quả → claim/refund/correction → đối soát báo cáo tháng và Excel.
 
 ## 2. Hai nguyên tắc kiến trúc bắt buộc (Architectural Invariants)
 
-### 2.1. Nguyên tắc Zero-Hardcoding & Snapshot cấu hình nguyên tử
-- **Cấm tuyệt đối hardcode**: Không sử dụng hằng số `const`, `static readonly`, literal code hay hardcoded switch/enum mapping cho bất kỳ tham số nghiệp vụ nào (đơn giá Map/Combo, mức tiền cọc, thời hạn khiếu nại $D+7$, khoảng cách đệm ranh giới, ngưỡng dung sai spatial bucketing, tỷ lệ giữ cọc khi hủy, v.v.). Các giá trị 1.000 VND, 2.000 VND, 100.000 VND chỉ là dữ liệu cấu hình demo ban đầu (initial seed data), không phải logic cố định của runtime.
-- **Cấu hình động có phiên bản (Versioned Dynamic Configuration)**: Toàn bộ tham số nghiệp vụ phải được quản lý thành các thực thể cấu hình trong cơ sở dữ liệu (`SurveyDepositPolicy`, `SurveyServicePrice`, `ClaimPolicy`, `SpatialPolicy`) với các thuộc tính: `Id`, `Version`, `EffectiveFrom`, `EffectiveTo`, `CreatedBy`, `CreatedAt`. Quản trị viên (SystemAdmin) cập nhật tham số thông qua việc ban hành phiên bản cấu hình mới, đóng phiên bản cũ bằng `EffectiveTo = ServerTimeUtc`, bảo toàn 100% dữ liệu lịch sử cấu hình.
-- **Snapshot nguyên tử bất biến tại thời điểm phát sinh (Atomic Snapshots)**: Resolve cấu hình do giao dịch đó sở hữu theo [snapshot cadence đã chốt](../docs/domain/v3-01-locked-design.md). Request lưu indicative quote; Order creation pin commercial price/deposit/bundle/claim/cancellation versions. Capture/job pin operational/spatial/model input policy. Invoice, release, claim và refund dùng lại terms của Order; chỉ release mới tính deadline từ notice date thực tế và ClaimPolicy snapshot. Không resolve current price/claim policy ở mỗi bước để đổi giao dịch cũ. Mọi snapshot có ID/value/fingerprint bất biến trong cùng transaction với business facts.
-- **Phạm vi zero-hardcoding**: cấm runtime fallback cho tunable business parameters. Schema/protocol identifiers, thuật toán tính tiền/calendar, authorization và transition guards vẫn là implementation có kiểm thử; không xây arbitrary script/rules engine trong DB. Các trạng thái/pointer current là projection được update atomic với append-only history, không bắt full event sourcing.
-
-### 2.2. Nguyên tắc Lưu vết lịch sử toàn vẹn (Full Version Lineage & Immutable History)
-- **Cấm ghi đè và cấm xóa cứng (No In-place Overwrite & No Hard-delete)**: Không xóa bản ghi hay cập nhật đè làm mất dữ liệu lịch sử. Mọi thay đổi dữ liệu hoặc trạng thái quan trọng phải được lưu vết append-only hoặc sinh phiên bản mới:
-  1. *Trạng thái giao dịch (Order, Request, Payment, Claim)*: Mọi chuyển đổi trạng thái phải lưu vào bảng lịch sử giao dịch (`OrderStateHistory`, `SurveyRequestReviewHistory`, `PaymentAuditHistory`, `RefundAuditHistory`), lưu rõ `ActorId`, `ActorRole`, `ChangedAtUtc`, `OldState`, `NewState`, `ReasonCode`, `ReasonDescription`, `EvidenceReference`, `CorrelationId`.
-  2. *Dữ liệu không gian và bản đồ*: First Baseline hoặc reviewed Baseline correction tạo `FarmBaseMapVersion` có lineage/reason; Follow-up tạo `SurveyMapSnapshot` riêng, không tự sinh/supersede current Baseline. Correction giữ `PredecessorVersionId`/withdrawal decision; mọi old source references và geometry được giữ để đối soát.
-  3. *Định danh cây trồng (Plant Profiles)*: Mỗi trụ có một `PlantProfileId` duy nhất. Mọi biến động qua các đợt khảo sát (tạo mới, dịch chuyển vị trí do GNSS, thay thế, hủy kích hoạt) bắt buộc phát sinh bản ghi `PlantChangeEvent` bất biến lưu rõ nguồn ảnh/khảo sát, tọa độ cũ/mới, lý do, bằng chứng và Manager phê duyệt.
-  4. *Hóa đơn và số lượng trụ*: Nếu có điều chỉnh số lượng trụ sau review hoặc sau giải quyết khiếu nại, phát sinh `InvoiceRevision` mới, không ghi đè hóa đơn cũ.
-  5. *Kết quả phát hiện bệnh (Combo)*: Mọi điều chỉnh nhãn bệnh, vùng bệnh hoặc hướng dẫn xử lý sau khiếu nại phải sinh `SurveyResultRevision` mới, phiên bản cũ được gắn cờ `Withdrawn` làm căn cứ giải quyết tranh chấp.
-  6. *Lượt bay và Nhiệm vụ bay (Capture Attempts & Quality Re-flights)*: Bãi bỏ hành vi gọi `RecoverFailedFlight` để reset/xóa timestamps hoặc checklist. Order 1-N CaptureAttempt; MVP mỗi attempt có execution Mission riêng. Re-flight tạo AttemptIndex mới/parent reason/approval, giữ nguyên telemetry/checklist/media cũ. Metashape/AI pin exact attempt/media manifest đã có `CaptureInputApproval`; input-quality approval khác terminal `Accepted` sau processing/review để tránh circular dependency. Không trộn ảnh các attempts bằng query toàn Order.
-
-## 3. Baseline hiện có và khoảng cách với v3
-
-Các source paths dưới đây đã được đọc trong audit; trạng thái chỉ mô tả baseline hiện tại, không khẳng định đã sửa.
-
-| Thành phần hiện có | Tái dùng | Delta v3 |
-|---|---|---|
-| Surveys/Domain/Catalogue/SurveyServiceType.cs và SurveyServiceMvpPolicy.cs | Versioned catalogue infrastructure | Hiện PlantHealth-only; thiết kế MAP/COMBO, không reinterpret service cũ; zero hardcoding |
-| Surveys/Domain/Orders/SurveyOrder.cs | Order transitions, snapshots, concurrency | Xóa hằng số DefaultBaselineDepositAmountVnd (5.000); cọc dùng chung có version; snapshot đơn giá và cọc lúc duyệt |
-| Surveys/Domain/Orders/SurveyOrderReadinessPolicy.cs | Authoritative operational evaluation | Thay full-paid gate bằng deposit gate; settlement là release gate; mọi chuyển đổi lưu OrderStateHistory |
-| Surveys/Application/Features/Approvals | Atomic onboarding/idempotency | Resolve price/deposit versions trong approval transaction; Follow-up same Farm + released Baseline, cross-service mapping |
-| Surveys/Application/Features/Orders/ConfirmSurveyOrderPoleCount | Count/pricing transaction seam | Count từ reviewed evidence của Order thay current inventory mặc định; unit price đã snapshot trước đó; lưu InvoiceRevision |
-| Database/Mapping/FarmBaseMapPublicationOrchestrator.cs | Review batch, provenance, profile mapping | Tách internal approved Baseline, survey snapshots và Owner publication; không supersede Baseline mỗi Follow-up; lưu FarmBaseMapVersion lineage |
-| Database/Health/PlantHealthReviewService.* | V4 pending/review/frozen approval/audit | Combo target context, first internal map; separate approval from finance-gated release; audit đầy đủ reviewer/reason |
-| Database/Health/PlantHealthReviewService.Publication.cs | Atomic exact-revision publication receipt | Hiện manual publish + Complete Order; thêm settlement/notice/window/revenue gates theo new policy; release revision bất biến |
-| Missions/Domain/Missions/DroneMission.cs và RescheduleOrderMission | Missions/Flight orchestration | Bãi bỏ RecoverFailedFlight xóa trắng dữ liệu; chuyển sang mô hình CaptureAttempt đa phiên bản (1-N); attempt-scoped media bảo vệ AI pipeline |
-| Integrations/AgriDrone.Integrations.SePay | QR/reference/webhook adapter | Giữ transport, sửa application allocations/obligations trong phase code tương lai |
-| backend/services/metashape-service | FastAPI photogrammetry/tiling baseline | Formalize authenticated/versioned job boundary, durable .NET source receipt/retry/reconciliation |
-| FarmBaseMapVersion, Plant mapping/change reports | Version history/stable IDs | One Baseline pointer + each Order snapshots; PlantChangeEvent bất biến cho mọi biến động cây; Map disease neutrality |
-| Claims/refund workflow/revenue/unlock | Một số payment refund/adjustment seams | Thêm explicit aggregates/read models/contracts theo phase; lưu lịch sử đề xuất, chấp nhận và chứng từ chuyển khoản |
-
-Paths tương đối với `backend/src` trừ khi ghi đầy đủ. Bảng trên mô tả baseline tại checkpoint rebaseline; đối chiếu checklist V3-02/V3-03 và source hiện tại để biết delta đã triển khai. Runtime Step 7 còn dùng được mô tả trong [Plant Health contracts](../docs/contracts/plant-health-v4/README.md), không phải v3 acceptance.
+- **Chính sách có phiên bản.** Approval pin đơn giá, cọc, gói, claim và cancellation. Capture/job pin chính sách vận hành và không gian. Invoice, settlement, release và refund dùng dữ kiện đã pin. Hạn claim tính từ ngày thông báo thực tế và policy snapshot. [Snapshot cadence](../docs/domain/v3-01-locked-design.md)
+- **Lịch sử bất biến.** Change facts, approval, invoice, receipt, refund và publication có audit và lineage. First tạo Baseline, Follow-up giữ Baseline nguồn và có snapshot riêng, re-flight tạo attempt/mission mới cùng Order. Correction sau phát hành giữ invoice và bút toán gốc. Các con trỏ hiện hành cập nhật nguyên tử cùng history. [Business Rules V3](Business-Rules-v3.md)
+- **Transaction và tương thích.** Dùng thứ tự khóa ADR 0020, receipt/idempotency và scope V3 rõ ràng. Provider, FastAPI, broker và bank I/O xử lý ngoài SQL transaction. Dùng migration tiếp nối, giữ historical contracts và migration đã phát hành. [ADR 0020](../docs/adr/0020-v3-capture-execution-and-funding-boundaries.md)
 
 ## 4. Status và dependency roadmap
 
-| Phase | Scope | Dependency | Status v3 / exit gate |
-|---|---|---|---|
-| V3-00 | Business rules, traceability, documentation inventory | Quyết định chủ dự án | Documentation complete khi audit links/coverage pass; không runtime acceptance |
-| V3-01 | Policy/context/contracts và legacy disposition | V3-00 | **DesignLocked / SourceAuditComplete 2026-11-11**; chưa runtime/live DB inventory; xem locked design/ADR 0019 |
-| V3-02 | Catalogue/shared deposit + request/approval snapshots | V3-01 | **Implementation present / DB acceptance pending**; xem execution checklist, public activation off |
-| V3-03 | Appointment/deposit/capture/Re-flight/cancellation | V3-02, BE2 readiness port | **[~] InProgress — PostgreSQL coordinator coverage partially verified; deterministic races, post-write rollback, media/object-storage, missing scenarios and V3-02 prerequisites remain pending**; public activation strictly off; see execution checklist |
-| V3-04 | Mapping/Baseline/survey snapshots/profile identity | V3-01, V3-03 source capture | Planned; first approved internal map, Follow-up không overwrite Baseline, PlantChangeEvent lineage |
-| V3-05 | Combo pending/review và invoice finalization | V3-04, processing contract | Planned; complete reviewed result + verified count, no severity, InvoiceRevision |
-| V3-06 | Settlement, overpayment, atomic release và notice | V3-02/04/05 | Planned; published=unlocked=notice, one sale/Order, rollback/idempotency |
-| V3-07 | Owner portal/media/timeline/comparison | V3-06 release proof | Planned; all result surfaces enforce release/ownership/withdrawal |
-| V3-08 | Claims/refund/correction/cancellation settlement | V3-06, storage/reconciliation | Planned; 7-day windows, negotiated refund/cap/reservation, immutable corrections/withdrawal lineage |
-| V3-09 | Revenue/cash/dashboard/Excel | V3-06/08 ledger facts | Planned; monthly as-of and Dashboard=Excel |
-| V3-10 | Final migration/cutover, acceptance/research/demo | Relevant previous phases | NotStarted; no runtime release without evidence |
+| Phase | Trạng thái source | Việc còn lại |
+|---|---|---|
+| V3-00–01 | Business rules, thiết kế và source audit đã chốt | Live inventory và migration disposition tại V3-10 |
+| V3-02–05 | Đã có code catalogue, approval, cọc, capture/hủy, mapping, COMBO, invoice và API | Các gate PostgreSQL, broker, storage, COMBO runtime tại V3-10. Sửa cap hủy sau đảo tiền trong V3-06 |
+| **Identity** | Backend refresh/logout và sửa sau review RT-03/04 đã build sạch | Nối frontend RT-06, kiểm cookie trên domain đích và nghiệm thu V3-10. Có thể làm song song với A2.2. [Checklist Identity](../docs/plans/v3-05e-to-v3-10-settlement-release-plan.md#identity--refresh-token-và-khôi-phục-phiên) |
+| **V3-06** | Tái sử dụng invoice, funding và callback cọc | Checkout số dư, settlement, excess reservation, phát hành, notice/window và release proof |
+| V3-07 | Có guard pre-release và các đường đọc nền | Nối release proof, Owner delivery/comparison và các khoảng trống Manager online |
+| V3-08 | Có cancellation obligation và luồng `QualityRefundCase` hiện hữu | Claim theo publication, thực thi hoàn V3 và lineage withdrawal/replacement |
+| V3-09 | Có API Admin, query tháng, lịch sử báo cáo và Excel | Nối facts chuẩn V3-06/08, đồng bộ cutoff và đối soát |
+| V3-10 | Có kế hoạch và ma trận | Nghiệm thu PostgreSQL, tích hợp, demo và quyết định cutover |
 
-Phases phản ánh dependency, không cấm phát triển độc lập adapters sau khi ports đã review. Không trì hoãn invariant/security tests tới cuối; meaningful phase checks cần trước integration. Comprehensive E2E chạy ở V3-10.
+- **Plan 1 · LongTH** sở hữu settlement, release, financial facts, refund execution và withdrawal/replacement. [Plan 1](../docs/plans/v3-05e-to-v3-10-settlement-release-plan.md)
+- **Plan 2 · Người thứ hai** sở hữu Owner delivery, workflow claim và dashboard/Excel. Có thể chuẩn bị contract và fixture song song với V3-06. [Plan 2](../docs/plans/v3-07-to-v3-10-owner-claims-reporting-plan.md)
 
 ## 5. V3-01 — Policy model, contracts và migration design
 
-- Tách ServiceType MAP/COMBO, survey intent First/Follow-up, capture role/attempt và commercial Order khỏi legacy MissionPurpose. Không dùng service enum làm tất cả các trục.
-- Quản lý cấu hình động: Loại bỏ toàn bộ enum-dependent rates, hằng số cọc hay hardcoded policy logic. Mọi tham số đều có Entity cấu hình với phiên bản (`PolicyVersion`), hiệu lực theo thời gian `[EffectiveFrom, EffectiveTo)`.
-- Review context references: Tenant/Farm/Order, business-policy version, Baseline/boundary/internal capture-map/survey snapshot versions, invoice/review revisions, price/deposit versions và receipt IDs.
-- Frozen approved revision có source fingerprint; target release receipt có paid-at-release proof/notice/deadline/recognition identity.
-- [Target contract](../docs/contracts/survey-business-v3.md) đã chốt family names/routing intent theo ADR 0019, chưa declared/deployed. Released Mapping V3/Health V4 giữ nguyên; breaking enum/context requires new schema and queue/cutover plan.
-- Inventory all old Orders/payments/maps/queues; phân loại completed historical, active unmapped, active mapped, missing provenance, outstanding refunds. Không suy đoán COMBO/free-paid evidence từ legacy service name.
-
-**Đã chốt thiết kế 2026-11-11:** [locked model/contracts/disposition](../docs/domain/v3-01-locked-design.md), [ADR 0019](../docs/adr/0019-v3-01-model-contract-and-migration-design.md), [source audit/gaps](../docs/operations/v3-01-source-audit.md). New HTTP contracts dùng `/api/v3/...`; legacy enum/payload/money giữ nguyên. Claim/cancellation snapshot pin tại Order creation; later stages không re-policy. Live inventory, generated SQL/schema validation và contract tests vẫn là gates tương lai, không đánh migration/runtime Done. Đợt này không tạo/chạy SQL.
+Thiết kế và source audit đã chốt. Live inventory của Order, payment, map, job và queue thuộc V3-10. [Thiết kế đã chốt](../docs/domain/v3-01-locked-design.md) · [ADR 0019](../docs/adr/0019-v3-01-model-contract-and-migration-design.md)
 
 ## 6. V3-02 — Catalogue và atomic request approval
 
-Implementation areas: Surveys catalogue/requests/approvals, Database approval transaction adapters, public/admin contracts.
-
-Kế hoạch thực thi: [V3-02 catalogue và atomic approval](../docs/plans/v3-02-catalogue-and-approval-implementation-plan.md), chia A persistence/policies → B publish/catalogue → C requests/tracking → D same-transaction snapshot/approval → E API/DI → F migration/testing/handoff. Implementation hiện có; public intake/checkout vẫn off đến full-flow acceptance.
-
-[Checklist thực thi V3-02](../docs/plans/v3-02-execution-checklist.md) theo dõi 13 work items và evidence theo đợt. 02A-2 database acceptance, 02D-3 và 02F-1 vẫn pending; unit/component pass không thay PostgreSQL upgrade/locking/rollback. Follow-up production fail closed đến khi có durable release-proof adapter của V3-06, không suy từ Completed/Published.
-
-- Versioned shared deposit policy (`SurveyDepositPolicy`) và hai price streams (`MAP`, `COMBO`); activation validation chống overlapping windows và nonpositive/noninteger VND. Cấm hardcode mức cọc hay đơn giá trong code.
-- Public tracking code non-enumerable, minimal status/decision, rate limiting. Existing owner requests áp Tenant/Farm predicates server-side.
-- Approval transaction resolve price/deposit snapshot tại creation, đúng request kind provision set, assignment/invitation/audit/Outbox/idempotency receipt cùng commit. Mọi quyết định duyệt lưu `SurveyRequestReviewHistory` kèm `ActorId`, `TimestampUtc`, `Decision`, `ReasonCode`.
-- Follow-up chỉ trên delivered Baseline; same Farm, MAP hoặc COMBO, không duplicate Tenant/Farm hoặc bắt cùng previous service.
-- Seed demo giá (1.000, 2.000, 100.000) tách khỏi runtime constant khi triển khai code tương lai; lưu lịch sử thay đổi cấu hình catalogue, không sửa money snapshots quá khứ.
-
-Exit: snapshot/catalogue race, approval rollback/idempotency, invalid configs và tracking privacy có checks thực tế.
+Catalogue, versioned price/deposit và approval snapshots đã có code. Còn các gate `02A-2`, `02D-3`, `02F-1` và evidence `02F-2` trên PostgreSQL tại V3-10. Follow-up production chờ proof V3-06. [Checklist V3-02](../docs/plans/v3-02-execution-checklist.md)
 
 ## 7. V3-03 — Capture, funding, Re-flight và cancellation
 
-Implementation areas: Surveys appointment/payment/readiness/cancellation policy, Missions planning/start, cross-module start coordinator.
-
-Kế hoạch chi tiết: [V3-03 capture/funding/cancellation A–H](../docs/plans/v3-03-capture-funding-and-cancellation-implementation-plan.md), [execution checklist 19 work items](../docs/plans/v3-03-execution-checklist.md). **03-00 → 03H-1 đã có source implementation; 03B-1/03B-2 persistence đã nghiệm thu trên fresh và populated-Legacy PostgreSQL.** Deposit callback/allocation, V3 appointments, atomic capture start/end, manifest/input approval, quality Re-flight, cancellation liabilities, API/DI, audit/Outbox và old-route guards đã nối. Build PASS; Unit **937/937**, Architecture **87/87**, Integration **39/39**, model drift none. Bước kế tiếp là 03H-2 race/fault/object-storage acceptance; V3-02 DB acceptance vẫn là prerequisite để ký phase/go-live.
-
-**Checkpoint 03-00 đã hoàn thành ngày 2026-11-13:** [execution baseline + W01–W26/source hashes/file manifest](../docs/operations/v3-03-execution-baseline.md), [ADR 0020 status/lock/funding/obligation decisions](../docs/adr/0020-v3-capture-execution-and-funding-boundaries.md). Đây là source/design acceptance lịch sử; implementation checkpoint mới nhất nằm ở execution checklist section 14. CaptureAttempt dùng thêm AwaitingUpload và Cancelled trước execution để làm rõ trạng thái, không thay commercial policy.
-
-- Deposit applied cho mọi Order; balance không nằm trong capture gate. Appointment-first, first capture không cần orthophoto/boundary chưa sinh ra.
-- Source-based readiness không nhận derived payment/approval state từ client. Atomic start rechecks Order/appointment/assignment/deposit/drone reservations/preflight/safety/authorization.
-- Mọi chuyển đổi trạng thái đơn hàng (từ `AwaitingAppointment` đến `Completed` hoặc `Cancelled`) bắt buộc ghi nhận vào bảng lịch sử `OrderStateHistory` lưu vết `OldStatus`, `NewStatus`, `ActorId`, `Reason`, `Evidence`.
-- **Mô hình hóa Lượt bay (CaptureAttempt Lifecycle)**: `Planned` → `PreflightReady` → `InFlight` → `AwaitingUpload` → `Uploaded` → `Processing` → `Accepted` HOẶC `ReflightRequired` / `FlightFailed`; `Cancelled` chỉ trước execution, theo ADR 0020. Cấm triệt để việc ghi đè (no in-place overwrite) hay gọi `RecoverFailedFlight` để xóa trắng dữ liệu chuyến bay cũ (`StartedAt=null`, `EndedAt=null`, xóa câu trả lời checklist).
-- **Chính sách Bay lại chất lượng (Quality Re-flight)**: Lượt bay mới tham chiếu cùng `SurveyOrderId`, cấp `AttemptIndex` mới, trỏ `SupersededAttemptId` về lượt bay cũ kèm `ReflightReason` (ảnh mờ, lỗi thiết bị, thời tiết xấu). Không tạo price/deposit mới; không nhân đôi chi phí hóa đơn.
-- **Phân lập Media theo Lượt bay (Attempt-Scoped Media)**: Media/GNSS gắn AttemptId; job pin exact immutable input manifest có quality approval sau upload/checksums. Không đòi terminal Accepted trước pipeline, không trộn ảnh nhiều lần bay ngầm. Accepted terminal chỉ ghi sau processing/review theo state machine.
-- Cancellation transitions có captured-quality evidence và reason. Before capture full return; customer hủy sau acceptable capture giữ tối đa deposit/return excess; team failure full return. No-show một free reschedule, weather không phạt.
-- Cancel terminal closes remaining receivable, giữ refund obligation và auditable retention classification.
-
-Exit: start/revoke race, reservation overlap, duplicate attempt/charge, cancellation refund cap, missing flight evidence checks và attempt-scoped media isolation checks.
+Appointment, thu cọc và phân bổ, capture/re-flight, hủy và tạo nghĩa vụ hoàn do hủy/service failure đã có code. Đưa phần nghiệm thu còn mở của `03H-2/3` vào V3-10. Sửa phép tính cap hủy sau reversal trong V3-06, rồi mới dùng chung cho excess. [Checklist V3-03](../docs/plans/v3-03-execution-checklist.md) · [A2.2](../docs/plans/v3-05e-to-v3-10-settlement-release-plan.md#a22--settlement-và-cap-hoàn-sau-reversal)
 
 ## 8. V3-04/05 — Mapping, identity, Combo và count/invoice
 
-Implementation areas: Farms/Plants mapping review, Surveys result/approval/invoice, Missions/FastAPI orchestration, Database publication adapters.
-
-- First approved paid mapping có internal Baseline/profile records; Owner still locked. Matching/disease processing trên internal approved map không yêu cầu prior customer publication/full balance hoặc paid second flight.
-- Baseline pointer khác per-Order survey map snapshot. Follow-up giữ `BaselineVersionId` và historical comparison basis; no automatic baseline overwrite. Bản đồ cũ được quản lý version lineage rõ ràng (`FarmBaseMapVersion`), trỏ `PredecessorVersionId`.
-- VerifiedBillablePoleCount lấy current Order reviewed in-boundary evidence. Boundary exceptions phải resolve trước count, original geometry không overwrite; no current inventory shortcut.
-- Quản lý định danh cây trồng (Plant Identity): First Baseline tạo 1 `PlantProfileId` duy nhất cho mỗi trụ vật lý. Mọi biến động qua các đợt khảo sát (tạo mới, dịch chuyển toạ độ do GNSS, thay thế, hủy kích hoạt) BẮT BUỘC phát sinh bản ghi `PlantChangeEvent` bất biến, lưu toạ độ cũ/mới, nguồn ảnh, lý do và quyết định duyệt của Manager. Cấm tự động thay đổi lifecycle profile.
-- Combo no-severity suspected observations/zones/guidance giữ V4 review foundations; MAP ghi NotAssessed/no health clearance. Negative Combo không được gọi certified healthy.
-- Invoice finalization dùng already-snapshotted rate. Count correction trước release versioned; sinh `InvoiceRevision` mới, không ghi đè hóa đơn cũ; invalidate old checkout obligation, reconcile late receipts. Zero poles exceptional review, không artificial minimum charge.
-
-Exit: first MAP/COMBO, cross-service Follow-up, identity/row-grid uncertainty/boundary cases và immutable source/review revision checks.
+Đã có internal mapping, lineage trụ, COMBO pending/review, freeze, invoice/correction và API Manager/Owner. V3-05F đã có build 0 warning, 0 error tại checkpoint review. Còn nghiệm thu migration/runtime và xác minh COMBO model policy trên môi trường đích tại V3-10. [V3-04](../docs/plans/v3-04-execution-checklist.md) · [V3-05](../docs/plans/v3-05-combo-review-and-invoice-implementation-plan.md)
 
 ## 9. V3-06 — Atomic settlement/release
 
-New seams dự kiến: release coordinator, release receipt/window, invoice/payment reconciliation, refund excess reservation và service-value journal. Tên class/table cụ thể chốt trong implementation ADR, không mở thêm module chỉ để giống diagram cũ.
-
-Transaction bắt buộc:
-
-1. Lock Order/current approved result/invoice/payment context; replay trả exact existing receipt sau current access check.
-2. Recheck approved fingerprint, finalized Total, Due=0, assignment/context và not cancelled/withdrawn/stale.
-3. Commit immutable publication/visibility, durable in-app notice, PublishedAt=UnlockedAt=NoticeCreatedAt, deadlineExclusive (tính từ cấu hình hạn khiếu nại động `ClaimPolicyVersion`), one original service-value entry/Order, completion/audit/Outbox.
-
-Release triggered từ cả approval và money confirmation; không manual publish lần hai sau webhook. Refund excess reservation không block nếu Due=0. Post-release complaint refund không reopen receivable. Asynchronous email consumers không là nguồn notice timestamp hoặc quyền access.
-
-Exit: failure injection giữa mỗi write rolls back; approval/callback/invoice races, double revenue/window/notice và stale revision checks. No release claims từ compile-only evidence.
+- [ ] Tính lại due từ funding facts hợp lệ. Dùng chung cap khả dụng cho settlement, excess reservation và hủy đơn, có xét reversal, refund đã hoàn và khoản đang giữ chỗ. `SurveyCaptureExecutionCoordinator` hiện tính cap hủy từ receipts trừ completed/refund reservations, cần bổ sung reversal đã xác minh.
+- [ ] Tạo checkout `FinalBalance` gắn exact invoice revision. Nối xác nhận tiền, dedup và xử lý late receipt/stale checkout. Tái dùng callback cọc và dữ kiện hoàn do hủy đã có.
+- [ ] Nối auto-release từ approval/invoice sẵn sàng và xác nhận tiền. Dưới khóa, recheck quyền, current approval/invoice/source, due = 0 và yêu cầu release còn hiệu lực. Commit publication/visibility, paid proof, notice/window, original service value, completion/history, audit và Outbox cùng nhau. `PublishedAt = UnlockedAt = NoticeCreatedAt`. Deadline đọc từ policy snapshot.
+- [ ] Reserve excess một lần và bàn giao release proof cùng ledger facts. Xác nhận V3-09 đọc đúng nguồn original sale theo Order. [Checklist A2](../docs/plans/v3-05e-to-v3-10-settlement-release-plan.md#a2--v3-06--settlement-release-notice-và-ledger-facts)
 
 ## 10. V3-07 — Owner delivery và online Manager workflow
 
-- Shared authorization/release policy cho map/tiles/profiles/timeline/latest health/comparison/report/media/export URLs; DB predicates trước result materialization/cache access.
-- Pending new Order không lộ qua current/latest aggregate projection của Farm; old released history vẫn available.
-- Separate mapping/Combo comparison basis with NotAssessed và stored reasons. Withdrawn versions không còn current downloads, vẫn có history/claim context hợp lệ.
-- Online-only Manager checklist/notes/media retry/resume; no offline cache/mutation queue implementation. Recheck revoked assignment, version conflicts, object token TTL và exact visibility cache invalidation.
-- FE/mobile contracts dùng server-returned prices/statuses/due/deadlines; target endpoints không được quảng cáo live trước implementation.
-
-Exit: all access surfaces/tenant isolation/signed URL/cache invalidation and interrupted-upload safety checks, không chỉ controller result endpoint.
+- [ ] Nối release proof V3 vào các đường đọc đã có. Áp ownership, exact publication và withdrawal trước projection, cache và ký URL. Giữ lịch sử hợp lệ khi một Order mới đang pending.
+- [ ] Hoàn thiện phần thiếu của Owner timeline/comparison/report/media V3 và kiểm phần còn thiếu của Manager online notes/checklist/upload retry/resume. Dữ liệu MAP dùng `NotAssessed`. FE/mobile đọc giá, due, status và deadline do server cấp. [Checklist B1](../docs/plans/v3-07-to-v3-10-owner-claims-reporting-plan.md#b1--v3-07-owner-đọc-kết-quả-và-manager-online)
 
 ## 11. V3-08 — Claim/refund/correction
 
-- Claim window revision-specific: notice D → deadlineExclusive D+8 00:00 VN (tính động theo cấu hình `ClaimPolicyVersion`, ví dụ 7 ngày lịch); server ReceiveAt decides, email retry/read không reset. Timely claim xử lý tiếp sau expiry.
-- Manager evidence verification, Admin proposal, Owner exact version acceptance; substantive corrected publication/new window, cosmetic no reset. Giữ nguyên toàn bộ lịch sử tranh chấp (`ClaimStateHistory`, `ClaimEvidenceAudit`).
-- Khi hiệu chỉnh kết quả giám định hoặc bản đồ sau khiếu nại: Phát sinh phiên bản mới (`SurveyResultRevision`, `FarmBaseMapVersion`), gắn cờ phiên bản cũ là `Withdrawn` với `WithdrawalReason` và `PredecessorVersionId`. Tuyệt đối không xóa hoặc ghi đè kết quả bị lỗi.
-- All-Order refund cap + concurrent reservation cho Overpayment/CancellationReturn/ServiceFailure/ComplaintRefund; pending/failed không Completed. Transfer retry đối soát bank reference để tránh double transfer.
-- Bank-proof storage authorization/audit; no client-controlled completion, no automatic gateway refund giả định. Retention protects evidence khi open claim/correction.
-- Corrections không charge thêm hoặc rewrite original invoice/service revenue; repayment/liability changes explicit ledger facts, no false arrears after complaint refund.
-
-Exit: deadline boundary, owner/admin concurrency, repeated refunds/changed proposal/bank-proof retry, correction access/history and one active Baseline/profile checks.
+- [ ] Plan 2 triển khai claim theo exact publication/window, Manager xác minh evidence, Admin đề xuất có version và Owner chấp nhận đúng proposal. Claim gửi kịp hạn tiếp tục xử lý sau deadline.
+- [ ] Plan 1 nối `SurveyRefundObligation` V3 với bằng chứng và completion chuyển khoản. Reuse obligation hủy/service failure và reserve tiền thừa sẵn có khi luồng tương ứng đã commit. Bổ sung refund khiếu nại, cap dùng chung, retry theo bank reference và audit. Tái dùng luồng upload chứng từ hiện có sau khi kiểm quyền và scope.
+- [ ] Phát hành withdrawal/replacement bất biến. Substantive correction tạo revision, notice/window mới. Cosmetic giữ window. Giữ doanh thu gốc, lịch sử và claim đã nhận. [Plan 1 A3](../docs/plans/v3-05e-to-v3-10-settlement-release-plan.md#a3--v3-08-thực-thi-refund-và-phát-hành-correction) · [Plan 2 B2](../docs/plans/v3-07-to-v3-10-owner-claims-reporting-plan.md#b2--v3-08-claims-workflow)
 
 ## 12. V3-09 — Financial reporting
 
-- Shared reporting query theo BR-FIN-01–05 và snapshot MAP/COMBO. Recognition key một original sale/Order; corrections no second sale.
-- Net service revenue chỉ trừ refunds hoàn published service value; net cash trừ all completed refunds. Overpayment/cancellation return chưa từng là revenue không trừ sale lần nữa.
-- Report separate receipts, refunds by reason, deposit liabilities, refundable excess, retained cancellation deposits, outstanding finalized balances, pending/unpriced items và legacy/unclassified reconciliation.
-- UTC+7 `[start,nextMonth)` conversion, historical as-of events cho month end, not current status arithmetic. Service filter/Excel/dashboard cùng query/formula version; Admin-only export/audit/formula-safe text.
-
-Exit: fixtures arithmetic across months/service/revisions, reconciliation receipts vs allocations/refunds/liabilities; same report fingerprint/filters for dashboard and Excel.
-
-## 13. Transaction boundaries và compatibility
-
-| Boundary | Atomic facts |
-|---|---|
-| Request approval | Request state + appropriate Tenant/Farm/Order/assignment/invitation + price/deposit/policy snapshots + idempotency/audit/Outbox |
-| Capture start | Current Order/appointment/assignment/deposit/drone reservation + Mission/CaptureAttempt transition/receipt/audit/Outbox + OrderStateHistory |
-| Quality Re-flight | Đóng băng Attempt cũ (ReflightRequired/FlightFailed) + sinh CaptureAttempt mới kèm SupersededAttemptId/ReflightReason + không đổi invoice/deposit |
-| Pending ingestion | Inbox receipt + full candidate/source validation + pending records/audit; no half-import ACK |
-| Manager approval | Exact reviewed revisions/internal mapping/profile lifecycle decisions and frozen approval receipt; no premature Owner publication |
-| Release | Publication + visibility + paid proof + notice/window + original recognition + Order completion + audit/Outbox |
-| Refund reserve | Receipt cap and all active reservations under lock + proposal/acceptance/obligation/audit |
-| Refund completion | Verified transfer proof + immutable completion + reason-classified reporting facts/audit; bank network outside SQL transaction |
-| Correction | Withdrawal/replacement relations/review and revision-specific visibility/window; no historical evidence overwrite; PredecessorVersionId linkage |
-
-Không distributed transaction với gateway/FastAPI/bank/email. Persist intents/receipts, bounded retries/reconciliation/compensation. Released contracts giữ nguyên; không sửa historical migration, published JSON fixtures hoặc Swagger snapshots để làm chúng giống target.
+- [ ] Nối release/refund facts V3 vào `MonthlyFinancialReportQuery` và `FinancialReportCalculator` hiện có. Bổ sung lineage còn thiếu trong history, nhất là invoice/payment/receipt, cash reversal và trạng thái đối soát. Giữ một original sale theo Order và số liệu Legacy có provenance.
+- [ ] Dùng chung cutoff/as-of có thể lặp lại cho API tháng và Excel. Đối soát doanh thu dịch vụ, tiền thu/hoàn, cọc, reserve excess, retention và số còn phải thu theo BR-FIN-01–05. Xác minh số và fingerprint của dashboard/Excel với cùng bộ lọc và cutoff. [Checklist B3](../docs/plans/v3-07-to-v3-10-owner-claims-reporting-plan.md#b3--v3-09-nối-facts-v3-vào-báo-cáo-hiện-có)
 
 ## 14. V3-10 — Acceptance, migration và release
 
-- Áp [acceptance matrix](../docs/testing/v3-business-acceptance.md) và [traceability](../docs/domain/v3-traceability-matrix.md). Test meaningful invariants/races/rollback/DB/broker/media access; no tests chỉ mirror implementation.
-- Future migration sequence: inventory/read-only preflight → expand policy/references/ledger fields → explicit legacy disposition/backfill evidence thật → compatible consumers → producer cutover → accepted API/UI → drain/replay/retention → reviewed contract cleanup.
-- Không rewrite old enum/money/source IDs; không “backfill” approval/payment/notice timestamps giả để mở v3 Orders. Roll-forward ưu tiên khi đã có financial/publication facts.
-- Research deliverables giữ RQ1 GNSS vs GNSS+grid/ID switches, RQ2 team-labelled class metrics, split by original flight/source trước augmentation, three-seed comparable runs, no expert diagnosis claim.
-- Pilot targets provisional: p95 read API ≤2s, review session ≤30min, pole count error ≤10%, macro-F1 ≥0.70; đo trên dataset/hardware đã công bố, không tự đánh pass từ chưa đo.
-- Demo first MAP/COMBO → follow-up → quality re-flight → excess/complaint refund → corrected report → monthly report/Excel, bảo vệ raw evidence.
+- [ ] Chạy [acceptance matrix](../docs/testing/v3-business-acceptance.md) theo [traceability](../docs/domain/v3-traceability-matrix.md). Nghiệm thu các gate PostgreSQL V3-02/03 còn mở, COMBO policy/coverage, mapping/invoice/correction, migration tương thích, lock races, rollback, storage và broker.
+- [ ] Nghiệm thu release/callback, quyền đọc và withdrawal/cache/URL, deadline, refund transfer/reconciliation, dashboard–Excel. Demo First MAP/COMBO → Follow-up → re-flight → excess/claim refund → correction → báo cáo tháng.
+- [ ] Nghiệm thu duy trì phiên frontend qua reload và JWT hết hạn, rotation đồng thời, logout/thu hồi và quyền tenant trên cấu hình domain đích. Dùng V3-T44–T48 trong ma trận nghiệm thu.
+- [ ] Thực hiện inventory/preflight, xác minh dữ liệu có nguồn, trình tự migration, cutover, replay/retention và rollback/roll-forward. Giữ `PublicIntakeEnabled = false` và `SurveyPayments:Enabled = false` đến khi có quyết định cutover dựa trên bằng chứng.
+- [ ] Hoàn tất RQ1 GNSS và GNSS+grid/ID switches, RQ2 metrics theo nhãn, split theo nguồn bay trước augmentation, ba seed và đo pilot p95 read ≤2s, review ≤30 phút, pole count error ≤10%, macro-F1 ≥0,70 trên dataset/hardware đã công bố.
 
-## 15. Documentation acceptance và tracking
-
-V3-00 chỉ hoàn tất khi canonical rules/plans/ADR/glossary/contracts/API intent/handoff/diagrams/test matrix được liên kết đúng, legacy artifacts được gắn status, và diff không chứa source/config/migration changes. Runtime capabilities V3-01–10 vẫn Planned/NotStarted cho đến evidence cụ thể.
-
-Historical completion reports không sửa nội dung test counts/run dates. [Rebaseline report](../docs/operations/v3-documentation-rebaseline-report.md) liệt kê phạm vi thay đổi và phần chưa được thực hiện. Không chạy build/test/migrations hay gateway requests chỉ để sửa tài liệu.
+Trong phase code dùng `dotnet build backend/AgriDrone.sln --no-restore --nologo`. Integration suite và nghiệm thu tập trung ở V3-10. [Master Plan Phase Tracker](../PROJECT_MEMORY.md#2-master-plan-phase-tracker-be1)

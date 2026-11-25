@@ -18,6 +18,12 @@ public sealed class TenantMembershipConfiguration : IEntityTypeConfiguration<Ten
         builder.HasKey(membership => membership.Id).HasName("pk_tenant_memberships");
         builder.HasAlternateKey(membership => new
         {
+            membership.Id,
+            membership.TenantId,
+            membership.UserId
+        }).HasName("uq_tenant_memberships_id_tenant_user");
+        builder.HasAlternateKey(membership => new
+        {
             membership.TenantId,
             membership.UserId
         }).HasName("uq_tenant_memberships_tenant_user");

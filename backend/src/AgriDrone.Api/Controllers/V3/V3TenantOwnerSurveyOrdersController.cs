@@ -5,6 +5,7 @@ using AgriDrone.Api.Mapping;
 using AgriDrone.IntegrationContracts.Surveys;
 using AgriDrone.Modules.Surveys.Application.Features.Appointments.ConfirmSurveyAppointment;
 using AgriDrone.Modules.Surveys.Application.Features.Appointments.RequestSurveyAppointmentReschedule;
+using AgriDrone.Modules.Surveys.Application.Features.Invoices.GetTenantOwnerSurveyOrderInvoice;
 using AgriDrone.Modules.Surveys.Application.Features.Payments.InitiateSurveyPayment;
 using AgriDrone.Modules.Surveys.Domain;
 using AgriDrone.SharedInfrastructure.Authorization;
@@ -125,5 +126,23 @@ public sealed class V3TenantOwnerSurveyOrdersController(
                 statusCode: StatusCodes.Status409Conflict,
                 title: result.ErrorCode ?? "V3 cancellation conflict",
                 detail: result.ErrorMessage);
+    }
+
+    /// <summary>Đọc metadata hóa đơn hiện hành tối giản dành cho Owner trước phát hành.</summary>
+    [HttpGet("{orderId:guid}/invoice")]
+    [ProducesResponseType<V3TenantOwnerInvoiceApiResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IResult> GetInvoice(
+        [FromRoute] Guid orderId,
+        CancellationToken cancellationToken)
+    {
+        var result = await sender.Send(
+            new GetTenantOwnerSurveyOrderInvoiceQuery(orderId),
+            cancellationToken);
+        return result.ToHttpResult(
+            HttpContext,
+            response => Results.Ok(V3SurveyResultAndInvoiceMapper.ToResponse(response)));
     }
 }

@@ -82,9 +82,27 @@ internal sealed class SurveyResultReviewTransaction(
             if (commercial is null)
                 return Result.Failure<SurveyResultReviewResponse>(AppError.Conflict("CommercialSnapshot.Missing", "Pinned commercial snapshot was not found."));
 
-            var activeAttempt = await FindActiveAttemptAsync(order, forUpdate: false, cancellationToken);
+            SurveyInternalApprovedResultRevision? currentApproval = null;
+            if (order.CurrentApprovedResultRevisionId.HasValue)
+            {
+                currentApproval = await db.Set<SurveyInternalApprovedResultRevision>().AsNoTracking()
+                    .SingleOrDefaultAsync(r =>
+                        r.Id == order.CurrentApprovedResultRevisionId.Value &&
+                        r.SurveyOrderId == order.Id &&
+                        r.TenantId == order.TenantId &&
+                        r.FarmId == order.FarmId &&
+                        r.IsCurrent,
+                        cancellationToken);
+                if (currentApproval is null)
+                {
+                    return Result.Failure<SurveyResultReviewResponse>(
+                        AppError.Conflict("ApprovedResult.Invalid", "Current internal approved result revision is missing or no longer current."));
+                }
+            }
+
+            var activeAttempt = await FindAttemptForReviewReadAsync(order, currentApproval, cancellationToken);
             if (activeAttempt is null)
-                return Result.Failure<SurveyResultReviewResponse>(AppError.Conflict("CaptureAttempt.NoActiveAttempt", "Survey order has no active capture attempt."));
+                return Result.Failure<SurveyResultReviewResponse>(AppError.Conflict("CaptureAttempt.NoActiveAttempt", "Survey order has no active or accepted capture attempt."));
 
             if (!order.VerifiedPoleCountSnapshotId.HasValue)
                 return Result.Failure<SurveyResultReviewResponse>(AppError.Conflict("CountSnapshot.Missing", "Survey order does not have a verified pole count snapshot pinned."));
@@ -229,7 +247,8 @@ internal sealed class SurveyResultReviewTransaction(
                 CurrentApprovedResultRevisionId: order.CurrentApprovedResultRevisionId,
                 ComboPendingBatch: pendingBatch,
                 CurrentComboReview: reviewSummary,
-                ExpectedFreezeTokens: expectedTokens));
+                ExpectedFreezeTokens: expectedTokens,
+                CurrentApprovedResultFingerprint: currentApproval?.EvidenceFingerprint));
         }
         catch (Fault f)
         {
@@ -1174,6 +1193,26 @@ internal sealed class SurveyResultReviewTransaction(
         return current ?? throw new Fault(AppError.NotFound("Order.NotFound", "Survey order was not found."));
     }
 
+    private async Task<CaptureAttempt?> FindAttemptForReviewReadAsync(
+        SurveyOrder order,
+        SurveyInternalApprovedResultRevision? currentApproval,
+        CancellationToken cancellationToken)
+    {
+        if (currentApproval is not null)
+        {
+            return await db.Set<CaptureAttempt>().AsNoTracking()
+                .Where(a => a.Id == currentApproval.CaptureAttemptId &&
+                            a.OrderId == order.Id &&
+                            a.TenantId == order.TenantId &&
+                            a.FarmId == order.FarmId &&
+                            (a.Status == CaptureAttemptStatus.Accepted ||
+                             a.Status == CaptureAttemptStatus.Processing))
+                .SingleOrDefaultAsync(cancellationToken);
+        }
+
+        return await FindActiveAttemptAsync(order, forUpdate: false, cancellationToken);
+    }
+
     private async Task<CaptureAttempt?> FindActiveAttemptAsync(SurveyOrder order, bool forUpdate, CancellationToken cancellationToken)
     {
         if (forUpdate)
@@ -1308,6 +1347,47 @@ internal sealed class SurveyResultReviewTransaction(
             """).ToListAsync(cancellationToken);
 
         return ids.ToHashSet();
+    }
+
+    internal async Task<Result> ValidateCorrectionComboReviewAsync(
+        SurveyOrder order,
+        SurveyComboImportBatch batch,
+        ComboAnalysisReadyV1 payload,
+        ComboReviewDecisionsSnapshotRecord decisions,
+        bool confirmNoDiseaseObserved,
+        string? negativeConfirmationEvidence,
+        DateTimeOffset evaluatedAt,
+        CancellationToken cancellationToken)
+    {
+        List<ComboPendingBlockingItem>? blockers;
+        try
+        {
+            blockers = batch.BlockingItems.Deserialize<List<ComboPendingBlockingItem>>(PayloadJsonOptions);
+        }
+        catch (JsonException)
+        {
+            blockers = null;
+        }
+
+        if (blockers is null || blockers.Count != batch.BlockingCount ||
+            !string.Equals(ComboAnalysisV1Fingerprint.ForPayload(payload), batch.CanonicalFingerprint, StringComparison.Ordinal))
+        {
+            return Result.Failure(AppError.Conflict("ComboBatch.CorruptedData", "COMBO batch payload or blocking evidence failed verification."));
+        }
+
+        var job = await db.Set<AiProcessingJob>()
+            .AsNoTracking()
+            .SingleOrDefaultAsync(j => j.Id == batch.JobId && j.MissionId == batch.MissionId, cancellationToken);
+        if (job is null || job.Status != AiJobStatus.Completed || job.JobType != AiJobType.DiseaseDetection ||
+            !job.HasCompleteComboInputCoverage())
+        {
+            return Result.Failure(AppError.Conflict("ComboJob.IncompleteCoverage", "The source COMBO job must be complete with verified input coverage."));
+        }
+
+        var allowedMedia = await LoadAllowedComboEvidenceAsync(batch, payload, cancellationToken);
+        return await ValidateComboReviewDecisionsAsync(
+            order, batch, payload, blockers, decisions, allowedMedia, job, confirmNoDiseaseObserved,
+            negativeConfirmationEvidence, SurveyComboReviewRevision.OutcomeApproved, evaluatedAt, cancellationToken);
     }
 
     private async Task<Result> ValidateComboReviewDecisionsAsync(
@@ -1718,7 +1798,7 @@ internal sealed class SurveyResultReviewTransaction(
             """).SingleOrDefaultAsync(cancellationToken);
     }
 
-    private async Task<bool> IsAssignedManagerAsync(
+    internal async Task<bool> IsAssignedManagerAsync(
         Guid tenantId,
         Guid farmId,
         Guid actorId,

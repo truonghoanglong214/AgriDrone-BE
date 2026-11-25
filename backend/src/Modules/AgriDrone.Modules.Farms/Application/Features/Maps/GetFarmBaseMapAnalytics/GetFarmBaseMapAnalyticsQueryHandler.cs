@@ -1,3 +1,5 @@
+using AgriDrone.Modules.Farms.Application.Abstractions.Maps;
+using AgriDrone.Modules.Farms.Application.Services;
 using AgriDrone.Modules.Farms.Domain.Maps;
 using AgriDrone.Modules.Farms.Infrastructure.Persistence;
 using AgriDrone.SharedKernel.Application;
@@ -7,7 +9,9 @@ using Microsoft.EntityFrameworkCore;
 namespace AgriDrone.Modules.Farms.Application.Features.Maps.GetFarmBaseMapAnalytics;
 
 internal sealed class GetFarmBaseMapAnalyticsQueryHandler(
-    FarmsDbContext dbContext)
+    FarmsDbContext dbContext,
+    FarmBaseMapReadAccess readAccess,
+    IFarmBaseMapPreviewReader previewReader)
     : IRequestHandler<GetFarmBaseMapAnalyticsQuery, Result<FarmBaseMapAnalyticsResponse>>
 {
     private sealed record PoleCountRow(Guid VersionId, int Count);
@@ -17,10 +21,40 @@ internal sealed class GetFarmBaseMapAnalyticsQueryHandler(
         GetFarmBaseMapAnalyticsQuery request,
         CancellationToken cancellationToken)
     {
+        var farm = await dbContext.Farms.AsNoTracking()
+            .SingleOrDefaultAsync(f => f.Id == request.FarmId, cancellationToken);
+        if (farm is null)
+        {
+            return Result.Failure<FarmBaseMapAnalyticsResponse>(
+                AppError.NotFound("Farm.NotFound", $"Farm with ID {request.FarmId} was not found."));
+        }
+
+        var access = await readAccess.CheckAsync(farm.TenantId, farm.Id, cancellationToken);
+        if (!access.IsAllowed)
+        {
+            return Result.Failure<FarmBaseMapAnalyticsResponse>(
+                AppError.NotFound("Farm.NotFound", "Farm was not found."));
+        }
+
         var versions = await dbContext.FarmBaseMapVersions.AsNoTracking()
             .Where(v => v.FarmId == request.FarmId && v.Status != FarmBaseMapStatus.Draft)
             .OrderBy(v => v.VersionNumber)
             .ToListAsync(cancellationToken);
+
+        if (!access.CanReadDraft)
+        {
+            var readable = new List<FarmBaseMapVersion>(versions.Count);
+            foreach (var version in versions)
+            {
+                if (await previewReader.CanOwnerReadAsync(
+                        version.TenantId, version.FarmId, version.SourceSurveyOrderId, cancellationToken))
+                {
+                    readable.Add(version);
+                }
+            }
+
+            versions = readable;
+        }
 
         if (versions.Count == 0)
         {

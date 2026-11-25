@@ -2,9 +2,14 @@ using AgriDrone.Modules.Identity.Application.Contracts.Authentication;
 
 namespace AgriDrone.Modules.Identity.Application.Abstractions.Services;
 
+public sealed record TenantSelectionValidationResult(
+    Guid UserId,
+    int AuthenticationVersion,
+    DateTimeOffset ExpiresAt);
+
 public interface ITenantSelectionTokenService
 {
-    TenantSelectionTokenResult Generate(Guid userId);
+    TenantSelectionTokenResult Generate(Guid userId, int authenticationVersion);
 
-    Guid? Validate(string token);
+    TenantSelectionValidationResult? Validate(string token);
 }

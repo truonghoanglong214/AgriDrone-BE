@@ -61,8 +61,13 @@ public static class DependencyInjection
             NoopSurveyCaptureExecutionProbe>();
         services.AddScoped<ISurveyCaptureExecutionCoordinator,
             SurveyCaptureExecutionCoordinator>();
-        services.AddScoped<AgriDrone.Modules.Surveys.Application.Abstractions.Results.ISurveyResultReviewTransaction,
-            SurveyResultReviewTransaction>();
+        services.AddScoped<SurveyResultReviewTransaction>();
+        services.AddScoped<AgriDrone.Modules.Surveys.Application.Abstractions.Results.ISurveyResultReviewTransaction>(
+            provider => provider.GetRequiredService<SurveyResultReviewTransaction>());
+        services.AddScoped<AgriDrone.Modules.Surveys.Application.Abstractions.Invoices.ISurveyInvoiceTransaction,
+            SurveyInvoiceTransaction>();
+        services.AddScoped<AgriDrone.Modules.Surveys.Application.Abstractions.Invoices.ISurveyInvoiceQueries,
+            SurveyInvoiceQueries>();
         services.AddScoped<ISystemManagerSurveyOrderQueries,
             SystemManagerSurveyOrderQueries>();
         services.AddScoped<IV3FollowUpBaselineQuery,
@@ -70,6 +75,17 @@ public static class DependencyInjection
         services.AddScoped<V3FollowUpBaselineEligibilityReader>();
         services.TryAddScoped<IV3BaselineDeliveryProofReader,
             UnavailableV3BaselineDeliveryProofReader>();
+        services.TryAddScoped<IV3ResultReleaseProofReader,
+            UnavailableV3ResultReleaseProofReader>();
+        services.TryAddScoped<IV3FinancialLedgerFactsReader,
+            UnavailableV3FinancialLedgerFactsReader>();
+        services.TryAddScoped<ISurveySettlementReleaseCoordinator,
+            SurveySettlementReleaseCoordinator>();
+        services.AddScoped<
+            IIntegrationMessageHandler<SurveyReleaseEvaluationRequestedV1>,
+            SurveyReleaseEvaluationRequestedV1Handler>();
+        services.AddIntegrationConsumer<SurveyReleaseEvaluationRequestedV1Processor>(
+            IntegrationConsumerNames.Be1SurveyReleaseEvaluationRequestedV1);
         services.AddScoped<IFarmBaseMapPreviewReader, FarmBaseMapPreviewReader>();
 
         return services;
@@ -343,6 +359,8 @@ public static class DependencyInjection
             SurveyPaymentProcessingRepository>();
         services.AddScoped<ISurveyPaymentProcessingOutbox,
             SurveyPaymentProcessingOutbox>();
+        services.AddScoped<IV3BalanceCheckoutTransaction,
+            V3BalanceCheckoutTransaction>();
 
         return services;
     }

@@ -25,6 +25,9 @@ internal sealed class SePayPaymentService(
 
     public string Provider => ProviderName;
 
+    public string GetBalanceCheckoutReference(Guid paymentId) =>
+        $"{_sePayOptions.PaymentCodePrefix}{ToBase36(paymentId)}".ToUpperInvariant();
+
     public async Task<Result<PaymentSessionResult>> CreateSessionAsync(
         CreatePaymentSession request,
         CancellationToken cancellationToken = default)
@@ -35,9 +38,10 @@ internal sealed class SePayPaymentService(
             return Result.Failure<PaymentSessionResult>(PaymentError.ProviderUnavailable());
         }
 
-        var providerReference =
-            $"{_sePayOptions.PaymentCodePrefix}{ToBase36(request.PaymentId)}"
-                .ToUpperInvariant();
+        var providerReference = request.BalanceCheckoutReference ?? GetBalanceCheckoutReference(request.PaymentId);
+        var isBalanceCheckout = request.BalanceCheckoutReference is not null;
+        Result<PaymentSessionResult> TransportFailure() => Result.Failure<PaymentSessionResult>(
+            isBalanceCheckout ? PaymentError.ProviderOutcomeUncertain() : PaymentError.ProviderUnavailable());
         var fields = new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["order_amount"] = request.Amount.ToString("0", CultureInfo.InvariantCulture),
@@ -65,6 +69,10 @@ internal sealed class SePayPaymentService(
             if ((int)response.StatusCode is < 300 or >= 400 ||
                 response.Headers.Location is null)
             {
+                var status = (int)response.StatusCode;
+                if (isBalanceCheckout && (status < 400 || status is 408 or 409 or 429 || status >= 500))
+                    return TransportFailure();
+
                 return Result.Failure<PaymentSessionResult>(
                     PaymentError.ProviderUnavailable());
             }
@@ -83,13 +91,11 @@ internal sealed class SePayPaymentService(
         }
         catch (HttpRequestException)
         {
-            return Result.Failure<PaymentSessionResult>(
-                PaymentError.ProviderUnavailable());
+            return TransportFailure();
         }
         catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            return Result.Failure<PaymentSessionResult>(
-                PaymentError.ProviderUnavailable());
+            return TransportFailure();
         }
     }
 
@@ -171,8 +177,7 @@ internal sealed class SePayPaymentService(
 
         var providerReference = GetString(order, "order_invoice_number");
         var eventId = GetString(transaction, "id") ??
-                      GetString(transaction, "transaction_id") ??
-                      GetString(order, "id");
+                      GetString(transaction, "transaction_id");
         var currency = GetString(transaction, "transaction_currency") ??
                        GetString(order, "order_currency");
         if (string.IsNullOrWhiteSpace(providerReference) ||

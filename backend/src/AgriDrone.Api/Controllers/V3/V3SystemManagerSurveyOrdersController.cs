@@ -3,6 +3,8 @@ using AgriDrone.Api.Contracts.Surveys.V3;
 using AgriDrone.Api.Mapping;
 using AgriDrone.IntegrationContracts.Surveys;
 using AgriDrone.Modules.Surveys.Application.Features.Appointments.ProposeSurveyAppointment;
+using AgriDrone.Modules.Surveys.Application.Features.Invoices.GetManagerSurveyOrderInvoice;
+using AgriDrone.Modules.Surveys.Application.Features.Results.GetSurveyResultReview;
 using AgriDrone.Modules.Surveys.Domain;
 using AgriDrone.SharedInfrastructure.Authorization;
 using AgriDrone.SharedInfrastructure.Http;
@@ -291,6 +293,154 @@ public sealed class V3SystemManagerSurveyOrdersController(
             cancellationToken);
         return CoordinatorResult(result.Success, result,
             StatusCodes.Status201Created, result.ErrorCode, result.ErrorMessage);
+    }
+
+    /// <summary>Đọc trạng thái review kết quả và các token hiện hành để freeze hoặc finalize hóa đơn V3.</summary>
+    [HttpGet("{orderId:guid}/result-review")]
+    [ProducesResponseType<V3SurveyResultReviewApiResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IResult> GetResultReview(
+        [FromRoute] Guid orderId,
+        CancellationToken cancellationToken)
+    {
+        var result = await sender.Send(
+            new GetSurveyResultReviewQuery(orderId),
+            cancellationToken);
+        return result.ToHttpResult(
+            HttpContext,
+            response => Results.Ok(V3SurveyResultAndInvoiceMapper.ToResponse(response)));
+    }
+
+    /// <summary>Ghi nhận một revision review COMBO bất biến theo exact batch/previous tokens.</summary>
+    [HttpPost("{orderId:guid}/result-review/combo-reviews")]
+    [ProducesResponseType<V3ComboReviewApiResponse>(StatusCodes.Status201Created)]
+    [ProducesResponseType<V3ComboReviewApiResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IResult> RecordComboReview(
+        [FromRoute] Guid orderId,
+        [FromBody] RecordV3ComboReviewRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await sender.Send(
+            V3SurveyResultAndInvoiceMapper.ToCommand(orderId, request),
+            cancellationToken);
+        return result.ToHttpResult(
+            HttpContext,
+            response => Results.Json(
+                V3SurveyResultAndInvoiceMapper.ToResponse(response),
+                statusCode: response.IsReplay
+                    ? StatusCodes.Status200OK
+                    : StatusCodes.Status201Created));
+    }
+
+    /// <summary>Chốt cứng bằng chứng kết quả nội bộ (MAP hoặc COMBO) và chấp nhận capture attempt.</summary>
+    [HttpPost("{orderId:guid}/result-review/freeze")]
+    [ProducesResponseType<V3FreezeInternalResultApiResponse>(StatusCodes.Status201Created)]
+    [ProducesResponseType<V3FreezeInternalResultApiResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IResult> FreezeInternalResult(
+        [FromRoute] Guid orderId,
+        [FromBody] FreezeV3InternalResultRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await sender.Send(
+            V3SurveyResultAndInvoiceMapper.ToCommand(orderId, request),
+            cancellationToken);
+        return result.ToHttpResult(
+            HttpContext,
+            response => Results.Json(
+                V3SurveyResultAndInvoiceMapper.ToResponse(response),
+                statusCode: response.IsReplay
+                    ? StatusCodes.Status200OK
+                    : StatusCodes.Status201Created));
+    }
+
+    /// <summary>Đọc hóa đơn V3 hiện hành cùng bộ token phiên bản để chuẩn bị correction hoặc bàn giao settlement.</summary>
+    [HttpGet("{orderId:guid}/invoice")]
+    [ProducesResponseType<V3ManagerInvoiceApiResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IResult> GetInvoice(
+        [FromRoute] Guid orderId,
+        CancellationToken cancellationToken)
+    {
+        var result = await sender.Send(
+            new GetManagerSurveyOrderInvoiceQuery(orderId),
+            cancellationToken);
+        return result.ToHttpResult(
+            HttpContext,
+            response => Results.Ok(V3SurveyResultAndInvoiceMapper.ToResponse(response)));
+    }
+
+    /// <summary>Chốt hóa đơn V3 lần đầu từ approval và count snapshot đã đóng băng.</summary>
+    [HttpPost("{orderId:guid}/invoice/finalize")]
+    [ProducesResponseType<V3FinalizeInvoiceApiResponse>(StatusCodes.Status201Created)]
+    [ProducesResponseType<V3FinalizeInvoiceApiResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IResult> FinalizeInvoice(
+        [FromRoute] Guid orderId,
+        [FromBody] FinalizeV3InvoiceRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await sender.Send(
+            V3SurveyResultAndInvoiceMapper.ToCommand(orderId, request),
+            cancellationToken);
+        return result.ToHttpResult(
+            HttpContext,
+            response => Results.Json(
+                V3SurveyResultAndInvoiceMapper.ToResponse(response),
+                statusCode: response.IsReplay
+                    ? StatusCodes.Status200OK
+                    : StatusCodes.Status201Created));
+    }
+
+    /// <summary>Hiệu chỉnh số trụ và cập nhật nguyên tử revision count/approval/invoice (và COMBO review nếu cần) trước phát hành.</summary>
+    [HttpPost("{orderId:guid}/invoice/corrections")]
+    [ProducesResponseType<V3CorrectPreReleaseInvoiceApiResponse>(StatusCodes.Status201Created)]
+    [ProducesResponseType<V3CorrectPreReleaseInvoiceApiResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IResult> CorrectPreReleaseInvoice(
+        [FromRoute] Guid orderId,
+        [FromBody] CorrectV3PreReleaseInvoiceRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await sender.Send(
+            V3SurveyResultAndInvoiceMapper.ToCommand(orderId, request),
+            cancellationToken);
+        return result.ToHttpResult(
+            HttpContext,
+            response => Results.Json(
+                V3SurveyResultAndInvoiceMapper.ToResponse(response),
+                statusCode: response.IsReplay
+                    ? StatusCodes.Status200OK
+                    : StatusCodes.Status201Created));
     }
 
     private bool TryGetActor(out Guid actorId)

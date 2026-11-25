@@ -12,6 +12,8 @@ public sealed class SurveyFundingReversal : Entity
     public string Provider { get; private set; } = null!;
     public string ProviderEventId { get; private set; } = null!;
     public string EventType { get; private set; } = null!;
+    public Guid? FundingReceiptId { get; private set; }
+    public decimal? CashAmount { get; private set; }
     public decimal Amount { get; private set; }
     public string Currency { get; private set; } = null!;
     public DateTimeOffset OccurredAt { get; private set; }
@@ -28,7 +30,9 @@ public sealed class SurveyFundingReversal : Entity
         decimal amount,
         string currency,
         DateTimeOffset occurredAt,
-        DateTimeOffset createdAt)
+        DateTimeOffset createdAt,
+        Guid? fundingReceiptId = null,
+        decimal? cashAmount = null)
     {
         DomainGuard.NotEmpty(id, nameof(id));
         DomainGuard.NotEmpty(surveyPaymentId, nameof(surveyPaymentId));
@@ -41,7 +45,22 @@ public sealed class SurveyFundingReversal : Entity
             throw new ArgumentOutOfRangeException(nameof(createdAt), "CreatedAt cannot precede OccurredAt.");
         }
 
-        var validatedAmount = PolicyValidationGuard.ValidatePositiveWholeVnd(amount, nameof(amount));
+        if (cashAmount.HasValue)
+        {
+            PolicyValidationGuard.ValidatePositiveWholeVnd(cashAmount.Value, nameof(cashAmount));
+            if (amount < 0m || amount > cashAmount.Value || amount != decimal.Truncate(amount) ||
+                fundingReceiptId == Guid.Empty || (!fundingReceiptId.HasValue && amount != 0m))
+            {
+                throw new ArgumentOutOfRangeException(nameof(amount), "Invalid reversal allocation or receipt linkage.");
+            }
+        }
+        else
+        {
+            if (fundingReceiptId.HasValue)
+                throw new ArgumentException("A linked reversal requires its original cash amount.", nameof(cashAmount));
+
+            PolicyValidationGuard.ValidatePositiveWholeVnd(amount, nameof(amount));
+        }
         var validatedCurrency = PolicyValidationGuard.ValidateVndCurrency(
             CurrencyCode.Create(currency), nameof(currency));
         var normalizedProvider = Required(provider, nameof(provider), 64);
@@ -57,7 +76,9 @@ public sealed class SurveyFundingReversal : Entity
             Provider = normalizedProvider,
             ProviderEventId = normalizedEventId,
             EventType = normalizedEventType,
-            Amount = validatedAmount,
+            FundingReceiptId = fundingReceiptId,
+            CashAmount = cashAmount,
+            Amount = amount,
             Currency = validatedCurrency,
             OccurredAt = occurredAt,
             CreatedAt = createdAt

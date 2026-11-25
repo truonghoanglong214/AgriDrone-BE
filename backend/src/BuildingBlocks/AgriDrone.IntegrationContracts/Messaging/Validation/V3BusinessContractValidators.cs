@@ -1,5 +1,6 @@
 using AgriDrone.IntegrationContracts.Health;
 using AgriDrone.IntegrationContracts.Mapping;
+using AgriDrone.IntegrationContracts.Surveys;
 
 namespace AgriDrone.IntegrationContracts.Messaging.Validation;
 
@@ -707,6 +708,45 @@ public static class V3BusinessContractValidators
         {
             errors.Add($"{name} is required.");
         }
+    }
+
+    public static IReadOnlyList<string> Validate(
+        SurveyReleaseEvaluationRequestedV1? payload)
+    {
+        var errors = RequiredIds(
+            (payload?.OrderId, "OrderId"),
+            (payload?.TenantId, "TenantId"),
+            (payload?.FarmId, "FarmId"),
+            (payload?.OperationId, "OperationId"));
+
+        if (payload is null)
+        {
+            return errors;
+        }
+
+        if (!Enum.TryParse<SurveyReleaseTriggerSource>(payload.TriggerSource, out var triggerSource) ||
+            !Enum.IsDefined(triggerSource) || payload.TriggerSource != triggerSource.ToString())
+        {
+            errors.Add("TriggerSource must be a supported settlement release trigger.");
+        }
+
+        if ((triggerSource is SurveyReleaseTriggerSource.InvoiceFinalization or
+            SurveyReleaseTriggerSource.PreReleaseCorrection or SurveyReleaseTriggerSource.AdminReconciliation) &&
+            !payload.TriggerActorId.HasValue)
+        {
+            errors.Add("TriggerActorId is required for a Manager or SystemAdmin trigger.");
+        }
+        RequiredText(payload.PayloadFingerprint, "PayloadFingerprint", errors);
+        Utc(payload.RequestedAt, "RequestedAt", errors);
+        OptionalId(payload.ExpectedApprovedResultRevisionId, "ExpectedApprovedResultRevisionId", errors);
+        OptionalId(payload.ExpectedCountSnapshotId, "ExpectedCountSnapshotId", errors);
+        OptionalId(payload.ExpectedInvoiceRevisionId, "ExpectedInvoiceRevisionId", errors);
+        OptionalId(payload.ExpectedCommercialPolicyVersionId, "ExpectedCommercialPolicyVersionId", errors);
+        OptionalId(payload.ExpectedSurveyServicePriceId, "ExpectedSurveyServicePriceId", errors);
+        OptionalId(payload.TriggerActorId, "TriggerActorId", errors);
+        OptionalId(payload.TriggerPaymentId, "TriggerPaymentId", errors);
+        OptionalId(payload.TriggerFundingReceiptId, "TriggerFundingReceiptId", errors);
+        return errors;
     }
 
     private static void OptionalText(string? value, string name,

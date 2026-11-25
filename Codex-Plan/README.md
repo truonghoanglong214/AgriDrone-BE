@@ -13,16 +13,12 @@ Nghiệp vụ được chốt ngày **2026-11-10**. Các đặc tả dưới đ�
 
 Nếu một policy chi tiết khác câu mô tả ngắn trong proposal, áp dụng amendment đã chốt trong Business Rules và đồng bộ hai tài liệu. Proposal v3 khác version wire contract Mapping V3/Health V4; giữ nguyên ý nghĩa payload đã phát hành.
 
-## Trạng thái triển khai — 2026-11-13
+## Trạng thái triển khai — 2026-11-25
 
-| Phạm vi | Trạng thái |
-|---|---|
-| V3-01 | Design locked, source audit hoàn thành; live DB inventory còn là release gate |
-| V3-02 | Có implementation catalogue/intake/approval; [checklist](../docs/plans/v3-02-execution-checklist.md) còn DB upgrade/locking/rollback acceptance |
-| V3-03 / 03-00 | [Source/design baseline](../docs/operations/v3-03-execution-baseline.md) và [ADR 0020](../docs/adr/0020-v3-capture-execution-and-funding-boundaries.md) đã chốt |
-| V3-03 / 03A-1, 03A-2 | Đã có CaptureAttempt và operational/funding/cancellation domain contracts; xem [checklist](../docs/plans/v3-03-execution-checklist.md) |
-| Bước tiếp theo | **03B-1 persistence và expand migration** theo [technical plan](../docs/plans/v3-03-capture-funding-and-cancellation-implementation-plan.md) |
-| Production | Public activation tắt; Follow-up chờ release proof V3-06; chưa nghiệm thu PostgreSQL |
+- **V3-02–05:** Đã có source catalogue/approval, cọc/capture/hủy, mapping/COMBO và invoice/API. Các gate runtime còn mở nằm ở V3-10. [Master plan](BE1-Core-Business-Implementation-Plan.md)
+- **Bước tiếp theo:** Ưu tiên refresh token để frontend duy trì đăng nhập. Trong V3-06, tiếp tục A2.2 rồi checkout số dư và phát hành. [Checklist Identity](../docs/plans/v3-05e-to-v3-10-settlement-release-plan.md#identity--refresh-token-và-khôi-phục-phiên) · [Plan 1](../docs/plans/v3-05e-to-v3-10-settlement-release-plan.md)
+- **V3-07–09:** Nối release proof, claim/refund và ledger. API báo cáo tháng và Excel đã có. [Plan 2](../docs/plans/v3-07-to-v3-10-owner-claims-reporting-plan.md)
+- **Production:** Giữ public intake và payments tắt đến nghiệm thu V3-10. Follow-up production chờ release proof V3-06. [Acceptance matrix](../docs/testing/v3-business-acceptance.md)
 
 ## Phạm vi nghiệp vụ
 

@@ -1,5 +1,16 @@
 # V3-04 Comprehensive Remediation — Canonical Implementation Plan
 
+**Checkpoint 2026-11-25.** Đã triển khai mapping, spatial policy, lineage trụ và count snapshot. Remediation G0–G18 đã đóng ở checkpoint V3-04.
+
+- [ ] Nghiệm thu mapping/Baseline, lineage, PostGIS, migration/preflight và race ở V3-10. [Acceptance matrix](../../testing/v3-business-acceptance.md)
+
+[Backlog V3-06 đến V3-10](../../../Codex-Plan/BE1-Core-Business-Implementation-Plan.md#4-status-và-dependency-roadmap)
+
+<details>
+<summary>Hồ sơ triển khai và evidence theo từng checkpoint</summary>
+
+Các trạng thái, checklist và số liệu bên dưới ghi theo thời điểm lập từng phần.
+
 **Ngày lập:** 2026-11-16  
 **Trạng thái:** READY FOR IMPLEMENTATION — chưa thực thi  
 **Phạm vi:** V3-04 Mapping, Plant Identity, Spatial Lineage và Authoritative Pole Count Evidence  
@@ -547,3 +558,5 @@ Mỗi kết quả còn lại phải được phân loại rõ: V3-06 dormant/leg
 Remediation chỉ hoàn thành khi code, schema model, migration, outbox contracts, API naming, state transitions và documentation cùng mô tả một nghiệp vụ duy nhất: **V3-04 chỉ phê duyệt kỹ thuật nội bộ và chốt evidence; V3-06 mới phát hành cho khách hàng**.
 
 Không chấp nhận trạng thái “build được nhưng còn đường bypass”, “follow-up để xử lý sau”, “zero count dùng fallback”, hoặc “migration chỉ đúng trên database trống”.
+
+</details>

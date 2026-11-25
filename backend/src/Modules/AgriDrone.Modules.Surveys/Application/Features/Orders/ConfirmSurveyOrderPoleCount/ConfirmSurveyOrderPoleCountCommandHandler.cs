@@ -87,6 +87,12 @@ internal sealed class ConfirmSurveyOrderPoleCountCommandHandler(
 
         var state = stateResult.Value;
         var order = state.Order;
+        if (order.Scope != ContractScope.Legacy)
+        {
+            return Result.Failure<ConfirmSurveyOrderPoleCountResponse>(
+                SurveyOrderError.InvalidTransition(
+                    $"Order '{order.Id}' uses V3 invoice finalization rather than legacy pole-count confirmation."));
+        }
         if (state.CurrentFarmBaseMapVersionId !=
             command.ExpectedFarmBaseMapVersionId)
         {

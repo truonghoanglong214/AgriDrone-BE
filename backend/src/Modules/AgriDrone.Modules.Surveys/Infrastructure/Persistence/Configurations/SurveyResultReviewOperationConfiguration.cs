@@ -19,7 +19,7 @@ public sealed class SurveyResultReviewOperationConfiguration
                     "request_fingerprint ~ '^[0-9a-f]{64}$'");
                 table.HasCheckConstraint(
                     "ck_survey_result_review_operations_action",
-                    "action IN ('RecordComboReview', 'FreezeInternalResult')");
+                    "action IN ('RecordComboReview', 'FreezeInternalResult', 'FinalizeInvoice', 'CorrectPreReleaseInvoice', 'BeginBalanceCheckout', 'CompleteBalanceCheckout', 'BalanceCheckoutUncertain')");
             });
 
         builder.HasKey(r => r.Id).HasName("pk_survey_result_review_operations");
@@ -36,6 +36,7 @@ public sealed class SurveyResultReviewOperationConfiguration
         builder.Property(r => r.ComboBatchId).HasColumnName("combo_batch_id").HasColumnType("uuid");
         builder.Property(r => r.ReviewRevisionId).HasColumnName("review_revision_id").HasColumnType("uuid");
         builder.Property(r => r.ApprovedResultRevisionId).HasColumnName("approved_result_revision_id").HasColumnType("uuid");
+        builder.Property(r => r.InvoiceRevisionId).HasColumnName("invoice_revision_id").HasColumnType("uuid");
         builder.Property(r => r.CaptureAttemptId).HasColumnName("capture_attempt_id").HasColumnType("uuid");
         builder.Property(r => r.PoleCountSnapshotId).HasColumnName("pole_count_snapshot_id").HasColumnType("uuid");
         builder.Property(r => r.Outcome).HasColumnName("outcome").HasColumnType("jsonb").IsRequired();
@@ -48,11 +49,22 @@ public sealed class SurveyResultReviewOperationConfiguration
         builder.HasIndex(r => new { r.SurveyOrderId, r.TenantId, r.FarmId })
             .HasDatabaseName("ix_survey_result_review_operations_order");
 
+        builder.HasIndex(r => new { r.InvoiceRevisionId, r.SurveyOrderId })
+            .HasDatabaseName("ix_survey_result_review_operations_invoice_revision");
+
         builder.HasOne<SurveyOrder>()
             .WithMany()
             .HasForeignKey(r => new { r.SurveyOrderId, r.TenantId, r.FarmId })
             .HasPrincipalKey(o => new { o.Id, o.TenantId, o.FarmId })
             .OnDelete(DeleteBehavior.Restrict)
             .HasConstraintName("fk_survey_result_review_operations_order");
+
+        builder.HasOne<SurveyInvoiceRevision>()
+            .WithMany()
+            .HasForeignKey(r => new { r.InvoiceRevisionId, r.SurveyOrderId })
+            .HasPrincipalKey(i => new { i.Id, i.SurveyOrderId })
+            .IsRequired(false)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_survey_result_review_operations_invoice_revision");
     }
 }
