@@ -1643,6 +1643,9 @@ namespace AgriDrone.Database.Migrations
                         .HasDatabaseName("uq_refresh_session_tokens_predecessor")
                         .HasFilter("predecessor_token_id IS NOT NULL");
 
+                    b.HasIndex("PredecessorTokenId", "SessionId")
+                        .HasDatabaseName("ix_refresh_session_tokens_predecessor_token");
+
                     b.ToTable("refresh_session_tokens", "identity", t =>
                         {
                             t.HasComment("Append-only rotated refresh token hashes retained for reuse detection.");
@@ -8757,11 +8760,6 @@ namespace AgriDrone.Database.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("blocking_count");
 
-                    b.Property<JsonDocument>("BlockingItems")
-                        .IsRequired()
-                        .HasColumnType("jsonb")
-                        .HasColumnName("blocking_items");
-
                     b.Property<Guid>("FarmBaseMapVersionId")
                         .HasColumnType("uuid")
                         .HasColumnName("farm_base_map_version_id");
@@ -10780,6 +10778,9 @@ namespace AgriDrone.Database.Migrations
 
                     b.HasIndex("SurveyOrderId", "ImportedAt")
                         .HasDatabaseName("ix_survey_combo_import_batches_order_imported");
+
+                    b.HasIndex("SurveyOrderId", "TenantId", "FarmId")
+                        .HasDatabaseName("ix_survey_combo_import_batches_order");
 
                     b.HasIndex("TenantId", "HandoffId")
                         .IsUnique()

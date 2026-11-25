@@ -86,9 +86,6 @@ public sealed class MappingPublicationDbContext(
 
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 
-    internal DbSet<MissionPublicationState> MissionPublicationStates =>
-        Set<MissionPublicationState>();
-
     public void AddAuditLog(AuditLog auditLog)
     {
         ArgumentNullException.ThrowIfNull(auditLog);
@@ -131,14 +128,15 @@ public sealed class MappingPublicationDbContext(
             new PlantInventoryChangeReportConfiguration());
         modelBuilder.ApplyConfiguration(new SurveyOrderConfiguration());
         modelBuilder.ApplyConfiguration(new CaptureAttemptConfiguration());
+        modelBuilder.ApplyConfiguration(new DroneConfiguration());
         modelBuilder.ApplyConfiguration(new DroneMissionConfiguration());
+        modelBuilder.ApplyConfiguration(new AiModelVersionConfiguration());
+        modelBuilder.ApplyConfiguration(new AiProcessingJobConfiguration());
         modelBuilder.ApplyConfiguration(new SurveyOrderPoleCountSnapshotConfiguration());
         modelBuilder.ApplyConfiguration(new SpatialPolicyConfiguration());
         modelBuilder.ApplyConfiguration(new InboxMessageConfiguration());
         modelBuilder.ApplyConfiguration(new OutboxMessageConfiguration());
         modelBuilder.ApplyConfiguration(new AuditLogConfiguration());
-        modelBuilder.ApplyConfiguration(
-            new MissionPublicationStateConfiguration());
 
         ConfigurePublicationRelationships(modelBuilder);
         RemoveSurveyOrderDependencies(modelBuilder);
@@ -165,6 +163,20 @@ public sealed class MappingPublicationDbContext(
             .Ignore(level => level.ConditionDetections)
             .Ignore(level => level.CorrectedScanVerifications)
             .Ignore(level => level.CorrectedDetectionReviews);
+
+        modelBuilder.Entity<DroneMission>()
+            .Ignore(mission => mission.Media)
+            .Ignore(mission => mission.TelemetryPoints)
+            .Ignore(mission => mission.PlantObservations)
+            .Ignore(mission => mission.PreflightChecklists);
+
+        modelBuilder.Entity<AiProcessingJob>()
+            .Ignore(job => job.ThresholdProfile)
+            .Ignore(job => job.PlantObservations);
+
+        modelBuilder.Entity<AiModelVersion>()
+            .Ignore(model => model.ThresholdProfiles)
+            .Ignore(model => model.PlantObservations);
     }
 
     private static void ConfigurePublicationRelationships(

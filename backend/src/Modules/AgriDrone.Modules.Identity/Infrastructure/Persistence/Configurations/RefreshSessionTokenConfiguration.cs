@@ -86,6 +86,9 @@ public sealed class RefreshSessionTokenConfiguration : IEntityTypeConfiguration<
             .HasFilter("predecessor_token_id IS NOT NULL")
             .IsUnique();
 
+        builder.HasIndex(token => new { token.PredecessorTokenId, token.SessionId })
+            .HasDatabaseName("ix_refresh_session_tokens_predecessor_token");
+
         builder.HasIndex(token => token.ExpiresAt)
             .HasDatabaseName("ix_refresh_session_tokens_expires");
 

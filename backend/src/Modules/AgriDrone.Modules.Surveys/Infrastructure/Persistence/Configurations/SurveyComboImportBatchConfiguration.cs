@@ -75,6 +75,9 @@ public sealed class SurveyComboImportBatchConfiguration
         builder.HasIndex(b => new { b.SurveyOrderId, b.ImportedAt })
             .HasDatabaseName("ix_survey_combo_import_batches_order_imported");
 
+        builder.HasIndex(b => new { b.SurveyOrderId, b.TenantId, b.FarmId })
+            .HasDatabaseName("ix_survey_combo_import_batches_order");
+
         // Relationships within Survey module
         builder.HasOne<SurveyOrder>()
             .WithMany()

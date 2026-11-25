@@ -378,11 +378,20 @@ internal sealed class MappingCandidatesApprovedHandler(
                 $"Actor is not allowed to publish this Zone map: {access.Reason}.");
         }
 
-        var mission = await context.MissionPublicationStates
+        var mission = await context.DroneMissions
             .AsNoTracking()
-            .SingleOrDefaultAsync(
-                candidate => candidate.Id == payload.MissionId,
-                cancellationToken);
+            .Where(candidate => candidate.Id == payload.MissionId)
+            .Select(candidate => new
+            {
+                candidate.Id,
+                candidate.TenantId,
+                candidate.FarmId,
+                candidate.ZoneId,
+                candidate.MissionType,
+                candidate.Status,
+                candidate.ProcessingStatus
+            })
+            .SingleOrDefaultAsync(cancellationToken);
         if (mission is null)
         {
             return Permanent(

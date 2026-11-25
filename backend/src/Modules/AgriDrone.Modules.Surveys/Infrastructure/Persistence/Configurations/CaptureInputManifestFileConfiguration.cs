@@ -17,6 +17,8 @@ public sealed class CaptureInputManifestFileConfiguration : IEntityTypeConfigura
                 table.HasCheckConstraint("ck_capture_input_manifest_files_size", "size_bytes > 0");
             });
 
+        builder.Ignore(file => file.Id);
+
         builder.HasKey(file => new { file.ManifestId, file.MediaAssetId })
             .HasName("pk_capture_input_manifest_files");
 
