@@ -100,6 +100,16 @@ internal sealed class QualityRefundWorkflow(
                     AppError.Conflict("QualityRefund.InvalidResult", exception.Message));
             }
 
+            var releasedPoleCodes = await GetReleasedPoleCodesAsync(
+                order.Id, result.Id, tenantId, order.FarmId, cancellationToken);
+            var allowedPoleCodes = releasedPoleCodes.ToHashSet(StringComparer.OrdinalIgnoreCase);
+            if (issues.Any(issue => !allowedPoleCodes.Contains(issue.PoleCode.Trim())))
+            {
+                return Result.Failure<QualityRefundCaseView>(AppError.Validation(
+                    "QualityRefund.PoleOutsideReleasedResult",
+                    "Có mã trụ không xác nhận được trong kết quả đã phát hành của đơn này."));
+            }
+
             db.QualityRefundCases.Add(refundCase);
             using var auditData = JsonSerializer.SerializeToDocument(new
             {
@@ -523,6 +533,69 @@ internal sealed class QualityRefundWorkflow(
             return Result.Failure<Uri>(NotFound());
         return Result.Success(await evidenceStorage.GetDownloadUriAsync(item.TransferEvidenceReference, cancellationToken));
     }
+
+    private Task<List<string>> GetReleasedPoleCodesAsync(
+        Guid orderId,
+        Guid resultId,
+        Guid tenantId,
+        Guid farmId,
+        CancellationToken cancellationToken) =>
+        db.Database.SqlQuery<string>($"""
+            WITH released AS (
+                SELECT r.survey_order_id, r.tenant_id, r.farm_id,
+                       r.farm_base_map_version_id, r.farm_boundary_version_id,
+                       o.verified_pole_count_snapshot_id, publication.published_at,
+                       publication.payload
+                FROM survey.survey_results r
+                JOIN survey.survey_orders o
+                  ON o.id = r.survey_order_id
+                 AND o.tenant_id = r.tenant_id
+                 AND o.farm_id = r.farm_id
+                JOIN survey.plant_health_publications publication
+                  ON publication.survey_result_id = r.id
+                 AND publication.tenant_id = r.tenant_id
+                 AND publication.farm_id = r.farm_id
+                 AND publication.batch_id = r.approved_batch_id
+                 AND publication.approval_fingerprint = r.approval_fingerprint
+                 AND publication.published_at = r.published_at
+                WHERE r.id = {resultId}
+                  AND r.survey_order_id = {orderId}
+                  AND r.tenant_id = {tenantId}
+                  AND r.farm_id = {farmId}
+                  AND r.status = 'PUBLISHED'
+                  AND r.invalidated_at IS NULL
+            )
+            SELECT p.plant_code AS "Value"
+            FROM released r
+            JOIN survey.survey_order_pole_count_snapshots snapshot
+              ON snapshot.id = r.verified_pole_count_snapshot_id
+             AND snapshot.survey_order_id = r.survey_order_id
+             AND snapshot.tenant_id = r.tenant_id
+             AND snapshot.farm_id = r.farm_id
+             AND snapshot.farm_base_map_version_id = r.farm_base_map_version_id
+             AND snapshot.farm_boundary_version_id = r.farm_boundary_version_id
+             AND snapshot.verified_at <= r.published_at
+            JOIN survey.survey_order_pole_count_snapshot_items item
+              ON item.snapshot_id = snapshot.id
+             AND item.tenant_id = snapshot.tenant_id
+             AND item.farm_id = snapshot.farm_id
+             AND item.mapping_candidate_batch_id = snapshot.mapping_candidate_batch_id
+             AND item.is_accepted
+             AND item.is_strictly_in_boundary
+            JOIN plant.plants p
+              ON p.farm_id = r.farm_id
+             AND p.plant_profile_id = item.plant_profile_id
+             AND p.created_at <= r.published_at
+
+            UNION
+
+            SELECT p.plant_code AS "Value"
+            FROM released r
+            CROSS JOIN LATERAL jsonb_array_elements(r.payload -> 'Findings') AS finding(value)
+            JOIN plant.plants p
+              ON p.farm_id = r.farm_id
+             AND p.id = (finding.value ->> 'PlantId')::uuid
+            """).ToListAsync(cancellationToken);
 
     private async Task<decimal> GrossPaidAsync(Guid orderId, CancellationToken cancellationToken) =>
         await db.SurveyPayments.AsNoTracking()

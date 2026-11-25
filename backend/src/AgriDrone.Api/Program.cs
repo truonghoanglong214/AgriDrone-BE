@@ -1,5 +1,6 @@
 using AgriDrone.Api.Legacy;
 using AgriDrone.Api.ModelBinding;
+using AgriDrone.Api.Reporting;
 using AgriDrone.Api.Surveys;
 using AgriDrone.Api.Swagger;
 using AgriDrone.Database;
@@ -31,6 +32,7 @@ using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddSingleton<RevenueReportSnapshots>();
 
 builder.Services
     .AddControllers()
