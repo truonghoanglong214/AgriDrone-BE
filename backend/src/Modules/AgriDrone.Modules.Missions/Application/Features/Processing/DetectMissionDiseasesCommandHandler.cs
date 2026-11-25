@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Globalization;
 using AgriDrone.IntegrationContracts.Health;
+using AgriDrone.IntegrationContracts.Mapping;
 using AgriDrone.Modules.Missions.Domain.Processing;
 using AgriDrone.Modules.Missions.Application.Abstractions.Media;
 using AgriDrone.Modules.Missions.Application.Abstractions.Missions;
@@ -39,8 +40,35 @@ internal sealed class DetectMissionDiseasesCommandHandler(
         double Latitude,
         double Longitude,
         int? RowIndex,
-        int? ColumnIndex);
+        int? ColumnIndex,
+        Guid? PlantProfileId);
     private sealed record CaptureMap(Guid BoundaryId, Guid BaseMapId);
+    private sealed record ReferenceRow(Guid Id);
+    private sealed record OrderBaselineRow(Guid? BaselineMapVersionId);
+    private sealed record OrderLockRow(Guid Id, string Status, Guid? BaselineMapVersionId);
+    private sealed record CommercialPolicyRow(Guid PolicyVersionId);
+    private sealed record ApprovalRow(Guid Id, Guid ManifestId, string ManifestHash, Guid ProcessingJobId);
+    private sealed record CommercialSnapshotRow(string ServiceCode, bool ScreensDisease, Guid BusinessPolicyVersionId);
+    private sealed record AttemptRow(Guid Id, string? InputApprovalReference, string? ProcessingJobReference);
+    private sealed record AttemptLockRow(Guid Id, string Status, string? InputApprovalReference, string? ProcessingJobReference);
+    private sealed record FrozenFileRow(Guid MediaAssetId, string Sha256, long SizeBytes, string MediaRole);
+    private sealed record SnapshotRow(Guid Id, Guid MappingCandidateBatchId);
+    private sealed record MappingBatchRow(Guid Id, string MappingKind, string Status);
+    private sealed record ComboInferencePolicy(
+        Guid ModelVersionId, string Version, double Confidence, double ClusterRadiusMeters, double BufferMeters);
+
+    private sealed record V3ComboInferenceContext(
+        Guid OrderId,
+        Guid AttemptId,
+        ApprovalRow Approval,
+        List<FrozenFileRow> FrozenFiles,
+        Guid SnapshotId,
+        Guid MappingBatchId,
+        AgriDrone.IntegrationContracts.Mapping.MappingKind MappingKind,
+        CaptureMap CaptureMap,
+        ComboInferencePolicy Policy);
+
+    private static readonly Guid ComboAnalysisNamespace = new("e2c56a81-79b8-4e1b-93f4-3d0cf3b12345");
 
     public async Task<Result<DetectMissionDiseasesResult>> Handle(
         DetectMissionDiseasesCommand request,
@@ -71,30 +99,233 @@ internal sealed class DetectMissionDiseasesCommandHandler(
                 MissionError.NotFound(request.MissionId));
         }
 
-        if (mission.Purpose != MissionPurpose.PlantHealth || mission.SurveyOrderId is null)
-            return Result.Failure<DetectMissionDiseasesResult>(AppError.Conflict("DetectDiseases.InvalidPurpose", "An Order-bound Plant Health Mission is required."));
-        var captureMap = await dbContext.Database.SqlQuery<CaptureMap>($"""
-            SELECT bm.farm_boundary_version_id AS "BoundaryId", bm.id AS "BaseMapId"
-            FROM farm.farm_base_map_versions bm
-            WHERE bm.farm_id = {request.FarmId} AND bm.tenant_id = {request.TenantId}
-              AND bm.farm_boundary_version_id = {mission.FarmBoundaryVersionId}
-              AND bm.published_at IS NOT NULL
-              AND (bm.id = {mission.SourceMapVersionId} OR EXISTS
-                (SELECT 1 FROM farm.zone_map_versions zm WHERE zm.id = {mission.SourceMapVersionId} AND zm.farm_base_map_version_id = bm.id))
-            """).SingleOrDefaultAsync(cancellationToken);
-        if (captureMap is null)
-            return Result.Failure<DetectMissionDiseasesResult>(AppError.Conflict("DetectDiseases.CaptureMapRequired", "The Mission must reference its published capture base map and approved boundary."));
+        if (mission.SurveyOrderId is not Guid orderId)
+            return Result.Failure<DetectMissionDiseasesResult>(AppError.Conflict("DetectDiseases.OrderRequired", "An Order-bound Mission is required for disease detection."));
 
-        // Truy vấn danh sách ảnh thô đã gắn GPS của Mission
-        var mediaList = await dbContext.MissionMedia
-            .Include(mm => mm.Media)
-            .AsNoTracking()
-            .Where(mm =>
-                mm.MissionId == request.MissionId &&
-                mm.MediaRole == MissionMediaRole.RawImage)
-            .OrderBy(mm => mm.CapturedAt)
-            .ThenBy(mm => mm.Media.StorageKey)
-            .ToListAsync(cancellationToken);
+        CaptureMap? captureMap = null;
+        bool isV3Combo = false;
+        V3ComboInferenceContext? v3Context = null;
+
+        if (mission.Purpose == MissionPurpose.Capture)
+        {
+            var commercial = await dbContext.Database.SqlQuery<CommercialSnapshotRow>($"""
+                SELECT service_code AS "ServiceCode", screens_disease AS "ScreensDisease", business_policy_version_id AS "BusinessPolicyVersionId"
+                FROM survey.survey_order_commercial_snapshots
+                WHERE survey_order_id = {orderId}
+                """).SingleOrDefaultAsync(cancellationToken);
+
+            if (commercial is null || commercial.ServiceCode != "COMBO" || !commercial.ScreensDisease)
+            {
+                return Result.Failure<DetectMissionDiseasesResult>(AppError.Conflict(
+                    "DetectDiseases.InvalidPurpose", "Only COMBO Capture missions with ScreensDisease enabled can run disease detection."));
+            }
+
+            var mapId = mission.InternallyApprovedMapVersionId ?? mission.SourceMapVersionId;
+            if (mapId is null)
+            {
+                return Result.Failure<DetectMissionDiseasesResult>(AppError.Conflict(
+                    "DetectDiseases.CaptureMapRequired", "A referenced capture map is required."));
+            }
+
+            captureMap = await dbContext.Database.SqlQuery<CaptureMap>($"""
+                SELECT bm.farm_boundary_version_id AS "BoundaryId", bm.id AS "BaseMapId"
+                FROM farm.farm_base_map_versions bm
+                WHERE bm.farm_id = {request.FarmId} AND bm.tenant_id = {request.TenantId}
+                  AND bm.farm_boundary_version_id = {mission.FarmBoundaryVersionId}
+                  AND bm.status IN ('INTERNALLY_APPROVED', 'PUBLISHED')
+                  AND bm.id = {mapId}
+                """).SingleOrDefaultAsync(cancellationToken);
+
+            if (captureMap is null)
+            {
+                return Result.Failure<DetectMissionDiseasesResult>(AppError.Conflict(
+                    "DetectDiseases.CaptureMapRequired", "A valid internally approved or published capture map and boundary are required."));
+            }
+
+            var attemptRow = await dbContext.Database.SqlQuery<AttemptRow>($"""
+                SELECT id AS "Id", input_approval_reference AS "InputApprovalReference", processing_job_reference AS "ProcessingJobReference"
+                FROM survey.capture_attempts
+                WHERE id = {mission.CaptureAttemptId} AND order_id = {orderId} AND status = 'PROCESSING'
+                """).SingleOrDefaultAsync(cancellationToken);
+
+            if (attemptRow is null || string.IsNullOrWhiteSpace(attemptRow.InputApprovalReference))
+            {
+                return Result.Failure<DetectMissionDiseasesResult>(AppError.Conflict(
+                    "DetectDiseases.ApprovalRequired", "An approved capture input with valid approval reference is required."));
+            }
+
+            if (!Guid.TryParse(attemptRow.InputApprovalReference, out var approvalId))
+            {
+                return Result.Failure<DetectMissionDiseasesResult>(AppError.Conflict(
+                    "DetectDiseases.ApprovalInvalid", "Capture attempt input approval reference is not a valid GUID."));
+            }
+
+            var preApproval = await dbContext.Database.SqlQuery<ApprovalRow>($"""
+                SELECT id AS "Id", input_manifest_id AS "ManifestId", manifest_fingerprint AS "ManifestHash", processing_job_id AS "ProcessingJobId"
+                FROM survey.capture_input_approvals
+                WHERE id = {approvalId} AND capture_attempt_id = {mission.CaptureAttemptId}
+                """).SingleOrDefaultAsync(cancellationToken);
+
+            if (preApproval is null)
+            {
+                return Result.Failure<DetectMissionDiseasesResult>(AppError.Conflict(
+                    "DetectDiseases.ApprovalRequired", "Approved capture input record was not found for this attempt."));
+            }
+
+            var frozenFiles = await dbContext.Database.SqlQuery<FrozenFileRow>($"""
+                SELECT media_asset_id AS "MediaAssetId", sha256 AS "Sha256", size_bytes AS "SizeBytes", media_role AS "MediaRole"
+                FROM survey.capture_input_manifest_files
+                WHERE manifest_id = {preApproval.ManifestId} AND media_role = 'RawImage'
+                """).ToListAsync(cancellationToken);
+
+            if (frozenFiles.Count == 0)
+            {
+                return Result.Failure<DetectMissionDiseasesResult>(AppError.Conflict(
+                    "DetectDiseases.FrozenFilesMissing", "No frozen raw images found in approved capture manifest."));
+            }
+
+            var approvedSnapshot = await dbContext.Database.SqlQuery<SnapshotRow>($"""
+                SELECT id AS "Id", mapping_candidate_batch_id AS "MappingCandidateBatchId"
+                FROM survey.survey_order_pole_count_snapshots
+                WHERE survey_order_id = {orderId}
+                  AND capture_attempt_id = {mission.CaptureAttemptId}
+                  AND tenant_id = {request.TenantId}
+                  AND farm_id = {request.FarmId}
+                  AND mission_id = {mission.Id}
+                  AND farm_base_map_version_id = {captureMap.BaseMapId}
+                  AND farm_boundary_version_id = {captureMap.BoundaryId}
+                ORDER BY revision_number DESC
+                LIMIT 1
+                """).SingleOrDefaultAsync(cancellationToken);
+
+            if (approvedSnapshot is null)
+            {
+                return Result.Failure<DetectMissionDiseasesResult>(AppError.Conflict(
+                    "DetectDiseases.PoleCountSnapshotRequired", "An approved pole count snapshot matching order, attempt, mission, base map and boundary is required."));
+            }
+
+            var mappingBatchRow = await dbContext.Database.SqlQuery<MappingBatchRow>($"""
+                SELECT id AS "Id", mapping_kind AS "MappingKind", status AS "Status"
+                FROM farm.mapping_candidate_batches
+                WHERE id = {approvedSnapshot.MappingCandidateBatchId} AND tenant_id = {request.TenantId} AND farm_id = {request.FarmId}
+                """).SingleOrDefaultAsync(cancellationToken);
+
+            if (mappingBatchRow is null || mappingBatchRow.Status != "Approved")
+            {
+                return Result.Failure<DetectMissionDiseasesResult>(AppError.Conflict(
+                    "DetectDiseases.MappingBatchNotApproved", "Mapping candidate batch must be approved for this snapshot."));
+            }
+
+            if (!Enum.TryParse<AgriDrone.IntegrationContracts.Mapping.MappingKind>(mappingBatchRow.MappingKind, out var parsedMappingKind))
+            {
+                return Result.Failure<DetectMissionDiseasesResult>(AppError.Conflict(
+                    "DetectDiseases.InvalidMappingKind", $"Mapping candidate batch has unrecognized MappingKind '{mappingBatchRow.MappingKind}'."));
+            }
+
+            var activeModels = await dbContext.AiModelVersions.AsNoTracking()
+                .Where(model => model.IsActive && model.ModelType == AiModelType.DiseaseDetection)
+                .Take(2)
+                .ToListAsync(cancellationToken);
+            var policy = activeModels.Count == 1 ? ReadComboPolicy(activeModels[0]) : null;
+            if (policy is null)
+            {
+                return Result.Failure<DetectMissionDiseasesResult>(AppError.Conflict(
+                    "DetectDiseases.ComboPolicyRequired",
+                    "COMBO requires one active disease detection model with a versioned comboInferencePolicy."));
+            }
+
+            v3Context = new V3ComboInferenceContext(
+                OrderId: orderId,
+                AttemptId: mission.CaptureAttemptId!.Value,
+                Approval: preApproval,
+                FrozenFiles: frozenFiles,
+                SnapshotId: approvedSnapshot.Id,
+                MappingBatchId: mappingBatchRow.Id,
+                MappingKind: parsedMappingKind,
+                CaptureMap: captureMap,
+                Policy: policy);
+
+            isV3Combo = true;
+        }
+        else if (mission.Purpose == MissionPurpose.PlantHealth)
+        {
+            captureMap = await dbContext.Database.SqlQuery<CaptureMap>($"""
+                SELECT bm.farm_boundary_version_id AS "BoundaryId", bm.id AS "BaseMapId"
+                FROM farm.farm_base_map_versions bm
+                WHERE bm.farm_id = {request.FarmId} AND bm.tenant_id = {request.TenantId}
+                  AND bm.farm_boundary_version_id = {mission.FarmBoundaryVersionId}
+                  AND bm.published_at IS NOT NULL
+                  AND (bm.id = {mission.SourceMapVersionId} OR EXISTS
+                    (SELECT 1 FROM farm.zone_map_versions zm WHERE zm.id = {mission.SourceMapVersionId} AND zm.farm_base_map_version_id = bm.id))
+                """).SingleOrDefaultAsync(cancellationToken);
+
+            if (captureMap is null)
+            {
+                return Result.Failure<DetectMissionDiseasesResult>(AppError.Conflict(
+                    "DetectDiseases.CaptureMapRequired", "The Mission must reference its published capture base map and approved boundary."));
+            }
+        }
+        else
+        {
+            return Result.Failure<DetectMissionDiseasesResult>(AppError.Conflict(
+                "DetectDiseases.InvalidPurpose", "Mission purpose must be Capture (COMBO) or PlantHealth."));
+        }
+
+        // Truy vấn danh sách ảnh: V3 COMBO lấy chính xác tập ảnh đã freeze; legacy PlantHealth lấy từ mission media active
+        List<MissionMedia> mediaList;
+        if (isV3Combo && v3Context is not null)
+        {
+            var frozenAssetIds = v3Context.FrozenFiles.Select(f => f.MediaAssetId).ToHashSet();
+
+            mediaList = await dbContext.MissionMedia
+                .Include(mm => mm.Media)
+                .AsNoTracking()
+                .Where(mm =>
+                    mm.MissionId == request.MissionId &&
+                    frozenAssetIds.Contains(mm.MediaId) &&
+                    mm.Media.StorageStatus == MediaStorageStatus.Active &&
+                    mm.Media.DeletedAt == null)
+                .OrderBy(mm => mm.CapturedAt)
+                .ThenBy(mm => mm.Media.StorageKey)
+                .ToListAsync(cancellationToken);
+
+            if (mediaList.Count != v3Context.FrozenFiles.Count)
+            {
+                return Result.Failure<DetectMissionDiseasesResult>(AppError.Conflict(
+                    "DetectDiseases.MediaMismatch", "Active mission media assets do not match frozen manifest file count."));
+            }
+
+            var frozenMap = v3Context.FrozenFiles.ToDictionary(f => f.MediaAssetId);
+            foreach (var mm in mediaList)
+            {
+                if (string.IsNullOrWhiteSpace(mm.Media.StorageKey))
+                {
+                    return Result.Failure<DetectMissionDiseasesResult>(AppError.Conflict(
+                        "DetectDiseases.InvalidStorageKey", $"Media asset {mm.MediaId} is missing storage key."));
+                }
+
+                if (frozenMap.TryGetValue(mm.MediaId, out var frozen) &&
+                    !string.Equals(mm.Media.Checksum, frozen.Sha256, StringComparison.OrdinalIgnoreCase))
+                {
+                    return Result.Failure<DetectMissionDiseasesResult>(AppError.Conflict(
+                        "DetectDiseases.MediaHashMismatch", $"Media asset {mm.MediaId} hash does not match frozen manifest hash."));
+                }
+            }
+        }
+        else
+        {
+            mediaList = await dbContext.MissionMedia
+                .Include(mm => mm.Media)
+                .AsNoTracking()
+                .Where(mm =>
+                    mm.MissionId == request.MissionId &&
+                    mm.MediaRole == MissionMediaRole.RawImage &&
+                    mm.Media.StorageStatus == MediaStorageStatus.Active &&
+                    mm.Media.DeletedAt == null)
+                .OrderBy(mm => mm.CapturedAt)
+                .ThenBy(mm => mm.Media.StorageKey)
+                .ToListAsync(cancellationToken);
+        }
 
         List<MetashapeTaskImageItem>? imageItems = null;
         if (mediaList.Count > 0)
@@ -111,13 +342,25 @@ internal sealed class DetectMissionDiseasesCommandHandler(
             request.MissionId,
             imageItems?.Count ?? 0);
 
+        HashSet<string>? expectedKeys = null;
+        if (v3Context is not null)
+        {
+            expectedKeys = new HashSet<string>(StringComparer.Ordinal);
+            if (mediaList.Count == 0 || mediaList.Any(media =>
+                string.IsNullOrWhiteSpace(media.Media.StorageKey) || !expectedKeys.Add(media.Media.StorageKey)))
+            {
+                return Result.Failure<DetectMissionDiseasesResult>(AppError.Conflict(
+                    "DetectDiseases.InvalidFrozenInputs", "Frozen COMBO inputs require unique storage keys."));
+            }
+        }
+
         var startedAt = timeProvider.GetUtcNow();
         var result = await metashapeService.DetectMissionDiseasesAsync(
             request.MissionId,
             request.TenantId,
             imageItems,
-            request.ConfidenceThreshold,
-            request.PolygonGeoJson,
+            v3Context?.Policy.Confidence ?? request.ConfidenceThreshold,
+            v3Context is null ? request.PolygonGeoJson : null,
             cancellationToken);
 
         if (!result.IsSuccess)
@@ -126,10 +369,26 @@ internal sealed class DetectMissionDiseasesCommandHandler(
                 AppError.Failure("DetectDiseases.Failed", result.ErrorMessage ?? "Failed to detect diseases."));
         }
 
+        if (expectedKeys is not null)
+        {
+            var outcomes = result.ImageOutcomes;
+            var successfulKeys = new HashSet<string>(StringComparer.Ordinal);
+            if (outcomes is null || outcomes.Any(outcome =>
+                    outcome.Status != "SUCCESS" || !successfulKeys.Add(outcome.StorageKey)) ||
+                !successfulKeys.SetEquals(expectedKeys) ||
+                result.Detections.Any(detection =>
+                    detection.SourceStorageKey is not { } key || !successfulKeys.Contains(key)))
+            {
+                return Result.Failure<DetectMissionDiseasesResult>(AppError.Conflict(
+                    "DetectDiseases.IncompleteImageCoverage",
+                    "Every frozen COMBO input requires one successful outcome and every detection must reference a processed input."));
+            }
+        }
+
         // Lưu kết quả nhận diện bệnh vào cơ sở dữ liệu PostgreSQL
         try
         {
-            await SaveDiseaseDetectionsToDatabaseAsync(request, result, mediaList, captureMap, mission.EndedAt ?? mission.StartedAt, startedAt, cancellationToken);
+            await SaveDiseaseDetectionsToDatabaseAsync(request, result, mediaList, captureMap, mission.EndedAt ?? mission.StartedAt, startedAt, v3Context, cancellationToken);
         }
         catch (DiseaseDetectionLocationException error)
         {
@@ -150,6 +409,7 @@ internal sealed class DetectMissionDiseasesCommandHandler(
         CaptureMap captureMap,
         DateTimeOffset? missionObservedAt,
         DateTimeOffset startedAt,
+        V3ComboInferenceContext? v3Context,
         CancellationToken cancellationToken)
     {
         try
@@ -159,9 +419,15 @@ internal sealed class DetectMissionDiseasesCommandHandler(
                 !double.IsFinite(d.Confidence) || d.Confidence is < 0 or > 1) ||
                 result.Detections.Select(d => (d.ImageName, d.Id)).Distinct().Count() != result.Detections.Count)
                 throw new InvalidOperationException("Detection output needs unique source IDs, valid coordinates, classes and confidence.");
-            var model = await dbContext.AiModelVersions.AsNoTracking().SingleOrDefaultAsync(m =>
-                m.IsActive && m.ModelType == AiModelType.DiseaseDetection && m.ModelName == result.ModelName, cancellationToken)
+            var modelQuery = dbContext.AiModelVersions.AsNoTracking().Where(model =>
+                model.ModelType == AiModelType.DiseaseDetection && model.ModelName == result.ModelName);
+            var model = await (v3Context is null
+                ? modelQuery.Where(model => model.IsActive)
+                : modelQuery.Where(model => model.Id == v3Context.Policy.ModelVersionId))
+                .SingleOrDefaultAsync(cancellationToken)
                 ?? throw new InvalidOperationException("Register the exact model name returned by the detector before publishing Plant Health output.");
+            if (v3Context is not null && ReadComboPolicy(model) != v3Context.Policy)
+                throw new InvalidOperationException("The COMBO inference policy changed during processing.");
             var metrics = model.Metrics.RootElement;
             string RequiredMetadata(string name) => metrics.TryGetProperty(name, out var field) && field.ValueKind == JsonValueKind.String &&
                 !string.IsNullOrWhiteSpace(field.GetString()) ? field.GetString()! :
@@ -174,140 +440,419 @@ internal sealed class DetectMissionDiseasesCommandHandler(
             // Ảnh khoanh vùng / ảnh cắt: kiểm tra object có thật trên MinIO TRƯỚC khi mở transaction (gọi mạng, không giữ khóa mission).
             var derivedObjects = await InspectDerivedImagesAsync(request, result, sources, cancellationToken);
             await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
-            _ = await dbContext.DroneMissions.FromSqlInterpolated($"SELECT *, xmin FROM mission.drone_missions WHERE id = {request.MissionId} FOR UPDATE")
-                .SingleAsync(cancellationToken);
-            var version = (await dbContext.AiProcessingJobs.Where(j => j.MissionId == request.MissionId && j.JobType == AiJobType.DiseaseDetection)
-                .Select(j => (int?)j.AttemptNumber).MaxAsync(cancellationToken) ?? 0) + 1;
-            var snapshot = new PlantHealthProcessingSnapshot(version, captureMap.BoundaryId, captureMap.BaseMapId, provenance, RequiredMetadata("teamLabelLimitation"));
-            var job = AiProcessingJob.RecordCompletedHealthRun(request.MissionId, model.Id, snapshot,
-                JsonSerializer.SerializeToDocument(new { request.ConfidenceThreshold, captureMap, MediaIds = mediaList.Select(m => m.MediaId).ToArray() }),
-                JsonSerializer.SerializeToDocument(result), startedAt, timeProvider.GetUtcNow());
-            dbContext.AiProcessingJobs.Add(job);
-            // Đăng ký ảnh khoanh vùng / ảnh cắt thành media của Mission (vai trò Other: không lẫn với ảnh xem trước bản đồ ProcessedImage).
-            // Một ảnh khoanh vùng dùng chung cho mọi detection trên cùng ảnh gốc ⇒ chỉ đăng ký 1 lần.
-            var registeredAt = timeProvider.GetUtcNow();
-            var derivedMediaIds = new Dictionary<string, Guid>(StringComparer.Ordinal);
-            foreach (var (key, info) in derivedObjects)
+
+            DroneMission mission;
+            AiProcessingJob job;
+            int version;
+
+            if (v3Context is not null)
             {
-                var asset = MediaAsset.Create(Guid.NewGuid(), request.TenantId, request.FarmId, info.Source.Media.Provider, key, info.StorageUri,
-                    MediaType.Image, "image/jpeg", info.SizeBytes, info.Sha256, executionContext.ActorId!.Value, registeredAt);
-                dbContext.MediaAssets.Add(asset);
-                dbContext.MissionMedia.Add(MissionMedia.Create(request.MissionId, asset.Id, MissionMediaRole.Other, registeredAt, info.Source.CapturedAt));
-                derivedMediaIds[key] = asset.Id;
-            }
-            Guid? DerivedId(string? key) => key is not null && derivedMediaIds.TryGetValue(key, out var id) ? id : null;
+                // ADR 0020 - Rank 2: Khóa Order FOR UPDATE để serialize với cancel/re-flight
+                var orderRow = await dbContext.Database.SqlQuery<OrderLockRow>($"""
+                    SELECT id AS "Id", status AS "Status", baseline_map_version_id AS "BaselineMapVersionId"
+                    FROM survey.survey_orders
+                    WHERE id = {v3Context.OrderId}
+                    FOR UPDATE
+                    """).SingleOrDefaultAsync(cancellationToken);
 
-            // 2. Lấy danh sách cây hiện có của Farm trong plant.plants để so khớp
-            var farmPlants = await dbContext.Database.SqlQueryRaw<PlantMatchTarget>(
-                @"SELECT id AS ""Id"", plant_code AS ""PlantCode"", 
-                         ST_Y(location::geometry) AS ""Latitude"", 
-                         ST_X(location::geometry) AS ""Longitude"",
-                         row_index AS ""RowIndex"", column_index AS ""ColumnIndex""
-                  FROM plant.plants 
-                  WHERE farm_id = {0} AND lifecycle_status = 'ACTIVE'",
-                request.FarmId)
-                .ToListAsync(cancellationToken);
-
-            // Retain every processing run and its observations; reprocess never overwrites history.
-
-            var observationsToInsert = new List<MissionPlantObservation>();
-            var infectedPlantIds = new HashSet<Guid>();
-
-            // Dung sai so khớp GPS (mặc định 2.5m nếu không truyền từ body request)
-            var matchingToleranceM = request.MatchingToleranceMeters is > 0
-                ? request.MatchingToleranceMeters.Value
-                : 2.5;
-
-            foreach (var detection in result.Detections)
-            {
-                // Luu tat ca quan sat: gom ca qua khoe (Healthy Fruit Green/Yellow/Red) va vet benh (Disease)
-                var isDisease = detection.ClassName.StartsWith("Disease", StringComparison.OrdinalIgnoreCase) ||
-                                (!detection.ClassName.StartsWith("Healthy", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(detection.ClassName));
-
-                // Tìm cây gần nhất trong vườn
-                PlantMatchTarget? nearestPlant = null;
-                double minDistance = double.MaxValue;
-
-                foreach (var plant in farmPlants)
+                if (orderRow is null || !string.Equals(orderRow.Status, "Processing", StringComparison.OrdinalIgnoreCase))
                 {
-                    var dist = CalculateHaversineMeters(detection.Lat, detection.Lon, plant.Latitude, plant.Longitude);
-                    if (dist < minDistance)
+                    throw new InvalidOperationException($"Survey order {v3Context.OrderId} is no longer in Processing status at commit time.");
+                }
+
+                // ADR 0020 - Rank 7: Khóa CaptureAttempt FOR UPDATE
+                var attemptRow = await dbContext.Database.SqlQuery<AttemptLockRow>($"""
+                    SELECT id AS "Id", status AS "Status", input_approval_reference AS "InputApprovalReference", processing_job_reference AS "ProcessingJobReference"
+                    FROM survey.capture_attempts
+                    WHERE id = {v3Context.AttemptId} AND order_id = {v3Context.OrderId}
+                    FOR UPDATE
+                    """).SingleOrDefaultAsync(cancellationToken);
+
+                if (attemptRow is null || !string.Equals(attemptRow.Status, "PROCESSING", StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new InvalidOperationException($"Capture attempt {v3Context.AttemptId} is no longer in PROCESSING status at commit time.");
+                }
+
+                if (!Guid.TryParse(attemptRow.InputApprovalReference, out var commitApprovalId) ||
+                    commitApprovalId != v3Context.Approval.Id ||
+                    !Guid.TryParse(attemptRow.ProcessingJobReference, out var commitJobRef) ||
+                    commitJobRef != v3Context.Approval.ProcessingJobId)
+                {
+                    throw new InvalidOperationException("Active capture attempt input approval reference or processing job changed during inference.");
+                }
+
+                // ADR 0020 - Rank 8: Khóa DroneMission FOR UPDATE
+                mission = await dbContext.DroneMissions.FromSqlInterpolated($"SELECT *, xmin FROM mission.drone_missions WHERE id = {request.MissionId} FOR UPDATE")
+                    .SingleAsync(cancellationToken);
+
+                version = (await dbContext.AiProcessingJobs.Where(j => j.MissionId == request.MissionId && j.JobType == AiJobType.DiseaseDetection)
+                    .Select(j => (int?)j.AttemptNumber).MaxAsync(cancellationToken) ?? 0) + 1;
+
+                // Rank 10: Recheck capture input approval
+                var approval = await dbContext.Database.SqlQuery<ApprovalRow>($"""
+                    SELECT id AS "Id", input_manifest_id AS "ManifestId", manifest_fingerprint AS "ManifestHash", processing_job_id AS "ProcessingJobId"
+                    FROM survey.capture_input_approvals
+                    WHERE id = {v3Context.Approval.Id} AND capture_attempt_id = {v3Context.AttemptId}
+                    """).SingleOrDefaultAsync(cancellationToken)
+                    ?? throw new InvalidOperationException("Approved capture input record not found at commit time.");
+
+                if (approval.ManifestId != v3Context.Approval.ManifestId ||
+                    approval.ManifestHash != v3Context.Approval.ManifestHash ||
+                    approval.ProcessingJobId != v3Context.Approval.ProcessingJobId)
+                {
+                    throw new InvalidOperationException("Approved capture input record was altered at commit time.");
+                }
+
+                // Rank 6: Recheck Snapshot
+                var recheckSnapshot = await dbContext.Database.SqlQuery<SnapshotRow>($"""
+                    SELECT id AS "Id", mapping_candidate_batch_id AS "MappingCandidateBatchId"
+                    FROM survey.survey_order_pole_count_snapshots
+                    WHERE id = {v3Context.SnapshotId}
+                      AND survey_order_id = {v3Context.OrderId}
+                      AND capture_attempt_id = {v3Context.AttemptId}
+                      AND tenant_id = {request.TenantId}
+                      AND farm_id = {request.FarmId}
+                      AND mission_id = {request.MissionId}
+                      AND farm_base_map_version_id = {v3Context.CaptureMap.BaseMapId}
+                      AND farm_boundary_version_id = {v3Context.CaptureMap.BoundaryId}
+                    """).SingleOrDefaultAsync(cancellationToken)
+                    ?? throw new InvalidOperationException("Approved pole count snapshot was missing or revoked at commit time.");
+
+                if (recheckSnapshot.MappingCandidateBatchId != v3Context.MappingBatchId)
+                {
+                    throw new InvalidOperationException("Approved pole count snapshot candidate batch altered at commit time.");
+                }
+
+                var baselineMapId = orderRow.BaselineMapVersionId ?? v3Context.CaptureMap.BaseMapId;
+                var mappingKind = v3Context.MappingKind;
+                var mappingBatchId = v3Context.MappingBatchId;
+
+                var commercialPolicyRow = await dbContext.Database.SqlQuery<CommercialPolicyRow>($"""
+                    SELECT business_policy_version_id AS "PolicyVersionId"
+                    FROM survey.survey_order_commercial_snapshots
+                    WHERE survey_order_id = {v3Context.OrderId}
+                    """).SingleOrDefaultAsync(cancellationToken);
+                var policyVersionId = commercialPolicyRow?.PolicyVersionId ?? Guid.Empty;
+
+                Guid? supersedesHandoffId = null;
+                if (version > 1)
+                {
+                    var prevJob = await dbContext.AiProcessingJobs.AsNoTracking()
+                        .Where(j => j.MissionId == request.MissionId && j.JobType == AiJobType.DiseaseDetection && j.AttemptNumber == version - 1 && j.Status == AiJobStatus.Completed)
+                        .OrderByDescending(j => j.CompletedAt)
+                        .FirstOrDefaultAsync(cancellationToken);
+
+                    if (prevJob is not null)
                     {
-                        minDistance = dist;
-                        nearestPlant = plant;
+                        supersedesHandoffId = CreateVersion5(
+                            ComboAnalysisNamespace,
+                            $"{request.TenantId:D}:{v3Context.OrderId:D}:{v3Context.AttemptId:D}:{prevJob.Id:D}:{version - 1}");
                     }
                 }
 
-                Guid? matchedPlantId = null;
-                decimal? matchConf = null;
-                if (nearestPlant != null && minDistance <= matchingToleranceM)
+                var comboProvenance = new AgriDrone.IntegrationContracts.Health.ComboAnalysisProvenanceV1(
+                    RequiredMetadata("datasetId"),
+                    RequiredMetadata("datasetVersion"),
+                    RequiredMetadata("annotationRuleVersion"),
+                    model.Id,
+                    model.Version,
+                    v3Context.Policy.Version,
+                    RequiredMetadata("boundaryPolicyVersion"));
+
+                // Đăng ký ảnh khoanh vùng / ảnh cắt thành media của Mission
+                var registeredAt = timeProvider.GetUtcNow();
+                var derivedMediaIds = new Dictionary<string, Guid>(StringComparer.Ordinal);
+                foreach (var (key, info) in derivedObjects)
                 {
-                    matchedPlantId = nearestPlant.Id;
-                    if (isDisease)
+                    var asset = MediaAsset.Create(Guid.NewGuid(), request.TenantId, request.FarmId, info.Source.Media.Provider, key, info.StorageUri,
+                        MediaType.Image, "image/jpeg", info.SizeBytes, info.Sha256, executionContext.ActorId!.Value, registeredAt);
+                    dbContext.MediaAssets.Add(asset);
+                    dbContext.MissionMedia.Add(MissionMedia.Create(request.MissionId, asset.Id, MissionMediaRole.Other, registeredAt, info.Source.CapturedAt));
+                    derivedMediaIds[key] = asset.Id;
+                }
+                Guid? DerivedId(string? key) => key is not null && derivedMediaIds.TryGetValue(key, out var id) ? id : null;
+
+                // Lấy danh sách cây hiện có của Farm trong plant.plants để so khớp
+                var farmPlants = await dbContext.Database.SqlQueryRaw<PlantMatchTarget>(
+                    @"SELECT id AS ""Id"", plant_code AS ""PlantCode"",
+                             ST_Y(location::geometry) AS ""Latitude"",
+                             ST_X(location::geometry) AS ""Longitude"",
+                             row_index AS ""RowIndex"", column_index AS ""ColumnIndex"",
+                             plant_profile_id AS ""PlantProfileId""
+                      FROM plant.plants
+                      WHERE farm_id = {0} AND lifecycle_status = 'ACTIVE'",
+                    request.FarmId)
+                    .ToListAsync(cancellationToken);
+
+                var matchingToleranceM = request.MatchingToleranceMeters is > 0
+                    ? request.MatchingToleranceMeters.Value
+                    : 2.5;
+
+                var findingItemsForZones = new List<(Guid FindingId, string ClassName, double Lat, double Lon, decimal Confidence, Guid? PlantProfileId, Guid? EvidenceMediaId)>();
+                var preparedDetections = new List<(DiseaseDetectionItem Detection, Guid FindingId, Guid? MatchedPlantId, Guid? PlantProfileId, string? PlantCode, int? Row, int? Col, double? DistanceM, decimal? MatchConf, MissionMedia? Source, Guid? AnnotatedMediaId, Guid? CropMediaId)>();
+                var infectedPlantIds = new HashSet<Guid>();
+
+                foreach (var detection in result.Detections)
+                {
+                    var isDisease = detection.ClassName.StartsWith("Disease", StringComparison.OrdinalIgnoreCase) ||
+                                    (!detection.ClassName.StartsWith("Healthy", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(detection.ClassName));
+
+                    PlantMatchTarget? nearestPlant = null;
+                    double minDistance = double.MaxValue;
+
+                    foreach (var plant in farmPlants)
                     {
-                        infectedPlantIds.Add(nearestPlant.Id);
+                        var dist = CalculateHaversineMeters(detection.Lat, detection.Lon, plant.Latitude, plant.Longitude);
+                        if (dist < minDistance)
+                        {
+                            minDistance = dist;
+                            nearestPlant = plant;
+                        }
                     }
-                    matchConf = (decimal)Math.Round(Math.Max(0.1, 1.0 - (minDistance / matchingToleranceM)), 4);
+
+                    Guid? matchedPlantId = null;
+                    decimal? matchConf = null;
+                    if (nearestPlant != null && minDistance <= matchingToleranceM)
+                    {
+                        matchedPlantId = nearestPlant.Id;
+                        if (isDisease)
+                        {
+                            infectedPlantIds.Add(nearestPlant.Id);
+                        }
+                        matchConf = (decimal)Math.Round(Math.Max(0.1, 1.0 - (minDistance / matchingToleranceM)), 4);
+                    }
+
+                    var source = sources.Find(detection);
+                    var annotatedMediaId = DerivedId(detection.AnnotatedStorageKey);
+                    var cropMediaId = DerivedId(detection.CropStorageKey);
+                    var findingId = new Guid(SHA256.HashData(Encoding.UTF8.GetBytes(
+                        $"{request.MissionId:D}/{detection.ImageName}/{detection.Id}")).AsSpan(0, 16));
+
+                    // F04: Chỉ đưa findings đủ điều kiện (bệnh và đạt ngưỡng tin cậy) vào đề xuất Disease Zones (loại bỏ Healthy detections)
+                    if (isDisease && matchedPlantId.HasValue && nearestPlant?.PlantProfileId is not null &&
+                        detection.Confidence >= v3Context.Policy.Confidence)
+                    {
+                        findingItemsForZones.Add((findingId, detection.ClassName, detection.Lat, detection.Lon, (decimal)detection.Confidence, nearestPlant?.PlantProfileId, source?.MediaId));
+                    }
+                    preparedDetections.Add((detection, findingId, matchedPlantId, nearestPlant?.PlantProfileId, nearestPlant?.PlantCode, nearestPlant?.RowIndex, nearestPlant?.ColumnIndex, nearestPlant is null ? null : minDistance, matchConf, source, annotatedMediaId, cropMediaId));
                 }
 
-                // Tra cứu ảnh media gốc (theo khóa MinIO; service cũ thì theo tên file)
-                var source = sources.Find(detection);
-                Guid? evidenceMediaId = source?.MediaId;
-                var annotatedMediaId = DerivedId(detection.AnnotatedStorageKey);
-                var cropMediaId = DerivedId(detection.CropStorageKey);
+                // F04: Sinh Proposal Disease Zones từ detections thật của run
+                var proposedZones = BuildProposedDiseaseZones(v3Context.OrderId, v3Context.AttemptId, version, v3Context.Policy, findingItemsForZones);
 
-                // Tạo metadata JSON cho vết bệnh
-                var metadataDoc = JsonDocument.Parse(JsonSerializer.Serialize(new
+                var comboSnapshot = new ComboAnalysisProcessingSnapshot(
+                    SourceRevision: version,
+                    CaptureAttemptId: v3Context.AttemptId,
+                    FarmBoundaryVersionId: v3Context.CaptureMap.BoundaryId,
+                    FarmBaseMapVersionId: v3Context.CaptureMap.BaseMapId,
+                    BaselineMapVersionId: baselineMapId,
+                    MappingCandidateBatchId: mappingBatchId,
+                    MappingKind: mappingKind,
+                    BusinessPolicyVersionId: policyVersionId,
+                    InputApprovalId: approval.Id,
+                    InputManifestId: approval.ManifestId,
+                    InputManifestHash: approval.ManifestHash,
+                    SupersedesHandoffId: supersedesHandoffId,
+                    LimitationNotice: RequiredMetadata("teamLabelLimitation"),
+                    Provenance: comboProvenance,
+                    ApprovedJobReference: approval.ProcessingJobId,
+                    DiseaseZones: proposedZones);
+
+                job = AiProcessingJob.RecordCompletedComboRun(request.MissionId, model.Id, comboSnapshot,
+                    JsonSerializer.SerializeToDocument(new { InferencePolicy = v3Context.Policy, captureMap, MediaIds = mediaList.Select(m => m.MediaId).ToArray(), mapping_candidate_batch_id = mappingBatchId, InputStorageKeys = mediaList.Select(m => m.Media.StorageKey).ToArray(), image_outcomes = result.ImageOutcomes }),
+                    JsonSerializer.SerializeToDocument(result), startedAt, timeProvider.GetUtcNow());
+
+                dbContext.AiProcessingJobs.Add(job);
+
+                var observationsToInsert = new List<MissionPlantObservation>();
+                foreach (var item in preparedDetections)
                 {
-                    source_finding_id = new Guid(SHA256.HashData(Encoding.UTF8.GetBytes(
-                        $"{request.MissionId:D}/{detection.ImageName}/{detection.Id}" )).AsSpan(0, 16)),
-                    observed_at = source?.CapturedAt ?? missionObservedAt
-                        ?? throw new InvalidOperationException("Capture time or Mission flight time is required for observed-time provenance."),
-                    suggested_plant_id = matchedPlantId,
-                    detection_id = detection.Id,
-                    class_id = detection.ClassId,
-                    class_name = detection.ClassName,
-                    image_name = detection.ImageName,
-                    crop_image_url = detection.CropImageUrl,
-                    annotated_image_url = detection.AnnotatedImageUrl,
-                    // Media đã đăng ký (link xem cấp mới mỗi lần qua .../media/{id}/download-url, không hết hạn như link ký sẵn).
-                    source_storage_key = source?.Media.StorageKey,
-                    annotated_media_id = annotatedMediaId,
-                    crop_media_id = cropMediaId,
-                    bbox = new[] { detection.BboxX, detection.BboxY, detection.BboxW, detection.BboxH },
-                    plant_code = nearestPlant?.PlantCode,
-                    row = nearestPlant?.RowIndex,
-                    col = nearestPlant?.ColumnIndex
-                }));
+                    var d = item.Detection;
+                    var metadataDoc = JsonDocument.Parse(JsonSerializer.Serialize(new
+                    {
+                        source_finding_id = item.FindingId,
+                        observed_at = item.Source?.CapturedAt ?? missionObservedAt
+                            ?? throw new InvalidOperationException("Capture time or Mission flight time is required for observed-time provenance."),
+                        suggested_plant_id = item.MatchedPlantId,
+                        detection_id = d.Id,
+                        class_id = d.ClassId,
+                        class_name = d.ClassName,
+                        image_name = d.ImageName,
+                        crop_image_url = d.CropImageUrl,
+                        annotated_image_url = d.AnnotatedImageUrl,
+                        source_storage_key = item.Source?.Media.StorageKey,
+                        annotated_media_id = item.AnnotatedMediaId,
+                        crop_media_id = item.CropMediaId,
+                        bbox = new[] { d.BboxX, d.BboxY, d.BboxW, d.BboxH },
+                        plant_code = item.PlantCode,
+                        row = item.Row,
+                        col = item.Col,
+                        plant_profile_id = item.PlantProfileId
+                    }));
 
-                var observation = MissionPlantObservation.Create(
-                    farmId: request.FarmId,
-                    missionId: request.MissionId,
-                    detectedLocation: new Point(detection.Lon, detection.Lat) { SRID = 4326 },
-                    detectionConfidence: (decimal)Math.Clamp(detection.Confidence, 0.0, 1.0),
-                    suggestedPlantId: matchedPlantId,
-                    resolvedPlantId: null,
-                    gpsDistanceM: GetGpsDistanceMeters(nearestPlant is null ? null : minDistance, detection.ImageName),
-                    matchingParameters: metadataDoc,
-                    evidenceMediaId: evidenceMediaId,
-                    reviewStatus: ObservationReviewStatus.Pending,
-                    aiJobId: job.Id,
-                    modelVersionId: model.Id,
-                    matchConfidence: matchConf,
-                    selectedMatchStrategy: MatchStrategy.GpsOnly,
-                    matchingAlgorithmVersion: model.Version);
+                    var observation = MissionPlantObservation.Create(
+                        farmId: request.FarmId,
+                        missionId: request.MissionId,
+                        detectedLocation: new Point(d.Lon, d.Lat) { SRID = 4326 },
+                        detectionConfidence: (decimal)Math.Clamp(d.Confidence, 0.0, 1.0),
+                        suggestedPlantId: item.MatchedPlantId,
+                        resolvedPlantId: null,
+                        gpsDistanceM: GetGpsDistanceMeters(item.DistanceM, d.ImageName),
+                        matchingParameters: metadataDoc,
+                        evidenceMediaId: item.Source?.MediaId,
+                        reviewStatus: ObservationReviewStatus.Pending,
+                        aiJobId: job.Id,
+                        modelVersionId: model.Id,
+                        matchConfidence: item.MatchConf,
+                        selectedMatchStrategy: MatchStrategy.GpsOnly,
+                        matchingAlgorithmVersion: model.Version);
 
-                observationsToInsert.Add(observation);
+                    observationsToInsert.Add(observation);
+                }
+
+                await dbContext.MissionPlantObservations.AddRangeAsync(observationsToInsert, cancellationToken);
+                await dbContext.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+
+                if (observationsToInsert.Count > 0)
+                {
+                    logger.LogInformation(
+                        "Successfully saved {Count} disease observations and {ZoneCount} proposed zones for Mission {MissionId} ({Infected} plants infected).",
+                        observationsToInsert.Count, proposedZones.Count, request.MissionId, infectedPlantIds.Count);
+                }
             }
-
-            await dbContext.MissionPlantObservations.AddRangeAsync(observationsToInsert, cancellationToken);
-            await dbContext.SaveChangesAsync(cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
-            if (observationsToInsert.Count > 0)
+            else
             {
-                logger.LogInformation(
-                    "Successfully saved {Count} disease observations to database for Mission {MissionId} ({Infected} plants infected). Ready for publishing via plant-health/publish.",
-                    observationsToInsert.Count, request.MissionId, infectedPlantIds.Count);
+                // Legacy PlantHealth flow
+                mission = await dbContext.DroneMissions.FromSqlInterpolated($"SELECT *, xmin FROM mission.drone_missions WHERE id = {request.MissionId} FOR UPDATE")
+                    .SingleAsync(cancellationToken);
+                version = (await dbContext.AiProcessingJobs.Where(j => j.MissionId == request.MissionId && j.JobType == AiJobType.DiseaseDetection)
+                    .Select(j => (int?)j.AttemptNumber).MaxAsync(cancellationToken) ?? 0) + 1;
+
+                var snapshot = new PlantHealthProcessingSnapshot(version, captureMap.BoundaryId, captureMap.BaseMapId, provenance, RequiredMetadata("teamLabelLimitation"));
+                job = AiProcessingJob.RecordCompletedHealthRun(request.MissionId, model.Id, snapshot,
+                    JsonSerializer.SerializeToDocument(new { request.ConfidenceThreshold, captureMap, MediaIds = mediaList.Select(m => m.MediaId).ToArray() }),
+                    JsonSerializer.SerializeToDocument(result), startedAt, timeProvider.GetUtcNow());
+
+                dbContext.AiProcessingJobs.Add(job);
+
+                var registeredAt = timeProvider.GetUtcNow();
+                var derivedMediaIds = new Dictionary<string, Guid>(StringComparer.Ordinal);
+                foreach (var (key, info) in derivedObjects)
+                {
+                    var asset = MediaAsset.Create(Guid.NewGuid(), request.TenantId, request.FarmId, info.Source.Media.Provider, key, info.StorageUri,
+                        MediaType.Image, "image/jpeg", info.SizeBytes, info.Sha256, executionContext.ActorId!.Value, registeredAt);
+                    dbContext.MediaAssets.Add(asset);
+                    dbContext.MissionMedia.Add(MissionMedia.Create(request.MissionId, asset.Id, MissionMediaRole.Other, registeredAt, info.Source.CapturedAt));
+                    derivedMediaIds[key] = asset.Id;
+                }
+                Guid? DerivedId(string? key) => key is not null && derivedMediaIds.TryGetValue(key, out var id) ? id : null;
+
+                var farmPlants = await dbContext.Database.SqlQueryRaw<PlantMatchTarget>(
+                    @"SELECT id AS ""Id"", plant_code AS ""PlantCode"",
+                             ST_Y(location::geometry) AS ""Latitude"",
+                             ST_X(location::geometry) AS ""Longitude"",
+                             row_index AS ""RowIndex"", column_index AS ""ColumnIndex"",
+                             plant_profile_id AS ""PlantProfileId""
+                      FROM plant.plants
+                      WHERE farm_id = {0} AND lifecycle_status = 'ACTIVE'",
+                    request.FarmId)
+                    .ToListAsync(cancellationToken);
+
+                var matchingToleranceM = request.MatchingToleranceMeters is > 0
+                    ? request.MatchingToleranceMeters.Value
+                    : 2.5;
+
+                var observationsToInsert = new List<MissionPlantObservation>();
+                var infectedPlantIds = new HashSet<Guid>();
+
+                foreach (var detection in result.Detections)
+                {
+                    var isDisease = detection.ClassName.StartsWith("Disease", StringComparison.OrdinalIgnoreCase) ||
+                                    (!detection.ClassName.StartsWith("Healthy", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(detection.ClassName));
+
+                    PlantMatchTarget? nearestPlant = null;
+                    double minDistance = double.MaxValue;
+
+                    foreach (var plant in farmPlants)
+                    {
+                        var dist = CalculateHaversineMeters(detection.Lat, detection.Lon, plant.Latitude, plant.Longitude);
+                        if (dist < minDistance)
+                        {
+                            minDistance = dist;
+                            nearestPlant = plant;
+                        }
+                    }
+
+                    Guid? matchedPlantId = null;
+                    decimal? matchConf = null;
+                    if (nearestPlant != null && minDistance <= matchingToleranceM)
+                    {
+                        matchedPlantId = nearestPlant.Id;
+                        if (isDisease)
+                        {
+                            infectedPlantIds.Add(nearestPlant.Id);
+                        }
+                        matchConf = (decimal)Math.Round(Math.Max(0.1, 1.0 - (minDistance / matchingToleranceM)), 4);
+                    }
+
+                    var source = sources.Find(detection);
+                    var annotatedMediaId = DerivedId(detection.AnnotatedStorageKey);
+                    var cropMediaId = DerivedId(detection.CropStorageKey);
+                    var findingId = new Guid(SHA256.HashData(Encoding.UTF8.GetBytes(
+                        $"{request.MissionId:D}/{detection.ImageName}/{detection.Id}")).AsSpan(0, 16));
+
+                    var metadataDoc = JsonDocument.Parse(JsonSerializer.Serialize(new
+                    {
+                        source_finding_id = findingId,
+                        observed_at = source?.CapturedAt ?? missionObservedAt
+                            ?? throw new InvalidOperationException("Capture time or Mission flight time is required for observed-time provenance."),
+                        suggested_plant_id = matchedPlantId,
+                        detection_id = detection.Id,
+                        class_id = detection.ClassId,
+                        class_name = detection.ClassName,
+                        image_name = detection.ImageName,
+                        crop_image_url = detection.CropImageUrl,
+                        annotated_image_url = detection.AnnotatedImageUrl,
+                        source_storage_key = source?.Media.StorageKey,
+                        annotated_media_id = annotatedMediaId,
+                        crop_media_id = cropMediaId,
+                        bbox = new[] { detection.BboxX, detection.BboxY, detection.BboxW, detection.BboxH },
+                        plant_code = nearestPlant?.PlantCode,
+                        row = nearestPlant?.RowIndex,
+                        col = nearestPlant?.ColumnIndex,
+                        plant_profile_id = nearestPlant?.PlantProfileId
+                    }));
+
+                    var observation = MissionPlantObservation.Create(
+                        farmId: request.FarmId,
+                        missionId: request.MissionId,
+                        detectedLocation: new Point(detection.Lon, detection.Lat) { SRID = 4326 },
+                        detectionConfidence: (decimal)Math.Clamp(detection.Confidence, 0.0, 1.0),
+                        suggestedPlantId: matchedPlantId,
+                        resolvedPlantId: null,
+                        gpsDistanceM: GetGpsDistanceMeters(nearestPlant is null ? null : minDistance, detection.ImageName),
+                        matchingParameters: metadataDoc,
+                        evidenceMediaId: source?.MediaId,
+                        reviewStatus: ObservationReviewStatus.Pending,
+                        aiJobId: job.Id,
+                        modelVersionId: model.Id,
+                        matchConfidence: matchConf,
+                        selectedMatchStrategy: MatchStrategy.GpsOnly,
+                        matchingAlgorithmVersion: model.Version);
+
+                    observationsToInsert.Add(observation);
+                }
+
+                await dbContext.MissionPlantObservations.AddRangeAsync(observationsToInsert, cancellationToken);
+                await dbContext.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+                if (observationsToInsert.Count > 0)
+                {
+                    logger.LogInformation(
+                        "Successfully saved {Count} disease observations to database for Mission {MissionId} ({Infected} plants infected). Ready for publishing via plant-health/publish.",
+                        observationsToInsert.Count, request.MissionId, infectedPlantIds.Count);
+                }
             }
         }
         catch (Exception ex)
@@ -395,5 +940,191 @@ internal sealed class DetectMissionDiseasesCommandHandler(
                 Math.Sin(dLon / 2.0) * Math.Sin(dLon / 2.0);
         var c = 2.0 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1.0 - a));
         return r * c;
+    }
+
+    private static Guid CreateVersion5(Guid namespaceId, string name)
+    {
+        var namespaceBytes = namespaceId.ToByteArray();
+        SwapGuidByteOrder(namespaceBytes);
+        var nameBytes = Encoding.UTF8.GetBytes(name);
+        var input = new byte[namespaceBytes.Length + nameBytes.Length];
+        Buffer.BlockCopy(namespaceBytes, 0, input, 0, namespaceBytes.Length);
+        Buffer.BlockCopy(nameBytes, 0, input, namespaceBytes.Length, nameBytes.Length);
+
+#pragma warning disable CA5350
+        var hash = SHA1.HashData(input);
+#pragma warning restore CA5350
+        var guidBytes = hash[..16];
+        guidBytes[6] = (byte)((guidBytes[6] & 0x0F) | 0x50);
+        guidBytes[8] = (byte)((guidBytes[8] & 0x3F) | 0x80);
+        SwapGuidByteOrder(guidBytes);
+        return new Guid(guidBytes);
+    }
+
+    private static void SwapGuidByteOrder(byte[] bytes)
+    {
+        (bytes[0], bytes[3]) = (bytes[3], bytes[0]);
+        (bytes[1], bytes[2]) = (bytes[2], bytes[1]);
+        (bytes[4], bytes[5]) = (bytes[5], bytes[4]);
+    }
+
+    private static ComboInferencePolicy? ReadComboPolicy(AiModelVersion model)
+    {
+        var metrics = model.Metrics.RootElement;
+        if (metrics.ValueKind != JsonValueKind.Object ||
+            !metrics.TryGetProperty("comboInferencePolicy", out var policy) ||
+            policy.ValueKind != JsonValueKind.Object ||
+            !policy.TryGetProperty("version", out var version) ||
+            version.ValueKind != JsonValueKind.String ||
+            version.GetString() is not { Length: > 0 and <= 128 } policyVersion ||
+            string.IsNullOrWhiteSpace(policyVersion) ||
+            !ReadNumber("confidence", out var confidence) || confidence is < 0 or > 1 ||
+            !ReadNumber("clusterRadiusMeters", out var radius) || radius <= 0 ||
+            !ReadNumber("bufferMeters", out var buffer) || buffer <= 0)
+        {
+            return null;
+        }
+
+        return new ComboInferencePolicy(model.Id, policyVersion, confidence, radius, buffer);
+
+        bool ReadNumber(string name, out double value)
+        {
+            value = 0;
+            return policy.TryGetProperty(name, out var property) &&
+                property.ValueKind == JsonValueKind.Number &&
+                property.TryGetDouble(out value) && double.IsFinite(value);
+        }
+    }
+
+    private static List<ProposedComboDiseaseZoneV1> BuildProposedDiseaseZones(
+        Guid orderId,
+        Guid attemptId,
+        int version,
+        ComboInferencePolicy policy,
+        List<(Guid FindingId, string ClassName, double Lat, double Lon, decimal Confidence, Guid? PlantProfileId, Guid? EvidenceMediaId)> items)
+    {
+        if (items.Count == 0)
+        {
+            return [];
+        }
+
+        // 1. Nhóm theo loại bệnh chuẩn hóa
+        var groups = items.OrderBy(item => item.FindingId)
+            .GroupBy(i => i.ClassName.Trim().Replace(' ', '_').ToUpperInvariant(), StringComparer.Ordinal)
+            .ToList();
+
+        var zones = new List<ProposedComboDiseaseZoneV1>();
+        int zoneIndex = 0;
+
+        foreach (var group in groups)
+        {
+            var classCode = group.Key;
+            var groupItems = group.GroupBy(item => item.PlantProfileId)
+                .Select(matches => matches.OrderByDescending(item => item.Confidence).First())
+                .ToList();
+            var n = groupItems.Count;
+            var visited = new bool[n];
+            var clusters = new List<List<(Guid FindingId, string ClassName, double Lat, double Lon, decimal Confidence, Guid? PlantProfileId, Guid? EvidenceMediaId)>>();
+
+            // 2. Phân cụm không gian (Spatial Clustering) bằng BFS Connected Components
+            for (int i = 0; i < n; i++)
+            {
+                if (visited[i]) continue;
+
+                var currentCluster = new List<(Guid FindingId, string ClassName, double Lat, double Lon, decimal Confidence, Guid? PlantProfileId, Guid? EvidenceMediaId)>();
+                var queue = new Queue<int>();
+                queue.Enqueue(i);
+                visited[i] = true;
+
+                while (queue.Count > 0)
+                {
+                    var u = queue.Dequeue();
+                    currentCluster.Add(groupItems[u]);
+
+                    for (int v = 0; v < n; v++)
+                    {
+                        if (visited[v]) continue;
+
+                        var dist = CalculateHaversineMeters(groupItems[u].Lat, groupItems[u].Lon, groupItems[v].Lat, groupItems[v].Lon);
+                        if (dist <= policy.ClusterRadiusMeters)
+                        {
+                            visited[v] = true;
+                            queue.Enqueue(v);
+                        }
+                    }
+                }
+
+                clusters.Add(currentCluster);
+            }
+
+            // 3. Mỗi cụm bệnh độc lập tạo thành một ProposedComboDiseaseZoneV1 riêng biệt
+            foreach (var cluster in clusters)
+            {
+                zoneIndex++;
+                double minLon = double.MaxValue, maxLon = double.MinValue;
+                double minLat = double.MaxValue, maxLat = double.MinValue;
+
+                foreach (var item in cluster)
+                {
+                    if (item.Lon < minLon) minLon = item.Lon;
+                    if (item.Lon > maxLon) maxLon = item.Lon;
+                    if (item.Lat < minLat) minLat = item.Lat;
+                    if (item.Lat > maxLat) maxLat = item.Lat;
+                }
+
+                const double metersPerLatitudeDegree = 111_195;
+                var latBuffer = policy.BufferMeters / metersPerLatitudeDegree;
+                var maxAbsoluteLatitude = Math.Max(Math.Abs(minLat), Math.Abs(maxLat));
+                var lonBuffer = latBuffer / Math.Max(1e-6, Math.Cos(maxAbsoluteLatitude * Math.PI / 180));
+                var pMinLon = Math.Max(-180, minLon - lonBuffer);
+                var pMaxLon = Math.Min(180, maxLon + lonBuffer);
+                var pMinLat = Math.Max(-90, minLat - latBuffer);
+                var pMaxLat = Math.Min(90, maxLat + latBuffer);
+
+                // Ring 5 điểm khép kín theo chiều kim đồng hồ
+                var ring = new List<IReadOnlyList<double>>
+                {
+                    new double[] { pMinLon, pMinLat },
+                    new double[] { pMaxLon, pMinLat },
+                    new double[] { pMaxLon, pMaxLat },
+                    new double[] { pMinLon, pMaxLat },
+                    new double[] { pMinLon, pMinLat }
+                };
+
+                var polygon = new GeoJsonPolygonV3("Polygon", [ring]);
+
+                var memberships = new List<ProposedDiseaseZoneMembershipV1>();
+                var zoneMedia = new List<EvidenceMediaReferenceV4>();
+
+                foreach (var item in cluster)
+                {
+                    memberships.Add(new ProposedDiseaseZoneMembershipV1(
+                        FindingId: item.FindingId,
+                        PlantProfileId: item.PlantProfileId,
+                        MappingCandidateId: null,
+                        Confidence: item.Confidence));
+
+                    if (item.EvidenceMediaId.HasValue && zoneMedia.All(m => m.MediaAssetId != item.EvidenceMediaId.Value))
+                    {
+                        zoneMedia.Add(new EvidenceMediaReferenceV4(item.EvidenceMediaId.Value, "source_image"));
+                    }
+                }
+
+                var proposalId = CreateVersion5(
+                    ComboAnalysisNamespace,
+                    $"{orderId:D}:{attemptId:D}:{version}:{zoneIndex}").ToString("D");
+
+                zones.Add(new ProposedComboDiseaseZoneV1(
+                    SourceProposalId: proposalId,
+                    Geometry: polygon,
+                    SuspectedClassCode: classCode,
+                    MembershipVersion: 1,
+                    Memberships: memberships,
+                    GuidanceCandidates: [],
+                    EvidenceMedia: zoneMedia));
+            }
+        }
+
+        return zones;
     }
 }

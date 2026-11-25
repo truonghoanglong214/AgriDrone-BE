@@ -33,6 +33,7 @@ public sealed class SystemManagerMissionsController(
     IMissionPlantGpsStore plantGpsStore,
     IMissionPlantGpsPublisher plantGpsPublisher,
     IMissionPlantHealthPublisher plantHealthPublisher,
+    IMissionComboAnalysisPublisher comboAnalysisPublisher,
     IExecutionContext executionContext) : ControllerBase
 {
     /// <summary>Lấy danh sách cây CSV đã lưu cho mission.</summary>
@@ -693,6 +694,88 @@ public sealed class SystemManagerMissionsController(
                     ["payload"] = result.Errors?.ToArray() ?? ["Payload is invalid."]
                 }),
             _ => Results.Problem("Unable to queue the plant health message.")
+        };
+    }
+
+    /// <summary>Đóng gói kết quả nhận diện COMBO của mission và xếp message ComboAnalysisReadyV1 vào Outbox.</summary>
+    /// <remarks>
+    /// Sau khi hoàn thành phân tích AI cho mission V3 COMBO, SystemManager gọi endpoint này để phát event
+    /// ComboAnalysisReadyV1 sang RabbitMQ để lưu pending batch cho Manager review.
+    /// Dùng Idempotency-Key trong header để đảm bảo an toàn, không bắn trùng.
+    /// </remarks>
+    [HttpPost("/api/v3/farms/{farmId:guid}/missions/{missionId:guid}/combo-analysis/handoffs")]
+    public async Task<IResult> PublishComboAnalysis(
+        [FromRoute] Guid farmId,
+        [FromRoute] Guid missionId,
+        [FromHeader(Name = "Idempotency-Key")] Guid? idempotencyKey,
+        [FromBody] PublishMissionComboAnalysisRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (idempotencyKey is not Guid messageId || messageId == Guid.Empty)
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["Idempotency-Key"] = ["A non-empty GUID Idempotency-Key is required."]
+            });
+        }
+
+        if (request.JobId == Guid.Empty)
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["JobId"] = ["A valid JobId is required."]
+            });
+        }
+
+        if (request.SourceRevision < 1)
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["SourceRevision"] = ["SourceRevision must be at least 1."]
+            });
+        }
+
+        var access = await managerAccessService.ResolveFarmAccessAsync(
+            farmId, cancellationToken);
+        if (!access.IsAllowed || access.TenantId is not Guid tenantId ||
+            access.FarmId != farmId)
+            return Results.Forbid();
+
+        if (executionContext.ActorId is not Guid actorId ||
+            executionContext.CorrelationId == Guid.Empty)
+            return Results.Unauthorized();
+
+        var result = await comboAnalysisPublisher.PublishAsync(
+            tenantId,
+            farmId,
+            missionId,
+            request.JobId,
+            request.SourceRevision,
+            actorId,
+            executionContext.CorrelationId,
+            messageId,
+            cancellationToken);
+
+        return result.Status switch
+        {
+            MissionComboAnalysisPublishStatus.Queued => Results.Ok(new
+            {
+                missionId,
+                handoffId = result.HandoffId,
+                messageId = result.MessageId,
+                status = "QUEUED"
+            }),
+            MissionComboAnalysisPublishStatus.NotFound => Results.NotFound(),
+            MissionComboAnalysisPublishStatus.Conflict => Results.Conflict(new
+            {
+                errors = result.Errors
+            }),
+            MissionComboAnalysisPublishStatus.Invalid => Results.ValidationProblem(
+                new Dictionary<string, string[]>
+                {
+                    ["payload"] = result.Errors?.ToArray() ?? ["Payload is invalid."]
+                }),
+            _ => Results.Problem("Unable to queue the combo analysis message.")
         };
     }
 

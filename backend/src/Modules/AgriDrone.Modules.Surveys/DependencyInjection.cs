@@ -137,6 +137,7 @@ public static class DependencyInjection
         services.AddScoped<ISpatialPolicyRepository, SpatialPolicyRepository>();
         services.AddScoped<ISurveyIntegrationOutbox, SurveyIntegrationOutbox>();
         services.AddScoped<ISurveyCatalogueQueries, SurveyCatalogueQueries>();
+        services.AddScoped<AgriDrone.Modules.Surveys.Application.Abstractions.Results.ISurveyComboPendingReadPort, AgriDrone.Modules.Surveys.Infrastructure.Persistence.Ports.SurveyComboPendingReadPort>();
         services.AddScoped<AgriDrone.Modules.Surveys.Application.Features.Reports.IMonthlyFinancialReportQuery, MonthlyFinancialReportQuery>();
         services.AddScoped<ISurveyRequestQueries, SurveyRequestQueries>();
         services.AddScoped<ISurveyOrderArchiveReferenceQuery, SurveyOrderArchiveReferenceQuery>();

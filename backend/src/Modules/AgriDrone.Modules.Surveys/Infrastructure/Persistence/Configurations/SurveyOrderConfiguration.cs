@@ -165,6 +165,8 @@ public sealed class SurveyOrderConfiguration : IEntityTypeConfiguration<SurveyOr
         builder.Property(order => order.PoleCountConfirmedAt).HasColumnName("pole_count_confirmed_at").HasColumnType("timestamp with time zone");
         builder.Property(order => order.PricingConfirmedBy).HasColumnName("pricing_confirmed_by").HasColumnType("uuid");
         builder.Property(order => order.PricingConfirmedAt).HasColumnName("pricing_confirmed_at").HasColumnType("timestamp with time zone");
+        builder.Property(order => order.CurrentInvoiceRevisionId).HasColumnName("current_invoice_revision_id").HasColumnType("uuid");
+        builder.Property(order => order.CurrentApprovedResultRevisionId).HasColumnName("current_approved_result_revision_id").HasColumnType("uuid");
         builder.Property(order => order.ConfirmedSurveyAreaHa).HasColumnName("confirmed_survey_area_ha").HasColumnType("numeric(12,4)").HasPrecision(12, 4);
         builder.Property(order => order.PricePerHaSnapshot).HasColumnName("price_per_ha_snapshot").HasColumnType("numeric(18,2)").HasPrecision(18, 2);
         builder.Property(order => order.Currency).HasColumnName("currency").HasColumnType("character(3)").HasMaxLength(3).IsFixedLength();
@@ -256,6 +258,20 @@ public sealed class SurveyOrderConfiguration : IEntityTypeConfiguration<SurveyOr
             .HasForeignKey(order => order.BusinessPolicyVersionId)
             .OnDelete(DeleteBehavior.Restrict)
             .HasConstraintName("fk_survey_orders_business_policy_version");
+
+        builder.HasOne(order => order.CurrentInvoiceRevision)
+            .WithMany()
+            .HasForeignKey(order => new { order.CurrentInvoiceRevisionId, order.Id, order.TenantId, order.FarmId })
+            .HasPrincipalKey(i => new { i.Id, i.SurveyOrderId, i.TenantId, i.FarmId })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_survey_orders_current_invoice_revision_scope");
+
+        builder.HasOne(order => order.CurrentApprovedResultRevision)
+            .WithMany()
+            .HasForeignKey(order => new { order.CurrentApprovedResultRevisionId, order.Id, order.TenantId, order.FarmId })
+            .HasPrincipalKey(r => new { r.Id, r.SurveyOrderId, r.TenantId, r.FarmId })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_survey_orders_current_approved_result_scope");
 
 
         builder.HasMany(order => order.ZoneScopes)

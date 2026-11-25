@@ -761,6 +761,15 @@ internal sealed class SurveyCaptureExecutionCoordinator(
                 $"files={files.Count}");
             db.Set<CaptureInputManifest>().Add(manifest);
 
+            var manifestFiles = files.Select(value => CaptureInputManifestFile.Create(
+                manifest.Id,
+                value.MediaId,
+                value.Checksum!.ToLowerInvariant(),
+                value.FileSizeBytes!.Value,
+                value.Role,
+                now)).ToList();
+            db.Set<CaptureInputManifestFile>().AddRange(manifestFiles);
+
             attempt.BindMission(mission.Id);
             attempt.MarkUploaded(
                 new CaptureUploadManifestEvidence(

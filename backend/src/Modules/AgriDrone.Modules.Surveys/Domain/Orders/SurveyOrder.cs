@@ -1,4 +1,5 @@
 using AgriDrone.Modules.Surveys.Application.Abstractions.Pricing;
+using AgriDrone.SharedKernel.Application;
 using AgriDrone.SharedKernel.Domain;
 
 namespace AgriDrone.Modules.Surveys.Domain;
@@ -175,6 +176,12 @@ public sealed class SurveyOrder : AggregateRoot
     public DateTimeOffset? PoleCountConfirmedAt { get; private set; }
     public Guid? PricingConfirmedBy { get; private set; }
     public DateTimeOffset? PricingConfirmedAt { get; private set; }
+    public Guid? CurrentInvoiceRevisionId { get; private set; }
+    public Guid? CurrentApprovedResultRevisionId { get; private set; }
+    public SurveyInvoiceRevision? CurrentInvoiceRevision { get; private set; }
+    public SurveyInternalApprovedResultRevision? CurrentApprovedResultRevision { get; private set; }
+    public ICollection<SurveyInvoiceRevision> InvoiceRevisions { get; private set; } = [];
+    public ICollection<SurveyInternalApprovedResultRevision> ApprovedResultRevisions { get; private set; } = [];
 
     // Legacy compatibility only. Target writes never populate these fields.
     public decimal? ConfirmedSurveyAreaHa { get; private set; }
@@ -968,6 +975,442 @@ public sealed class SurveyOrder : AggregateRoot
         BaselineMapVersionId = baselineMapVersionId;
         UpdatedAt = occurredAt;
         Version++;
+    }
+
+    public Result RecordInternalApprovedResult(
+        SurveyInternalApprovedResultRevision resultRevision,
+        SurveyInternalApprovedResultRevision? currentRevision,
+        SurveyOrderPoleCountSnapshot countSnapshot,
+        uint expectedVersion)
+    {
+        if (resultRevision is null)
+            return Result.Failure(AppError.Validation("ResultRevision.Required", "Internal approved result revision is required."));
+
+        if (countSnapshot is null)
+            return Result.Failure(AppError.Validation("CountSnapshot.Required", "Pole count snapshot is required."));
+
+        if (Scope != ContractScope.V3)
+            return Result.Failure(AppError.Validation("SurveyOrder.ScopeInvalid", "Only V3 orders can record internal approved result revisions."));
+
+        if (resultRevision.ReviewedAt == default || resultRevision.ReviewedAt.Offset != TimeSpan.Zero)
+            return Result.Failure(AppError.Validation("ReviewedAt.Invalid", "ReviewedAt must be a valid UTC timestamp."));
+
+        if (resultRevision.ReviewedAt < UpdatedAt)
+            return Result.Failure(AppError.Validation("ReviewedAt.BeforeUpdatedAt", "ReviewedAt cannot be earlier than order last updated timestamp."));
+
+        if (Version != expectedVersion)
+        {
+            return Result.Failure(AppError.Conflict(
+                "SurveyOrder.ConcurrencyViolation",
+                $"Optimistic concurrency violation: order version is {Version}, expected {expectedVersion}."));
+        }
+
+        if (Status != SurveyOrderStatus.Processing && Status != SurveyOrderStatus.AwaitingSettlement)
+        {
+            return Result.Failure(AppError.Validation(
+                "SurveyOrder.StatusInvalid",
+                $"Cannot record internal approved result in status '{Status}'. Must be Processing or AwaitingSettlement."));
+        }
+
+        if (resultRevision.SurveyOrderId != Id || resultRevision.TenantId != TenantId || resultRevision.FarmId != FarmId)
+        {
+            return Result.Failure(AppError.Validation(
+                "ResultRevision.ContextMismatch",
+                "Internal approved result revision does not match survey order tenant, farm, or order identifier."));
+        }
+
+        if (!resultRevision.IsCurrent)
+        {
+            return Result.Failure(AppError.Validation(
+                "ResultRevision.NotCurrent",
+                "Only an active current result revision can be recorded on the order."));
+        }
+
+        // Lineage verification against actual current predecessor revision
+        if (!CurrentApprovedResultRevisionId.HasValue)
+        {
+            if (currentRevision is not null)
+            {
+                return Result.Failure(AppError.Conflict(
+                    "ResultRevision.LineageStateMismatch",
+                    "Current approved result revision must be null when order has no active approval."));
+            }
+
+            if (resultRevision.RevisionNumber != 1)
+            {
+                return Result.Failure(AppError.Validation(
+                    "ResultRevision.InitialRevisionNumberInvalid",
+                    "Initial internal approved result revision must have revision number 1."));
+            }
+
+            if (resultRevision.PredecessorRevisionId.HasValue)
+            {
+                return Result.Failure(AppError.Validation(
+                    "ResultRevision.InitialPredecessorInvalid",
+                    "Initial internal approved result revision cannot have a predecessor."));
+            }
+        }
+        else
+        {
+            if (currentRevision is null)
+            {
+                return Result.Failure(AppError.Conflict(
+                    "ResultRevision.CurrentRevisionMissing",
+                    "Current approved result revision must be provided for correction."));
+            }
+
+            if (currentRevision.Id != CurrentApprovedResultRevisionId.Value)
+            {
+                return Result.Failure(AppError.Conflict(
+                    "ResultRevision.CurrentPointerMismatch",
+                    "Provided current revision does not match the order current approved result pointer."));
+            }
+
+            if (currentRevision.SurveyOrderId != Id || currentRevision.TenantId != TenantId || currentRevision.FarmId != FarmId)
+            {
+                return Result.Failure(AppError.Validation(
+                    "ResultRevision.CurrentRevisionContextMismatch",
+                    "Current revision context does not match survey order tenant, farm, or order identifier."));
+            }
+
+            if (currentRevision.RevisionNumber == int.MaxValue)
+            {
+                return Result.Failure(AppError.Validation(
+                    "ResultRevision.RevisionLimitReached",
+                    "Revision sequence has reached maximum integer limit."));
+            }
+
+            if (resultRevision.Id == currentRevision.Id)
+            {
+                return Result.Failure(AppError.Validation(
+                    "ResultRevision.SelfReference",
+                    "New revision cannot have the same identifier as current predecessor revision."));
+            }
+
+            if (!resultRevision.PredecessorRevisionId.HasValue || resultRevision.PredecessorRevisionId.Value != currentRevision.Id)
+            {
+                return Result.Failure(AppError.Validation(
+                    "ResultRevision.PredecessorMismatch",
+                    "New revision predecessor must match the identifier of the current predecessor revision."));
+            }
+
+            if (resultRevision.RevisionNumber != currentRevision.RevisionNumber + 1)
+            {
+                return Result.Failure(AppError.Validation(
+                    "ResultRevision.RevisionSequenceInvalid",
+                    $"New revision number must be exactly {currentRevision.RevisionNumber + 1}."));
+            }
+
+            // If predecessor has already been superseded, its successor pointer must match new revision ID
+            if (!currentRevision.IsCurrent || currentRevision.SuccessorRevisionId.HasValue)
+            {
+                if (!currentRevision.SuccessorRevisionId.HasValue || currentRevision.SuccessorRevisionId.Value != resultRevision.Id)
+                {
+                    return Result.Failure(AppError.Conflict(
+                        "ResultRevision.PredecessorAlreadySuperseded",
+                        "Predecessor revision has already been superseded by a different successor revision."));
+                }
+            }
+        }
+
+        // Verification against loaded count snapshot
+        if (countSnapshot.Id != resultRevision.PoleCountSnapshotId)
+        {
+            return Result.Failure(AppError.Validation(
+                "ResultRevision.SnapshotIdMismatch",
+                "Result revision pole count snapshot identifier does not match provided snapshot."));
+        }
+
+        if (countSnapshot.SurveyOrderId != Id || countSnapshot.TenantId != TenantId || countSnapshot.FarmId != FarmId)
+        {
+            return Result.Failure(AppError.Validation(
+                "CountSnapshot.ContextMismatch",
+                "Pole count snapshot context does not match survey order tenant, farm, or order identifier."));
+        }
+
+        if (countSnapshot.MissionId != resultRevision.MissionId)
+        {
+            return Result.Failure(AppError.Validation(
+                "ResultRevision.MissionMismatch",
+                "Result revision mission identifier does not match count snapshot mission identifier."));
+        }
+
+        if (countSnapshot.CaptureAttemptId != resultRevision.CaptureAttemptId)
+        {
+            return Result.Failure(AppError.Validation(
+                "ResultRevision.AttemptMismatch",
+                "Result revision capture attempt identifier does not match count snapshot capture attempt identifier."));
+        }
+
+        if (countSnapshot.FarmBaseMapVersionId != resultRevision.FarmBaseMapVersionId)
+        {
+            return Result.Failure(AppError.Validation(
+                "ResultRevision.BaseMapMismatch",
+                "Result revision base map version does not match count snapshot base map version."));
+        }
+
+        if (countSnapshot.FarmBoundaryVersionId != resultRevision.FarmBoundaryVersionId)
+        {
+            return Result.Failure(AppError.Validation(
+                "ResultRevision.BoundaryMismatch",
+                "Result revision farm boundary version does not match count snapshot farm boundary version."));
+        }
+
+        if (countSnapshot.MappingCandidateBatchId != resultRevision.MappingCandidateBatchId)
+        {
+            return Result.Failure(AppError.Validation(
+                "ResultRevision.CandidateBatchMismatch",
+                "Result revision mapping candidate batch does not match count snapshot candidate batch."));
+        }
+
+        CurrentApprovedResultRevisionId = resultRevision.Id;
+        VerifiedPoleCountSnapshotId = countSnapshot.Id;
+        VerifiedBillablePoleCount = countSnapshot.VerifiedBillablePoleCount;
+        UpdatedAt = resultRevision.ReviewedAt;
+        Version++;
+        return Result.Success();
+    }
+
+    public Result FinalizeInvoiceRevision(
+        SurveyInvoiceRevision invoiceRevision,
+        SurveyInvoiceRevision? currentInvoiceRevision,
+        uint expectedVersion)
+    {
+        if (invoiceRevision is null)
+            return Result.Failure(AppError.Validation("InvoiceRevision.Required", "Invoice revision is required."));
+
+        if (Scope != ContractScope.V3)
+            return Result.Failure(AppError.Validation("SurveyOrder.ScopeInvalid", "Only V3 orders can finalize invoice revisions."));
+
+        if (invoiceRevision.FinalizedAt == default || invoiceRevision.FinalizedAt.Offset != TimeSpan.Zero)
+            return Result.Failure(AppError.Validation("FinalizedAt.Invalid", "FinalizedAt must be a valid UTC timestamp."));
+
+        if (invoiceRevision.FinalizedAt < UpdatedAt)
+            return Result.Failure(AppError.Validation("FinalizedAt.BeforeUpdatedAt", "FinalizedAt cannot be earlier than order last updated timestamp."));
+
+        if (Version != expectedVersion)
+        {
+            return Result.Failure(AppError.Conflict(
+                "SurveyOrder.ConcurrencyViolation",
+                $"Optimistic concurrency violation: order version is {Version}, expected {expectedVersion}."));
+        }
+
+        if (!CurrentApprovedResultRevisionId.HasValue)
+        {
+            return Result.Failure(AppError.Validation(
+                "InvoiceRevision.ApprovalRequired",
+                "Cannot finalize invoice revision without an active internal approved result."));
+        }
+
+        if (invoiceRevision.ApprovedResultRevisionId != CurrentApprovedResultRevisionId.Value)
+        {
+            return Result.Failure(AppError.Validation(
+                "InvoiceRevision.ApprovalMismatch",
+                "Invoice revision does not reference the current approved internal result."));
+        }
+
+        if (invoiceRevision.SurveyOrderId != Id || invoiceRevision.TenantId != TenantId || invoiceRevision.FarmId != FarmId)
+        {
+            return Result.Failure(AppError.Validation(
+                "InvoiceRevision.ContextMismatch",
+                "Invoice revision does not match survey order tenant, farm, or order identifier."));
+        }
+
+        if (invoiceRevision.Status != SurveyInvoiceRevision.StatusCurrent)
+        {
+            return Result.Failure(AppError.Validation(
+                "InvoiceRevision.NotCurrent",
+                "Only an active current invoice revision can be finalized on the order."));
+        }
+
+        // Lineage verification with actual current predecessor invoice revision
+        if (!CurrentInvoiceRevisionId.HasValue)
+        {
+            if (currentInvoiceRevision is not null)
+            {
+                return Result.Failure(AppError.Conflict(
+                    "InvoiceRevision.LineageStateMismatch",
+                    "Current invoice revision must be null when order has no active invoice."));
+            }
+
+            if (invoiceRevision.RevisionNumber != 1)
+            {
+                return Result.Failure(AppError.Validation(
+                    "InvoiceRevision.InitialRevisionNumberInvalid",
+                    "Initial invoice revision must have revision number 1."));
+            }
+
+            if (invoiceRevision.PredecessorRevisionId.HasValue)
+            {
+                return Result.Failure(AppError.Validation(
+                    "InvoiceRevision.InitialPredecessorInvalid",
+                    "Initial invoice revision cannot have a predecessor."));
+            }
+        }
+        else
+        {
+            if (currentInvoiceRevision is null)
+            {
+                return Result.Failure(AppError.Conflict(
+                    "InvoiceRevision.CurrentRevisionMissing",
+                    "Current invoice revision must be provided for correction."));
+            }
+
+            if (currentInvoiceRevision.Id != CurrentInvoiceRevisionId.Value)
+            {
+                return Result.Failure(AppError.Conflict(
+                    "InvoiceRevision.CurrentPointerMismatch",
+                    "Provided current invoice revision does not match the order current invoice pointer."));
+            }
+
+            if (currentInvoiceRevision.SurveyOrderId != Id || currentInvoiceRevision.TenantId != TenantId || currentInvoiceRevision.FarmId != FarmId)
+            {
+                return Result.Failure(AppError.Validation(
+                    "InvoiceRevision.CurrentRevisionContextMismatch",
+                    "Current invoice revision context does not match survey order tenant, farm, or order identifier."));
+            }
+
+            if (currentInvoiceRevision.RevisionNumber == int.MaxValue)
+            {
+                return Result.Failure(AppError.Validation(
+                    "InvoiceRevision.RevisionLimitReached",
+                    "Invoice revision sequence has reached maximum integer limit."));
+            }
+
+            if (invoiceRevision.Id == currentInvoiceRevision.Id)
+            {
+                return Result.Failure(AppError.Validation(
+                    "InvoiceRevision.SelfReference",
+                    "New invoice revision cannot have the same identifier as current predecessor revision."));
+            }
+
+            if (!invoiceRevision.PredecessorRevisionId.HasValue || invoiceRevision.PredecessorRevisionId.Value != currentInvoiceRevision.Id)
+            {
+                return Result.Failure(AppError.Validation(
+                    "InvoiceRevision.PredecessorMismatch",
+                    "New invoice revision predecessor must match the identifier of the current predecessor revision."));
+            }
+
+            if (invoiceRevision.RevisionNumber != currentInvoiceRevision.RevisionNumber + 1)
+            {
+                return Result.Failure(AppError.Validation(
+                    "InvoiceRevision.RevisionSequenceInvalid",
+                    $"New invoice revision number must be exactly {currentInvoiceRevision.RevisionNumber + 1}."));
+            }
+
+            // If predecessor invoice revision has already been superseded, its successor pointer must match new revision ID
+            if (currentInvoiceRevision.Status == SurveyInvoiceRevision.StatusSuperseded || currentInvoiceRevision.SuccessorRevisionId.HasValue)
+            {
+                if (!currentInvoiceRevision.SuccessorRevisionId.HasValue || currentInvoiceRevision.SuccessorRevisionId.Value != invoiceRevision.Id)
+                {
+                    return Result.Failure(AppError.Conflict(
+                        "InvoiceRevision.PredecessorAlreadySuperseded",
+                        "Predecessor invoice revision has already been superseded by a different successor revision."));
+                }
+            }
+        }
+
+        // Pinned commercial terms completeness and exact match
+        if (!BusinessPolicyVersionId.HasValue)
+        {
+            return Result.Failure(AppError.Conflict(
+                "SurveyOrder.CommercialPolicyMissing",
+                "Survey order lacks pinned commercial policy version."));
+        }
+
+        if (invoiceRevision.CommercialPolicyVersionId != BusinessPolicyVersionId.Value)
+        {
+            return Result.Failure(AppError.Validation(
+                "InvoiceRevision.CommercialPolicyMismatch",
+                "Invoice revision policy version does not match survey order pinned commercial policy version."));
+        }
+
+        if (!SurveyServicePriceId.HasValue)
+        {
+            return Result.Failure(AppError.Conflict(
+                "SurveyOrder.ServicePriceMissing",
+                "Survey order lacks pinned survey service price identifier."));
+        }
+
+        if (invoiceRevision.SurveyServicePriceId != SurveyServicePriceId.Value)
+        {
+            return Result.Failure(AppError.Validation(
+                "InvoiceRevision.ServicePriceMismatch",
+                "Invoice revision service price identifier does not match survey order pinned price identifier."));
+        }
+
+        if (!PricePerPoleSnapshot.HasValue)
+        {
+            return Result.Failure(AppError.Conflict(
+                "SurveyOrder.PricePerPoleMissing",
+                "Survey order lacks pinned price per pole snapshot."));
+        }
+
+        if (invoiceRevision.PricePerPole != PricePerPoleSnapshot.Value.Amount)
+        {
+            return Result.Failure(AppError.Validation(
+                "InvoiceRevision.PricePerPoleMismatch",
+                "Invoice revision unit price does not match pinned price per pole snapshot."));
+        }
+
+        if (string.IsNullOrWhiteSpace(Currency))
+        {
+            return Result.Failure(AppError.Conflict(
+                "SurveyOrder.CurrencyMissing",
+                "Survey order lacks currency configuration."));
+        }
+
+        if (!string.Equals(invoiceRevision.Currency, Currency, StringComparison.OrdinalIgnoreCase))
+        {
+            return Result.Failure(AppError.Validation(
+                "InvoiceRevision.CurrencyMismatch",
+                "Invoice revision currency does not match survey order currency."));
+        }
+
+        if (!VerifiedPoleCountSnapshotId.HasValue)
+        {
+            return Result.Failure(AppError.Conflict(
+                "SurveyOrder.CountSnapshotMissing",
+                "Survey order lacks verified pole count snapshot linkage."));
+        }
+
+        if (invoiceRevision.PoleCountSnapshotId != VerifiedPoleCountSnapshotId.Value)
+        {
+            return Result.Failure(AppError.Validation(
+                "InvoiceRevision.CountSnapshotMismatch",
+                "Invoice revision pole count snapshot does not match verified count snapshot."));
+        }
+
+        if (!VerifiedBillablePoleCount.HasValue)
+        {
+            return Result.Failure(AppError.Conflict(
+                "SurveyOrder.VerifiedPoleCountMissing",
+                "Survey order lacks verified billable pole count."));
+        }
+
+        if (invoiceRevision.VerifiedBillablePoleCount != VerifiedBillablePoleCount.Value)
+        {
+            return Result.Failure(AppError.Validation(
+                "InvoiceRevision.VerifiedPoleCountMismatch",
+                $"Invoice verified billable pole count ({invoiceRevision.VerifiedBillablePoleCount}) does not match order verified count ({VerifiedBillablePoleCount.Value})."));
+        }
+
+        if (Status != SurveyOrderStatus.Processing && Status != SurveyOrderStatus.AwaitingSettlement)
+        {
+            return Result.Failure(AppError.Validation(
+                "SurveyOrder.StatusInvalid",
+                $"Cannot finalize invoice revision in status '{Status}'. Must be Processing or AwaitingSettlement."));
+        }
+
+        EnsureCurrentOrTransitionTo(SurveyOrderStatus.AwaitingSettlement, invoiceRevision.FinalizedAt);
+
+        CurrentInvoiceRevisionId = invoiceRevision.Id;
+        FinalPrice = invoiceRevision.TotalAmount;
+        RemainingAmount = invoiceRevision.DueAmount;
+        VerifiedBillablePoleCount = invoiceRevision.VerifiedBillablePoleCount;
+
+        ApplyCurrentOrTransition(SurveyOrderStatus.AwaitingSettlement, invoiceRevision.FinalizedAt);
+        return Result.Success();
     }
 
     public void MarkBaselineAppointmentConfirmed(DateTimeOffset occurredAt)

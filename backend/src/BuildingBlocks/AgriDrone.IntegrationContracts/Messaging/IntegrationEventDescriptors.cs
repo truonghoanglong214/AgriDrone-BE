@@ -135,6 +135,13 @@ public static class IntegrationEventDescriptors
             IntegrationSchemaVersions.V4,
             RequiresActorId: false);
 
+    public static IntegrationEventDescriptor<ComboAnalysisReadyV1>
+        ComboAnalysisReadyV1 { get; } =
+        new(
+            IntegrationEventTypes.ComboAnalysisReadyV1,
+            IntegrationSchemaVersions.V1,
+            RequiresActorId: true);
+
     public static IntegrationEventDescriptor<SurveyRequestApprovedV1>
         SurveyRequestApprovedV1 { get; } =
         new(

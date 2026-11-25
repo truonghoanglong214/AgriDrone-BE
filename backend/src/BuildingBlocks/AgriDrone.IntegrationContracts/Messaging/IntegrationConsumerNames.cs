@@ -55,6 +55,9 @@ public static class IntegrationConsumerNames
     public const string Be1PlantHealthAnalysisReadyV4 =
         "be1-plant-health-analysis-ready-v4";
 
+    public const string Be1ComboAnalysisReadyV1 =
+        "be1-combo-analysis-ready-v1";
+
     public const string Be1BaselineMissionStartedV1 =
         "be1-baseline-mission-started-v1";
 

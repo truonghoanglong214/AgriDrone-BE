@@ -49,6 +49,8 @@ public static class DependencyInjection
 
         services.AddScoped<ISurveyOrderOperationalContextV3Query,
             SurveyOrderOperationalContextV3Query>();
+        services.AddScoped<ISurveyOrderCommercialSnapshotQuery,
+            SurveyOrderCommercialSnapshotQuery>();
         services.AddScoped<ISurveyOrderOperationalContextV4Query,
             SurveyOrderOperationalContextV4Query>();
         services.AddScoped<ISurveyOrderCaptureContextV5Query,
@@ -59,6 +61,8 @@ public static class DependencyInjection
             NoopSurveyCaptureExecutionProbe>();
         services.AddScoped<ISurveyCaptureExecutionCoordinator,
             SurveyCaptureExecutionCoordinator>();
+        services.AddScoped<AgriDrone.Modules.Surveys.Application.Abstractions.Results.ISurveyResultReviewTransaction,
+            SurveyResultReviewTransaction>();
         services.AddScoped<ISystemManagerSurveyOrderQueries,
             SystemManagerSurveyOrderQueries>();
         services.AddScoped<IV3FollowUpBaselineQuery,
@@ -135,6 +139,24 @@ public static class DependencyInjection
         services.AddScoped<ISurveyResultPublicationUnitOfWork>(
             serviceProvider => serviceProvider.GetRequiredService<
                 SurveyResultPublicationDbContext>());
+
+        services.AddDbContext<SurveyComboImportDbContext>(
+            (serviceProvider, options) =>
+            {
+                var dataSource =
+                    serviceProvider.GetRequiredService<NpgsqlDataSource>();
+                options.UseNpgsql(
+                    dataSource,
+                    npgsql =>
+                    {
+                        npgsql.UseNetTopologySuite();
+                        PostgreSqlEnumMappings.ConfigureOptions(npgsql);
+                    });
+            });
+
+        services.AddScoped<AgriDrone.IntegrationContracts.Health.IComboAnalysisPendingImport, Health.ComboAnalysisPendingImport>();
+        services.AddScoped<IIntegrationMessageHandler<AgriDrone.IntegrationContracts.Health.ComboAnalysisReadyV1>, Health.ComboAnalysisReadyV1Handler>();
+        services.AddIntegrationConsumer<Health.ComboAnalysisReadyV1Processor>(IntegrationConsumerNames.Be1ComboAnalysisReadyV1);
 
         services.AddScoped<AgriDrone.IntegrationContracts.Health.IPlantHealthPendingImport, Health.PlantHealthPendingImport>();
         services.AddScoped<IIntegrationMessageHandler<AgriDrone.IntegrationContracts.Health.PlantHealthAnalysisReadyV4>, Health.PlantHealthAnalysisReadyV4Handler>();

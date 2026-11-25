@@ -1260,5 +1260,165 @@ internal static class CrossModuleRelationshipConfiguration
             .HasPrincipalKey(c => new { c.Id, c.BatchId })
             .OnDelete(DeleteBehavior.Restrict)
             .HasConstraintName("fk_plant_profile_observations_candidate");
+
+        modelBuilder.Entity<SurveyInternalApprovedResultRevision>()
+            .HasOne<CaptureAttempt>()
+            .WithMany()
+            .HasForeignKey(r => new { r.CaptureAttemptId, r.TenantId, r.FarmId, r.SurveyOrderId })
+            .HasPrincipalKey(a => new { a.Id, a.TenantId, a.FarmId, a.OrderId })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_survey_internal_approved_result_revisions_attempt");
+
+        modelBuilder.Entity<SurveyInternalApprovedResultRevision>()
+            .HasOne<DroneMission>()
+            .WithMany()
+            .HasForeignKey(r => new { r.MissionId, r.FarmId })
+            .HasPrincipalKey(m => new { m.Id, m.FarmId })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_survey_internal_approved_result_revisions_mission");
+
+        modelBuilder.Entity<SurveyInternalApprovedResultRevision>()
+            .HasOne<MappingCandidateBatch>()
+            .WithMany()
+            .HasForeignKey(r => new { r.MappingCandidateBatchId, r.TenantId, r.FarmId })
+            .HasPrincipalKey(b => new { b.Id, b.TenantId, b.FarmId })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_survey_internal_approved_result_revisions_batch");
+
+        modelBuilder.Entity<SurveyInternalApprovedResultRevision>()
+            .HasOne<FarmBaseMapVersion>()
+            .WithMany()
+            .HasForeignKey(r => new { r.FarmBaseMapVersionId, r.TenantId, r.FarmId })
+            .HasPrincipalKey(m => new { m.Id, m.TenantId, m.FarmId })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_survey_internal_approved_result_revisions_base_map");
+
+        modelBuilder.Entity<SurveyInternalApprovedResultRevision>()
+            .HasOne<FarmBaseMapVersion>()
+            .WithMany()
+            .HasForeignKey(r => new { r.BaselineMapVersionId, r.TenantId, r.FarmId })
+            .HasPrincipalKey(m => new { m.Id, m.TenantId, m.FarmId })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_survey_internal_approved_result_revisions_baseline_map");
+
+        modelBuilder.Entity<SurveyInternalApprovedResultRevision>()
+            .HasOne<FarmBoundary>()
+            .WithMany()
+            .HasForeignKey(r => new { r.FarmBoundaryVersionId, r.TenantId, r.FarmId })
+            .HasPrincipalKey(b => new { b.Id, b.TenantId, b.FarmId })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_survey_internal_approved_result_revisions_boundary");
+
+        modelBuilder.Entity<SurveyInternalApprovedResultRevision>()
+            .HasOne<User>()
+            .WithMany()
+            .HasForeignKey(r => r.ReviewedBy)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_survey_internal_approved_result_revisions_reviewer");
+
+        modelBuilder.Entity<SurveyInvoiceRevision>()
+            .HasOne<SurveyServicePrice>()
+            .WithMany()
+            .HasForeignKey(i => i.SurveyServicePriceId)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_survey_invoice_revisions_service_price");
+
+        modelBuilder.Entity<SurveyInvoiceRevision>()
+            .HasOne<BusinessPolicyVersion>()
+            .WithMany()
+            .HasForeignKey(i => i.CommercialPolicyVersionId)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_survey_invoice_revisions_policy_version");
+
+        modelBuilder.Entity<SurveyInvoiceRevision>()
+            .HasOne<User>()
+            .WithMany()
+            .HasForeignKey(i => i.FinalizedBy)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_survey_invoice_revisions_users_finalized_by");
+
+        modelBuilder.Entity<SurveyInvoiceRevision>()
+            .HasOne<User>()
+            .WithMany()
+            .HasForeignKey(i => i.ZeroPoleApprovedBy)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_survey_invoice_revisions_users_zero_pole_approved_by");
+
+        modelBuilder.Entity<SurveyComboImportBatch>()
+            .HasOne<CaptureAttempt>()
+            .WithMany()
+            .HasForeignKey(b => new { b.CaptureAttemptId, b.TenantId, b.FarmId, b.SurveyOrderId })
+            .HasPrincipalKey(a => new { a.Id, a.TenantId, a.FarmId, a.OrderId })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_survey_combo_import_batches_attempt");
+
+        modelBuilder.Entity<SurveyComboImportBatch>()
+            .HasOne<DroneMission>()
+            .WithMany()
+            .HasForeignKey(b => new { b.MissionId, b.FarmId })
+            .HasPrincipalKey(m => new { m.Id, m.FarmId })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_survey_combo_import_batches_mission");
+
+        modelBuilder.Entity<SurveyComboImportBatch>()
+            .HasOne<MappingCandidateBatch>()
+            .WithMany()
+            .HasForeignKey(b => new { b.MappingCandidateBatchId, b.TenantId, b.FarmId })
+            .HasPrincipalKey(m => new { m.Id, m.TenantId, m.FarmId })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_survey_combo_import_batches_mapping_batch");
+
+        modelBuilder.Entity<SurveyComboImportBatch>()
+            .HasOne<FarmBaseMapVersion>()
+            .WithMany()
+            .HasForeignKey(b => new { b.FarmBaseMapVersionId, b.TenantId, b.FarmId })
+            .HasPrincipalKey(m => new { m.Id, m.TenantId, m.FarmId })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_survey_combo_import_batches_base_map");
+
+        modelBuilder.Entity<SurveyComboImportBatch>()
+            .HasOne<FarmBaseMapVersion>()
+            .WithMany()
+            .HasForeignKey(b => new { b.BaselineMapVersionId, b.TenantId, b.FarmId })
+            .HasPrincipalKey(m => new { m.Id, m.TenantId, m.FarmId })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_survey_combo_import_batches_baseline_map");
+
+        modelBuilder.Entity<SurveyComboImportBatch>()
+            .HasOne<FarmBoundary>()
+            .WithMany()
+            .HasForeignKey(b => new { b.FarmBoundaryVersionId, b.TenantId, b.FarmId })
+            .HasPrincipalKey(m => new { m.Id, m.TenantId, m.FarmId })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_survey_combo_import_batches_boundary");
+
+        modelBuilder.Entity<SurveyComboImportBatch>()
+            .HasOne<BusinessPolicyVersion>()
+            .WithMany()
+            .HasForeignKey(b => b.BusinessPolicyVersionId)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_survey_combo_import_batches_policy_version");
+
+        modelBuilder.Entity<SurveyComboReviewRevision>()
+            .HasOne<CaptureAttempt>()
+            .WithMany()
+            .HasForeignKey(r => new { r.CaptureAttemptId, r.TenantId, r.FarmId, r.SurveyOrderId })
+            .HasPrincipalKey(a => new { a.Id, a.TenantId, a.FarmId, a.OrderId })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_survey_combo_review_revisions_attempt");
+
+        modelBuilder.Entity<SurveyComboReviewRevision>()
+            .HasOne<User>()
+            .WithMany()
+            .HasForeignKey(r => r.ReviewedBy)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_survey_combo_review_revisions_reviewer");
+
+        modelBuilder.Entity<SurveyResultReviewOperation>()
+            .HasOne<User>()
+            .WithMany()
+            .HasForeignKey(o => o.ActorId)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_survey_result_review_operations_actor");
     }
 }

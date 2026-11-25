@@ -86,7 +86,9 @@ public static class DependencyInjection
         services.AddScoped<IMissionPlantGpsStore, MissionPlantGpsStore>();
         services.AddScoped<IMissionPlantGpsPublisher, MissionPlantGpsPublisher>();
         services.AddScoped<IMissionPlantHealthPublisher, MissionPlantHealthPublisher>();
+        services.AddScoped<IMissionComboAnalysisPublisher, MissionComboAnalysisPublisher>();
         services.AddScoped<IPlantHealthSourceContextQuery, PlantHealthSourceContextQuery>();
+        services.AddScoped<IComboAnalysisSourceContextQuery, ComboAnalysisSourceContextQuery>();
         services.AddScoped<IMissionStartedOutbox, MissionStartedOutbox>();
 
         services.AddScoped<
@@ -101,6 +103,9 @@ public static class DependencyInjection
             IDroneQueries,
             DroneQueries>();
 
+        services.TryAddScoped<
+            ISurveyOrderCommercialSnapshotQuery,
+            UnavailableSurveyOrderCommercialSnapshotQuery>();
         services.TryAddScoped<
             ISurveyOrderOperationalContextQuery,
             UnavailableSurveyOrderOperationalContextQuery>();

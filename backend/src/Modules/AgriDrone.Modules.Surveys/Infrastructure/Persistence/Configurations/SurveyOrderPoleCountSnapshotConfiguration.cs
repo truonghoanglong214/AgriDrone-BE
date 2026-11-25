@@ -20,6 +20,8 @@ public sealed class SurveyOrderPoleCountSnapshotConfiguration
 
         builder.HasKey(s => s.Id).HasName("pk_survey_order_pole_count_snapshots");
         builder.HasAlternateKey(s => new { s.Id, s.TenantId, s.FarmId }).HasName("uq_survey_order_pole_count_snapshots_id_tenant_farm");
+        builder.HasAlternateKey(s => new { s.Id, s.SurveyOrderId, s.TenantId, s.FarmId }).HasName("uq_survey_order_pole_count_snapshots_id_order_tenant_farm");
+        builder.HasAlternateKey(s => new { s.Id, s.SurveyOrderId }).HasName("uq_survey_order_pole_count_snapshots_id_order");
 
         builder.Property(s => s.Id).HasColumnName("id").HasColumnType("uuid");
         builder.Property(s => s.SurveyOrderId).HasColumnName("survey_order_id").HasColumnType("uuid").IsRequired();

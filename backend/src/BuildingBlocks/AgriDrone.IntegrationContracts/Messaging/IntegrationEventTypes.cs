@@ -59,6 +59,9 @@ namespace AgriDrone.IntegrationContracts.Messaging
         public const string PlantHealthAnalysisReadyV4 =
             "health.analysis-ready.v4";
 
+        public const string ComboAnalysisReadyV1 =
+            "survey.combo-analysis-ready.v1";
+
         public const string SurveyRequestApprovedV1 =
             "survey.request-approved.v1";
 

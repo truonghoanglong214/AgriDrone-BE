@@ -56,6 +56,7 @@ internal sealed class SurveysDbContext(DbContextOptions<SurveysDbContext> option
     public DbSet<CaptureAttempt> CaptureAttempts => Set<CaptureAttempt>();
     public DbSet<CaptureAttemptHistory> CaptureAttemptHistories => Set<CaptureAttemptHistory>();
     public DbSet<CaptureInputManifest> CaptureInputManifests => Set<CaptureInputManifest>();
+    public DbSet<CaptureInputManifestFile> CaptureInputManifestFiles => Set<CaptureInputManifestFile>();
     public DbSet<CaptureInputApproval> CaptureInputApprovals => Set<CaptureInputApproval>();
     public DbSet<SpatialPolicy> SpatialPolicies => Set<SpatialPolicy>();
     public DbSet<SurveyOrderPoleCountSnapshot> SurveyOrderPoleCountSnapshots => Set<SurveyOrderPoleCountSnapshot>();
@@ -66,6 +67,11 @@ internal sealed class SurveysDbContext(DbContextOptions<SurveysDbContext> option
     public DbSet<SurveyCancellationDecision> SurveyCancellationDecisions => Set<SurveyCancellationDecision>();
     public DbSet<SurveyRefundObligation> SurveyRefundObligations => Set<SurveyRefundObligation>();
     public DbSet<CancellationRetention> CancellationRetentions => Set<CancellationRetention>();
+    public DbSet<SurveyInternalApprovedResultRevision> SurveyInternalApprovedResultRevisions => Set<SurveyInternalApprovedResultRevision>();
+    public DbSet<SurveyInvoiceRevision> SurveyInvoiceRevisions => Set<SurveyInvoiceRevision>();
+    public DbSet<SurveyComboImportBatch> SurveyComboImportBatches => Set<SurveyComboImportBatch>();
+    public DbSet<SurveyComboReviewRevision> SurveyComboReviewRevisions => Set<SurveyComboReviewRevision>();
+    public DbSet<SurveyResultReviewOperation> SurveyResultReviewOperations => Set<SurveyResultReviewOperation>();
 
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 

@@ -76,6 +76,66 @@ public sealed class AiProcessingJob : Entity
         };
     }
 
+    public bool HasCompleteComboInputCoverage()
+    {
+        var manifest = InputManifest.RootElement;
+        if (manifest.ValueKind != JsonValueKind.Object ||
+            !manifest.TryGetProperty("InputStorageKeys", out var inputs) ||
+            inputs.ValueKind != JsonValueKind.Array ||
+            !manifest.TryGetProperty("image_outcomes", out var outcomes) ||
+            outcomes.ValueKind != JsonValueKind.Array)
+        {
+            return false;
+        }
+
+        var expected = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var input in inputs.EnumerateArray())
+        {
+            if (input.ValueKind != JsonValueKind.String ||
+                input.GetString() is not { Length: > 0 } key || !expected.Add(key))
+            {
+                return false;
+            }
+        }
+
+        if (expected.Count == 0)
+            return false;
+
+        foreach (var outcome in outcomes.EnumerateArray())
+        {
+            if (outcome.ValueKind != JsonValueKind.Object ||
+                !outcome.TryGetProperty("StorageKey", out var storageKey) ||
+                storageKey.ValueKind != JsonValueKind.String ||
+                storageKey.GetString() is not { } key || !expected.Remove(key) ||
+                !outcome.TryGetProperty(nameof(Status), out var status) ||
+                status.ValueKind != JsonValueKind.String || status.GetString() != "SUCCESS")
+            {
+                return false;
+            }
+        }
+
+        return expected.Count == 0;
+    }
+
+    public static AiProcessingJob RecordCompletedComboRun(Guid missionId, Guid modelId,
+        ComboAnalysisProcessingSnapshot snapshot, JsonDocument input, JsonDocument output,
+        DateTimeOffset startedAt, DateTimeOffset completedAt)
+    {
+        DomainGuard.NotEmpty(missionId); DomainGuard.NotEmpty(modelId);
+        ArgumentNullException.ThrowIfNull(snapshot);
+        DomainGuard.Utc(startedAt); DomainGuard.Utc(completedAt);
+        if (completedAt < startedAt) throw new ArgumentException("Completion cannot precede start.");
+        return new AiProcessingJob
+        {
+            Id = Guid.CreateVersion7(), MissionId = missionId, ModelVersionId = modelId,
+            JobType = AiJobType.DiseaseDetection, Status = AiJobStatus.Completed,
+            Parameters = JsonSerializer.SerializeToDocument(snapshot), AttemptNumber = snapshot.SourceRevision,
+            InputManifest = JsonDocument.Parse(input.RootElement.GetRawText()),
+            OutputManifest = JsonDocument.Parse(output.RootElement.GetRawText()),
+            QueuedAt = startedAt, StartedAt = startedAt, CompletedAt = completedAt, ProgressPercent = 100
+        };
+    }
+
     public static AiProcessingJob RecordCompletedMappingRun(
         Guid missionId,
         Guid modelId,
