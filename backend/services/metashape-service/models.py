@@ -231,6 +231,13 @@ class DiseaseDetectMissionRequest(BaseModel):
         return normalize_polygon_geojson(v)
 
 
+class ImageInferenceOutcome(BaseModel):
+    """Execution outcome for a single raw image input."""
+    storage_key: str
+    status: str = "SUCCESS"  # "SUCCESS" | "SKIPPED" | "FAILED"
+    error_message: Optional[str] = None
+
+
 class DiseaseDetectMissionResponse(BaseModel):
     """Response containing all disease detections for a mission."""
     mission_id: str
@@ -241,6 +248,7 @@ class DiseaseDetectMissionResponse(BaseModel):
     csv_download_url: Optional[str] = None
     annotated_image_urls: List[str] = Field(default_factory=list)
     detections: List[DiseaseDetectionItem] = Field(default_factory=list)
+    image_outcomes: List[ImageInferenceOutcome] = Field(default_factory=list)
 
 
 

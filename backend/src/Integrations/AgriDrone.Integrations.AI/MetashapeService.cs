@@ -627,7 +627,7 @@ public sealed class MetashapeService(
                 logger.LogError("Disease detection failed with HTTP {Status}: {Body}", (int)response.StatusCode, responseBody);
                 return new DetectMissionDiseasesResult(
                     false, missionId, string.Empty, 0, 0, new Dictionary<string, int>(), null,
-                    Array.Empty<DiseaseDetectionItem>(), null, $"HTTP {response.StatusCode}: {responseBody}");
+                    Array.Empty<DiseaseDetectionItem>(), null, $"HTTP {response.StatusCode}: {responseBody}", Array.Empty<ImageInferenceOutcome>());
             }
 
             using var doc = JsonDocument.Parse(responseBody);
@@ -683,15 +683,30 @@ public sealed class MetashapeService(
                 }
             }
 
+            var imageOutcomes = new List<ImageInferenceOutcome>();
+            if (root.TryGetProperty("image_outcomes", out var ios) && ios.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var io in ios.EnumerateArray())
+                {
+                    var key = io.TryGetProperty("storage_key", out var sk) ? sk.GetString() ?? "" : "";
+                    var status = io.TryGetProperty("status", out var st) ? st.GetString() ?? "SUCCESS" : "SUCCESS";
+                    var err = io.TryGetProperty("error_message", out var em) ? em.GetString() : null;
+                    if (!string.IsNullOrWhiteSpace(key))
+                    {
+                        imageOutcomes.Add(new ImageInferenceOutcome(key, status, err));
+                    }
+                }
+            }
+
             return new DetectMissionDiseasesResult(
-                true, missionId, modelName, totalScanned, totalDetections, summary, csvUrl, detections, annotatedUrls);
+                true, missionId, modelName, totalScanned, totalDetections, summary, csvUrl, detections, annotatedUrls, null, imageOutcomes);
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Failed to run disease detection for mission {MissionId}", missionId);
             return new DetectMissionDiseasesResult(
                 false, missionId, string.Empty, 0, 0, new Dictionary<string, int>(), null,
-                Array.Empty<DiseaseDetectionItem>(), null, ex.Message);
+                Array.Empty<DiseaseDetectionItem>(), null, ex.Message, Array.Empty<ImageInferenceOutcome>());
         }
     }
 

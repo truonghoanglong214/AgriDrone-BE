@@ -65,6 +65,7 @@ from models import (
     DiseaseDetectionItem,
     DiseaseDetectMissionRequest,
     DiseaseDetectMissionResponse,
+    ImageInferenceOutcome,
 )
 from orchard_postprocessor import (
     assign_grid_and_detect_missing,
@@ -1246,6 +1247,7 @@ def detect_mission_diseases(request: DiseaseDetectMissionRequest):
 
     # (đường dẫn cục bộ, tên nội bộ img_XXXX, GPS, khóa MinIO gốc — None khi lấy từ thư mục cục bộ)
     local_image_items: list[tuple[str, str, Optional[tuple[float, float]], Optional[str]]] = []
+    image_outcomes: list[ImageInferenceOutcome] = []
 
     # 1. Thu thập ảnh: từ request.images (MinIO hoặc disk)
     if request.images and len(request.images) > 0:
@@ -1265,9 +1267,14 @@ def detect_mission_diseases(request: DiseaseDetectMissionRequest):
                     minio_storage.download_file(img.storage_key, local_path)
                 except Exception as ex:
                     logger.warning(f"Failed to download image {img.storage_key} from MinIO: {ex}")
+                    image_outcomes.append(ImageInferenceOutcome(storage_key=img.storage_key, status="FAILED", error_message=str(ex)))
                     continue
 
             gps_coords = extract_exif_gps(local_path)
+            if gps_coords is None:
+                image_outcomes.append(ImageInferenceOutcome(storage_key=img.storage_key, status="FAILED", error_message="Missing or invalid EXIF GPS"))
+                continue
+
             # Giữ khóa MinIO gốc: tên nội bộ img_XXXX không khớp được media đã đăng ký phía .NET.
             local_image_items.append((local_path, img_filename, gps_coords, img.storage_key))
 
@@ -1317,17 +1324,34 @@ def detect_mission_diseases(request: DiseaseDetectMissionRequest):
         if request.polygon_geojson and gps_coords and not is_inside_polygon(
             img_lat, img_lon, request.polygon_geojson
         ):
+            if source_storage_key:
+                image_outcomes.append(ImageInferenceOutcome(
+                    storage_key=source_storage_key,
+                    status="SKIPPED",
+                    error_message="Image location is outside the boundary polygon"
+                ))
             continue
 
-        res_list = model.predict(
-            source=img_path,
-            conf=request.confidence_threshold,
-            device=device,
-            verbose=False
-        )
-        r = res_list[0] if res_list and len(res_list) > 0 else None
-        if r is None:
+        try:
+            res_list = model.predict(
+                source=img_path,
+                conf=request.confidence_threshold,
+                device=device,
+                verbose=False
+            )
+            r = res_list[0] if res_list and len(res_list) > 0 else None
+            if r is None:
+                if source_storage_key:
+                    image_outcomes.append(ImageInferenceOutcome(storage_key=source_storage_key, status="FAILED", error_message="YOLO prediction returned empty result"))
+                continue
+        except Exception as pred_ex:
+            logger.error(f"Prediction failed for {img_path}: {pred_ex}")
+            if source_storage_key:
+                image_outcomes.append(ImageInferenceOutcome(storage_key=source_storage_key, status="FAILED", error_message=str(pred_ex)))
             continue
+
+        if source_storage_key:
+            image_outcomes.append(ImageInferenceOutcome(storage_key=source_storage_key, status="SUCCESS"))
 
         annotated_url = None
         annotated_storage_key = None
@@ -1477,6 +1501,7 @@ def detect_mission_diseases(request: DiseaseDetectMissionRequest):
         csv_download_url=csv_url,
         annotated_image_urls=annotated_image_urls,
         detections=detections,
+        image_outcomes=image_outcomes,
     )
 
 

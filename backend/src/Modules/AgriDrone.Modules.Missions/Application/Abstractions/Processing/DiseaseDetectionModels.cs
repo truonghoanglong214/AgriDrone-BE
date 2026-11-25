@@ -25,6 +25,14 @@ public sealed record DiseaseDetectionItem(
     string? CropSha256 = null);
 
 /// <summary>
+/// Individual inference outcome for a single raw image input.
+/// </summary>
+public sealed record ImageInferenceOutcome(
+    string StorageKey,
+    string Status, // "SUCCESS" | "FAILED"
+    string? ErrorMessage = null);
+
+/// <summary>
 /// Result of running disease detection across mission photos.
 /// </summary>
 public sealed record DetectMissionDiseasesResult(
@@ -37,4 +45,5 @@ public sealed record DetectMissionDiseasesResult(
     string? CsvDownloadUrl,
     IReadOnlyList<DiseaseDetectionItem> Detections,
     IReadOnlyList<string>? AnnotatedImageUrls = null,
-    string? ErrorMessage = null);
+    string? ErrorMessage = null,
+    IReadOnlyList<ImageInferenceOutcome>? ImageOutcomes = null);
