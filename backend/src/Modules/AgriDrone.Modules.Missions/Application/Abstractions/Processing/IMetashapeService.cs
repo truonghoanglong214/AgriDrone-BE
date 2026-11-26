@@ -89,6 +89,20 @@ public interface IMetashapeService
         double? customAngleDeg = null,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Tính lại Hàng/Cột + cây khuyết cho danh sách cây hiện có (không quét YOLO lại) — gọi Python /api/v1/yolo/recalculate-grid.
+    /// </summary>
+    Task<DetectMissionTreesResult> RecalculateTreeGridAsync(
+        Guid missionId,
+        IReadOnlyList<TreeDetectionItem> activeTrees,
+        double rowSpacing = 2.8,
+        double colSpacing = 2.5,
+        object? polygonGeoJson = null,
+        double? anchorLat = null,
+        double? anchorLon = null,
+        double? customAngleDeg = null,
+        CancellationToken cancellationToken = default);
+
     Task<(byte[] Bytes, string FileName)?> DownloadTreesCsvAsync(
         Guid missionId,
         CancellationToken cancellationToken = default);

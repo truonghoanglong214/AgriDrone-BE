@@ -1,5 +1,10 @@
 import os
 
+from dotenv import load_dotenv
+
+# Nạp biến môi trường từ .env cạnh file này (không ghi đè biến đã set sẵn trong shell/docker)
+load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
+
 # Đảm bảo PROJ luôn trỏ đúng vào thư mục proj_data của rasterio trong virtualenv,
 # tránh xung đột với PROJ của PostgreSQL/PostGIS cài trên Windows
 try:
@@ -24,6 +29,7 @@ class Settings(BaseModel):
     minio_secret_key: str = os.getenv("MINIO_ROOT_PASSWORD", "agridrone-dragon")
     minio_bucket: str = os.getenv("MINIO_BUCKET", "agridrone-media")
     minio_secure: bool = os.getenv("MINIO_SECURE", "false").lower() in ("true", "1", "yes")
+    minio_region: str | None = os.getenv("MINIO_REGION") or None
 
     # Storage temp directory (located on D: drive in project directory with plenty of space)
     temp_dir: str = os.getenv(
