@@ -70,6 +70,7 @@ public static class DependencyInjection
             SurveyInvoiceQueries>();
         services.AddScoped<ISystemManagerSurveyOrderQueries,
             SystemManagerSurveyOrderQueries>();
+        services.AddScoped<IV3TenantOwnerSurveyOrderQueries, V3TenantOwnerSurveyOrderQueries>();
         services.AddScoped<ISurveyCaptureAttemptQueries,
             SurveyCaptureAttemptQueries>();
         services.AddScoped<IV3FollowUpBaselineQuery,
