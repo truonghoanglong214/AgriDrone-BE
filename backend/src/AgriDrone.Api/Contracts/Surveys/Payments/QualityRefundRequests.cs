@@ -11,7 +11,8 @@ public sealed record ReportQualityRefundRequest(
     string? EvidenceReference,
     string RecipientBankName,
     string RecipientAccountNumber,
-    string RecipientAccountName);
+    string RecipientAccountName,
+    Guid? PublicationId = null);
 
 public sealed record DecideQualityRefundRequest(
     bool Approve,

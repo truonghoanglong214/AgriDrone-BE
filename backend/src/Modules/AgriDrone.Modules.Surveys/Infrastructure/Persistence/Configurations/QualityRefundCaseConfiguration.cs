@@ -10,6 +10,8 @@ public sealed class QualityRefundCaseConfiguration : IEntityTypeConfiguration<Qu
     {
         builder.ToTable("quality_refund_cases", "survey", table =>
         {
+            table.HasCheckConstraint("ck_quality_refund_result_source",
+                "(survey_result_id IS NOT NULL) <> (v3_publication_id IS NOT NULL)");
             table.HasCheckConstraint("ck_quality_refund_approved_amount", "approved_amount IS NULL OR approved_amount > 0");
             table.HasCheckConstraint("ck_quality_refund_transfer", "(status = 'Refunded' AND bank_transfer_reference IS NOT NULL AND transferred_at IS NOT NULL AND recorded_by IS NOT NULL AND recorded_at IS NOT NULL) OR (status <> 'Refunded' AND bank_transfer_reference IS NULL AND transferred_at IS NULL)");
         });
@@ -19,6 +21,7 @@ public sealed class QualityRefundCaseConfiguration : IEntityTypeConfiguration<Qu
         builder.Property(item => item.TenantId).HasColumnName("tenant_id");
         builder.Property(item => item.FarmId).HasColumnName("farm_id");
         builder.Property(item => item.SurveyResultId).HasColumnName("survey_result_id");
+        builder.Property(item => item.V3PublicationId).HasColumnName("v3_publication_id");
         builder.Property(item => item.ReportedBy).HasColumnName("reported_by");
         builder.Property(item => item.ReportedIssues).HasColumnName("reported_issues").HasColumnType("jsonb").IsRequired();
         builder.Property(item => item.Description).HasColumnName("description").HasMaxLength(2000).IsRequired();

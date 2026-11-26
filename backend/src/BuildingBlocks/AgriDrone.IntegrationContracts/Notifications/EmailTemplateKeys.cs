@@ -11,4 +11,5 @@ public static class EmailTemplateKeys
 
     public const string SurveyRequestRejected =
         "survey-request-rejected";
+    public const string V3SurveyResultReleased = "v3-survey-result-released";
 }

@@ -97,12 +97,6 @@ internal sealed class SurveyReleaseEvaluationRequestedV1Handler(
             return IntegrationMessageProcessingResult.Retry(outcome.ErrorMessage);
         }
 
-        if (outcome.Outcome == SurveySettlementReleaseOutcome.Blocked &&
-            outcome.ErrorCode == SurveySettlementReleaseCoordinator.ReleasePersistencePendingCode)
-        {
-            return IntegrationMessageProcessingResult.Retry(outcome.ErrorMessage);
-        }
-
         var now = timeProvider.GetUtcNow();
         var inbox = InboxMessage.Start(ConsumerName, envelope, now);
 

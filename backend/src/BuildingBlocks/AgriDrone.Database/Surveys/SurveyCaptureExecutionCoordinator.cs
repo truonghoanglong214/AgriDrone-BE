@@ -95,7 +95,7 @@ internal sealed class SurveyCaptureExecutionCoordinator(
                     "The V3 Order is not at the expected ReadyForCapture version.");
             }
             if (!order.RequiresBaselineMapping &&
-                (!order.PreviousCompatibleOrderId.HasValue ||
+                (!order.BaselineMapVersionId.HasValue ||
                  !order.FarmBaseMapVersionId.HasValue))
             {
                 return PrepareFailure(

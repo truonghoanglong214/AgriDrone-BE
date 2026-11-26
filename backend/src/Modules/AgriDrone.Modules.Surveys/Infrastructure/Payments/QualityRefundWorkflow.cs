@@ -1,5 +1,6 @@
 using System.Data;
 using System.Text.Json;
+using AgriDrone.IntegrationContracts.Surveys;
 using AgriDrone.Modules.Surveys.Application.Abstractions.Payments;
 using AgriDrone.Modules.Surveys.Domain;
 using AgriDrone.Modules.Surveys.Infrastructure.Persistence;
@@ -9,6 +10,7 @@ using AgriDrone.SharedKernel.Application.Abstractions.Authorization;
 using AgriDrone.SharedKernel.Application.Abstractions.Execution;
 using AgriDrone.SharedKernel.Application.Pagination;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Npgsql;
 
 namespace AgriDrone.Modules.Surveys.Infrastructure.Payments;
@@ -20,7 +22,9 @@ internal sealed class QualityRefundWorkflow(
     IAuditWriter auditWriter,
     TimeProvider timeProvider,
     IQualityRefundNoticeQuery noticeQuery,
-    AgriDrone.SharedKernel.Application.Abstractions.IRefundEvidenceStorage evidenceStorage) : IQualityRefundWorkflow
+    AgriDrone.SharedKernel.Application.Abstractions.IRefundEvidenceStorage evidenceStorage,
+    IV3ResultReleaseProofReader? releaseProofReader = null,
+    IV3QualityRefundFundingReader? v3FundingReader = null) : IQualityRefundWorkflow
 {
     public async Task<Result<QualityRefundCaseView>> ReportAsync(
         Guid orderId,
@@ -30,7 +34,8 @@ internal sealed class QualityRefundWorkflow(
         string recipientBankName,
         string recipientAccountNumber,
         string recipientAccountName,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Guid? publicationId = null)
     {
         if (executionContext.ActorId is not Guid actorId ||
             executionContext.TenantId is not Guid tenantId)
@@ -43,21 +48,10 @@ internal sealed class QualityRefundWorkflow(
         {
             await using var transaction = await db.Database.BeginTransactionAsync(
                 IsolationLevel.Serializable, cancellationToken);
-            var order = await db.SurveyOrders.SingleOrDefaultAsync(item =>
-                item.Id == orderId && item.TenantId == tenantId,
-                cancellationToken);
+            var order = await LockOrderAsync(orderId, tenantId, cancellationToken);
             if (order is null)
             {
                 return Result.Failure<QualityRefundCaseView>(NotFound());
-            }
-
-            var result = await db.SurveyResults.SingleOrDefaultAsync(item =>
-                item.SurveyOrderId == orderId,
-                cancellationToken);
-            if (result is null)
-            {
-                return Result.Failure<QualityRefundCaseView>(
-                    AppError.Conflict("QualityRefund.ResultUnavailable", "A published result is required."));
             }
 
             if (await db.QualityRefundCases.AnyAsync(item =>
@@ -69,25 +63,34 @@ internal sealed class QualityRefundWorkflow(
                     AppError.Conflict("QualityRefund.ExistingCase", "An active or completed quality refund case already exists."));
             }
 
-            if (await GrossPaidAsync(orderId, cancellationToken) <= 0)
-            {
-                return Result.Failure<QualityRefundCaseView>(
-                    AppError.Conflict("QualityRefund.NoCapturedPayment", "The order has no captured service payment."));
-            }
+            var claim = await ReadClaimContextAsync(order, cancellationToken);
+            if (claim.IsFailure)
+                return Result.Failure<QualityRefundCaseView>(claim.Error);
 
-            var noticeCreatedAt = await noticeQuery.GetCreatedAtAsync(tenantId, orderId, result.Id, cancellationToken);
-            if (noticeCreatedAt is null)
-                return Result.Failure<QualityRefundCaseView>(AppError.Conflict("QualityRefund.NoticeUnavailable", "Chưa có thông báo mở kết quả để xác định thời hạn khiếu nại."));
-            if (receivedAt < noticeCreatedAt.Value || receivedAt >= ClaimPolicy.CalculateSevenDayDeadline(noticeCreatedAt.Value))
-                return Result.Failure<QualityRefundCaseView>(AppError.Conflict("QualityRefund.ClaimWindowClosed", "Đã hết thời hạn 7 ngày gửi khiếu nại hoàn tiền theo giờ Việt Nam."));
+            var context = claim.Value;
+            if (context.Release is not null && publicationId != context.Release.PublicationId)
+                return Result.Failure<QualityRefundCaseView>(AppError.Conflict(
+                    "QualityRefund.PublicationChanged", "Reload the claim window and submit the current V3 publication ID."));
+
+            if (receivedAt < context.NoticeCreatedAt || receivedAt >= context.DeadlineExclusive)
+                return Result.Failure<QualityRefundCaseView>(AppError.Conflict(
+                    "QualityRefund.ClaimWindowClosed", "The deadline for submitting a quality claim has passed."));
+
+            if (context.Release is { ScreensDisease: false } &&
+                issues.Any(issue => issue is not null && issue.IssueType != "WRONG_POLE"))
+                return Result.Failure<QualityRefundCaseView>(AppError.Validation(
+                    "QualityRefund.InvalidMapIssue", "Only pole mapping issues may be reported for a MAP publication."));
 
             QualityRefundCase refundCase;
             try
             {
-                refundCase = QualityRefundCase.Report(
-                    order, result, actorId, issues, description, evidenceReference,
-                    recipientBankName, recipientAccountNumber, recipientAccountName,
-                    receivedAt);
+                refundCase = context.Release is { } release
+                    ? QualityRefundCase.ReportV3(
+                        order, release.PublicationId, actorId, issues, description, evidenceReference,
+                        recipientBankName, recipientAccountNumber, recipientAccountName, receivedAt)
+                    : QualityRefundCase.Report(
+                        order, context.LegacyResult!, actorId, issues, description, evidenceReference,
+                        recipientBankName, recipientAccountNumber, recipientAccountName, receivedAt);
             }
             catch (ArgumentException exception)
             {
@@ -100,14 +103,16 @@ internal sealed class QualityRefundWorkflow(
                     AppError.Conflict("QualityRefund.InvalidResult", exception.Message));
             }
 
-            var releasedPoleCodes = await GetReleasedPoleCodesAsync(
-                order.Id, result.Id, tenantId, order.FarmId, cancellationToken);
+            var releasedPoleCodes = context.Release is { } released
+                ? await GetV3ReleasedPoleCodesAsync(released, cancellationToken)
+                : await GetReleasedPoleCodesAsync(
+                    order.Id, context.LegacyResult!.Id, tenantId, order.FarmId, cancellationToken);
             var allowedPoleCodes = releasedPoleCodes.ToHashSet(StringComparer.OrdinalIgnoreCase);
             if (issues.Any(issue => !allowedPoleCodes.Contains(issue.PoleCode.Trim())))
             {
                 return Result.Failure<QualityRefundCaseView>(AppError.Validation(
                     "QualityRefund.PoleOutsideReleasedResult",
-                    "Có mã trụ không xác nhận được trong kết quả đã phát hành của đơn này."));
+                    "One or more pole codes are outside this published survey result."));
             }
 
             db.QualityRefundCases.Add(refundCase);
@@ -115,6 +120,7 @@ internal sealed class QualityRefundWorkflow(
             {
                 refundCase.SurveyOrderId,
                 refundCase.SurveyResultId,
+                refundCase.V3PublicationId,
                 refundCase.Status,
                 refundCase.ReportedIssues,
                 refundCase.Description,
@@ -146,19 +152,24 @@ internal sealed class QualityRefundWorkflow(
         var now = timeProvider.GetUtcNow();
         var order = await db.SurveyOrders.AsNoTracking().SingleOrDefaultAsync(x => x.Id == orderId && x.TenantId == tenantId, cancellationToken);
         if (order is null) return Result.Failure<QualityRefundClaimWindowView>(NotFound());
-        var result = await db.SurveyResults.AsNoTracking().SingleOrDefaultAsync(x => x.SurveyOrderId == orderId && x.TenantId == tenantId, cancellationToken);
-        var notice = result is null ? null : await noticeQuery.GetCreatedAtAsync(tenantId, orderId, result.Id, cancellationToken);
-        DateTimeOffset? deadline = notice is null ? null : ClaimPolicy.CalculateSevenDayDeadline(notice.Value);
+        if (order.Scope == ContractScope.Legacy)
+            return await GetLegacyClaimWindowAsync(order, now, cancellationToken);
+
+        var claim = await ReadClaimContextAsync(order, cancellationToken);
+        if (claim.IsFailure)
+            return Result.Success(new QualityRefundClaimWindowView(now, null, null, false, claim.Error.Description));
+
+        var context = claim.Value;
         string? reason = null;
-        if (order.Status != SurveyOrderStatus.Completed || result is null || result.Status != SurveyResultStatus.Published ||
-            result.InvalidatedAt.HasValue || result.ServiceType != SurveyServiceType.PlantHealth)
-            reason = "Đơn chưa có kết quả đủ điều kiện khiếu nại.";
-        else if (await db.QualityRefundCases.AnyAsync(x => x.SurveyOrderId == orderId && x.Status != QualityRefundStatus.Rejected, cancellationToken))
-            reason = "Đơn đã có hồ sơ đang xử lý hoặc đã hoàn tiền.";
-        else if (notice is null) reason = "Chưa có thông báo mở kết quả để xác định thời hạn khiếu nại.";
-        else if (now < notice.Value || now >= deadline!.Value) reason = "Đã hết thời hạn 7 ngày gửi khiếu nại hoàn tiền.";
-        else if (await GrossPaidAsync(orderId, cancellationToken) <= 0) reason = "Đơn chưa có khoản thanh toán được xác nhận.";
-        return Result.Success(new QualityRefundClaimWindowView(now, notice, deadline, reason is null, reason));
+        if (await db.QualityRefundCases.AnyAsync(x =>
+                x.SurveyOrderId == orderId && x.Status != QualityRefundStatus.Rejected, cancellationToken))
+            reason = "The order already has a claim being handled or refunded.";
+        else if (now < context.NoticeCreatedAt || now >= context.DeadlineExclusive)
+            reason = "The deadline for submitting a quality claim has passed.";
+
+        return Result.Success(new QualityRefundClaimWindowView(
+            now, context.NoticeCreatedAt, context.DeadlineExclusive, reason is null, reason,
+            context.Release?.PublicationId));
     }
 
     public async Task<Result<IReadOnlyList<QualityRefundCaseView>>> GetOwnerCasesAsync(
@@ -268,6 +279,7 @@ internal sealed class QualityRefundWorkflow(
             {
                 refundCase.SurveyOrderId,
                 refundCase.SurveyResultId,
+                refundCase.V3PublicationId,
                 refundCase.ManagerFindings,
                 refundCase.ManagerVerificationReason,
                 refundCase.ManagerVerifiedBy,
@@ -310,6 +322,16 @@ internal sealed class QualityRefundWorkflow(
             .Where(item => item.SurveyOrderId == orderId)
             .OrderByDescending(item => item.CreatedAt)
             .ToListAsync(cancellationToken);
+        if (order.Scope == ContractScope.V3)
+        {
+            var funding = await ReadV3FundingAsync(order, cancellationToken);
+            return funding.IsFailure
+                ? Result.Failure<QualityRefundOrderView>(funding.Error)
+                : Result.Success(new QualityRefundOrderView(
+                    orderId, funding.Value.GrossConfirmedReceipts, funding.Value.CompletedRefunds,
+                    funding.Value.OrderConfirmedNetCash, order.Currency ?? "VND", cases.Select(Map).ToArray()));
+        }
+
         var gross = await GrossPaidAsync(orderId, cancellationToken);
         var refunded = cases.Where(item => item.Status == QualityRefundStatus.Refunded)
             .Sum(item => item.ApprovedAmount ?? 0m);
@@ -365,6 +387,10 @@ internal sealed class QualityRefundWorkflow(
         {
             await using var transaction = await db.Database.BeginTransactionAsync(
                 IsolationLevel.Serializable, cancellationToken);
+            var order = await LockOrderAsync(orderId, tenantId: null, cancellationToken);
+            if (order is null)
+                return Result.Failure<QualityRefundCaseView>(NotFound());
+
             var refundCase = await db.QualityRefundCases.SingleOrDefaultAsync(item =>
                 item.Id == caseId && item.SurveyOrderId == orderId,
                 cancellationToken);
@@ -379,28 +405,45 @@ internal sealed class QualityRefundWorkflow(
                 refundCase.EnsureVersion(expectedVersion);
                 if (approve)
                 {
-                    var result = await db.SurveyResults.SingleOrDefaultAsync(item =>
-                        item.Id == refundCase.SurveyResultId &&
-                        item.SurveyOrderId == orderId,
-                        cancellationToken);
-                    if (result is null || result.InvalidatedAt.HasValue ||
-                        result.Status != SurveyResultStatus.Published)
+                    if (order.Scope == ContractScope.V3)
                     {
-                        return Result.Failure<QualityRefundCaseView>(
-                            AppError.Conflict("QualityRefund.ResultChanged", "The published result is no longer current."));
-                    }
+                        var release = await ReadV3ReleaseAsync(order, cancellationToken);
+                        if (release is null || refundCase.V3PublicationId != release.PublicationId)
+                            return Result.Failure<QualityRefundCaseView>(AppError.Conflict(
+                                "QualityRefund.ResultChanged", "The V3 publication on this claim is no longer current."));
 
-                    var gross = await GrossPaidAsync(orderId, cancellationToken);
-                    var alreadyRefunded = await RefundedAsync(orderId, cancellationToken);
-                    var amount = gross - alreadyRefunded;
-                    if (amount <= 0)
+                        var funding = await ReadV3FundingAsync(order, cancellationToken);
+                        if (funding.IsFailure)
+                            return Result.Failure<QualityRefundCaseView>(funding.Error);
+                        if (funding.Value.RequiresReconciliation)
+                            return Result.Failure<QualityRefundCaseView>(FundingOnHold());
+                        if (funding.Value.AvailableRefundCap <= 0m)
+                            return Result.Failure<QualityRefundCaseView>(NoRefundableAmount());
+
+                        refundCase.Approve(adminId, reason, funding.Value.AvailableRefundCap, now);
+                    }
+                    else
                     {
-                        return Result.Failure<QualityRefundCaseView>(
-                            AppError.Conflict("QualityRefund.NoRefundableAmount", "No captured amount remains refundable."));
-                    }
+                        var result = await db.SurveyResults.SingleOrDefaultAsync(item =>
+                            item.Id == refundCase.SurveyResultId &&
+                            item.SurveyOrderId == orderId,
+                            cancellationToken);
+                        if (result is null || result.InvalidatedAt.HasValue ||
+                            result.Status != SurveyResultStatus.Published)
+                        {
+                            return Result.Failure<QualityRefundCaseView>(
+                                AppError.Conflict("QualityRefund.ResultChanged", "The published result is no longer current."));
+                        }
 
-                    refundCase.Approve(adminId, reason, amount, now);
-                    result.InvalidateForQualityRefund(refundCase.Id, adminId, now, result.Version);
+                        var gross = await GrossPaidAsync(orderId, cancellationToken);
+                        var alreadyRefunded = await RefundedAsync(orderId, cancellationToken);
+                        var amount = gross - alreadyRefunded;
+                        if (amount <= 0)
+                            return Result.Failure<QualityRefundCaseView>(NoRefundableAmount());
+
+                        refundCase.Approve(adminId, reason, amount, now);
+                        result.InvalidateForQualityRefund(refundCase.Id, adminId, now, result.Version);
+                    }
                 }
                 else
                 {
@@ -417,6 +460,7 @@ internal sealed class QualityRefundWorkflow(
             {
                 refundCase.Status,
                 refundCase.SurveyResultId,
+                refundCase.V3PublicationId,
                 refundCase.DecisionReason,
                 refundCase.ApprovedAmount
             });
@@ -454,6 +498,10 @@ internal sealed class QualityRefundWorkflow(
         {
             await using var transaction = await db.Database.BeginTransactionAsync(
                 IsolationLevel.Serializable, cancellationToken);
+            var order = await LockOrderAsync(orderId, tenantId: null, cancellationToken);
+            if (order is null)
+                return Result.Failure<QualityRefundCaseView>(NotFound());
+
             var refundCase = await db.QualityRefundCases.SingleOrDefaultAsync(item =>
                 item.Id == caseId && item.SurveyOrderId == orderId,
                 cancellationToken);
@@ -468,6 +516,15 @@ internal sealed class QualityRefundWorkflow(
                 if (string.IsNullOrWhiteSpace(transferEvidenceReference) ||
                     !await evidenceStorage.ExistsAsync(refundCase.TenantId, caseId, transferEvidenceReference, cancellationToken))
                     return Result.Failure<QualityRefundCaseView>(AppError.Validation("QualityRefund.InvalidEvidence", "Ảnh biên lai không hợp lệ hoặc chưa upload thành công."));
+                if (order.Scope == ContractScope.V3 && refundCase.Status == QualityRefundStatus.Approved)
+                {
+                    var funding = await ReadV3FundingAsync(order, cancellationToken);
+                    if (funding.IsFailure)
+                        return Result.Failure<QualityRefundCaseView>(funding.Error);
+                    if (funding.Value.RequiresReconciliation)
+                        return Result.Failure<QualityRefundCaseView>(FundingOnHold());
+                }
+
                 refundCase.RecordTransfer(adminId, bankTransferReference,
                     now, expectedVersion, transferEvidenceReference);
             }
@@ -483,7 +540,8 @@ internal sealed class QualityRefundWorkflow(
                 refundCase.BankTransferReference,
                 refundCase.TransferEvidenceReference,
                 refundCase.TransferredAt,
-                refundCase.RecordedBy
+                refundCase.RecordedBy,
+                refundCase.V3PublicationId
             });
             auditWriter.AddSystemAdminAction(db, adminId,
                 executionContext.CorrelationId, nameof(QualityRefundCase),
@@ -533,6 +591,132 @@ internal sealed class QualityRefundWorkflow(
             return Result.Failure<Uri>(NotFound());
         return Result.Success(await evidenceStorage.GetDownloadUriAsync(item.TransferEvidenceReference, cancellationToken));
     }
+
+    private Task<SurveyOrder?> LockOrderAsync(Guid orderId, Guid? tenantId, CancellationToken cancellationToken) =>
+        db.SurveyOrders.FromSqlInterpolated($"""
+            SELECT o.*, o.xmin FROM survey.survey_orders o
+            WHERE o.id = {orderId} AND ({tenantId}::uuid IS NULL OR o.tenant_id = {tenantId}::uuid)
+            FOR UPDATE
+            """).SingleOrDefaultAsync(cancellationToken);
+
+    private sealed record ClaimContext(
+        DateTimeOffset NoticeCreatedAt,
+        DateTimeOffset DeadlineExclusive,
+        SurveyResult? LegacyResult,
+        V3ResultReleaseProof? Release);
+
+    private async Task<Result<QualityRefundClaimWindowView>> GetLegacyClaimWindowAsync(
+        SurveyOrder order, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        var result = await db.SurveyResults.AsNoTracking().SingleOrDefaultAsync(x =>
+            x.SurveyOrderId == order.Id && x.TenantId == order.TenantId, cancellationToken);
+        var notice = result is null ? null : await noticeQuery.GetCreatedAtAsync(
+            order.TenantId, order.Id, result.Id, cancellationToken);
+        DateTimeOffset? deadline = notice is null ? null : ClaimPolicy.CalculateSevenDayDeadline(notice.Value);
+        string? reason = null;
+        if (order.Status != SurveyOrderStatus.Completed || result is null || result.Status != SurveyResultStatus.Published ||
+            result.InvalidatedAt.HasValue || result.ServiceType != SurveyServiceType.PlantHealth)
+            reason = "Đơn chưa có kết quả đủ điều kiện khiếu nại.";
+        else if (await db.QualityRefundCases.AnyAsync(x => x.SurveyOrderId == order.Id && x.Status != QualityRefundStatus.Rejected, cancellationToken))
+            reason = "Đơn đã có hồ sơ đang xử lý hoặc đã hoàn tiền.";
+        else if (notice is null) reason = "Chưa có thông báo mở kết quả để xác định thời hạn khiếu nại.";
+        else if (now < notice.Value || now >= deadline!.Value) reason = "Đã hết thời hạn 7 ngày gửi khiếu nại hoàn tiền.";
+        else if (await GrossPaidAsync(order.Id, cancellationToken) <= 0) reason = "Đơn chưa có khoản thanh toán được xác nhận.";
+        return Result.Success(new QualityRefundClaimWindowView(now, notice, deadline, reason is null, reason));
+    }
+
+    private async Task<Result<ClaimContext>> ReadClaimContextAsync(SurveyOrder order, CancellationToken cancellationToken)
+    {
+        if (order.Scope == ContractScope.V3)
+        {
+            var release = await ReadV3ReleaseAsync(order, cancellationToken);
+            if (release is null)
+                return Result.Failure<ClaimContext>(AppError.Conflict(
+                    "QualityRefund.ReleaseUnavailable", "A current V3 publication and claim window are required."));
+
+            var funding = await ReadV3FundingAsync(order, cancellationToken);
+            if (funding.IsFailure)
+                return Result.Failure<ClaimContext>(funding.Error);
+            if (funding.Value.RequiresReconciliation)
+                return Result.Failure<ClaimContext>(FundingOnHold());
+            if (funding.Value.AvailableRefundCap <= 0m)
+                return Result.Failure<ClaimContext>(NoRefundableAmount());
+
+            return Result.Success(new ClaimContext(
+                release.NoticeCreatedAt, release.ClaimDeadlineExclusiveUtc, null, release));
+        }
+
+        var result = await db.SurveyResults.AsNoTracking().SingleOrDefaultAsync(x =>
+            x.SurveyOrderId == order.Id && x.TenantId == order.TenantId && x.FarmId == order.FarmId,
+            cancellationToken);
+        if (order.Status != SurveyOrderStatus.Completed || result is null ||
+            result.Status != SurveyResultStatus.Published || result.InvalidatedAt.HasValue ||
+            result.ServiceType != SurveyServiceType.PlantHealth)
+            return Result.Failure<ClaimContext>(AppError.Conflict(
+                "QualityRefund.ResultUnavailable", "A current published Plant Health result is required."));
+        if (await GrossPaidAsync(order.Id, cancellationToken) <= 0m)
+            return Result.Failure<ClaimContext>(AppError.Conflict(
+                "QualityRefund.NoCapturedPayment", "The order has no captured service payment."));
+
+        var notice = await noticeQuery.GetCreatedAtAsync(order.TenantId, order.Id, result.Id, cancellationToken);
+        if (notice is null)
+            return Result.Failure<ClaimContext>(AppError.Conflict(
+                "QualityRefund.NoticeUnavailable", "A notification is required to determine the claim deadline."));
+
+        return Result.Success(new ClaimContext(notice.Value,
+            ClaimPolicy.CalculateSevenDayDeadline(notice.Value), result, null));
+    }
+
+    private async Task<V3ResultReleaseProof?> ReadV3ReleaseAsync(SurveyOrder order, CancellationToken cancellationToken)
+    {
+        if (order.Status != SurveyOrderStatus.Completed || releaseProofReader is null)
+            return null;
+
+        var release = await releaseProofReader.GetByOrderIdAsync(order.TenantId, order.Id, cancellationToken);
+        return release is not null && release.AllowsOwnerActiveAccess(order.TenantId, order.FarmId) &&
+            release.OrderId == order.Id &&
+            ((release.ServiceCode, release.ScreensDisease) is
+                (SurveyInternalApprovedResultRevision.ServiceMap, false) or
+                (SurveyInternalApprovedResultRevision.ServiceCombo, true)) &&
+            release.ApprovedResultRevisionId != Guid.Empty &&
+            release.ApprovedResultRevisionId == order.CurrentApprovedResultRevisionId &&
+            release.InvoiceRevisionId != Guid.Empty && release.InvoiceRevisionId == order.CurrentInvoiceRevisionId &&
+            release.ClaimWindowId != Guid.Empty && release.NoticeCreatedAt >= release.UnlockedAt &&
+            release.ClaimDeadlineExclusiveUtc > release.NoticeCreatedAt
+            ? release
+            : null;
+    }
+
+    private Task<Result<V3QualityRefundFunding>> ReadV3FundingAsync(SurveyOrder order, CancellationToken cancellationToken) =>
+        v3FundingReader?.ReadAsync(order, db.Database.CurrentTransaction?.GetDbTransaction(), cancellationToken) ??
+        Task.FromResult(Result.Failure<V3QualityRefundFunding>(FundingOnHold()));
+
+    private static AppError FundingOnHold() =>
+        AppError.Conflict("QualityRefund.FundingOnHold", "V3 funding must be reconciled before approving a refund.");
+
+    private static AppError NoRefundableAmount() =>
+        AppError.Conflict("QualityRefund.NoRefundableAmount", "No confirmed amount remains refundable.");
+
+    private Task<List<string>> GetV3ReleasedPoleCodesAsync(V3ResultReleaseProof release, CancellationToken cancellationToken) =>
+        db.Database.SqlQuery<string>($"""
+            SELECT DISTINCT p.plant_code AS "Value"
+            FROM survey.survey_internal_approved_result_revisions approval
+            JOIN survey.survey_order_pole_count_snapshots snapshot
+              ON snapshot.id = approval.pole_count_snapshot_id
+             AND snapshot.survey_order_id = approval.survey_order_id
+             AND snapshot.tenant_id = approval.tenant_id AND snapshot.farm_id = approval.farm_id
+            JOIN survey.survey_order_pole_count_snapshot_items item
+              ON item.snapshot_id = snapshot.id AND item.tenant_id = snapshot.tenant_id
+             AND item.farm_id = snapshot.farm_id AND item.mapping_candidate_batch_id = snapshot.mapping_candidate_batch_id
+             AND item.is_accepted AND item.is_strictly_in_boundary
+            JOIN plant.plants p
+              ON p.farm_id = snapshot.farm_id AND p.plant_profile_id = item.plant_profile_id
+            WHERE approval.id = {release.ApprovedResultRevisionId}
+              AND approval.survey_order_id = {release.OrderId}
+              AND approval.tenant_id = {release.TenantId} AND approval.farm_id = {release.FarmId}
+              AND approval.evidence_fingerprint = {release.ApprovedResultFingerprint}
+              AND p.created_at <= {release.PublishedAt}
+            """).ToListAsync(cancellationToken);
 
     private Task<List<string>> GetReleasedPoleCodesAsync(
         Guid orderId,
@@ -620,7 +804,7 @@ internal sealed class QualityRefundWorkflow(
         item.DecisionReason,
         item.ApprovedAmount, item.BankTransferReference,
         item.TransferEvidenceReference, item.TransferredAt,
-        item.Version, item.CreatedAt, item.UpdatedAt);
+        item.Version, item.CreatedAt, item.UpdatedAt, item.V3PublicationId);
 
     private static ManagerQualityRefundCaseView MapManager(QualityRefundCase item) => new(
         item.Id, item.SurveyOrderId, item.SurveyResultId, item.Status,
@@ -628,7 +812,7 @@ internal sealed class QualityRefundWorkflow(
         item.Description, item.EvidenceReference,
         item.ManagerFindings?.RootElement.Deserialize<VerifiedPoleIssue[]>(),
         item.ManagerVerifiedBy, item.ManagerVerifiedAt, item.ManagerVerificationReason,
-        item.Version, item.CreatedAt, item.UpdatedAt);
+        item.Version, item.CreatedAt, item.UpdatedAt, item.V3PublicationId);
 
     private static AppError Forbidden() =>
         AppError.Forbidden("QualityRefund.Forbidden", "Actor is not authorized.");

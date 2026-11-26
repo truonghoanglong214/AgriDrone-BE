@@ -1,3 +1,4 @@
+using System.Data;
 using AgriDrone.IntegrationContracts.Farms;
 using AgriDrone.Modules.Plants.Application.Features.GetFarmPlants;
 using AgriDrone.Modules.Plants.Infrastructure.Persistence;
@@ -36,6 +37,31 @@ internal sealed class GetFarmPlantsQueryHandler(
             return Result.Failure<IReadOnlyList<FarmPlantItem>>(
                 AppError.NotFound("Plant.FarmNotFound", "Farm was not found."));
         }
+
+        // Read the order scope and inventory from one database snapshot so an
+        // internal approval cannot change the live rows between those reads.
+        await using var transaction = await db.Database.BeginTransactionAsync(
+            IsolationLevel.RepeatableRead, cancellationToken);
+        var usesV3Inventory = await db.Database.SqlQuery<bool>($"""
+            SELECT EXISTS (
+                SELECT 1
+                FROM survey.survey_orders o
+                WHERE o.tenant_id = {tenantId} AND o.farm_id = {request.FarmId}
+                  AND o.scope = 'V3'::system.contract_scope
+                  AND (
+                      o.status <> 'CANCELLED'::system.survey_order_status
+                      OR EXISTS (
+                          SELECT 1
+                          FROM farm.farm_base_map_versions m
+                          WHERE m.source_survey_order_id = o.id
+                            AND m.tenant_id = o.tenant_id AND m.farm_id = o.farm_id
+                            AND m.approved_internal_at IS NOT NULL
+                      )
+                  )
+            ) AS "Value"
+            """).SingleAsync(cancellationToken);
+        if (usesV3Inventory)
+            return await ReadReleasedV3PlantsAsync(tenantId, request.FarmId, cancellationToken);
 
         var orderPaymentPending = await db.Database.SqlQueryRaw<bool>(
             @"SELECT EXISTS (
@@ -120,5 +146,53 @@ internal sealed class GetFarmPlantsQueryHandler(
             .ToArray();
 
         return Result.Success(plants);
+    }
+
+    private async Task<Result<IReadOnlyList<FarmPlantItem>>> ReadReleasedV3PlantsAsync(
+        Guid tenantId, Guid farmId, CancellationToken cancellationToken)
+    {
+        var snapshotId = await db.Database.SqlQuery<Guid?>($"""
+            SELECT a.pole_count_snapshot_id AS "Value"
+            FROM survey.v3_survey_releases r
+            JOIN survey.survey_internal_approved_result_revisions a ON a.id = r.approval_id
+                AND a.survey_order_id = r.survey_order_id AND a.tenant_id = r.tenant_id AND a.farm_id = r.farm_id
+            JOIN farm.farm_base_map_versions m ON m.id = r.map_id
+                AND m.source_survey_order_id = r.survey_order_id AND m.tenant_id = r.tenant_id AND m.farm_id = r.farm_id
+            WHERE r.tenant_id = {tenantId} AND r.farm_id = {farmId}
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM survey.quality_refund_cases c
+                  WHERE c.v3_publication_id = r.id AND c.status = 'Refunded'
+              )
+            ORDER BY m.version_number DESC, r.published_at DESC, r.id DESC
+            LIMIT 1
+            """).FirstOrDefaultAsync(cancellationToken);
+        if (!snapshotId.HasValue)
+            return Result.Failure<IReadOnlyList<FarmPlantItem>>(
+                AppError.NotFound("Plant.NotFound", "No released plant inventory was found."));
+
+        // The approved snapshot fixes the plant membership and positions.
+        // Live zone assignments and lifecycle changes may belong to a later survey.
+        var plants = await db.Database.SqlQuery<FarmPlantItem>($"""
+            SELECT released."Id", released."PlantCode", NULL::uuid AS "ZoneId",
+                   released."Row", released."Col", released."Lat", released."Lon",
+                   'ACTIVE'::text AS "LifecycleStatus"
+            FROM (
+                SELECT DISTINCT ON (i.plant_profile_id)
+                       p.id AS "Id", p.plant_code AS "PlantCode",
+                       i.effective_row_index AS "Row", i.effective_column_index AS "Col",
+                       ST_Y(i.effective_position) AS "Lat", ST_X(i.effective_position) AS "Lon"
+                FROM survey.survey_order_pole_count_snapshot_items i
+                JOIN survey.survey_order_pole_count_snapshots s ON s.id = i.snapshot_id
+                    AND s.tenant_id = i.tenant_id AND s.farm_id = i.farm_id
+                JOIN plant.plants p ON p.plant_profile_id = i.plant_profile_id AND p.farm_id = i.farm_id
+                    AND p.created_at <= s.verified_at
+                WHERE i.snapshot_id = {snapshotId.Value} AND i.tenant_id = {tenantId} AND i.farm_id = {farmId}
+                  AND i.is_accepted AND i.is_strictly_in_boundary
+                ORDER BY i.plant_profile_id, p.created_at DESC, p.id, i.id
+            ) released
+            ORDER BY released."Row", released."Col", released."PlantCode"
+            """).ToListAsync(cancellationToken);
+        return Result.Success<IReadOnlyList<FarmPlantItem>>(plants);
     }
 }

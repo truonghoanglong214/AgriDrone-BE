@@ -32,6 +32,29 @@ public sealed class Notification : Entity
 
     public Guid? SourcePublicationId { get; private set; }
 
+    public static Notification ForV3SurveyRelease(
+        Guid ownerId, Guid tenantId, Guid farmId, Guid orderId, DateTimeOffset createdAt)
+    {
+        DomainGuard.NotEmpty(ownerId);
+        DomainGuard.NotEmpty(tenantId);
+        DomainGuard.NotEmpty(farmId);
+        DomainGuard.NotEmpty(orderId);
+        DomainGuard.Utc(createdAt);
+        return new Notification
+        {
+            Id = Guid.CreateVersion7(),
+            UserId = ownerId,
+            TenantId = tenantId,
+            FarmId = farmId,
+            NotificationType = "SURVEY_V3_RELEASED",
+            Title = "Kết quả khảo sát đã được mở",
+            Message = "Bạn có thể xem kết quả khảo sát và thời hạn khiếu nại trong chi tiết đơn.",
+            EntityType = "SurveyOrder",
+            EntityId = orderId,
+            CreatedAt = createdAt
+        };
+    }
+
     public static Notification ForPublishedPlantHealth(Guid ownerId, Guid tenantId, Guid farmId, Guid publicationId,
         string teamLabelLimitation, DateTimeOffset createdAt)
     {

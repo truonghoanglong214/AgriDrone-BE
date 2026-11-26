@@ -15,6 +15,7 @@ public static class EmailTemplateVariableKeys
     public const string ApplicantName = "applicantName";
 
     public const string RequestNumber = "requestNumber";
+    public const string OrderNumber = "orderNumber";
 
     public const string SurveyServiceName = "surveyServiceName";
 

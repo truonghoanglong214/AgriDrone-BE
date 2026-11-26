@@ -765,6 +765,42 @@ internal static class SurveyInvoiceFunding
             }
         }
 
+        if (order.Scope == ContractScope.V3)
+        {
+            // An approved complaint reserves money. Recording the manual transfer converts
+            // that reservation into an order-level cash refund using the same case row.
+            var complaintCases = await (useRelationalLock
+                ? db.Set<QualityRefundCase>().FromSqlInterpolated($"""
+                    SELECT c.*, c.xmin FROM survey.quality_refund_cases c
+                    WHERE c.survey_order_id = {order.Id} AND c.status IN ('Approved', 'Refunded')
+                    ORDER BY c.id FOR SHARE
+                    """)
+                : db.Set<QualityRefundCase>().AsNoTracking().Where(c =>
+                    c.SurveyOrderId == order.Id &&
+                    (c.Status == QualityRefundStatus.Approved || c.Status == QualityRefundStatus.Refunded)))
+                .ToListAsync(cancellationToken);
+
+            foreach (var complaint in complaintCases)
+            {
+                if (complaint.TenantId != order.TenantId || complaint.FarmId != order.FarmId ||
+                    complaint.ApprovedAmount is not decimal amount || amount <= 0m ||
+                    decimal.Truncate(amount) != amount)
+                {
+                    return Hold("Complaint refund amount or order scope could not be verified.");
+                }
+
+                if (complaint.Status == QualityRefundStatus.Refunded)
+                {
+                    totalCompletedRefunds += amount;
+                }
+                else
+                {
+                    totalActiveReservations += amount;
+                    activeOtherRefundReservations += amount;
+                }
+            }
+        }
+
         var grossConfirmedReceipts = receipts.Sum(r => countedCashByReceipt[r.Id]);
         var totalCashReversals = reversalsByReceipt.Values.Sum(r => r.Cash);
         var routedToRefundTotal = routedToRefundByReceipt.Values.Sum();

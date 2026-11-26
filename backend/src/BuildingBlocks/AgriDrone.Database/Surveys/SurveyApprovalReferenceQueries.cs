@@ -304,7 +304,8 @@ internal sealed class SurveyApprovalReferenceQueries(
             tenantId,
             farmId,
             eligibility.IsEligible ? eligibility.BaseMapVersionId : null,
-            eligibility.IsEligible ? eligibility.ConfirmedActivePoleCount : null);
+            eligibility.IsEligible ? eligibility.ConfirmedActivePoleCount : null,
+            eligibility.IsEligible ? eligibility.BaselineMapVersionId : null);
     }
 
     public async Task<SurveyApprovalPreviousOrderReference?>

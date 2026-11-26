@@ -21,7 +21,8 @@ public sealed class QualityRefundCase : Entity
     public Guid SurveyOrderId { get; private set; }
     public Guid TenantId { get; private set; }
     public Guid FarmId { get; private set; }
-    public Guid SurveyResultId { get; private set; }
+    public Guid? SurveyResultId { get; private set; }
+    public Guid? V3PublicationId { get; private set; }
     public Guid ReportedBy { get; private set; }
     public JsonDocument ReportedIssues { get; private set; } = null!;
     public string Description { get; private set; } = null!;
@@ -47,7 +48,7 @@ public sealed class QualityRefundCase : Entity
     public DateTimeOffset CreatedAt { get; private set; }
     public DateTimeOffset UpdatedAt { get; private set; }
     public SurveyOrder SurveyOrder { get; private set; } = null!;
-    public SurveyResult SurveyResult { get; private set; } = null!;
+    public SurveyResult? SurveyResult { get; private set; }
 
     public static QualityRefundCase Report(
         SurveyOrder order,
@@ -61,8 +62,6 @@ public sealed class QualityRefundCase : Entity
         string recipientAccountName,
         DateTimeOffset now)
     {
-        DomainGuard.NotEmpty(reportedBy);
-        DomainGuard.Utc(now);
         if (order.Status != SurveyOrderStatus.Completed ||
             result.Status != SurveyResultStatus.Published ||
             result.InvalidatedAt.HasValue ||
@@ -73,6 +72,48 @@ public sealed class QualityRefundCase : Entity
         {
             throw new InvalidOperationException("Only a current published Plant Health result can be reported.");
         }
+
+        return CreateReport(order, result.Id, null, reportedBy, issues, description, evidenceReference,
+            recipientBankName, recipientAccountNumber, recipientAccountName, now);
+    }
+
+    public static QualityRefundCase ReportV3(
+        SurveyOrder order,
+        Guid publicationId,
+        Guid reportedBy,
+        IReadOnlyList<ReportedPoleIssue> issues,
+        string description,
+        string? evidenceReference,
+        string recipientBankName,
+        string recipientAccountNumber,
+        string recipientAccountName,
+        DateTimeOffset now)
+    {
+        DomainGuard.NotEmpty(publicationId);
+        if (order.Scope != ContractScope.V3 || order.Status != SurveyOrderStatus.Completed)
+        {
+            throw new InvalidOperationException("A completed V3 order is required.");
+        }
+
+        return CreateReport(order, null, publicationId, reportedBy, issues, description, evidenceReference,
+            recipientBankName, recipientAccountNumber, recipientAccountName, now);
+    }
+
+    private static QualityRefundCase CreateReport(
+        SurveyOrder order,
+        Guid? resultId,
+        Guid? v3PublicationId,
+        Guid reportedBy,
+        IReadOnlyList<ReportedPoleIssue> issues,
+        string description,
+        string? evidenceReference,
+        string recipientBankName,
+        string recipientAccountNumber,
+        string recipientAccountName,
+        DateTimeOffset now)
+    {
+        DomainGuard.NotEmpty(reportedBy);
+        DomainGuard.Utc(now);
 
         if (issues is null || issues.Count < 1 ||
             issues.Any(item =>
@@ -106,7 +147,8 @@ public sealed class QualityRefundCase : Entity
             SurveyOrderId = order.Id,
             TenantId = order.TenantId,
             FarmId = order.FarmId,
-            SurveyResultId = result.Id,
+            SurveyResultId = resultId,
+            V3PublicationId = v3PublicationId,
             ReportedBy = reportedBy,
             ReportedIssues = JsonSerializer.SerializeToDocument(issues.Select(item =>
                 new ReportedPoleIssue(item.PoleCode.Trim(), item.IssueType, item.Details.Trim()))),

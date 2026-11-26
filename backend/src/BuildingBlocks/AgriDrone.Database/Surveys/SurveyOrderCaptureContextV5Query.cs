@@ -94,7 +94,7 @@ internal sealed class SurveyOrderCaptureContextV5Query(
             blockers.Add("ACTIVE_CAPTURE_ATTEMPT_EXISTS");
         }
         if (!order.RequiresBaselineMapping &&
-            (!order.PreviousCompatibleOrderId.HasValue ||
+            (!order.BaselineMapVersionId.HasValue ||
              !order.FarmBaseMapVersionId.HasValue))
         {
             blockers.Add("FOLLOW_UP_BASELINE_NOT_PINNED");

@@ -53,7 +53,7 @@ internal sealed class V3FollowUpBaselineEligibilityReader(
                   AND source_order.id = @source_order_id
                   AND base_map.tenant_id = @tenant_id
                   AND base_map.farm_id = @farm_id
-                  AND base_map.status = 'PUBLISHED'::system.farm_base_map_status
+                  AND base_map.status IN ('PUBLISHED', 'SUPERSEDED')
                   AND source_order.scope = 'V3'::system.contract_scope
                   AND source_order.status = 'COMPLETED'::system.survey_order_status
                 FOR SHARE OF base_map, source_order
@@ -79,19 +79,39 @@ internal sealed class V3FollowUpBaselineEligibilityReader(
             where map.Id == proof.BaseMapVersionId &&
                   order.Id == proof.SourceOrderId &&
                   map.TenantId == tenantId && map.FarmId == farmId &&
-                  map.Status == FarmBaseMapStatus.Published &&
+                  (map.Status == FarmBaseMapStatus.Published || map.Status == FarmBaseMapStatus.Superseded) &&
                   order.Scope == ContractScope.V3 &&
                   order.Status == SurveyOrderStatus.Completed
-            select new { map.Id, SourceOrderId = order.Id, order.ConfirmedSurveyPoleCount })
+            select new { map.Id, SourceOrderId = order.Id, order.ConfirmedSurveyPoleCount, order.VerifiedBillablePoleCount })
             .SingleOrDefaultAsync(cancellationToken);
 
-        if (candidate?.ConfirmedSurveyPoleCount is not { } count || count.Value <= 0)
+        var count = candidate?.VerifiedBillablePoleCount ?? candidate?.ConfirmedSurveyPoleCount?.Value;
+        if (candidate is null || count is null or <= 0)
         {
             return V3FollowUpBaselineEligibilityResult.Ineligible(
                 "The released baseline is not current or has no valid confirmed pole count.");
         }
 
+        var current = await (
+            from map in context.Set<FarmBaseMapVersion>().AsNoTracking()
+            join order in context.Set<SurveyOrder>().AsNoTracking() on map.SourceSurveyOrderId equals order.Id
+            where map.TenantId == tenantId && map.FarmId == farmId &&
+                  (map.Id == proof.BaseMapVersionId || map.BaselineMapVersionId == proof.BaseMapVersionId) &&
+                  order.Scope == ContractScope.V3 && (map.Status == FarmBaseMapStatus.Published ||
+                    map.Status == FarmBaseMapStatus.InternalApproved || map.Id == proof.BaseMapVersionId)
+            orderby map.VersionNumber descending
+            select new { map.Id, map.Status, SourceOrderId = order.Id, OrderStatus = order.Status, order.VerifiedBillablePoleCount })
+            .FirstOrDefaultAsync(cancellationToken);
+        if (current is null || current.Status != FarmBaseMapStatus.Published ||
+            current.OrderStatus != SurveyOrderStatus.Completed)
+            return V3FollowUpBaselineEligibilityResult.Ineligible(
+                "The latest accepted snapshot has not been released.");
+
+        var currentProof = await deliveryProofReader.ReadCurrentAsync(context, tenantId, farmId, cancellationToken);
+        if (currentProof?.ReleaseId != proof.ReleaseId || !currentProof.AllowsFollowUp(tenantId, farmId))
+            return V3FollowUpBaselineEligibilityResult.Ineligible("The baseline release is no longer available.");
+
         return V3FollowUpBaselineEligibilityResult.Eligible(
-            candidate.Id, candidate.SourceOrderId, count.Value);
+            current.Id, current.SourceOrderId, current.VerifiedBillablePoleCount ?? count.Value, proof.BaseMapVersionId);
     }
 }

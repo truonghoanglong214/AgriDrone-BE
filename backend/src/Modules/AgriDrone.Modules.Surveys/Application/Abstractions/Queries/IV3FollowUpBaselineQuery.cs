@@ -5,13 +5,16 @@ public sealed record V3FollowUpBaselineEligibilityResult(
     Guid? BaseMapVersionId,
     Guid? SourceOrderId,
     int? ConfirmedActivePoleCount,
-    string? RejectionReason = null)
+    string? RejectionReason = null,
+    Guid? BaselineMapVersionId = null)
 {
     public static V3FollowUpBaselineEligibilityResult Eligible(
         Guid baseMapVersionId,
         Guid sourceOrderId,
-        int confirmedActivePoleCount) =>
-        new(true, baseMapVersionId, sourceOrderId, confirmedActivePoleCount);
+        int confirmedActivePoleCount,
+        Guid? baselineMapVersionId = null) =>
+        new(true, baseMapVersionId, sourceOrderId, confirmedActivePoleCount,
+            BaselineMapVersionId: baselineMapVersionId ?? baseMapVersionId);
 
     public static V3FollowUpBaselineEligibilityResult Ineligible(string reason) =>
         new(false, null, null, null, reason);
