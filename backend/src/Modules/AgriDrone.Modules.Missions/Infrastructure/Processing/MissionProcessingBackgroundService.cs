@@ -59,7 +59,7 @@ internal sealed class MissionProcessingBackgroundService(
 
             var pendingMissions = await dbContext.DroneMissions
                 .AsNoTracking()
-                .Where(m => m.Status == MissionStatus.ReadyForProcessing)
+                .Where(m => m.Status == MissionStatus.ReadyForProcessing && m.CaptureAttemptId == null)
                 .Select(m => new MissionProcessingWorkItem(m.TenantId, m.FarmId, m.Id))
                 .ToListAsync(cancellationToken);
 

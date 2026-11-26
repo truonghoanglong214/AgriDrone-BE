@@ -11,6 +11,7 @@ using AgriDrone.Modules.Missions.Application.Features.Missions.TransitionMission
 using AgriDrone.Modules.Missions.Domain.Drones;
 using AgriDrone.Modules.Missions.Domain.Media;
 using AgriDrone.Modules.Missions.Domain.Missions;
+using AgriDrone.Modules.Missions.Domain.Telemetry;
 using AgriDrone.Modules.Surveys.Domain;
 using AgriDrone.SharedKernel.Application.Abstractions.Authorization;
 using AgriDrone.SharedKernel.Application.Abstractions.Execution;
@@ -492,6 +493,12 @@ public sealed class V303H2MediaSecurityAcceptanceTests : V303H2IntegrationTestBa
         Assert.False(wrongJobApproval.Success);
         Assert.Equal("CAPTURE_PROCESSING_JOB_MISMATCH", wrongJobApproval.ErrorCode);
 
+        var recoverRequest = new RecoverCaptureMissionRequest(
+            seeded.OrderId, prepRes.AttemptId, seeded.ManagerUserId, Guid.NewGuid());
+        var prematureRecovery = await coordinator.RecoverApprovedMissionAsync(recoverRequest);
+        Assert.False(prematureRecovery.Success);
+        Assert.Equal("CAPTURE_APPROVAL_NOT_CURRENT", prematureRecovery.ErrorCode);
+
         // Valid approval succeeds
         var approveRes = await coordinator.ApproveInputAsync(new ApproveCaptureInputRequest(
             seeded.OrderId,
@@ -518,6 +525,49 @@ public sealed class V303H2MediaSecurityAcceptanceTests : V303H2IntegrationTestBa
 
         var finalAttempt = await verifyCtx.Set<CaptureAttempt>().AsNoTracking().SingleAsync(a => a.Id == prepRes.AttemptId);
         Assert.Equal(CaptureAttemptStatus.Processing, finalAttempt.Status);
+
+        var approvedMission = await verifyCtx.Set<DroneMission>().AsNoTracking()
+            .SingleAsync(mission => mission.Id == prepRes.MissionId);
+        Assert.Equal(MissionStatus.ReadyForProcessing, approvedMission.Status);
+        Assert.Equal(ProcessingStatus.Uploaded, approvedMission.ProcessingStatus);
+
+        var telemetryId = await verifyCtx.Set<MissionTelemetryImport>().AsNoTracking()
+            .Where(telemetry => telemetry.MissionId == prepRes.MissionId)
+            .Select(telemetry => telemetry.Id).SingleAsync();
+
+        // Reproduce a previously approved mission that was left in Uploading.
+        await verifyCtx.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE mission.drone_missions
+            SET status = 'UPLOADING', processing_status = 'NOT_UPLOADED'
+            WHERE id = {prepRes.MissionId}
+            """);
+
+        var recovered = await coordinator.RecoverApprovedMissionAsync(recoverRequest);
+        Assert.True(recovered.Success, recovered.ErrorMessage);
+        Assert.False(recovered.AlreadyReady);
+        Assert.Equal(prepRes.MissionId, recovered.MissionId);
+        Assert.Equal(approveRes.ApprovalId, recovered.ApprovalId);
+        Assert.Equal(freezeRes.ManifestId, recovered.ManifestId);
+        Assert.Equal(processingJobId, recovered.ProcessingJobId);
+
+        var recoveredMission = await verifyCtx.Set<DroneMission>().AsNoTracking()
+            .SingleAsync(mission => mission.Id == prepRes.MissionId);
+        Assert.Equal(MissionStatus.ReadyForProcessing, recoveredMission.Status);
+        Assert.Equal(ProcessingStatus.Uploaded, recoveredMission.ProcessingStatus);
+        Assert.Equal(missionMedia.MediaId, await verifyCtx.Set<MissionMedia>().AsNoTracking()
+            .Where(media => media.MissionId == prepRes.MissionId)
+            .Select(media => media.MediaId).SingleAsync());
+        Assert.Equal(telemetryId, await verifyCtx.Set<MissionTelemetryImport>().AsNoTracking()
+            .Where(telemetry => telemetry.MissionId == prepRes.MissionId)
+            .Select(telemetry => telemetry.Id).SingleAsync());
+        Assert.Equal(CaptureInputManifestStatus.Approved, await verifyCtx.Set<CaptureInputManifest>().AsNoTracking()
+            .Where(manifest => manifest.Id == recovered.ManifestId)
+            .Select(manifest => manifest.Status).SingleAsync());
+
+        var replay = await coordinator.RecoverApprovedMissionAsync(recoverRequest);
+        Assert.True(replay.Success, replay.ErrorMessage);
+        Assert.True(replay.AlreadyReady);
+        Assert.Equal(recovered.MissionVersion, replay.MissionVersion);
     }
 
     private sealed class TestManagerAccessService(Guid tenantId, Guid farmId) : ISystemManagerAccessService

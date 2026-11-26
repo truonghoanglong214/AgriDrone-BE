@@ -45,6 +45,12 @@ internal sealed class MissionProcessor(
             return;
         }
 
+        if (mission.CaptureAttemptId.HasValue)
+        {
+            logger.LogInformation("V3 capture mission {MissionId} awaits manual orthophoto processing.", item.MissionId);
+            return;
+        }
+
         if (mission.Status != MissionStatus.ReadyForProcessing)
         {
             logger.LogInformation(

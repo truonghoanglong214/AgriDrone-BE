@@ -92,10 +92,12 @@ public abstract class V303H2IntegrationTestBase : IAsyncLifetime
         Guid actorId,
         TimeSpan clockOffset = default)
     {
-        var mission = await context.Set<DroneMission>().AsNoTracking().SingleAsync(value => value.Id == missionId);
+        var mission = await context.Set<DroneMission>().SingleAsync(value => value.Id == missionId);
         var startedAt = mission.StartedAt!.Value + clockOffset;
         var endedAt = mission.EndedAt!.Value + clockOffset;
         var importedAt = DateTimeOffset.UtcNow;
+        if (mission.Status == MissionStatus.FlightCompleted)
+            mission.StartUploading(importedAt);
         using var segment = JsonSerializer.SerializeToDocument(new
         {
             points = new[]

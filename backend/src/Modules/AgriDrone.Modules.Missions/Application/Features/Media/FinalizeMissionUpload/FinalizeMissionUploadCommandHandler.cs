@@ -63,6 +63,13 @@ internal sealed class FinalizeMissionUploadCommandHandler(
                 AppError.Conflict("MissionUpload.MissionNotOrderBound",
                     "Legacy Missions cannot finalize uploads."));
 
+        if (mission.CaptureAttemptId.HasValue)
+        {
+            return Result.Failure<FinalizeMissionUploadResult>(
+                AppError.Conflict("MissionUpload.V3InputApprovalRequired",
+                    "Finalize the V3 capture through its input-approval endpoint before starting mapping."));
+        }
+
         if (mission.Status != MissionStatus.Uploading)
         {
             return Result.Failure<FinalizeMissionUploadResult>(

@@ -161,6 +161,24 @@ public record ApproveCaptureInputResult(
     string? ErrorCode = null,
     string? ErrorMessage = null);
 
+public record RecoverCaptureMissionRequest(
+    Guid OrderId,
+    Guid AttemptId,
+    Guid ActorId,
+    Guid CorrelationId);
+
+public record RecoverCaptureMissionResult(
+    bool Success,
+    Guid AttemptId,
+    Guid MissionId,
+    Guid ApprovalId,
+    Guid ManifestId,
+    Guid ProcessingJobId,
+    uint MissionVersion,
+    bool AlreadyReady,
+    string? ErrorCode = null,
+    string? ErrorMessage = null);
+
 public record CreateQualityReflightRequest(
     Guid OrderId,
     uint ExpectedOrderVersion,
@@ -264,6 +282,10 @@ public interface ISurveyCaptureExecutionCoordinator
 
     Task<ApproveCaptureInputResult> ApproveInputAsync(
         ApproveCaptureInputRequest request,
+        CancellationToken cancellationToken = default);
+
+    Task<RecoverCaptureMissionResult> RecoverApprovedMissionAsync(
+        RecoverCaptureMissionRequest request,
         CancellationToken cancellationToken = default);
 
     Task<CreateQualityReflightResult> CreateQualityReflightAsync(

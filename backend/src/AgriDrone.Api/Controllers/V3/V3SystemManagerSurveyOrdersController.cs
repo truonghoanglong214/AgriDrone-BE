@@ -281,6 +281,31 @@ public sealed class V3SystemManagerSurveyOrdersController(
             StatusCodes.Status201Created, result.ErrorCode, result.ErrorMessage);
     }
 
+    /// <summary>Đồng bộ trạng thái nhiệm vụ V3 theo bản duyệt đầu vào hiện hành.</summary>
+    [HttpPost("{orderId:guid}/capture-attempts/{attemptId:guid}/input-approval/recover")]
+    [ProducesResponseType<RecoverCaptureMissionResult>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IResult> RecoverApprovedMission(
+        [FromRoute] Guid orderId,
+        [FromRoute] Guid attemptId,
+        CancellationToken cancellationToken)
+    {
+        if (!TryGetActor(out var actorId)) return Results.Forbid();
+        var result = await captureCoordinator.RecoverApprovedMissionAsync(
+            new RecoverCaptureMissionRequest(orderId, attemptId, actorId, executionContext.CorrelationId),
+            cancellationToken);
+
+        if (result.ErrorCode == "MANAGER_FORBIDDEN")
+            return Results.Forbid();
+        if (result.ErrorCode == "CAPTURE_NOT_FOUND")
+            return Results.NotFound();
+
+        return CoordinatorResult(result.Success, result,
+            StatusCodes.Status200OK, result.ErrorCode, result.ErrorMessage);
+    }
+
     /// <summary>Đọc danh sách các lần bay (CaptureAttempt), mission gắn kèm và lịch sử chuyển trạng thái cho đơn V3.</summary>
     [HttpGet("{orderId:guid}/capture-attempts")]
     [ProducesResponseType<IReadOnlyList<V3CaptureAttemptApiResponse>>(StatusCodes.Status200OK)]

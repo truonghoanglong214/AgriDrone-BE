@@ -606,10 +606,11 @@ internal sealed class SurveyCaptureExecutionCoordinator(
                     token);
             var mission = attempt is null
                 ? null
-                : await db.Set<DroneMission>().AsNoTracking().SingleOrDefaultAsync(
+                : await db.Set<DroneMission>().SingleOrDefaultAsync(
                     value => value.CaptureAttemptId == attempt.Id && value.SurveyOrderId == request.OrderId, token);
             if (order is null || attempt is null || manifest is null || mission is null ||
-                order.Scope != ContractScope.V3 || mission.Id != manifest.MissionId ||
+                order.Scope != ContractScope.V3 || mission.Purpose != MissionPurpose.Capture ||
+                mission.Id != manifest.MissionId ||
                 mission.TenantId != order.TenantId || mission.FarmId != order.FarmId)
             {
                 return ApprovalFailure("INPUT_VERSION_CONFLICT", "Uploaded manifest, Attempt, or Order is stale.");
@@ -651,6 +652,12 @@ internal sealed class SurveyCaptureExecutionCoordinator(
                 !string.Equals(manifest.ManifestFingerprint, request.ManifestFingerprint, StringComparison.Ordinal))
             {
                 return ApprovalFailure("INPUT_VERSION_CONFLICT", "Uploaded Attempt or exact manifest is missing or stale.");
+            }
+
+            if (mission.Status is not (MissionStatus.Uploading or MissionStatus.ReadyForProcessing))
+            {
+                return ApprovalFailure("CAPTURE_MISSION_STATE_CONFLICT",
+                    "Only an uploading mission or a mission already ready for processing can be approved.");
             }
 
             var telemetry = await ReadValidCaptureTelemetryAsync(order, mission, token);
@@ -710,6 +717,9 @@ internal sealed class SurveyCaptureExecutionCoordinator(
                 order.TransitionToAwaitingProcessingV3(now);
                 order.TransitionToProcessingV3(now);
             }
+            if (mission.Status == MissionStatus.Uploading)
+                mission.MarkReadyForProcessing(now);
+
             db.Set<CaptureInputApproval>().Add(approval);
             AddCaptureEvidence(order, request.ActorId, request.CorrelationId,
                 "CAPTURE_INPUT_APPROVED", now, attempt.Id, mission.Id);
@@ -722,6 +732,79 @@ internal sealed class SurveyCaptureExecutionCoordinator(
                 attempt.Version);
         },
         ApprovalException,
+        cancellationToken);
+
+    public Task<RecoverCaptureMissionResult> RecoverApprovedMissionAsync(
+        RecoverCaptureMissionRequest request,
+        CancellationToken cancellationToken = default) => ExecuteAsync(
+        async token =>
+        {
+            await LockOrderAsync(request.OrderId, token);
+            var order = await db.Set<SurveyOrder>().AsNoTracking().SingleOrDefaultAsync(
+                value => value.Id == request.OrderId && value.Scope == ContractScope.V3, token);
+            if (order is null)
+                return RecoverMissionFailure("CAPTURE_NOT_FOUND", "V3 order or capture attempt was not found.");
+
+            if (!await IsAssignedManagerAsync(order.TenantId, order.FarmId, request.ActorId, token))
+                return RecoverMissionFailure("MANAGER_FORBIDDEN", "The actor is not the active assigned Manager.");
+
+            var attempt = await db.Set<CaptureAttempt>().AsNoTracking().SingleOrDefaultAsync(
+                value => value.Id == request.AttemptId && value.OrderId == order.Id &&
+                    value.TenantId == order.TenantId && value.FarmId == order.FarmId, token);
+            if (attempt is null)
+                return RecoverMissionFailure("CAPTURE_NOT_FOUND", "V3 order or capture attempt was not found.");
+
+            if (order.Status != SurveyOrderStatus.Processing || attempt.Status != CaptureAttemptStatus.Processing ||
+                !Guid.TryParse(attempt.InputApprovalReference, out var approvalId) ||
+                !Guid.TryParse(attempt.UploadManifestReference, out var manifestId) ||
+                !Guid.TryParse(attempt.ProcessingJobReference, out var jobId))
+            {
+                return RecoverMissionFailure("CAPTURE_APPROVAL_NOT_CURRENT",
+                    "Recovery requires a Processing order and attempt with a current input approval.");
+            }
+
+            var mission = await db.Set<DroneMission>().SingleOrDefaultAsync(value =>
+                value.CaptureAttemptId == attempt.Id && value.SurveyOrderId == order.Id &&
+                value.TenantId == order.TenantId && value.FarmId == order.FarmId &&
+                value.Purpose == MissionPurpose.Capture, token);
+            if (mission is null)
+                return RecoverMissionFailure("CAPTURE_NOT_FOUND", "The mission bound to this capture attempt was not found.");
+
+            var hasCurrentApproval = await (
+                from approval in db.Set<CaptureInputApproval>()
+                join manifest in db.Set<CaptureInputManifest>() on approval.InputManifestId equals manifest.Id
+                join job in db.Set<AiProcessingJob>() on approval.ProcessingJobId equals job.Id
+                where approval.Id == approvalId && approval.CaptureAttemptId == attempt.Id &&
+                      approval.TenantId == order.TenantId && approval.FarmId == order.FarmId &&
+                      approval.SurveyOrderId == order.Id && approval.MissionId == mission.Id &&
+                      manifest.Id == manifestId && manifest.Status == CaptureInputManifestStatus.Approved &&
+                      manifest.ManifestFingerprint == attempt.UploadManifestFingerprint &&
+                      approval.ManifestFingerprint == manifest.ManifestFingerprint &&
+                      job.Id == jobId && job.MissionId == mission.Id
+                select approval.Id).AnyAsync(token);
+            if (!hasCurrentApproval)
+            {
+                return RecoverMissionFailure("CAPTURE_APPROVAL_NOT_CURRENT",
+                    "The current approval, approved manifest, and processing job do not match the capture mission.");
+            }
+
+            var alreadyReady = mission.Status == MissionStatus.ReadyForProcessing;
+            if (!alreadyReady)
+            {
+                if (mission.Status != MissionStatus.Uploading)
+                    return RecoverMissionFailure("CAPTURE_MISSION_STATE_CONFLICT", "Only an uploading mission can be recovered.");
+
+                var now = clock.GetUtcNow();
+                mission.MarkReadyForProcessing(now);
+                AddCaptureEvidence(order, request.ActorId, request.CorrelationId,
+                    "CAPTURE_MISSION_PROCESSING_READINESS_RECOVERED", now, attempt.Id, mission.Id);
+                await db.SaveChangesAsync(token);
+            }
+
+            return new RecoverCaptureMissionResult(
+                true, attempt.Id, mission.Id, approvalId, manifestId, jobId, mission.Version, alreadyReady);
+        },
+        exception => RecoverMissionFailure("CAPTURE_MISSION_RECOVERY_CONFLICT", GetErrorMessage(exception)),
         cancellationToken);
 
     public Task<FreezeCaptureInputManifestResult> FreezeInputManifestAsync(
@@ -1932,6 +2015,8 @@ internal sealed class SurveyCaptureExecutionCoordinator(
         new(false, Guid.Empty, "UNCHANGED", 0, code, message);
     private static RecordFlightFailureResult FailureException(Exception exception) =>
         FailureFailure("CAPTURE_FAILURE_CONFLICT", GetErrorMessage(exception));
+    private static RecoverCaptureMissionResult RecoverMissionFailure(string code, string message) =>
+        new(false, Guid.Empty, Guid.Empty, Guid.Empty, Guid.Empty, Guid.Empty, 0, false, code, message);
     private static ApproveCaptureInputResult ApprovalFailure(string code, string message) =>
         new(false, Guid.Empty, Guid.Empty, "UNCHANGED", 0, code, message);
     private static ApproveCaptureInputResult ApprovalException(Exception exception) =>
