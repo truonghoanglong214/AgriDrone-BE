@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using AgriDrone.Api.Contracts.Surveys.V3;
 using AgriDrone.Modules.Surveys.Application.Features.Catalogue.CreateSurveyServiceV3;
 using AgriDrone.Modules.Surveys.Application.Features.Catalogue.PublishSurveyServicePriceV3;
@@ -6,6 +7,7 @@ using AgriDrone.Modules.Surveys.Application.Features.Policies.PublishBusinessPol
 using AgriDrone.Modules.Surveys.Application.Features.Policies.PublishCancellationPolicy;
 using AgriDrone.Modules.Surveys.Application.Features.Policies.PublishClaimPolicy;
 using AgriDrone.Modules.Surveys.Application.Features.Policies.PublishSurveyDepositPolicy;
+using AgriDrone.Modules.Surveys.Application.Features.Policies.ReadCommercialPolicies;
 using AgriDrone.Modules.Surveys.Application.Features.Policies.TransitionBusinessPolicyActivation;
 using AgriDrone.SharedInfrastructure.Authorization;
 using AgriDrone.SharedInfrastructure.Http;
@@ -20,6 +22,96 @@ namespace AgriDrone.Api.Controllers.V3;
 [Authorize(Policy = AccessAuthorizationPolicies.SystemAdmin)]
 public sealed class V3SystemAdminCommercialPoliciesController(ISender sender) : ControllerBase
 {
+    [HttpGet("services")]
+    [ProducesResponseType<CommercialServiceItem[]>(StatusCodes.Status200OK)]
+    public async Task<IResult> GetServices(
+        CancellationToken cancellationToken,
+        [FromQuery, Range(0, int.MaxValue)] int offset = 0,
+        [FromQuery, Range(1, 100)] int limit = 50)
+    {
+        var response = await sender.Send(new GetCommercialServicesQuery(offset, limit), cancellationToken);
+        return Results.Ok(response);
+    }
+
+    [HttpGet("revisions")]
+    [ProducesResponseType<CommercialRevisionItem[]>(StatusCodes.Status200OK)]
+    public async Task<IResult> GetRevisions(
+        CancellationToken cancellationToken,
+        [FromQuery] Guid? surveyServiceId = null,
+        [FromQuery, Range(0, int.MaxValue)] int offset = 0,
+        [FromQuery, Range(1, 100)] int limit = 50)
+    {
+        var response = await sender.Send(new GetCommercialRevisionsQuery(surveyServiceId, offset, limit), cancellationToken);
+        return Results.Ok(response);
+    }
+
+    [HttpGet("prices")]
+    [ProducesResponseType<CommercialPriceItem[]>(StatusCodes.Status200OK)]
+    public async Task<IResult> GetPrices(
+        CancellationToken cancellationToken,
+        [FromQuery] Guid? surveyServiceId = null,
+        [FromQuery, Range(0, int.MaxValue)] int offset = 0,
+        [FromQuery, Range(1, 100)] int limit = 50)
+    {
+        var response = await sender.Send(new GetCommercialPricesQuery(surveyServiceId, offset, limit), cancellationToken);
+        return Results.Ok(response);
+    }
+
+    [HttpGet("deposit-policies")]
+    [ProducesResponseType<CommercialDepositPolicyItem[]>(StatusCodes.Status200OK)]
+    public async Task<IResult> GetDepositPolicies(
+        CancellationToken cancellationToken,
+        [FromQuery, Range(0, int.MaxValue)] int offset = 0,
+        [FromQuery, Range(1, 100)] int limit = 50)
+    {
+        var response = await sender.Send(new GetCommercialDepositPoliciesQuery(offset, limit), cancellationToken);
+        return Results.Ok(response);
+    }
+
+    [HttpGet("claim-policies")]
+    [ProducesResponseType<CommercialClaimPolicyItem[]>(StatusCodes.Status200OK)]
+    public async Task<IResult> GetClaimPolicies(
+        CancellationToken cancellationToken,
+        [FromQuery, Range(0, int.MaxValue)] int offset = 0,
+        [FromQuery, Range(1, 100)] int limit = 50)
+    {
+        var response = await sender.Send(new GetCommercialClaimPoliciesQuery(offset, limit), cancellationToken);
+        return Results.Ok(response);
+    }
+
+    [HttpGet("cancellation-policies")]
+    [ProducesResponseType<CommercialCancellationPolicyItem[]>(StatusCodes.Status200OK)]
+    public async Task<IResult> GetCancellationPolicies(
+        CancellationToken cancellationToken,
+        [FromQuery, Range(0, int.MaxValue)] int offset = 0,
+        [FromQuery, Range(1, 100)] int limit = 50)
+    {
+        var response = await sender.Send(new GetCommercialCancellationPoliciesQuery(offset, limit), cancellationToken);
+        return Results.Ok(response);
+    }
+
+    [HttpGet("bundle-versions")]
+    [ProducesResponseType<CommercialBundleVersionItem[]>(StatusCodes.Status200OK)]
+    public async Task<IResult> GetBundleVersions(
+        CancellationToken cancellationToken,
+        [FromQuery] string? streamKey = null,
+        [FromQuery, Range(0, int.MaxValue)] int offset = 0,
+        [FromQuery, Range(1, 100)] int limit = 50)
+    {
+        var response = await sender.Send(new GetCommercialBundleVersionsQuery(streamKey?.Trim(), offset, limit), cancellationToken);
+        return Results.Ok(response);
+    }
+
+    [HttpGet("activations")]
+    [ProducesResponseType<CommercialActivationItem>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IResult> GetActivation(
+        CancellationToken cancellationToken)
+    {
+        var response = await sender.Send(new GetCommercialActivationQuery(), cancellationToken);
+        return response is null ? Results.NotFound() : Results.Ok(response);
+    }
+
     /// <summary>Đăng ký dịch vụ khảo sát V3 mới (ví dụ: MAP, COMBO).</summary>
     [HttpPost("services")]
     [ProducesResponseType<CreateSurveyServiceV3Response>(StatusCodes.Status201Created)]
