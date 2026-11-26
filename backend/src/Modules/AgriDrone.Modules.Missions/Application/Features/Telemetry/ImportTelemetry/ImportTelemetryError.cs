@@ -30,6 +30,11 @@ internal static class ImportTelemetryError
             "Telemetry timestamps must be within the " +
             "Mission flight interval.");
 
+    public static AppError CaptureUploadClosed() =>
+        AppError.Conflict(
+            "TelemetryImport.CaptureUploadClosed",
+            "This V3 capture upload is closed. Reopen the unapproved manifest to import telemetry.");
+
     public static AppError ConcurrentUpdate() =>
         AppError.Conflict(
             "TelemetryImport.ConcurrentUpdate",

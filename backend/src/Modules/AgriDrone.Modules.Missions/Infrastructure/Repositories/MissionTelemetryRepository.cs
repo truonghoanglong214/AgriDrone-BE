@@ -59,6 +59,47 @@ internal sealed class MissionTelemetryRepository(
             points);
     }
 
+    public async Task<bool> SaveCaptureImportAsync(
+        Guid orderId,
+        Guid attemptId,
+        MissionTelemetryImport telemetryImport,
+        IReadOnlyCollection<MissionTelemetryPoint> points,
+        bool replaceExisting,
+        CancellationToken cancellationToken)
+    {
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var uploadOpen = await dbContext.Database.SqlQuery<int>($"""
+                SELECT 1 AS "Value"
+                FROM survey.survey_orders o
+                JOIN survey.capture_attempts a ON a.order_id = o.id
+                JOIN mission.drone_missions m ON m.capture_attempt_id = a.id AND m.survey_order_id = o.id
+                WHERE o.id = {orderId} AND o.tenant_id = {telemetryImport.TenantId} AND o.farm_id = {telemetryImport.FarmId}
+                  AND o.scope = 'V3' AND o.status = 'AWAITING_CAPTURE_UPLOAD'
+                  AND a.id = {attemptId} AND m.id = {telemetryImport.MissionId}
+                  AND m.tenant_id = o.tenant_id AND m.farm_id = o.farm_id
+                  AND a.tenant_id = o.tenant_id AND a.farm_id = o.farm_id AND a.status = 'AWAITING_UPLOAD'
+                FOR SHARE OF o
+                """)
+            .ToListAsync(cancellationToken);
+        if (uploadOpen.Count == 0)
+            return false;
+
+        if (replaceExisting)
+        {
+            await dbContext.MissionTelemetryPoints
+                .Where(point => point.MissionId == telemetryImport.MissionId)
+                .ExecuteDeleteAsync(cancellationToken);
+            dbContext.MissionTelemetryPoints.AddRange(points);
+        }
+        else
+        {
+            Add(telemetryImport, points);
+        }
+        await dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return true;
+    }
+
     public async Task ReplaceAsync(
         MissionTelemetryImport telemetryImport,
         IReadOnlyCollection<MissionTelemetryPoint> points,

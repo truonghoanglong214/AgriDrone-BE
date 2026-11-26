@@ -111,6 +111,31 @@ public record FreezeCaptureInputManifestResult(
     string Status,
     uint Version,
     string? ErrorCode = null,
+    string? ErrorMessage = null,
+    Guid? ProcessingJobId = null,
+    uint? OrderVersion = null);
+
+public record ReopenCaptureInputManifestRequest(
+    Guid OrderId,
+    uint ExpectedOrderVersion,
+    Guid AttemptId,
+    uint ExpectedAttemptVersion,
+    Guid ManifestId,
+    Guid ActorId,
+    Guid CorrelationId,
+    Guid OperationId,
+    string PayloadFingerprint,
+    string Reason);
+
+public record ReopenCaptureInputManifestResult(
+    bool Success,
+    Guid AttemptId,
+    Guid MissionId,
+    Guid SupersededManifestId,
+    string Status,
+    uint Version,
+    uint OrderVersion,
+    string? ErrorCode = null,
     string? ErrorMessage = null);
 
 public record ApproveCaptureInputRequest(
@@ -231,6 +256,10 @@ public interface ISurveyCaptureExecutionCoordinator
 
     Task<FreezeCaptureInputManifestResult> FreezeInputManifestAsync(
         FreezeCaptureInputManifestRequest request,
+        CancellationToken cancellationToken = default);
+
+    Task<ReopenCaptureInputManifestResult> ReopenInputManifestAsync(
+        ReopenCaptureInputManifestRequest request,
         CancellationToken cancellationToken = default);
 
     Task<ApproveCaptureInputResult> ApproveInputAsync(

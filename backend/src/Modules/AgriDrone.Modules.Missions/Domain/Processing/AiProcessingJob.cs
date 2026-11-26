@@ -136,6 +136,43 @@ public sealed class AiProcessingJob : Entity
         };
     }
 
+    public static AiProcessingJob QueueCaptureMapping(
+        Guid missionId,
+        Guid manifestId,
+        string manifestFingerprint,
+        DateTimeOffset queuedAt)
+    {
+        DomainGuard.NotEmpty(missionId);
+        DomainGuard.NotEmpty(manifestId);
+        DomainGuard.Utc(queuedAt);
+
+        return new AiProcessingJob
+        {
+            Id = Guid.CreateVersion7(),
+            MissionId = missionId,
+            ClientOperationId = manifestId,
+            JobType = AiJobType.Mapping,
+            Status = AiJobStatus.Queued,
+            AttemptNumber = 1,
+            Parameters = JsonSerializer.SerializeToDocument(new { }),
+            InputManifest = JsonSerializer.SerializeToDocument(new { manifestId, manifestFingerprint }),
+            OutputManifest = JsonSerializer.SerializeToDocument(new { }),
+            QueuedAt = queuedAt
+        };
+    }
+
+    public void CancelQueuedCaptureMapping(DateTimeOffset cancelledAt)
+    {
+        DomainGuard.Utc(cancelledAt);
+        if (JobType != AiJobType.Mapping || Status != AiJobStatus.Queued)
+        {
+            throw new InvalidOperationException("Only a queued mapping job can be cancelled on manifest reopening.");
+        }
+
+        Status = AiJobStatus.Cancelled;
+        CompletedAt = cancelledAt;
+    }
+
     public static AiProcessingJob RecordCompletedMappingRun(
         Guid missionId,
         Guid modelId,

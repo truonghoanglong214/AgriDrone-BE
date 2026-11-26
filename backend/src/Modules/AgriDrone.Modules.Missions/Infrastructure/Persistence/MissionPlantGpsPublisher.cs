@@ -66,12 +66,11 @@ internal sealed class MissionPlantGpsPublisher(
         var captureAttemptMatches = await db.Database.SqlQueryRaw<int>(
                 "SELECT 1 AS \"Value\" FROM survey.capture_attempts " +
                 "WHERE id = {0} AND order_id = {1} " +
-                "AND tenant_id = {2} AND farm_id = {3} AND mission_id = {4}",
+                "AND tenant_id = {2} AND farm_id = {3}",
                 captureAttemptId,
                 request.SurveyOrderId,
                 tenantId,
-                farmId,
-                missionId)
+                farmId)
             .AnyAsync(cancellationToken);
         if (!captureAttemptMatches)
         {

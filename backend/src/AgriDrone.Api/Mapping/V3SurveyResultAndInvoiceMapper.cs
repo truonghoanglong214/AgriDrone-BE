@@ -427,6 +427,10 @@ internal static class V3SurveyResultAndInvoiceMapper
                         ToStatus: history.ToStatus,
                         Reason: history.Reason,
                         CreatedAt: history.CreatedAt))
-                    .ToArray()))
+                    .ToArray(),
+                ManifestId: attempt.ManifestId,
+                ManifestFingerprint: attempt.ManifestFingerprint,
+                ProcessingJobId: attempt.ProcessingJobId,
+                OrderVersion: attempt.OrderVersion))
             .ToArray();
 }

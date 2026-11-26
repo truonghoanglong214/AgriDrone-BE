@@ -17,7 +17,11 @@ public sealed record ManagerSurveyOrderCaptureAttemptResponse(
     Guid? ParentMissionId,
     DateTimeOffset? StartedAt,
     DateTimeOffset? EndedAt,
-    IReadOnlyList<ManagerSurveyOrderCaptureAttemptHistoryResponse> History);
+    IReadOnlyList<ManagerSurveyOrderCaptureAttemptHistoryResponse> History,
+    Guid? ManifestId = null,
+    string? ManifestFingerprint = null,
+    Guid? ProcessingJobId = null,
+    uint? OrderVersion = null);
 
 public sealed record ManagerSurveyOrderCaptureAttemptHistoryResponse(
     uint TransitionSequence,

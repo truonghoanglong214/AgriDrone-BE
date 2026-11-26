@@ -1,6 +1,7 @@
 using System.Data;
 using AgriDrone.Modules.Farms.Domain.Farms;
 using AgriDrone.Modules.Missions.Domain.Missions;
+using AgriDrone.Modules.Missions.Domain.Processing;
 using AgriDrone.Modules.Surveys.Application.Abstractions.Queries;
 using AgriDrone.Modules.Surveys.Application.Features.Orders.GetManagerSurveyOrderCaptureAttempts;
 using AgriDrone.Modules.Surveys.Domain;
@@ -45,7 +46,8 @@ internal sealed class SurveyCaptureAttemptQueries(
                     order.Id,
                     order.TenantId,
                     order.FarmId,
-                    order.Scope
+                    order.Scope,
+                    order.Version
                 })
                 .SingleOrDefaultAsync(cancellationToken);
 
@@ -90,7 +92,8 @@ internal sealed class SurveyCaptureAttemptQueries(
                     attempt.SupersededAttemptId,
                     attempt.ParentMissionId,
                     attempt.StartedAt,
-                    attempt.EndedAt
+                    attempt.EndedAt,
+                    attempt.UploadManifestReference
                 })
                 .ToListAsync(cancellationToken);
 
@@ -115,6 +118,27 @@ internal sealed class SurveyCaptureAttemptQueries(
                     MissionId = mission.Id
                 })
                 .ToDictionaryAsync(x => x.AttemptId, x => x.MissionId, cancellationToken);
+
+            var manifestIds = attempts
+                .Select(attempt => Guid.TryParse(attempt.UploadManifestReference, out var id) ? id : Guid.Empty)
+                .Where(id => id != Guid.Empty)
+                .ToArray();
+            var manifests = await (
+                from manifest in db.Set<CaptureInputManifest>().AsNoTracking()
+                join job in db.Set<AiProcessingJob>().AsNoTracking().Where(job => job.JobType == AiJobType.Mapping)
+                    on new { OperationId = (Guid?)manifest.Id, manifest.MissionId }
+                    equals new { OperationId = job.ClientOperationId, job.MissionId } into jobs
+                from job in jobs.DefaultIfEmpty()
+                where manifestIds.Contains(manifest.Id) &&
+                      manifest.SurveyOrderId == orderScope.Id &&
+                      manifest.TenantId == orderScope.TenantId && manifest.FarmId == orderScope.FarmId &&
+                      (manifest.Status == CaptureInputManifestStatus.Uploaded || manifest.Status == CaptureInputManifestStatus.Approved)
+                select new
+                {
+                    manifest.Id, manifest.CaptureAttemptId, manifest.ManifestFingerprint,
+                    ProcessingJobId = job == null ? (Guid?)null : job.Id
+                })
+                .ToDictionaryAsync(item => item.CaptureAttemptId, cancellationToken);
 
             var histories = await db.Set<CaptureAttemptHistory>().AsNoTracking()
                 .Where(history => attemptIds.Contains(history.CaptureAttemptId))
@@ -148,21 +172,29 @@ internal sealed class SurveyCaptureAttemptQueries(
                         .ToArray());
 
             var items = attempts
-                .Select(attempt => new ManagerSurveyOrderCaptureAttemptResponse(
-                    CaptureAttemptId: attempt.Id,
-                    AttemptIndex: attempt.AttemptIndex,
-                    Status: attempt.Status,
-                    Version: attempt.Version,
-                    MissionId: missionsByAttempt.TryGetValue(attempt.Id, out var missionId)
-                        ? missionId
-                        : null,
-                    ParentAttemptId: attempt.SupersededAttemptId,
-                    ParentMissionId: attempt.ParentMissionId,
-                    StartedAt: attempt.StartedAt,
-                    EndedAt: attempt.EndedAt,
-                    History: historyByAttempt.TryGetValue(attempt.Id, out var attemptHistory)
-                        ? attemptHistory
-                        : []))
+                .Select(attempt =>
+                {
+                    manifests.TryGetValue(attempt.Id, out var manifest);
+                    return new ManagerSurveyOrderCaptureAttemptResponse(
+                        CaptureAttemptId: attempt.Id,
+                        AttemptIndex: attempt.AttemptIndex,
+                        Status: attempt.Status,
+                        Version: attempt.Version,
+                        MissionId: missionsByAttempt.TryGetValue(attempt.Id, out var missionId)
+                            ? missionId
+                            : null,
+                        ParentAttemptId: attempt.SupersededAttemptId,
+                        ParentMissionId: attempt.ParentMissionId,
+                        StartedAt: attempt.StartedAt,
+                        EndedAt: attempt.EndedAt,
+                        History: historyByAttempt.TryGetValue(attempt.Id, out var attemptHistory)
+                            ? attemptHistory
+                            : [],
+                        ManifestId: manifest?.Id,
+                        ManifestFingerprint: manifest?.ManifestFingerprint,
+                        ProcessingJobId: manifest?.ProcessingJobId,
+                        OrderVersion: orderScope.Version);
+                })
                 .ToArray();
 
             await tx.CommitAsync(cancellationToken);

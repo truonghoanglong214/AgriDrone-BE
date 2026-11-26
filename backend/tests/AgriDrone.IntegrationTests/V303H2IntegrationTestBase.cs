@@ -6,6 +6,7 @@ using AgriDrone.Modules.Missions.Application.Abstractions.Media;
 using AgriDrone.IntegrationContracts.Surveys;
 using AgriDrone.Modules.Missions.Domain.Media;
 using AgriDrone.Modules.Missions.Domain.Missions;
+using AgriDrone.Modules.Missions.Domain.Telemetry;
 using AgriDrone.Modules.Surveys.Domain;
 using AgriDrone.SharedInfrastructure.Messaging;
 using AgriDrone.SharedInfrastructure.Messaging.Outbox;
@@ -83,6 +84,32 @@ public abstract class V303H2IntegrationTestBase : IAsyncLifetime
         public void AddAuditLog(AgriDrone.SharedInfrastructure.Auditing.AuditLog auditLog)
         {
         }
+    }
+
+    protected static async Task SeedCaptureTelemetryAsync(
+        AgriDroneSchemaDbContext context,
+        Guid missionId,
+        Guid actorId)
+    {
+        var mission = await context.Set<DroneMission>().AsNoTracking().SingleAsync(value => value.Id == missionId);
+        var startedAt = mission.StartedAt!.Value;
+        var endedAt = mission.EndedAt!.Value;
+        var importedAt = DateTimeOffset.UtcNow;
+        using var segment = JsonSerializer.SerializeToDocument(new
+        {
+            points = new[]
+            {
+                new { recordedAt = startedAt, longitude = 106.5, latitude = 10.5 },
+                new { recordedAt = endedAt, longitude = 106.501, latitude = 10.501 }
+            }
+        });
+        context.Set<MissionTelemetryImport>().Add(MissionTelemetryImport.Create(
+            mission.TenantId, mission.FarmId, missionId, Guid.NewGuid(), "flight.bbl",
+            new string('a', 64), 2, segment, startedAt, endedAt, actorId, importedAt));
+        context.Set<MissionTelemetryPoint>().AddRange(
+            MissionTelemetryPoint.Create(missionId, 0, startedAt, 106.5, 10.5, null, null, null, null, null, importedAt),
+            MissionTelemetryPoint.Create(missionId, 1, endedAt, 106.501, 10.501, null, null, null, null, null, importedAt));
+        await context.SaveChangesAsync();
     }
 
     protected static async Task<uint> GetOrderVersionAsync(string databaseName, Guid orderId)

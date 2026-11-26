@@ -197,7 +197,7 @@ internal sealed class ImportTelemetryCommandHandler(
             actualFlightRoute,
             now);
 
-        if (existingMissionImport is null)
+        if (existingMissionImport is null && !mission.CaptureAttemptId.HasValue)
         {
             telemetryRepository.Add(
                 telemetryImport,
@@ -212,7 +212,16 @@ internal sealed class ImportTelemetryCommandHandler(
 
         try
         {
-            if (existingMissionImport is null)
+            if (mission.CaptureAttemptId is Guid captureAttemptId)
+            {
+                if (!await telemetryRepository.SaveCaptureImportAsync(
+                        mission.SurveyOrderId.Value, captureAttemptId, persistedImport, telemetryPoints,
+                        existingMissionImport is not null, cancellationToken))
+                {
+                    return Result.Failure<ImportTelemetryResult>(ImportTelemetryError.CaptureUploadClosed());
+                }
+            }
+            else if (existingMissionImport is null)
             {
                 await unitOfWork.SaveChangesAsync(
                     cancellationToken);

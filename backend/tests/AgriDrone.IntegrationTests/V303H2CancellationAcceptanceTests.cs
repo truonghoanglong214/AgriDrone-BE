@@ -258,6 +258,7 @@ public sealed class V303H2CancellationAcceptanceTests : V303H2IntegrationTestBas
         context.Set<MissionMedia>().Add(missionMedia);
         await context.SaveChangesAsync();
 
+        await SeedCaptureTelemetryAsync(context, prepRes.MissionId, seeded.ManagerUserId);
         var orderVerFreeze = await GetOrderVersionAsync(DatabaseName, seeded.OrderId);
         var freezeRes = await coordinator.FreezeInputManifestAsync(new FreezeCaptureInputManifestRequest(
             seeded.OrderId,
@@ -271,15 +272,7 @@ public sealed class V303H2CancellationAcceptanceTests : V303H2IntegrationTestBas
             "freeze-fp"));
         Assert.True(freezeRes.Success);
 
-        var processingJobId = Guid.NewGuid();
-        await using (var conn = new NpgsqlConnection(BuildConnectionString(DatabaseName)))
-        {
-            await conn.OpenAsync();
-            await ExecuteAsync(conn, $$"""
-                INSERT INTO mission.ai_processing_jobs (id, mission_id, job_type, status, parameters, attempt_number, input_manifest, output_manifest, queued_at)
-                VALUES ('{{processingJobId}}', '{{prepRes.MissionId}}', 'FRAME_EXTRACTION'::system.ai_job_type, 'QUEUED'::system.ai_job_status, '{}'::jsonb, 1, '{}'::jsonb, '{}'::jsonb, NOW());
-                """);
-        }
+        var processingJobId = Assert.IsType<Guid>(freezeRes.ProcessingJobId);
 
         var orderVerApprove = await GetOrderVersionAsync(DatabaseName, seeded.OrderId);
         var approveRes = await coordinator.ApproveInputAsync(new ApproveCaptureInputRequest(

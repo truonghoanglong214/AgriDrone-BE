@@ -386,7 +386,11 @@ public sealed record V3CaptureAttemptApiResponse(
     Guid? ParentMissionId,
     DateTimeOffset? StartedAt,
     DateTimeOffset? EndedAt,
-    IReadOnlyList<V3CaptureAttemptHistoryApiResponse> History);
+    IReadOnlyList<V3CaptureAttemptHistoryApiResponse> History,
+    Guid? ManifestId = null,
+    string? ManifestFingerprint = null,
+    Guid? ProcessingJobId = null,
+    uint? OrderVersion = null);
 
 public sealed record V3TenantOwnerInvoiceApiResponse(
     Guid OrderId,

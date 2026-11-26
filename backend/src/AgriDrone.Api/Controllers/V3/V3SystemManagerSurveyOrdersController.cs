@@ -202,6 +202,8 @@ public sealed class V3SystemManagerSurveyOrdersController(
     }
 
     [HttpPost("{orderId:guid}/capture-attempts/{attemptId:guid}/input-manifest/freeze")]
+    [ProducesResponseType<FreezeCaptureInputManifestResult>(StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IResult> FreezeCaptureManifest(
         [FromRoute] Guid orderId,
         [FromRoute] Guid attemptId,
@@ -222,6 +224,35 @@ public sealed class V3SystemManagerSurveyOrdersController(
                 request.PayloadFingerprint), cancellationToken);
         return CoordinatorResult(result.Success, result,
             StatusCodes.Status201Created, result.ErrorCode, result.ErrorMessage);
+    }
+
+    [HttpPost("{orderId:guid}/capture-attempts/{attemptId:guid}/input-manifest/reopen")]
+    [ProducesResponseType<ReopenCaptureInputManifestResult>(StatusCodes.Status200OK)]
+    public async Task<IResult> ReopenCaptureManifest(
+        [FromRoute] Guid orderId,
+        [FromRoute] Guid attemptId,
+        [FromBody] ReopenV3CaptureManifestRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!TryGetActor(out var actorId)) return Results.Forbid();
+        var result = await captureCoordinator.ReopenInputManifestAsync(
+            new ReopenCaptureInputManifestRequest(
+                orderId,
+                request.ExpectedOrderVersion!.Value,
+                attemptId,
+                request.ExpectedAttemptVersion!.Value,
+                request.ManifestId!.Value,
+                actorId,
+                executionContext.CorrelationId,
+                request.OperationId!.Value,
+                request.PayloadFingerprint,
+                request.Reason), cancellationToken);
+        if (result.ErrorCode == "MANAGER_FORBIDDEN")
+            return Results.Forbid();
+        if (result.ErrorCode == "CAPTURE_MANIFEST_NOT_FOUND")
+            return Results.NotFound();
+        return CoordinatorResult(result.Success, result,
+            StatusCodes.Status200OK, result.ErrorCode, result.ErrorMessage);
     }
 
     [HttpPost("{orderId:guid}/capture-attempts/{attemptId:guid}/input-approval")]

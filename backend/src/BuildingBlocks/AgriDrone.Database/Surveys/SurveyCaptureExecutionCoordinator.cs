@@ -10,6 +10,8 @@ using AgriDrone.Modules.Missions.Domain.Drones;
 using AgriDrone.Modules.Missions.Application.Abstractions.Media;
 using AgriDrone.Modules.Missions.Domain.Missions;
 using AgriDrone.Modules.Missions.Domain.Media;
+using AgriDrone.Modules.Missions.Domain.Processing;
+using AgriDrone.Modules.Missions.Domain.Telemetry;
 using AgriDrone.Modules.Surveys.Domain;
 using AgriDrone.SharedInfrastructure.Auditing;
 using AgriDrone.SharedInfrastructure.Messaging.Outbox;
@@ -504,6 +506,86 @@ internal sealed class SurveyCaptureExecutionCoordinator(
         FailureException,
         cancellationToken);
 
+    public Task<ReopenCaptureInputManifestResult> ReopenInputManifestAsync(
+        ReopenCaptureInputManifestRequest request,
+        CancellationToken cancellationToken = default) => ExecuteAsync(
+        async token =>
+        {
+            await LockOrderAsync(request.OrderId, token);
+            var order = await db.Set<SurveyOrder>().SingleOrDefaultAsync(
+                value => value.Id == request.OrderId && value.Scope == ContractScope.V3, token);
+            if (order is null)
+                return ReopenFailure("CAPTURE_MANIFEST_NOT_FOUND", "V3 order or manifest was not found.");
+
+            if (!await IsAssignedManagerAsync(order.TenantId, order.FarmId, request.ActorId, token))
+                return ReopenFailure("MANAGER_FORBIDDEN", "The actor is not the active assigned Manager.");
+
+            var attempt = await db.Set<CaptureAttempt>()
+                .Include(value => value.History)
+                .SingleOrDefaultAsync(value => value.Id == request.AttemptId && value.OrderId == order.Id
+                    && value.TenantId == order.TenantId && value.FarmId == order.FarmId, token);
+            var manifest = await db.Set<CaptureInputManifest>()
+                .SingleOrDefaultAsync(value => value.Id == request.ManifestId
+                    && value.CaptureAttemptId == request.AttemptId && value.SurveyOrderId == order.Id
+                    && value.TenantId == order.TenantId && value.FarmId == order.FarmId, token);
+            if (attempt is null || manifest is null)
+                return ReopenFailure("CAPTURE_MANIFEST_NOT_FOUND", "V3 order or manifest was not found.");
+
+            var replay = attempt.History.SingleOrDefault(value => value.OperationId == request.OperationId);
+            if (replay is not null)
+            {
+                return replay.Action == CaptureAttemptAction.ReopenUpload &&
+                       replay.EvidenceReference == manifest.Id.ToString("D") &&
+                       string.Equals(replay.PayloadFingerprint, request.PayloadFingerprint.Trim(), StringComparison.Ordinal)
+                    ? new ReopenCaptureInputManifestResult(
+                        true, attempt.Id, manifest.MissionId, manifest.Id, attempt.Status.ToString(),
+                        attempt.Version, order.Version)
+                    : ReopenFailure("OPERATION_CONFLICT", "The operation identifier was already used with another payload.");
+            }
+
+            if (order.Status != SurveyOrderStatus.AwaitingInputReview ||
+                order.Version != request.ExpectedOrderVersion ||
+                attempt.Status != CaptureAttemptStatus.Uploaded ||
+                attempt.Version != request.ExpectedAttemptVersion ||
+                manifest.Status != CaptureInputManifestStatus.Uploaded ||
+                attempt.UploadManifestReference != manifest.Id.ToString("D") ||
+                attempt.UploadManifestFingerprint != manifest.ManifestFingerprint ||
+                await db.Set<CaptureInputApproval>().AnyAsync(value => value.InputManifestId == manifest.Id, token))
+            {
+                return ReopenFailure("CAPTURE_MANIFEST_STATE_CONFLICT", "Only the current unapproved manifest can be reopened.");
+            }
+
+            var mission = await db.Set<DroneMission>().SingleOrDefaultAsync(value =>
+                value.Id == manifest.MissionId && value.CaptureAttemptId == attempt.Id &&
+                value.SurveyOrderId == order.Id && value.TenantId == order.TenantId && value.FarmId == order.FarmId, token);
+            if (mission is null ||
+                mission.Status is not (MissionStatus.FlightCompleted or MissionStatus.Uploading or MissionStatus.UploadFailed))
+            {
+                return ReopenFailure("CAPTURE_MISSION_STATE_CONFLICT", "The mission has left the upload phase.");
+            }
+
+            var job = await FindCaptureMappingJob(manifest).SingleOrDefaultAsync(token);
+            if (job is not null && job.Status != AiJobStatus.Queued)
+                return ReopenFailure("CAPTURE_JOB_STATE_CONFLICT", "The manifest's processing job has already advanced.");
+
+            var now = clock.GetUtcNow();
+            if (mission.Status == MissionStatus.UploadFailed)
+                mission.StartUploading(now);
+            job?.CancelQueuedCaptureMapping(now);
+            manifest.MarkSuperseded(now);
+            attempt.ReopenUpload(manifest.Id, now, request.ActorId, request.CorrelationId, request.OperationId,
+                request.PayloadFingerprint, request.Reason, request.ExpectedAttemptVersion);
+            order.TransitionToAwaitingCaptureUploadV3(now);
+            AddCaptureEvidence(order, request.ActorId, request.CorrelationId,
+                "CAPTURE_INPUT_MANIFEST_REOPENED", now, attempt.Id, mission.Id);
+            await db.SaveChangesAsync(token);
+
+            return new ReopenCaptureInputManifestResult(
+                true, attempt.Id, mission.Id, manifest.Id, attempt.Status.ToString(), attempt.Version, order.Version);
+        },
+        exception => ReopenFailure("CAPTURE_MANIFEST_REOPEN_CONFLICT", GetErrorMessage(exception)),
+        cancellationToken);
+
     public Task<ApproveCaptureInputResult> ApproveInputAsync(
         ApproveCaptureInputRequest request,
         CancellationToken cancellationToken = default) => ExecuteAsync(
@@ -515,7 +597,7 @@ internal sealed class SurveyCaptureExecutionCoordinator(
                 value => value.Id == request.OrderId, token);
             var attempt = await db.Set<CaptureAttempt>()
                 .Include(value => value.History)
-                .SingleOrDefaultAsync(value => value.Id == request.AttemptId, token);
+                .SingleOrDefaultAsync(value => value.Id == request.AttemptId && value.OrderId == request.OrderId, token);
             var manifest = await db.Set<CaptureInputManifest>()
                 .SingleOrDefaultAsync(value =>
                     value.Id == request.ManifestId &&
@@ -525,8 +607,10 @@ internal sealed class SurveyCaptureExecutionCoordinator(
             var mission = attempt is null
                 ? null
                 : await db.Set<DroneMission>().AsNoTracking().SingleOrDefaultAsync(
-                    value => value.CaptureAttemptId == attempt.Id, token);
-            if (order is null || attempt is null || manifest is null || mission is null)
+                    value => value.CaptureAttemptId == attempt.Id && value.SurveyOrderId == request.OrderId, token);
+            if (order is null || attempt is null || manifest is null || mission is null ||
+                order.Scope != ContractScope.V3 || mission.Id != manifest.MissionId ||
+                mission.TenantId != order.TenantId || mission.FarmId != order.FarmId)
             {
                 return ApprovalFailure("INPUT_VERSION_CONFLICT", "Uploaded manifest, Attempt, or Order is stale.");
             }
@@ -538,18 +622,20 @@ internal sealed class SurveyCaptureExecutionCoordinator(
             {
                 return ApprovalFailure("MANAGER_FORBIDDEN", "The actor is not the active assigned Manager.");
             }
-            var replayFingerprint = await ReadOperationFingerprintAsync(
-                attempt.Id, request.OperationId, token);
-            if (replayFingerprint is not null)
+            var replay = attempt.History.SingleOrDefault(value => value.OperationId == request.OperationId);
+            if (replay is not null)
             {
                 var replayApprovalId = await db.Set<CaptureInputApproval>()
                     .AsNoTracking()
                     .Where(value =>
                         value.CaptureAttemptId == attempt.Id &&
-                        value.InputManifestId == manifest.Id)
+                        value.InputManifestId == manifest.Id &&
+                        value.ProcessingJobId == request.ProcessingJobId &&
+                        value.ManifestFingerprint == request.ManifestFingerprint)
                     .Select(value => value.Id)
                     .SingleOrDefaultAsync(token);
-                return string.Equals(replayFingerprint, request.PayloadFingerprint, StringComparison.Ordinal) &&
+                return replay.Action == CaptureAttemptAction.StartProcessing &&
+                       string.Equals(replay.PayloadFingerprint, request.PayloadFingerprint.Trim(), StringComparison.Ordinal) &&
                        replayApprovalId != Guid.Empty
                     ? new ApproveCaptureInputResult(
                         true, attempt.Id, replayApprovalId, attempt.Status.ToString(), attempt.Version)
@@ -561,9 +647,27 @@ internal sealed class SurveyCaptureExecutionCoordinator(
                 attempt.Version != request.ExpectedAttemptVersion ||
                 attempt.Status != CaptureAttemptStatus.Uploaded ||
                 manifest.Status != CaptureInputManifestStatus.Uploaded ||
+                attempt.UploadManifestReference != manifest.Id.ToString("D") ||
                 !string.Equals(manifest.ManifestFingerprint, request.ManifestFingerprint, StringComparison.Ordinal))
             {
                 return ApprovalFailure("INPUT_VERSION_CONFLICT", "Uploaded Attempt or exact manifest is missing or stale.");
+            }
+
+            var telemetry = await ReadValidCaptureTelemetryAsync(order, mission, token);
+            if (telemetry is null || manifest.GpsMetadataSummary != FormatTelemetryEvidence(telemetry))
+            {
+                return ApprovalFailure("CAPTURE_TELEMETRY_NOT_FROZEN",
+                    "Reopen the manifest, import valid Blackbox telemetry and freeze it with the photos before approval.");
+            }
+
+            var jobId = await FindCaptureMappingJob(manifest).AsNoTracking()
+                .Where(value => value.Status == AiJobStatus.Queued)
+                .Select(value => (Guid?)value.Id)
+                .SingleOrDefaultAsync(token);
+            if (jobId is null || jobId != request.ProcessingJobId)
+            {
+                return ApprovalFailure("CAPTURE_PROCESSING_JOB_MISMATCH",
+                    "Use the processingJobId associated with the current manifest.");
             }
 
             attempt.BindMission(mission.Id);
@@ -642,7 +746,7 @@ internal sealed class SurveyCaptureExecutionCoordinator(
                     value.SurveyOrderId == request.OrderId,
                     token);
             if (order is null || attempt is null || mission is null ||
-                order.Scope != ContractScope.V3)
+                order.Scope != ContractScope.V3 || mission.TenantId != order.TenantId || mission.FarmId != order.FarmId)
             {
                 return ManifestFailure(
                     "CAPTURE_UPLOAD_VERSION_CONFLICT",
@@ -656,25 +760,26 @@ internal sealed class SurveyCaptureExecutionCoordinator(
             {
                 return ManifestFailure("MANAGER_FORBIDDEN", "The actor is not the active assigned Manager.");
             }
-            var replayFingerprint = await ReadOperationFingerprintAsync(
-                attempt.Id, request.OperationId, token);
-            if (replayFingerprint is not null)
+            var replay = attempt.History.SingleOrDefault(value => value.OperationId == request.OperationId);
+            if (replay is not null)
             {
-                var replayManifest = await db.Set<CaptureInputManifest>()
-                    .AsNoTracking()
-                    .Where(value => value.CaptureAttemptId == attempt.Id)
-                    .OrderByDescending(value => value.CreatedAt)
-                    .FirstOrDefaultAsync(token);
-                return string.Equals(replayFingerprint, request.PayloadFingerprint, StringComparison.Ordinal) &&
-                       replayManifest is not null
-                    ? new FreezeCaptureInputManifestResult(
-                        true, attempt.Id, replayManifest.Id,
-                        replayManifest.ManifestFingerprint,
-                        replayManifest.TotalFileCount,
-                        replayManifest.TotalSizeBytes,
-                        attempt.Status.ToString(),
-                        attempt.Version)
-                    : ManifestFailure("OPERATION_CONFLICT", "The operation identifier was already used with another payload.");
+                if (replay.Action != CaptureAttemptAction.MarkUploaded ||
+                    !string.Equals(replay.PayloadFingerprint, request.PayloadFingerprint.Trim(), StringComparison.Ordinal) ||
+                    replay.EvidenceReference is not { Length: >= 36 } reference ||
+                    !Guid.TryParse(reference.AsSpan(0, 36), out var manifestId))
+                {
+                    return ManifestFailure("OPERATION_CONFLICT", "The operation identifier was already used with another payload.");
+                }
+
+                var replayManifest = await db.Set<CaptureInputManifest>().AsNoTracking()
+                    .SingleOrDefaultAsync(value => value.Id == manifestId &&
+                        value.CaptureAttemptId == attempt.Id && value.MissionId == mission.Id, token);
+                if (replayManifest is null)
+                    return ManifestFailure("CAPTURE_MANIFEST_STATE_CONFLICT", "The original frozen manifest could not be found.");
+
+                var replayJobId = await FindCaptureMappingJob(replayManifest).AsNoTracking()
+                    .Select(value => (Guid?)value.Id).SingleOrDefaultAsync(token);
+                return BuildFrozenManifestResult(order, attempt, replayManifest, replayJobId);
             }
             if (
                 order.Status != SurveyOrderStatus.AwaitingCaptureUpload ||
@@ -741,10 +846,20 @@ internal sealed class SurveyCaptureExecutionCoordinator(
                 }
             }
 
+            var telemetry = await ReadValidCaptureTelemetryAsync(order, mission, token);
+            if (telemetry is null)
+            {
+                return ManifestFailure("CAPTURE_TELEMETRY_REQUIRED",
+                    "Import valid Blackbox telemetry for this mission before freezing the input manifest.");
+            }
+
+            var telemetryEvidence = FormatTelemetryEvidence(telemetry);
             var canonical = string.Join(
                 '\n',
                 files.Select(value =>
-                    $"{value.MediaId:D}|{value.Checksum!.ToLowerInvariant()}|{value.FileSizeBytes}|{value.Role}"));
+                    $"{value.MediaId:D}|{value.Checksum!.ToLowerInvariant()}|{value.FileSizeBytes}|{value.Role}")
+                    .Prepend(telemetryEvidence)
+                    .Prepend($"attempt-version={attempt.Version}"));
             var fingerprint = Convert.ToHexString(
                 SHA256.HashData(Encoding.UTF8.GetBytes(canonical)));
             var manifest = CaptureInputManifest.Create(
@@ -758,8 +873,10 @@ internal sealed class SurveyCaptureExecutionCoordinator(
                 files.Count,
                 files.Sum(value => value.FileSizeBytes!.Value),
                 now,
-                $"files={files.Count}");
+                telemetryEvidence);
+            var job = AiProcessingJob.QueueCaptureMapping(mission.Id, manifest.Id, manifest.ManifestFingerprint, now);
             db.Set<CaptureInputManifest>().Add(manifest);
+            db.Set<AiProcessingJob>().Add(job);
 
             var manifestFiles = files.Select(value => CaptureInputManifestFile.Create(
                 manifest.Id,
@@ -792,18 +909,57 @@ internal sealed class SurveyCaptureExecutionCoordinator(
             AddCaptureEvidence(order, request.ActorId, request.CorrelationId,
                 "CAPTURE_INPUT_MANIFEST_FROZEN", now, attempt.Id, mission.Id);
             await db.SaveChangesAsync(token);
-            return new FreezeCaptureInputManifestResult(
-                true,
-                attempt.Id,
-                manifest.Id,
-                manifest.ManifestFingerprint,
-                manifest.TotalFileCount,
-                manifest.TotalSizeBytes,
-                attempt.Status.ToString(),
-                attempt.Version);
+            return BuildFrozenManifestResult(order, attempt, manifest, job.Id);
         },
         ManifestException,
         cancellationToken);
+
+    private IQueryable<AiProcessingJob> FindCaptureMappingJob(CaptureInputManifest manifest) =>
+        db.Set<AiProcessingJob>().Where(job => job.ClientOperationId == manifest.Id &&
+            job.MissionId == manifest.MissionId && job.JobType == AiJobType.Mapping);
+
+    private async Task<MissionTelemetryImport?> ReadValidCaptureTelemetryAsync(
+        SurveyOrder order,
+        DroneMission mission,
+        CancellationToken token)
+    {
+        var telemetry = await db.Set<MissionTelemetryImport>().AsNoTracking()
+            .SingleOrDefaultAsync(value => value.MissionId == mission.Id &&
+                value.TenantId == order.TenantId && value.FarmId == order.FarmId, token);
+        if (telemetry is null || telemetry.PointCount < 2 ||
+            telemetry.PayloadChecksum is not { Length: 64 } checksum || !checksum.All(Uri.IsHexDigit) ||
+            telemetry.SelectedSegmentJson?.RootElement is not { ValueKind: JsonValueKind.Object } segment ||
+            !segment.TryGetProperty("points", out var points) ||
+            points.ValueKind != JsonValueKind.Array || points.GetArrayLength() != telemetry.PointCount ||
+            mission.StartedAt is not DateTimeOffset startedAt || mission.EndedAt is not DateTimeOffset endedAt ||
+            telemetry.FirstRecordedAt < startedAt || telemetry.LastRecordedAt > endedAt ||
+            telemetry.FirstRecordedAt >= telemetry.LastRecordedAt)
+        {
+            return null;
+        }
+
+        var persisted = await db.Set<MissionTelemetryPoint>().AsNoTracking()
+            .Where(point => point.MissionId == mission.Id)
+            .GroupBy(_ => 1)
+            .Select(group => new
+            {
+                Count = group.Count(),
+                First = group.Min(point => point.RecordedAt),
+                Last = group.Max(point => point.RecordedAt)
+            })
+            .SingleOrDefaultAsync(token);
+        return persisted?.Count == telemetry.PointCount && persisted.First == telemetry.FirstRecordedAt &&
+            persisted.Last == telemetry.LastRecordedAt ? telemetry : null;
+    }
+
+    private static string FormatTelemetryEvidence(MissionTelemetryImport telemetry) =>
+        $"telemetry={telemetry.Id:D}|operation={telemetry.OperationId:D}|sha256={telemetry.PayloadChecksum}|points={telemetry.PointCount}";
+
+    private static FreezeCaptureInputManifestResult BuildFrozenManifestResult(
+        SurveyOrder order, CaptureAttempt attempt, CaptureInputManifest manifest, Guid? jobId) =>
+        new(true, attempt.Id, manifest.Id, manifest.ManifestFingerprint, manifest.TotalFileCount,
+            manifest.TotalSizeBytes, attempt.Status.ToString(), attempt.Version,
+            ProcessingJobId: jobId, OrderVersion: order.Version);
 
     public Task<CreateQualityReflightResult> CreateQualityReflightAsync(
         CreateQualityReflightRequest request,
@@ -1781,6 +1937,8 @@ internal sealed class SurveyCaptureExecutionCoordinator(
         new(false, Guid.Empty, Guid.Empty, "UNCHANGED", 0, code, message);
     private static ApproveCaptureInputResult ApprovalException(Exception exception) =>
         ApprovalFailure("CAPTURE_INPUT_CONFLICT", GetErrorMessage(exception));
+    private static ReopenCaptureInputManifestResult ReopenFailure(string code, string message) =>
+        new(false, Guid.Empty, Guid.Empty, Guid.Empty, "UNCHANGED", 0, 0, code, message);
     private static FreezeCaptureInputManifestResult ManifestFailure(string code, string message) =>
         new(false, Guid.Empty, Guid.Empty, string.Empty, 0, 0L, "UNCHANGED", 0, code, message);
     private static FreezeCaptureInputManifestResult ManifestException(Exception exception) =>

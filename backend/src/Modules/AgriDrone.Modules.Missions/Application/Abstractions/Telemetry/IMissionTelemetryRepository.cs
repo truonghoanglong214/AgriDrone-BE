@@ -22,6 +22,14 @@ internal interface IMissionTelemetryRepository
         MissionTelemetryImport telemetryImport,
         IReadOnlyCollection<MissionTelemetryPoint> points);
 
+    Task<bool> SaveCaptureImportAsync(
+        Guid orderId,
+        Guid attemptId,
+        MissionTelemetryImport telemetryImport,
+        IReadOnlyCollection<MissionTelemetryPoint> points,
+        bool replaceExisting,
+        CancellationToken cancellationToken);
+
     Task ReplaceAsync(
         MissionTelemetryImport telemetryImport,
         IReadOnlyCollection<MissionTelemetryPoint> points,

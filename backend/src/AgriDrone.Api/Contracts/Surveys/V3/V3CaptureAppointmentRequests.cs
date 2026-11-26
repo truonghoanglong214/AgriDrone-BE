@@ -83,6 +83,14 @@ public sealed record FreezeV3CaptureManifestRequest(
     [param: Required] Guid? OperationId,
     [param: Required, StringLength(128, MinimumLength = 1)] string PayloadFingerprint);
 
+public sealed record ReopenV3CaptureManifestRequest(
+    [param: Required] Guid? ManifestId,
+    [param: Required] uint? ExpectedOrderVersion,
+    [param: Required] uint? ExpectedAttemptVersion,
+    [param: Required] Guid? OperationId,
+    [param: Required, StringLength(128, MinimumLength = 1)] string PayloadFingerprint,
+    [param: Required, StringLength(500, MinimumLength = 1)] string Reason);
+
 public sealed record ApproveV3CaptureInputRequest(
     [param: Required] Guid? ManifestId,
     [param: Required, StringLength(128, MinimumLength = 1)] string ManifestFingerprint,

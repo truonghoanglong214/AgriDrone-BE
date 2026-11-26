@@ -1,4 +1,5 @@
 using AgriDrone.IntegrationContracts.Surveys;
+using AgriDrone.Modules.Missions.Domain.Missions;
 using AgriDrone.Modules.Surveys.Domain;
 using Microsoft.EntityFrameworkCore;
 
@@ -19,11 +20,14 @@ internal sealed class SurveyOrderCommercialSnapshotQuery(AgriDroneSchemaDbContex
             from order in db.Set<SurveyOrder>().AsNoTracking()
             join commercial in db.Set<SurveyOrderCommercialSnapshot>() on order.Id equals commercial.SurveyOrderId
             join attempt in db.Set<CaptureAttempt>() on order.Id equals attempt.OrderId
+            join mission in db.Set<DroneMission>() on (Guid?)attempt.Id equals mission.CaptureAttemptId
             where order.Id == surveyOrderId &&
                   order.TenantId == tenantId && order.FarmId == farmId &&
                   order.Scope == ContractScope.V3 && order.Status == SurveyOrderStatus.Processing &&
                   order.FarmBoundaryVersionId.HasValue && commercial.MapsPoles &&
-                  attempt.Id == captureAttemptId && attempt.MissionId == missionId &&
+                  attempt.Id == captureAttemptId &&
+                  mission.Id == missionId && mission.SurveyOrderId == order.Id &&
+                  mission.TenantId == tenantId && mission.FarmId == farmId &&
                   attempt.TenantId == tenantId && attempt.FarmId == farmId &&
                   attempt.Status == CaptureAttemptStatus.Processing
             select new SurveyOrderMappingContext(

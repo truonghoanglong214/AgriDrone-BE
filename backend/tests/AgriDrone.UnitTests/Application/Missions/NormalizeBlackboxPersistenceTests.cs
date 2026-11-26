@@ -123,6 +123,10 @@ public sealed class NormalizeBlackboxPersistenceTests
         public void Add(MissionTelemetryImport telemetryImport,
             IReadOnlyCollection<MissionTelemetryPoint> points) =>
             throw new NotSupportedException();
+        public Task<bool> SaveCaptureImportAsync(Guid orderId, Guid attemptId, MissionTelemetryImport telemetryImport,
+            IReadOnlyCollection<MissionTelemetryPoint> points, bool replaceExisting,
+            CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
         public Task ReplaceAsync(MissionTelemetryImport telemetryImport,
             IReadOnlyCollection<MissionTelemetryPoint> points,
             CancellationToken cancellationToken = default) =>

@@ -168,7 +168,7 @@ internal sealed class MappingCandidatesReadyV4Handler(
 
         // Load and validate CaptureAttempt context
         var attempt = await context.CaptureAttempts
-            .FromSqlInterpolated($"SELECT * FROM survey.capture_attempts WHERE id = {payload.CaptureAttemptId} AND order_id = {order.Id} AND mission_id = {payload.MissionId} AND tenant_id = {order.TenantId} AND farm_id = {order.FarmId} FOR SHARE")
+            .FromSqlInterpolated($"SELECT * FROM survey.capture_attempts WHERE id = {payload.CaptureAttemptId} AND order_id = {order.Id} AND tenant_id = {order.TenantId} AND farm_id = {order.FarmId} FOR SHARE")
             .SingleOrDefaultAsync(cancellationToken);
         if (attempt is null)
         {

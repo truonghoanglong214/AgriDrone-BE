@@ -284,7 +284,7 @@ public sealed class V303H2MediaSecurityAcceptanceTests : V303H2IntegrationTestBa
         var orderVerValidFreeze = await GetOrderVersionAsync(DatabaseName, seeded.OrderId);
         var storageCoordinator = CreateCoordinator(context, objectStorage: objectStorage);
 
-        var validFreezeRes = await storageCoordinator.FreezeInputManifestAsync(new FreezeCaptureInputManifestRequest(
+        var freezeRequest = new FreezeCaptureInputManifestRequest(
             seeded.OrderId,
             orderVerValidFreeze,
             prepRes.AttemptId,
@@ -293,9 +293,17 @@ public sealed class V303H2MediaSecurityAcceptanceTests : V303H2IntegrationTestBa
             seeded.ManagerUserId,
             Guid.NewGuid(),
             opId,
-            fp));
+            fp);
 
+        var missingTelemetry = await storageCoordinator.FreezeInputManifestAsync(freezeRequest);
+        Assert.False(missingTelemetry.Success);
+        Assert.Equal("CAPTURE_TELEMETRY_REQUIRED", missingTelemetry.ErrorCode);
+        Assert.Equal(orderVerValidFreeze, await GetOrderVersionAsync(DatabaseName, seeded.OrderId));
+
+        await SeedCaptureTelemetryAsync(context, prepRes.MissionId, seeded.ManagerUserId);
+        var validFreezeRes = await storageCoordinator.FreezeInputManifestAsync(freezeRequest);
         Assert.True(validFreezeRes.Success, validFreezeRes.ErrorMessage);
+        Assert.NotNull(validFreezeRes.ProcessingJobId);
         Assert.Equal(1, validFreezeRes.TotalFileCount);
         Assert.Equal(objectBytes.LongLength, validFreezeRes.TotalSizeBytes);
         Assert.Equal(64, validFreezeRes.ManifestFingerprint.Length);
@@ -329,6 +337,37 @@ public sealed class V303H2MediaSecurityAcceptanceTests : V303H2IntegrationTestBa
 
         Assert.False(conflictOpRes.Success);
         Assert.Equal("OPERATION_CONFLICT", conflictOpRes.ErrorCode);
+
+        var reopenRequest = new ReopenCaptureInputManifestRequest(
+            seeded.OrderId, validFreezeRes.OrderVersion!.Value, prepRes.AttemptId, validFreezeRes.Version,
+            validFreezeRes.ManifestId, seeded.ManagerUserId, Guid.NewGuid(), Guid.NewGuid(),
+            "reopen-fp", "Supplement the capture telemetry");
+        var reopened = await storageCoordinator.ReopenInputManifestAsync(reopenRequest);
+        Assert.True(reopened.Success, reopened.ErrorMessage);
+        Assert.Equal(prepRes.MissionId, reopened.MissionId);
+        Assert.Equal(CaptureAttemptStatus.AwaitingUpload.ToString(), reopened.Status);
+        Assert.Equal(CaptureInputManifestStatus.Superseded, await context.Set<CaptureInputManifest>()
+            .Where(value => value.Id == validFreezeRes.ManifestId)
+            .Select(value => value.Status).SingleAsync());
+        Assert.Equal(1, await context.Set<MissionMedia>().CountAsync(value => value.MissionId == prepRes.MissionId));
+        Assert.True((await storageCoordinator.ReopenInputManifestAsync(reopenRequest)).Success);
+
+        var refrozen = await storageCoordinator.FreezeInputManifestAsync(freezeRequest with
+        {
+            OperationId = Guid.NewGuid(),
+            PayloadFingerprint = "refreeze-fp",
+            ExpectedOrderVersion = reopened.OrderVersion,
+            ExpectedAttemptVersion = reopened.Version
+        });
+        Assert.True(refrozen.Success, refrozen.ErrorMessage);
+        Assert.NotEqual(validFreezeRes.ManifestId, refrozen.ManifestId);
+        Assert.NotEqual(validFreezeRes.ManifestFingerprint, refrozen.ManifestFingerprint);
+        Assert.NotEqual(validFreezeRes.ProcessingJobId, refrozen.ProcessingJobId);
+        Assert.Equal(validFreezeRes.TotalFileCount, refrozen.TotalFileCount);
+
+        var originalReplay = await storageCoordinator.FreezeInputManifestAsync(freezeRequest);
+        Assert.Equal(validFreezeRes.ManifestId, originalReplay.ManifestId);
+        Assert.Equal(validFreezeRes.ProcessingJobId, originalReplay.ProcessingJobId);
     }
 
     [Fact]
@@ -410,6 +449,7 @@ public sealed class V303H2MediaSecurityAcceptanceTests : V303H2IntegrationTestBa
         context.Set<MissionMedia>().Add(missionMedia);
         await context.SaveChangesAsync();
 
+        await SeedCaptureTelemetryAsync(context, prepRes.MissionId, seeded.ManagerUserId);
         var orderVerFreeze = await GetOrderVersionAsync(DatabaseName, seeded.OrderId);
         var freezeRes = await coordinator.FreezeInputManifestAsync(new FreezeCaptureInputManifestRequest(
             seeded.OrderId,
@@ -423,16 +463,7 @@ public sealed class V303H2MediaSecurityAcceptanceTests : V303H2IntegrationTestBa
             "freeze-fp"));
         Assert.True(freezeRes.Success, freezeRes.ErrorMessage);
 
-        // Insert processing job record to satisfy foreign key fk_capture_input_approvals_processing_job
-        var processingJobId = Guid.NewGuid();
-        await using (var conn = new NpgsqlConnection(BuildConnectionString(DatabaseName)))
-        {
-            await conn.OpenAsync();
-            await ExecuteAsync(conn, $$"""
-                INSERT INTO mission.ai_processing_jobs (id, mission_id, job_type, status, parameters, attempt_number, input_manifest, output_manifest, queued_at)
-                VALUES ('{{processingJobId}}', '{{prepRes.MissionId}}', 'FRAME_EXTRACTION'::system.ai_job_type, 'QUEUED'::system.ai_job_status, '{}'::jsonb, 1, '{}'::jsonb, '{}'::jsonb, NOW());
-                """);
-        }
+        var processingJobId = Assert.IsType<Guid>(freezeRes.ProcessingJobId);
 
         // Approval with wrong manifest fingerprint must fail
         var orderVerApprove = await GetOrderVersionAsync(DatabaseName, seeded.OrderId);
@@ -452,6 +483,13 @@ public sealed class V303H2MediaSecurityAcceptanceTests : V303H2IntegrationTestBa
 
         Assert.False(badApproveRes.Success);
         Assert.Equal("INPUT_VERSION_CONFLICT", badApproveRes.ErrorCode);
+
+        var wrongJobApproval = await coordinator.ApproveInputAsync(new ApproveCaptureInputRequest(
+            seeded.OrderId, orderVerApprove, prepRes.AttemptId, freezeRes.Version,
+            freezeRes.ManifestId, freezeRes.ManifestFingerprint, Guid.NewGuid(),
+            seeded.ManagerUserId, Guid.NewGuid(), Guid.NewGuid(), "unbound-job"));
+        Assert.False(wrongJobApproval.Success);
+        Assert.Equal("CAPTURE_PROCESSING_JOB_MISMATCH", wrongJobApproval.ErrorCode);
 
         // Valid approval succeeds
         var approveRes = await coordinator.ApproveInputAsync(new ApproveCaptureInputRequest(

@@ -218,7 +218,18 @@ internal sealed class FarmBaseMapInternalApprovalOrchestrator(
                 if (isV3)
                 {
                     var attempt = await dbContext.CaptureAttempts
-                        .FromSqlInterpolated($"SELECT * FROM survey.capture_attempts WHERE id = {batch.CaptureAttemptId} AND order_id = {order.Id} AND mission_id = {batch.MissionId} AND tenant_id = {order.TenantId} AND farm_id = {order.FarmId} FOR SHARE")
+                        .FromSqlInterpolated($"""
+                            SELECT a.* FROM survey.capture_attempts a
+                            WHERE a.id = {batch.CaptureAttemptId} AND a.order_id = {order.Id}
+                              AND a.tenant_id = {order.TenantId} AND a.farm_id = {order.FarmId}
+                              AND EXISTS (
+                                  SELECT 1 FROM mission.drone_missions m
+                                  WHERE m.id = {batch.MissionId} AND m.capture_attempt_id = a.id
+                                    AND m.survey_order_id = a.order_id
+                                    AND m.tenant_id = a.tenant_id AND m.farm_id = a.farm_id
+                              )
+                            FOR SHARE OF a
+                            """)
                         .SingleOrDefaultAsync(transactionToken);
                     if (attempt?.Status != CaptureAttemptStatus.Processing ||
                         order.FarmBoundaryVersionId != batch.FarmBoundaryVersionId)

@@ -115,6 +115,7 @@ public sealed class SurveyOrder : AggregateRoot
             },
             [SurveyOrderStatus.AwaitingInputReview] = new HashSet<SurveyOrderStatus>
             {
+                SurveyOrderStatus.AwaitingCaptureUpload,
                 SurveyOrderStatus.AwaitingProcessing,
                 SurveyOrderStatus.AwaitingReflightDecision,
                 SurveyOrderStatus.Cancelled

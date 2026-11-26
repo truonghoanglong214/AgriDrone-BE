@@ -63,6 +63,7 @@ public sealed class CaptureAttempt : AggregateRoot
             (CaptureAttemptStatus.InFlight, CaptureAttemptStatus.FlightFailed) => true,
             (CaptureAttemptStatus.AwaitingUpload, CaptureAttemptStatus.Uploaded) => true,
             (CaptureAttemptStatus.AwaitingUpload, CaptureAttemptStatus.ReflightRequired) => true,
+            (CaptureAttemptStatus.Uploaded, CaptureAttemptStatus.AwaitingUpload) => true,
             (CaptureAttemptStatus.Uploaded, CaptureAttemptStatus.Processing) => true,
             (CaptureAttemptStatus.Uploaded, CaptureAttemptStatus.ReflightRequired) => true,
             (CaptureAttemptStatus.Processing, CaptureAttemptStatus.Accepted) => true,
@@ -818,6 +819,50 @@ public sealed class CaptureAttempt : AggregateRoot
         Version++;
         UpdatedAt = timestamp;
         LastPredecessorHistoryId = historyId;
+        _history.Add(history);
+    }
+
+    public void ReopenUpload(
+        Guid manifestId,
+        DateTimeOffset timestamp,
+        Guid actorId,
+        Guid correlationId,
+        Guid operationId,
+        string payloadFingerprint,
+        string reason,
+        uint expectedVersion)
+    {
+        const string action = CaptureAttemptAction.ReopenUpload;
+        if (CheckIdempotentReplay(operationId, payloadFingerprint, action)) return;
+
+        EnsureVersion(expectedVersion);
+        const CaptureAttemptStatus targetStatus = CaptureAttemptStatus.AwaitingUpload;
+        SurveyTransitionGuard.EnsureAllowed(
+            Status == CaptureAttemptStatus.Uploaded && CanTransition(Status, targetStatus),
+            Status,
+            targetStatus,
+            CaptureAttemptDomainErrorCodes.InvalidTransition);
+
+        if (manifestId == Guid.Empty || UploadManifestReference != manifestId.ToString("D"))
+        {
+            throw new SurveyDomainException(
+                CaptureAttemptDomainErrorCodes.EvidenceIdentityMismatch,
+                "Only the current uploaded manifest can be reopened.");
+        }
+
+        DomainGuard.Utc(timestamp, nameof(timestamp));
+        SurveyTransitionGuard.EnsureTimestamp(timestamp, UpdatedAt);
+        var history = CaptureAttemptHistory.CreateTransition(
+            Guid.NewGuid(), Id, Version + 1, action, Status, targetStatus, actorId,
+            "V3_CAPTURE_COORDINATOR", reason, UploadManifestReference, correlationId,
+            operationId, payloadFingerprint, LastPredecessorHistoryId!.Value, timestamp);
+
+        UploadManifestReference = null;
+        UploadManifestFingerprint = null;
+        Status = targetStatus;
+        Version++;
+        UpdatedAt = timestamp;
+        LastPredecessorHistoryId = history.Id;
         _history.Add(history);
     }
 
