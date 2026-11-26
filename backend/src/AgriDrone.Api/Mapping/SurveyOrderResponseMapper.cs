@@ -66,7 +66,9 @@ internal static class SurveyOrderResponseMapper
                     response.UpdatedAt,
                     response.CurrentAppointmentPurpose is { } purpose
                         ? SurveyAppointmentResponseMapper.MapPurpose(purpose)
-                        : null))
+                        : null,
+                    response.CurrentAppointmentStartAt,
+                    response.CurrentAppointmentEndAt))
                 .ToArray(),
             page.PageNumber,
             page.PageSize,

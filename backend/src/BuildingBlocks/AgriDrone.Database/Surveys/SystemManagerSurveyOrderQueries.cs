@@ -91,7 +91,9 @@ internal sealed class SystemManagerSurveyOrderQueries(
                 row.CurrentAppointment == null ? null : row.CurrentAppointment.Status,
                 row.Order.CreatedAt,
                 row.Order.UpdatedAt,
-                row.CurrentAppointment == null ? null : row.CurrentAppointment.Purpose))
+                row.CurrentAppointment == null ? null : row.CurrentAppointment.Purpose,
+                row.CurrentAppointment == null ? null : row.CurrentAppointment.ProposedStartAt,
+                row.CurrentAppointment == null ? null : row.CurrentAppointment.ProposedEndAt))
             .ToPagedResultAsync(page, cancellationToken);
     }
 

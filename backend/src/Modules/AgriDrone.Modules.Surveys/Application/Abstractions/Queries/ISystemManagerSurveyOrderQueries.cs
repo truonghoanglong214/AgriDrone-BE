@@ -57,7 +57,9 @@ public sealed record SystemManagerSurveyOrderItem(
     SurveyAppointmentStatus? CurrentAppointmentStatus,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt,
-    SurveyAppointmentPurpose? CurrentAppointmentPurpose = null);
+    SurveyAppointmentPurpose? CurrentAppointmentPurpose = null,
+    DateTimeOffset? CurrentAppointmentStartAt = null,
+    DateTimeOffset? CurrentAppointmentEndAt = null);
 
 public sealed record TenantOwnerSurveyOrderItem(
     Guid SurveyOrderId,

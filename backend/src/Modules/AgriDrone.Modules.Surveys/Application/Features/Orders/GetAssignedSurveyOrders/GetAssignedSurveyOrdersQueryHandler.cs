@@ -58,7 +58,9 @@ internal sealed class GetAssignedSurveyOrdersQueryHandler(
                 item.CurrentAppointmentStatus,
                 item.CreatedAt,
                 item.UpdatedAt,
-                item.CurrentAppointmentPurpose))
+                item.CurrentAppointmentPurpose,
+                item.CurrentAppointmentStartAt,
+                item.CurrentAppointmentEndAt))
             .ToArray();
 
         return Result.Success(new PagedResult<AssignedSurveyOrderResponse>(

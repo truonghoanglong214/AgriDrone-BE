@@ -15,6 +15,8 @@ public sealed class GetAssignedSurveyOrdersQueryHandlerTests
     {
         var actorId = Guid.NewGuid();
         var orderId = Guid.NewGuid();
+        var appointmentStartAt = new DateTimeOffset(2026, 11, 28, 8, 0, 0, TimeSpan.Zero);
+        var appointmentEndAt = appointmentStartAt.AddHours(1);
         var queries = new FakeQueries(new PagedResult<SystemManagerSurveyOrderItem>(
             [new SystemManagerSurveyOrderItem(
                 orderId,
@@ -24,19 +26,22 @@ public sealed class GetAssignedSurveyOrdersQueryHandlerTests
                 "FARM-01",
                 "Farm 01",
                 Guid.NewGuid(),
-                "PLANT_HEALTH",
-                "Plant health",
-                SurveyOrderStatus.PendingBoundaryVerification,
+                "MAP",
+                "Mapping",
+                SurveyOrderStatus.ReadyForCapture,
                 3,
                 true,
                 null,
                 null,
                 null,
-                null,
-                null,
-                null,
-                DateTimeOffset.UtcNow.AddMinutes(-1),
-                DateTimeOffset.UtcNow)],
+                Guid.NewGuid(),
+                2,
+                SurveyAppointmentStatus.Confirmed,
+                appointmentStartAt.AddDays(-1),
+                appointmentStartAt.AddHours(-1),
+                SurveyAppointmentPurpose.Capture,
+                appointmentStartAt,
+                appointmentEndAt)],
             1,
             20,
             1));
@@ -46,16 +51,19 @@ public sealed class GetAssignedSurveyOrdersQueryHandlerTests
 
         var result = await handler.Handle(
             new GetAssignedSurveyOrdersQuery(
-                SurveyOrderStatus.PendingBoundaryVerification),
+                SurveyOrderStatus.ReadyForCapture),
             CancellationToken.None);
 
         Assert.True(result.IsSuccess);
         Assert.Equal(actorId, queries.ActorId);
-        Assert.Equal(SurveyOrderStatus.PendingBoundaryVerification,
+        Assert.Equal(SurveyOrderStatus.ReadyForCapture,
             queries.Filter?.Status);
         var item = Assert.Single(result.Value.Items);
         Assert.Equal(orderId, item.SurveyOrderId);
         Assert.Equal((uint)3, item.OrderVersion);
+        Assert.Equal(SurveyAppointmentStatus.Confirmed, item.CurrentAppointmentStatus);
+        Assert.Equal(appointmentStartAt, item.CurrentAppointmentStartAt);
+        Assert.Equal(appointmentEndAt, item.CurrentAppointmentEndAt);
     }
 
     [Fact]
