@@ -1005,13 +1005,16 @@ internal sealed class SurveyCaptureExecutionCoordinator(
         CancellationToken cancellationToken = default) => ExecuteAsync(
         async token =>
         {
-            if (!await LockOrderAsync(request.OrderId, token))
+            var scope = await db.Set<SurveyOrder>()
+                .AsNoTracking()
+                .Where(value => value.Id == request.OrderId)
+                .Select(value => new { value.Id, value.TenantId })
+                .SingleOrDefaultAsync(token);
+            if (scope is null)
             {
                 return CancelFailure(request.OrderId, "ORDER_NOT_FOUND", "Survey Order was not found.");
             }
-            var now = clock.GetUtcNow();
-            var order = await db.Set<SurveyOrder>().SingleAsync(
-                value => value.Id == request.OrderId, token);
+
             var decisionKind = request.DecisionKind switch
             {
                 CaptureCancellationDecisionKind.CustomerBeforeCapture => CancellationDecisionKind.CustomerBeforeCapture,
@@ -1020,20 +1023,37 @@ internal sealed class SurveyCaptureExecutionCoordinator(
                 CaptureCancellationDecisionKind.ServiceFailure => CancellationDecisionKind.ServiceFailure,
                 _ => throw new InvalidOperationException("Unsupported cancellation decision kind.")
             };
+
+            // ADR 0020 Rank 1: Authorize caller BEFORE acquiring Order Rank 2 lock or reading funding facts
             var ownerDecision = decisionKind == CancellationDecisionKind.CustomerBeforeCapture;
             if (ownerDecision)
             {
                 if (request.ActorId != request.RequesterId ||
-                    !await HasOwnerAccessAsync(order.TenantId, request.ActorId, token))
+                    !await HasOwnerAccessAsync(scope.TenantId, request.ActorId, token))
                 {
-                    return CancelFailure(order.Id, "OWNER_FORBIDDEN", "Before-capture cancellation requires the active Tenant Owner.");
+                    return CancelFailure(scope.Id, "OWNER_FORBIDDEN", "Before-capture cancellation requires the active Tenant Owner.");
                 }
             }
             else if (!await IsSystemAdminAsync(request.ActorId, token))
             {
-                return CancelFailure(order.Id, "ADMIN_DECISION_REQUIRED", "This cancellation decision requires a System Admin.");
+                return CancelFailure(scope.Id, "ADMIN_DECISION_REQUIRED", "This cancellation decision requires a System Admin.");
             }
 
+            // ADR 0020 Rank 2: Lock Order FOR UPDATE and reverify scope
+            if (!await LockOrderAsync(request.OrderId, token))
+            {
+                return CancelFailure(request.OrderId, "ORDER_NOT_FOUND", "Survey Order was not found.");
+            }
+
+            var now = clock.GetUtcNow();
+            var order = await db.Set<SurveyOrder>().SingleAsync(
+                value => value.Id == request.OrderId, token);
+            if (order.TenantId != scope.TenantId)
+            {
+                return CancelFailure(order.Id, "OWNER_FORBIDDEN", "Order tenant context changed during cancellation authorization.");
+            }
+
+            // ADR 0020 Rank 3: Idempotent replay check
             var replay = await db.Set<SurveyCancellationDecision>()
                 .AsNoTracking()
                 .SingleOrDefaultAsync(value =>
@@ -1115,28 +1135,91 @@ internal sealed class SurveyCaptureExecutionCoordinator(
                 }
             }
 
-            var receipts = await db.Set<SurveyFundingReceipt>()
-                .Where(value => value.SurveyOrderId == order.Id)
-                .SumAsync(value => (decimal?)value.Amount, token) ?? 0m;
-            var completedRefunds = await db.Set<SurveyRefundObligation>()
-                .Where(value =>
-                    value.SurveyOrderId == order.Id &&
-                    value.Status == SurveyRefundObligationStatus.Completed)
-                .SumAsync(value => (decimal?)value.Amount, token) ?? 0m;
-            var activeReservations = await db.Set<SurveyRefundObligation>()
-                .Where(value =>
-                    value.SurveyOrderId == order.Id &&
-                    (value.Status == SurveyRefundObligationStatus.Pending ||
-                     value.Status == SurveyRefundObligationStatus.Reserved ||
-                     value.Status == SurveyRefundObligationStatus.Executing))
-                .SumAsync(value => (decimal?)value.Amount, token) ?? 0m;
-            var unreserved = receipts - completedRefunds - activeReservations;
-            if (unreserved < 0m)
+            // ADR 0020 Rank 4: Lock active capture appointments before Rank 5 funding/deposit locks
+            var activeAppointments = db.Database.IsRelational()
+                ? await db.Set<SurveyAppointment>()
+                    .FromSqlInterpolated($"""
+                        SELECT appointment.*, appointment.xmin
+                        FROM survey.survey_appointments AS appointment
+                        WHERE appointment.survey_order_id = {order.Id}
+                          AND appointment.purpose = 'CAPTURE'::system.survey_appointment_purpose
+                          AND appointment.status IN (
+                            'PROPOSED'::system.survey_appointment_status,
+                            'CONFIRMED'::system.survey_appointment_status,
+                            'RESCHEDULE_REQUESTED'::system.survey_appointment_status)
+                        ORDER BY appointment.id
+                        FOR UPDATE
+                        """)
+                    .ToListAsync(token)
+                : await db.Set<SurveyAppointment>()
+                    .Where(value =>
+                        value.SurveyOrderId == order.Id &&
+                        value.Purpose == SurveyAppointmentPurpose.Capture &&
+                        (value.Status == SurveyAppointmentStatus.Proposed ||
+                         value.Status == SurveyAppointmentStatus.Confirmed ||
+                         value.Status == SurveyAppointmentStatus.RescheduleRequested))
+                    .OrderBy(value => value.Id)
+                    .ToListAsync(token);
+
+            // ADR 0020 Rank 5: Lock DepositObligation (FOR UPDATE) + shared funding/reversal/refund ledger
+            SurveyDepositObligation? deposit = null;
+            if (order.DepositObligationId.HasValue)
             {
-                return CancelFailure(order.Id, "REFUND_RECONCILIATION_HOLD", "Existing refunds and reservations exceed confirmed receipts.");
+                deposit = db.Database.IsRelational()
+                    ? await db.Set<SurveyDepositObligation>()
+                        .FromSqlInterpolated($"SELECT d.* FROM survey.survey_deposit_obligations AS d WHERE d.id = {order.DepositObligationId.Value} AND d.survey_order_id = {order.Id} FOR UPDATE")
+                        .SingleOrDefaultAsync(token)
+                    : await db.Set<SurveyDepositObligation>()
+                        .SingleOrDefaultAsync(value =>
+                            value.Id == order.DepositObligationId.Value &&
+                            value.SurveyOrderId == order.Id,
+                            token);
+                if (deposit is null)
+                {
+                    return CancelFailure(order.Id, "REFUND_RECONCILIATION_HOLD", "Pinned deposit obligation could not be found.");
+                }
             }
+
+            var fundingResult = await SurveyInvoiceFunding.ReadAsync(
+                db,
+                order,
+                deposit,
+                currentInvoiceRevisionId: order.CurrentInvoiceRevisionId,
+                lockRows: true,
+                token,
+                allowHistoricalUnlinkedRefunds: true);
+            if (fundingResult.IsFailure)
+            {
+                return CancelFailure(order.Id, "REFUND_RECONCILIATION_HOLD", fundingResult.Error.Description);
+            }
+
+            var funding = fundingResult.Value;
+            // Historical unlinked refunds still consume the Order-level cap.
+            if (funding.ExcludedReceiptIds.Count > 0)
+            {
+                return CancelFailure(
+                    order.Id,
+                    "REFUND_RECONCILIATION_HOLD",
+                    "Order has funding receipts requiring Admin reconciliation before cancellation.");
+            }
+
+            var available = funding.AvailableRefundCap;
             var retained = request.RequestedRetentionAmount;
-            var refund = unreserved - retained;
+            if (retained < 0m || decimal.Truncate(retained) != retained)
+            {
+                return CancelFailure(order.Id, "INVALID_RETENTION_AMOUNT", "Requested retention amount must be a non-negative whole VND amount.");
+            }
+
+            var maxRetention = Math.Min(snapshot.DepositAmount, available);
+            if (retained > maxRetention)
+            {
+                return CancelFailure(
+                    order.Id,
+                    CancellationDomainErrorCodes.RetentionExceedsAllowedCap,
+                    $"Requested retention amount ({retained}) exceeds allowed cap min(D={snapshot.DepositAmount}, Available={available}) = {maxRetention}.");
+            }
+
+            var refund = available - retained;
             var terms = PinnedCancellationPolicyTerms.Create(
                 policy.Id,
                 policy.VersionNumber,
@@ -1145,6 +1228,13 @@ internal sealed class SurveyCaptureExecutionCoordinator(
                 policy.AllowedFreeNoShowReschedules,
                 policy.OperationalPostponementRefundable,
                 policy.ServiceFailureRefundable);
+
+            // SurveyCancellationDecision.Create and ck_survey_cancellation_decisions_arithmetic compute
+            // unreserved = confirmedReceiptsAmount - completedRefundsAmount - activeRefundReservationsAmount.
+            // Pass netReceiptsAfterReversals (gross - cashReversals) as confirmedReceiptsAmount so completed
+            // refunds and active reservations are never double-subtracted, and persist the full reversal basis
+            // in the ORDER_CANCELLED AuditLog metadata.
+            var netReceiptsAfterReversals = funding.GrossConfirmedReceipts - funding.TotalCashReversals;
             var decision = SurveyCancellationDecision.Create(
                 Guid.CreateVersion7(),
                 order.Id,
@@ -1155,9 +1245,9 @@ internal sealed class SurveyCaptureExecutionCoordinator(
                 decisionKind,
                 request.ReasonCode,
                 request.ReasonDescription,
-                receipts,
-                completedRefunds,
-                activeReservations,
+                netReceiptsAfterReversals,
+                funding.TotalCompletedRefunds,
+                funding.TotalActiveReservations,
                 snapshot.DepositAmount,
                 retained,
                 refund,
@@ -1196,6 +1286,7 @@ internal sealed class SurveyCaptureExecutionCoordinator(
                     now));
             }
 
+            // ADR 0020 Rank 7 & Rank 8: CaptureAttempt -> DroneMission
             var activeAttempt = await db.Set<CaptureAttempt>()
                 .Include(value => value.History)
                 .SingleOrDefaultAsync(value =>
@@ -1229,22 +1320,7 @@ internal sealed class SurveyCaptureExecutionCoordinator(
                 activeMission.Cancel(now);
             }
 
-            if (order.DepositObligationId.HasValue)
-            {
-                var deposit = await db.Set<SurveyDepositObligation>().SingleOrDefaultAsync(value =>
-                    value.Id == order.DepositObligationId.Value &&
-                    value.SurveyOrderId == order.Id,
-                    token);
-                deposit?.Cancel(now);
-            }
-            var activeAppointments = await db.Set<SurveyAppointment>()
-                .Where(value =>
-                    value.SurveyOrderId == order.Id &&
-                    value.Purpose == SurveyAppointmentPurpose.Capture &&
-                    (value.Status == SurveyAppointmentStatus.Proposed ||
-                     value.Status == SurveyAppointmentStatus.Confirmed ||
-                     value.Status == SurveyAppointmentStatus.RescheduleRequested))
-                .ToListAsync(token);
+            deposit?.Cancel(now);
             foreach (var appointment in activeAppointments)
             {
                 if (appointment.Status == SurveyAppointmentStatus.RescheduleRequested)
@@ -1261,7 +1337,26 @@ internal sealed class SurveyCaptureExecutionCoordinator(
             db.Set<SurveyCancellationDecision>().Add(decision);
             AddCaptureEvidence(order, request.ActorId, request.CorrelationId,
                 "ORDER_CANCELLED", now, activeAttempt?.Id, null,
-                decision.Id, refundObligation?.Id);
+                decision.Id, refundObligation?.Id,
+                fundingBasis: new
+                {
+                    grossConfirmedReceiptsAmount = funding.GrossConfirmedReceipts,
+                    cashReversalsAmount = funding.TotalCashReversals,
+                    netConfirmedReceiptsAfterReversals = netReceiptsAfterReversals,
+                    completedRefundsAmount = funding.TotalCompletedRefunds,
+                    activeRefundReservationsAmount = funding.TotalActiveReservations,
+                    availableRefundableAmount = available,
+                    pinnedDepositAmount = snapshot.DepositAmount,
+                    retainedAmount = decision.RetainedAmount,
+                    refundAmount = decision.RefundAmount,
+                    hasUnlinkedHistoricalRefunds = funding.HasUnlinkedRefundObligations,
+                    hasOpenReconciliation = funding.HasOpenReconciliation,
+                    reconciliationReasons = funding.ReconciliationReasons,
+                    excludedSettlementReceiptIds = funding.ExcludedReceiptIds,
+                    fundingReceiptIds = funding.ReceiptIds,
+                    fundingReversalIds = funding.ReversalIds,
+                    existingRefundObligationIds = funding.ActiveOrCompletedRefundIds
+                });
             await db.SaveChangesAsync(token);
             return new CancelCaptureOrderResult(
                 true,
@@ -1427,7 +1522,8 @@ internal sealed class SurveyCaptureExecutionCoordinator(
         Guid? attemptId = null,
         Guid? missionId = null,
         Guid? cancellationDecisionId = null,
-        Guid? refundObligationId = null)
+        Guid? refundObligationId = null,
+        object? fundingBasis = null)
     {
         using var newData = JsonSerializer.SerializeToDocument(new
         {
@@ -1435,7 +1531,8 @@ internal sealed class SurveyCaptureExecutionCoordinator(
             attemptId,
             missionId,
             cancellationDecisionId,
-            refundObligationId
+            refundObligationId,
+            fundingBasis
         });
         db.Set<AuditLog>().Add(AuditLog.ForUserAction(
             order.TenantId,
@@ -1700,5 +1797,7 @@ internal sealed class SurveyCaptureExecutionCoordinator(
     private static CancelCaptureOrderResult CancelException(
         Guid orderId,
         Exception exception) =>
-        CancelFailure(orderId, "CANCELLATION_CONFLICT", GetErrorMessage(exception));
+        exception is SurveyDomainException domainException
+            ? CancelFailure(orderId, domainException.Code, domainException.Message)
+            : CancelFailure(orderId, "CANCELLATION_CONFLICT", GetErrorMessage(exception));
 }

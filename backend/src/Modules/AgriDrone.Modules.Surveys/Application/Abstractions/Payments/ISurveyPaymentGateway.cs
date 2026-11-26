@@ -6,6 +6,8 @@ public interface ISurveyPaymentGateway
 {
     string Provider { get; }
 
+    bool SupportsV3BalanceCheckout => false;
+
     string? GetBalanceCheckoutReference(Guid paymentId) => null;
 
     Task<Result<PaymentSessionResult>> CreateSessionAsync(

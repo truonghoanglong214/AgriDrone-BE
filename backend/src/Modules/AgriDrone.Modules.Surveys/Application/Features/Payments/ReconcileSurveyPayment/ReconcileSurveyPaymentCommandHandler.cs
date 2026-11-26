@@ -20,7 +20,8 @@ internal sealed class ReconcileSurveyPaymentCommandHandler(
     ISurveyPaymentProcessingOutbox outbox,
     IAuditWriter auditWriter,
     IExecutionContext executionContext,
-    TimeProvider timeProvider)
+    TimeProvider timeProvider,
+    IV3FundingReconciliationTransaction? v3Reconciliation = null)
     : IRequestHandler<ReconcileSurveyPaymentCommand,
         Result<ReconcileSurveyPaymentResponse>>
 {
@@ -33,6 +34,58 @@ internal sealed class ReconcileSurveyPaymentCommandHandler(
         {
             return Result.Failure<ReconcileSurveyPaymentResponse>(
                 PaymentError.Forbidden());
+        }
+
+        if (command.OperationId.HasValue &&
+            command.DispositionKind.HasValue &&
+            command.SurveyOrderId.HasValue &&
+            v3Reconciliation is not null)
+        {
+            if (executionContext.CorrelationId == Guid.Empty)
+            {
+                return Result.Failure<ReconcileSurveyPaymentResponse>(
+                    PaymentError.Forbidden());
+            }
+
+            var v3Result = await v3Reconciliation.ReconcileAsync(
+                new V3FundingReconciliationRequest(
+                    OrderId: command.SurveyOrderId.Value,
+                    ActorId: actorId,
+                    CorrelationId: executionContext.CorrelationId,
+                    OperationId: command.OperationId.Value,
+                    DispositionKind: command.DispositionKind.Value,
+                    SurveyPaymentId: command.SurveyPaymentId == Guid.Empty ? null : command.SurveyPaymentId,
+                    FundingReceiptId: command.FundingReceiptId,
+                    TargetInvoiceRevisionId: command.TargetInvoiceRevisionId,
+                    Amount: command.SettledAmount,
+                    Currency: command.Currency,
+                    ProviderReference: command.ProviderReference,
+                    ProviderTransactionId: command.ProviderTransactionId,
+                    Reason: command.Reason,
+                    EvidenceReference: command.EvidenceReference,
+                    ExpectedOrderVersion: command.ExpectedOrderVersion,
+                    ExpectedPaymentVersion: command.ExpectedPaymentVersion),
+                cancellationToken);
+
+            if (v3Result.IsFailure)
+            {
+                return Result.Failure<ReconcileSurveyPaymentResponse>(v3Result.Error);
+            }
+
+            var v3 = v3Result.Value;
+            return Result.Success(new ReconcileSurveyPaymentResponse(
+                v3.SurveyPaymentId ?? command.SurveyPaymentId,
+                v3.OrderId,
+                string.Empty,
+                v3.ProviderReference ?? command.ProviderReference,
+                v3.Amount,
+                v3.Currency,
+                v3.PaymentStatus ?? "RECONCILED",
+                v3.OrderStatus,
+                v3.PaymentVersion ?? command.ExpectedPaymentVersion,
+                v3.OrderVersion,
+                v3.ReconciledBy,
+                v3.ReconciledAt));
         }
 
         var reconciledAt = timeProvider.GetUtcNow();

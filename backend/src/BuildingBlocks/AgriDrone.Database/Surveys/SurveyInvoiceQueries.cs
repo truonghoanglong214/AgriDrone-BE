@@ -1,6 +1,7 @@
 using System.Data;
 using AgriDrone.Modules.Farms.Domain.Farms;
 using AgriDrone.Modules.Surveys.Application.Abstractions.Invoices;
+using AgriDrone.Modules.Surveys.Application.Abstractions.Payments;
 using AgriDrone.Modules.Surveys.Application.Features.Invoices.GetManagerSurveyOrderInvoice;
 using AgriDrone.Modules.Surveys.Application.Features.Invoices.GetTenantOwnerSurveyOrderInvoice;
 using AgriDrone.Modules.Surveys.Domain;
@@ -12,7 +13,9 @@ namespace AgriDrone.Database.Surveys;
 
 internal sealed class SurveyInvoiceQueries(
     AgriDroneSchemaDbContext db,
-    SurveyResultReviewTransaction resultReview) : ISurveyInvoiceQueries
+    SurveyResultReviewTransaction resultReview,
+    IBalanceCheckoutTokenService checkoutTokenService,
+    TimeProvider timeProvider) : ISurveyInvoiceQueries
 {
     private sealed record OrderScopeRow(Guid Id, Guid TenantId, Guid FarmId);
 
@@ -132,27 +135,40 @@ internal sealed class SurveyInvoiceQueries(
                 }
             }
 
-            var depositPayments = depositObligation is null
-                ? new Dictionary<Guid, SurveyPayment>()
-                : await db.Set<SurveyPayment>().AsNoTracking()
-                    .Where(p => p.SurveyOrderId == order.Id && p.DepositObligationId == depositObligation.Id)
-                    .ToDictionaryAsync(p => p.Id, cancellationToken);
+            var orderPayments = await db.Set<SurveyPayment>().AsNoTracking()
+                .Where(p => p.SurveyOrderId == order.Id)
+                .OrderBy(p => p.Id)
+                .ToDictionaryAsync(p => p.Id, cancellationToken);
 
             var funding = await SurveyInvoiceFunding.ReadAsync(
-                db, order, depositObligation, depositPayments, lockRows: false, cancellationToken);
+                db,
+                order,
+                depositObligation,
+                currentInvoiceRevisionId: invoice.Id,
+                lockRows: false,
+                cancellationToken,
+                preloadedOrderPayments: orderPayments,
+                allowHistoricalUnlinkedRefunds: order.Status == SurveyOrderStatus.Completed);
             if (funding.IsFailure)
                 return Result.Failure<ManagerSurveyOrderInvoiceResponse>(funding.Error);
 
-            var openCheckoutIds = await db.Set<SurveyPayment>().AsNoTracking()
-                .Where(p => p.SurveyOrderId == order.Id &&
-                            p.Purpose == PaymentPurpose.FinalBalance &&
+            var openCheckoutIds = orderPayments.Values
+                .Where(p => p.Purpose == PaymentPurpose.FinalBalance &&
                             (p.Status == SurveyPaymentStatus.Pending ||
                              p.Status == SurveyPaymentStatus.Processing ||
                              p.Status == SurveyPaymentStatus.AdjustmentRequired))
                 .OrderBy(p => p.CreatedAt)
                 .ThenBy(p => p.Id)
                 .Select(p => p.Id)
-                .ToListAsync(cancellationToken);
+                .ToList();
+
+            var settlement = funding.Value.ComputeInvoiceSettlement(invoice.TotalAmount);
+            var currentDueAmount = order.Status == SurveyOrderStatus.Completed
+                ? 0m
+                : settlement.DueAmount;
+            var currentOverpaymentAmount = order.Status == SurveyOrderStatus.Completed
+                ? Math.Max(0m, funding.Value.ConfirmedNetPaid - invoice.TotalAmount)
+                : settlement.ExcessAmount;
 
             await tx.CommitAsync(cancellationToken);
 
@@ -182,9 +198,9 @@ internal sealed class SurveyInvoiceQueries(
                 VerifiedBillablePoleCount: invoice.VerifiedBillablePoleCount,
                 TotalAmount: invoice.TotalAmount,
                 ValidAllocatedDepositNet: invoice.ValidAllocatedDepositNet,
-                ConfirmedNetReceipts: funding.Value.ConfirmedNetReceipts,
-                DueAmount: invoice.DueAmount,
-                OverpaymentAmount: invoice.OverpaymentAmount,
+                ConfirmedNetReceipts: funding.Value.ConfirmedNetPaid,
+                DueAmount: currentDueAmount,
+                OverpaymentAmount: currentOverpaymentAmount,
                 ZeroPoleApprovedBy: invoice.ZeroPoleApprovedBy,
                 ZeroPoleReasonCode: invoice.ZeroPoleReasonCode,
                 ZeroPoleEvidenceReference: invoice.ZeroPoleEvidenceReference,
@@ -192,7 +208,11 @@ internal sealed class SurveyInvoiceQueries(
                 ComboReviewRevisionId: comboReviewRevisionId,
                 ComboReviewFingerprint: comboReviewFingerprint,
                 OpenFinalBalanceCheckoutPaymentIds: openCheckoutIds,
-                FinalizedAt: invoice.FinalizedAt));
+                FinalizedAt: invoice.FinalizedAt,
+                HasOpenReconciliation: funding.Value.HasOpenReconciliation,
+                ReconciliationReasons: funding.Value.ReconciliationReasons,
+                OrderConfirmedNetCash: funding.Value.OrderConfirmedNetCash,
+                OrderAvailableRefundCap: funding.Value.AvailableRefundCap));
         }
         catch (PostgresException exception) when (IsReadConflict(exception))
         {
@@ -252,30 +272,86 @@ internal sealed class SurveyInvoiceQueries(
                     r.Status == SurveyInvoiceRevision.StatusCurrent,
                     cancellationToken);
 
-            var approvalValid = invoice is not null && await db.Set<SurveyInternalApprovedResultRevision>().AsNoTracking()
-                .AnyAsync(a =>
-                    a.Id == order.CurrentApprovedResultRevisionId.Value &&
-                    a.Id == invoice.ApprovedResultRevisionId &&
-                    a.SurveyOrderId == order.Id &&
-                    a.TenantId == order.TenantId &&
-                    a.FarmId == order.FarmId &&
-                    a.IsCurrent &&
-                    a.PoleCountSnapshotId == order.VerifiedPoleCountSnapshotId.Value,
-                    cancellationToken);
+            var approval = invoice is null
+                ? null
+                : await db.Set<SurveyInternalApprovedResultRevision>().AsNoTracking()
+                    .Where(a =>
+                        a.Id == order.CurrentApprovedResultRevisionId.Value &&
+                        a.Id == invoice.ApprovedResultRevisionId &&
+                        a.SurveyOrderId == order.Id &&
+                        a.TenantId == order.TenantId &&
+                        a.FarmId == order.FarmId &&
+                        a.IsCurrent &&
+                        a.PoleCountSnapshotId == order.VerifiedPoleCountSnapshotId.Value)
+                    .Select(a => new { a.Id, a.EvidenceFingerprint })
+                    .SingleOrDefaultAsync(cancellationToken);
 
-            var snapshotValid = invoice is not null && await db.Set<SurveyOrderPoleCountSnapshot>().AsNoTracking()
-                .AnyAsync(s =>
-                    s.Id == order.VerifiedPoleCountSnapshotId.Value &&
-                    s.Id == invoice.PoleCountSnapshotId &&
-                    s.SurveyOrderId == order.Id &&
-                    s.TenantId == order.TenantId &&
-                    s.FarmId == order.FarmId,
-                    cancellationToken);
+            var snapshot = invoice is null
+                ? null
+                : await db.Set<SurveyOrderPoleCountSnapshot>().AsNoTracking()
+                    .Where(s =>
+                        s.Id == order.VerifiedPoleCountSnapshotId.Value &&
+                        s.Id == invoice.PoleCountSnapshotId &&
+                        s.SurveyOrderId == order.Id &&
+                        s.TenantId == order.TenantId &&
+                        s.FarmId == order.FarmId)
+                    .Select(s => new { s.Id, s.EvidenceFingerprint })
+                    .SingleOrDefaultAsync(cancellationToken);
 
-            if (invoice is null || !approvalValid || !snapshotValid)
+            if (invoice is null || approval is null || snapshot is null)
             {
                 return Result.Failure<TenantOwnerSurveyOrderInvoiceResponse>(
                     AppError.NotFound("Invoice.NotFound", "Survey invoice was not found."));
+            }
+
+            decimal currentDueAmount;
+            if (order.Status == SurveyOrderStatus.Completed)
+            {
+                currentDueAmount = 0m;
+            }
+            else
+            {
+                SurveyDepositObligation? depositObligation = null;
+                if (order.DepositObligationId is Guid obligationId)
+                {
+                    depositObligation = await db.Set<SurveyDepositObligation>().AsNoTracking()
+                        .SingleOrDefaultAsync(o => o.Id == obligationId && o.SurveyOrderId == order.Id, cancellationToken);
+                    if (depositObligation is null || depositObligation.Status == SurveyDepositObligationStatus.Cancelled)
+                    {
+                        return Result.Failure<TenantOwnerSurveyOrderInvoiceResponse>(
+                            AppError.Conflict("DepositObligation.Invalid", "Deposit obligation is missing or cancelled."));
+                    }
+                }
+
+                var funding = await SurveyInvoiceFunding.ReadAsync(
+                    db,
+                    order,
+                    depositObligation,
+                    currentInvoiceRevisionId: invoice.Id,
+                    lockRows: false,
+                    cancellationToken);
+                if (funding.IsFailure)
+                    return Result.Failure<TenantOwnerSurveyOrderInvoiceResponse>(funding.Error);
+
+                currentDueAmount = funding.Value.ComputeInvoiceSettlement(invoice.TotalAmount).DueAmount;
+            }
+
+            string? checkoutToken = null;
+            if (order.Status == SurveyOrderStatus.AwaitingSettlement)
+            {
+                checkoutToken = checkoutTokenService.Protect(new BalanceCheckoutTokenPayload(
+                    ActorId: actorId,
+                    TenantId: order.TenantId,
+                    FarmId: order.FarmId,
+                    OrderId: order.Id,
+                    ExpectedOrderVersion: order.Version,
+                    ExpectedInvoiceRevisionId: invoice.Id,
+                    ExpectedInvoiceFingerprint: invoice.EvidenceFingerprint,
+                    ExpectedApprovedResultRevisionId: approval.Id,
+                    ExpectedApprovedResultFingerprint: approval.EvidenceFingerprint,
+                    ExpectedCountSnapshotId: snapshot.Id,
+                    ExpectedCountSnapshotFingerprint: snapshot.EvidenceFingerprint,
+                    IssuedAt: timeProvider.GetUtcNow()));
             }
 
             await tx.CommitAsync(cancellationToken);
@@ -289,8 +365,9 @@ internal sealed class SurveyInvoiceQueries(
                 PricePerPole: invoice.PricePerPole,
                 Currency: invoice.Currency,
                 TotalAmount: invoice.TotalAmount,
-                DueAmount: invoice.DueAmount,
-                FinalizedAt: invoice.FinalizedAt));
+                DueAmount: currentDueAmount,
+                FinalizedAt: invoice.FinalizedAt,
+                CheckoutToken: checkoutToken));
         }
         catch (PostgresException exception) when (IsReadConflict(exception))
         {

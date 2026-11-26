@@ -81,6 +81,7 @@ internal sealed class SurveySettlementReleaseCoordinator(
 
             if (request.ExpectedFarmId is Guid farmId && farmId != discovery.FarmId)
             {
+                await tx.RollbackAsync(cancellationToken);
                 return EvaluateSurveySettlementReleaseResult.Forbidden(
                     request.OrderId, "SettlementRelease.CrossFarmForbidden", "Order does not belong to the expected farm.");
             }
@@ -197,20 +198,23 @@ internal sealed class SurveySettlementReleaseCoordinator(
                 }
             }
 
-            var depositPayments = depositObligation is null
-                ? new Dictionary<Guid, SurveyPayment>()
-                : await db.Set<SurveyPayment>()
-                    .FromSqlInterpolated($"""
-                        SELECT *, xmin FROM survey.survey_payments
-                        WHERE survey_order_id = {order.Id}
-                          AND deposit_obligation_id = {depositObligation.Id}
-                        ORDER BY id
-                        FOR SHARE
-                        """)
-                    .ToDictionaryAsync(p => p.Id, cancellationToken);
+            var orderPayments = await db.Set<SurveyPayment>()
+                .FromSqlInterpolated($"""
+                    SELECT payment.*, payment.xmin FROM survey.survey_payments AS payment
+                    WHERE payment.survey_order_id = {order.Id}
+                    ORDER BY payment.id
+                    FOR SHARE
+                    """)
+                .ToDictionaryAsync(p => p.Id, cancellationToken);
 
             var fundingResult = await SurveyInvoiceFunding.ReadAsync(
-                db, order, depositObligation, depositPayments, lockRows: true, cancellationToken);
+                db,
+                order,
+                depositObligation,
+                currentInvoiceRevisionId: order.CurrentInvoiceRevisionId,
+                lockRows: true,
+                cancellationToken,
+                preloadedOrderPayments: orderPayments);
             if (fundingResult.IsFailure)
             {
                 await tx.RollbackAsync(cancellationToken);
@@ -316,20 +320,32 @@ internal sealed class SurveySettlementReleaseCoordinator(
             }
 
             var funding = fundingResult.Value;
-            if (invoice.ValidAllocatedDepositNet != funding.ValidAllocatedDepositNet)
+            if (funding.HasOpenReconciliation)
             {
                 await tx.RollbackAsync(cancellationToken);
                 return EvaluateSurveySettlementReleaseResult.ReconciliationHold(
                     order.Id,
-                    "SettlementRelease.DepositNetChanged",
-                    "Current valid allocated deposit net disagrees with finalized invoice deposit credit.",
+                    SurveyInvoiceFunding.HoldErrorCode,
+                    string.Join(" ", funding.ReconciliationReasons),
                     order.Version,
                     order.Status.ToString(),
                     invoice.Id);
             }
 
-            var dueAmount = Math.Max(0m, invoice.TotalAmount - funding.ValidAllocatedDepositNet);
-            if (dueAmount > 0m)
+            if (funding.ActiveOtherRefundReservations > 0m)
+            {
+                await tx.RollbackAsync(cancellationToken);
+                return EvaluateSurveySettlementReleaseResult.ReconciliationHold(
+                    order.Id,
+                    "SettlementRelease.ConflictingActiveRefundReservations",
+                    "Active refund reservations for another refund origin block release until reconciled.",
+                    order.Version,
+                    order.Status.ToString(),
+                    invoice.Id);
+            }
+
+            var settlement = funding.ComputeInvoiceSettlement(invoice.TotalAmount);
+            if (settlement.DueAmount > 0m)
             {
                 await tx.RollbackAsync(cancellationToken);
                 return EvaluateSurveySettlementReleaseResult.InsufficientFunding(
@@ -345,16 +361,35 @@ internal sealed class SurveySettlementReleaseCoordinator(
                     invoiceFingerprint: invoice.EvidenceFingerprint,
                     totalAmount: invoice.TotalAmount,
                     validAllocatedDepositNet: funding.ValidAllocatedDepositNet,
-                    confirmedNetReceipts: funding.ConfirmedNetReceipts,
-                    dueAmount: dueAmount,
+                    confirmedNetReceipts: funding.ConfirmedNetPaid,
+                    dueAmount: settlement.DueAmount,
                     currency: invoice.Currency);
+            }
+
+            if (settlement.ExcessAmount > 0m)
+            {
+                var planResult = funding.PlanOverpaymentReservations(
+                    invoice.TotalAmount,
+                    originDecisionId: invoice.Id,
+                    invoice.Currency);
+                if (planResult.IsFailure)
+                {
+                    await tx.RollbackAsync(cancellationToken);
+                    return EvaluateSurveySettlementReleaseResult.ReconciliationHold(
+                        order.Id,
+                        planResult.Error.Code,
+                        planResult.Error.Description,
+                        order.Version,
+                        order.Status.ToString(),
+                        invoice.Id);
+                }
             }
 
             await tx.RollbackAsync(cancellationToken);
             return EvaluateSurveySettlementReleaseResult.Blocked(
                 order.Id,
                 ReleasePersistencePendingCode,
-                "Release evaluation passed Rank 1-6 checks; durable release receipt, notice, claim window, and recognition persistence are completed in V3-06 A2.4.",
+                "Release evaluation passed Rank 1-6 checks; durable release receipt, notice, claim window, and overpayment reservation persistence are completed in V3-06 A2.4.",
                 order.Version,
                 order.Status.ToString());
         }

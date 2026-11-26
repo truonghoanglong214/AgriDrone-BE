@@ -1,8 +1,12 @@
 using AgriDrone.Api.Contracts.Surveys.V3;
+using AgriDrone.Modules.Surveys.Application.Abstractions.Payments;
 using AgriDrone.Modules.Surveys.Application.Features.Invoices.CorrectSurveyOrderPreReleaseInvoice;
 using AgriDrone.Modules.Surveys.Application.Features.Invoices.FinalizeSurveyOrderInvoice;
 using AgriDrone.Modules.Surveys.Application.Features.Invoices.GetManagerSurveyOrderInvoice;
 using AgriDrone.Modules.Surveys.Application.Features.Invoices.GetTenantOwnerSurveyOrderInvoice;
+using AgriDrone.Modules.Surveys.Application.Features.Orders.GetManagerSurveyOrderCaptureAttempts;
+using AgriDrone.Modules.Surveys.Application.Features.Payments.InitiateBalanceCheckout;
+using AgriDrone.Modules.Surveys.Application.Features.Payments.ReconcileSurveyPayment;
 using AgriDrone.Modules.Surveys.Application.Features.Results.FreezeSurveyInternalResult;
 using AgriDrone.Modules.Surveys.Application.Features.Results.GetSurveyResultReview;
 using AgriDrone.Modules.Surveys.Application.Features.Results.RecordSurveyComboReview;
@@ -253,7 +257,11 @@ internal static class V3SurveyResultAndInvoiceMapper
             response.ComboReviewRevisionId,
             response.ComboReviewFingerprint,
             response.OpenFinalBalanceCheckoutPaymentIds,
-            response.FinalizedAt);
+            response.FinalizedAt,
+            response.HasOpenReconciliation,
+            response.ReconciliationReasons,
+            response.OrderConfirmedNetCash,
+            response.OrderAvailableRefundCap);
 
     public static V3FinalizeInvoiceApiResponse ToResponse(
         FinalizeSurveyOrderInvoiceResponse response) => new(
@@ -335,5 +343,90 @@ internal static class V3SurveyResultAndInvoiceMapper
             response.Currency,
             response.TotalAmount,
             response.DueAmount,
-            response.FinalizedAt);
+            response.FinalizedAt,
+            response.CheckoutToken);
+
+    public static V3BalanceCheckoutApiResponse ToResponse(
+        InitiateBalanceCheckoutResponse response) => new(
+            response.OrderId,
+            response.PaymentId,
+            response.InvoiceRevisionId,
+            response.InvoiceRevisionNumber,
+            response.Amount,
+            response.Currency,
+            response.Provider,
+            response.ProviderReference,
+            response.PaymentStatus,
+            response.RedirectUrl,
+            response.ClientToken,
+            response.ExpiresAt,
+            response.PaymentVersion,
+            response.OrderVersion,
+            response.IsReplay);
+
+    public static ReconcileV3SurveyOrderFundingCommand ToCommand(
+        Guid orderId,
+        ReconcileV3SurveyOrderFundingRequest request) => new(
+            OrderId: orderId,
+            OperationId: request.OperationId!.Value,
+            DispositionKind: request.DispositionKind!.Value,
+            SurveyPaymentId: request.SurveyPaymentId,
+            FundingReceiptId: request.FundingReceiptId,
+            TargetInvoiceRevisionId: request.TargetInvoiceRevisionId,
+            Amount: request.Amount!.Value,
+            Currency: request.Currency,
+            ProviderReference: request.ProviderReference,
+            ProviderTransactionId: request.ProviderTransactionId,
+            Reason: request.Reason,
+            EvidenceReference: request.EvidenceReference,
+            ExpectedOrderVersion: request.ExpectedOrderVersion!.Value,
+            ExpectedPaymentVersion: request.ExpectedPaymentVersion);
+
+    public static V3FundingReconciliationApiResponse ToResponse(
+        V3FundingReconciliationResult result) => new(
+            DecisionId: result.DecisionId,
+            OrderId: result.OrderId,
+            OperationId: result.OperationId,
+            DispositionKind: result.DispositionKind,
+            SurveyPaymentId: result.SurveyPaymentId,
+            FundingReceiptId: result.FundingReceiptId,
+            TargetInvoiceRevisionId: result.TargetInvoiceRevisionId,
+            Amount: result.Amount,
+            Currency: result.Currency,
+            ProviderReference: result.ProviderReference,
+            ProviderTransactionId: result.ProviderTransactionId,
+            PaymentStatus: result.PaymentStatus,
+            OrderStatus: result.OrderStatus,
+            PaymentVersion: result.PaymentVersion,
+            OrderVersion: result.OrderVersion,
+            HasOpenReconciliation: result.HasOpenReconciliation,
+            ConfirmedNetReceipts: result.ConfirmedNetReceipts,
+            OrderConfirmedNetCash: result.OrderConfirmedNetCash,
+            AvailableRefundCap: result.AvailableRefundCap,
+            ReconciledBy: result.ReconciledBy,
+            ReconciledAt: result.ReconciledAt,
+            IsReplay: result.IsReplay);
+
+    public static IReadOnlyList<V3CaptureAttemptApiResponse> ToResponse(
+        IReadOnlyList<ManagerSurveyOrderCaptureAttemptResponse> items) =>
+        items.Select(attempt => new V3CaptureAttemptApiResponse(
+                CaptureAttemptId: attempt.CaptureAttemptId,
+                AttemptIndex: attempt.AttemptIndex,
+                Status: attempt.Status,
+                Version: attempt.Version,
+                MissionId: attempt.MissionId,
+                ParentAttemptId: attempt.ParentAttemptId,
+                ParentMissionId: attempt.ParentMissionId,
+                StartedAt: attempt.StartedAt,
+                EndedAt: attempt.EndedAt,
+                History: attempt.History
+                    .Select(history => new V3CaptureAttemptHistoryApiResponse(
+                        TransitionSequence: history.TransitionSequence,
+                        Action: history.Action,
+                        FromStatus: history.FromStatus,
+                        ToStatus: history.ToStatus,
+                        Reason: history.Reason,
+                        CreatedAt: history.CreatedAt))
+                    .ToArray()))
+            .ToArray();
 }

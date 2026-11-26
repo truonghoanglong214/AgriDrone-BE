@@ -6,6 +6,7 @@ using AgriDrone.IntegrationContracts.Surveys;
 using AgriDrone.Modules.Surveys.Application.Features.Appointments.ConfirmSurveyAppointment;
 using AgriDrone.Modules.Surveys.Application.Features.Appointments.RequestSurveyAppointmentReschedule;
 using AgriDrone.Modules.Surveys.Application.Features.Invoices.GetTenantOwnerSurveyOrderInvoice;
+using AgriDrone.Modules.Surveys.Application.Features.Payments.InitiateBalanceCheckout;
 using AgriDrone.Modules.Surveys.Application.Features.Payments.InitiateSurveyPayment;
 using AgriDrone.Modules.Surveys.Domain;
 using AgriDrone.SharedInfrastructure.Authorization;
@@ -144,5 +145,32 @@ public sealed class V3TenantOwnerSurveyOrdersController(
         return result.ToHttpResult(
             HttpContext,
             response => Results.Ok(V3SurveyResultAndInvoiceMapper.ToResponse(response)));
+    }
+
+    /// <summary>Khởi tạo checkout thanh toán số dư hóa đơn V3 bằng checkoutToken do backend cấp.</summary>
+    [HttpPost("{orderId:guid}/balance-checkouts")]
+    [ProducesResponseType<V3BalanceCheckoutApiResponse>(StatusCodes.Status201Created)]
+    [ProducesResponseType<V3BalanceCheckoutApiResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IResult> InitiateBalanceCheckout(
+        [FromRoute] Guid orderId,
+        [FromBody] InitiateV3BalanceCheckoutRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await sender.Send(
+            new InitiateBalanceCheckoutCommand(orderId, request.CheckoutToken, request.IdempotencyKey),
+            cancellationToken);
+        return result.ToHttpResult(
+            HttpContext,
+            response => response.IsReplay
+                ? Results.Ok(V3SurveyResultAndInvoiceMapper.ToResponse(response))
+                : Results.Json(
+                    V3SurveyResultAndInvoiceMapper.ToResponse(response),
+                    statusCode: StatusCodes.Status201Created));
     }
 }

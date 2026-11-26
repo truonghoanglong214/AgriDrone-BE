@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using AgriDrone.IntegrationContracts.Mapping;
 using AgriDrone.Modules.Surveys.Application.Abstractions.Results;
+using AgriDrone.Modules.Surveys.Domain;
 
 namespace AgriDrone.Api.Contracts.Surveys.V3;
 
@@ -225,7 +226,11 @@ public sealed record V3ManagerInvoiceApiResponse(
     Guid? ComboReviewRevisionId,
     string? ComboReviewFingerprint,
     IReadOnlyList<Guid> OpenFinalBalanceCheckoutPaymentIds,
-    DateTimeOffset FinalizedAt);
+    DateTimeOffset FinalizedAt,
+    bool HasOpenReconciliation = false,
+    IReadOnlyList<string>? ReconciliationReasons = null,
+    decimal OrderConfirmedNetCash = 0m,
+    decimal OrderAvailableRefundCap = 0m);
 
 public sealed record V3FinalizeInvoiceApiResponse(
     Guid OrderId,
@@ -294,6 +299,95 @@ public sealed record V3CorrectPreReleaseInvoiceApiResponse(
     Guid? ComboReviewRevisionId,
     string? ComboReviewFingerprint);
 
+public sealed record InitiateV3BalanceCheckoutRequest(
+    [param: Required, StringLength(8192, MinimumLength = 1)]
+    string CheckoutToken,
+    Guid IdempotencyKey);
+
+public sealed record V3BalanceCheckoutApiResponse(
+    Guid OrderId,
+    Guid PaymentId,
+    Guid InvoiceRevisionId,
+    int? InvoiceRevisionNumber,
+    decimal Amount,
+    string Currency,
+    string Provider,
+    string? ProviderReference,
+    string PaymentStatus,
+    Uri? RedirectUrl,
+    string? ClientToken,
+    DateTimeOffset? ExpiresAt,
+    uint? PaymentVersion,
+    uint? OrderVersion,
+    bool IsReplay);
+
+public sealed record ReconcileV3SurveyOrderFundingRequest(
+    [param: Required] Guid? OperationId,
+    [param: Required] SurveyReconciliationDispositionKind? DispositionKind,
+    [param: Required]
+    [param: Range(typeof(uint), "1", "4294967295")]
+    uint? ExpectedOrderVersion,
+    [param: Required]
+    [param: Range(typeof(decimal), "0", "79228162514264337593543950335")]
+    decimal? Amount,
+    [param: Required, StringLength(3, MinimumLength = 3)]
+    string Currency,
+    [param: Required, StringLength(2000, MinimumLength = 1)]
+    string Reason,
+    [param: Required, StringLength(1000, MinimumLength = 1)]
+    string EvidenceReference,
+    Guid? SurveyPaymentId = null,
+    Guid? FundingReceiptId = null,
+    Guid? TargetInvoiceRevisionId = null,
+    [param: StringLength(150)] string? ProviderReference = null,
+    [param: StringLength(150)] string? ProviderTransactionId = null,
+    [param: Range(typeof(uint), "1", "4294967295")]
+    uint? ExpectedPaymentVersion = null);
+
+public sealed record V3FundingReconciliationApiResponse(
+    Guid DecisionId,
+    Guid OrderId,
+    Guid OperationId,
+    SurveyReconciliationDispositionKind DispositionKind,
+    Guid? SurveyPaymentId,
+    Guid? FundingReceiptId,
+    Guid? TargetInvoiceRevisionId,
+    decimal Amount,
+    string Currency,
+    string? ProviderReference,
+    string? ProviderTransactionId,
+    string? PaymentStatus,
+    string OrderStatus,
+    uint? PaymentVersion,
+    uint OrderVersion,
+    bool HasOpenReconciliation,
+    decimal ConfirmedNetReceipts,
+    decimal OrderConfirmedNetCash,
+    decimal AvailableRefundCap,
+    Guid ReconciledBy,
+    DateTimeOffset ReconciledAt,
+    bool IsReplay);
+
+public sealed record V3CaptureAttemptHistoryApiResponse(
+    uint TransitionSequence,
+    string Action,
+    CaptureAttemptStatus? FromStatus,
+    CaptureAttemptStatus ToStatus,
+    string Reason,
+    DateTimeOffset CreatedAt);
+
+public sealed record V3CaptureAttemptApiResponse(
+    Guid CaptureAttemptId,
+    int AttemptIndex,
+    CaptureAttemptStatus Status,
+    uint Version,
+    Guid? MissionId,
+    Guid? ParentAttemptId,
+    Guid? ParentMissionId,
+    DateTimeOffset? StartedAt,
+    DateTimeOffset? EndedAt,
+    IReadOnlyList<V3CaptureAttemptHistoryApiResponse> History);
+
 public sealed record V3TenantOwnerInvoiceApiResponse(
     Guid OrderId,
     string OrderNumber,
@@ -304,4 +398,5 @@ public sealed record V3TenantOwnerInvoiceApiResponse(
     string Currency,
     decimal TotalAmount,
     decimal DueAmount,
-    DateTimeOffset FinalizedAt);
+    DateTimeOffset FinalizedAt,
+    string? CheckoutToken = null);

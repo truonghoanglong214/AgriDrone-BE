@@ -15,6 +15,8 @@ internal sealed class ProcessSurveyPaymentEventCommandValidator
         RuleFor(command => command.ProviderEventId)
             .NotEmpty()
             .MaximumLength(150);
+        RuleFor(command => command.ProviderTransactionId)
+            .MaximumLength(150);
         RuleFor(command => command.EventType)
             .NotEmpty()
             .MaximumLength(100)

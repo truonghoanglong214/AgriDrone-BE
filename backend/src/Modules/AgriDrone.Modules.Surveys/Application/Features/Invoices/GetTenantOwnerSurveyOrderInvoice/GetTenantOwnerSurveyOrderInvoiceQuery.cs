@@ -16,4 +16,5 @@ public sealed record TenantOwnerSurveyOrderInvoiceResponse(
     string Currency,
     decimal TotalAmount,
     decimal DueAmount,
-    DateTimeOffset FinalizedAt);
+    DateTimeOffset FinalizedAt,
+    string? CheckoutToken = null);

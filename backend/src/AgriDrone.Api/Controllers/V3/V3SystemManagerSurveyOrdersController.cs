@@ -4,6 +4,7 @@ using AgriDrone.Api.Mapping;
 using AgriDrone.IntegrationContracts.Surveys;
 using AgriDrone.Modules.Surveys.Application.Features.Appointments.ProposeSurveyAppointment;
 using AgriDrone.Modules.Surveys.Application.Features.Invoices.GetManagerSurveyOrderInvoice;
+using AgriDrone.Modules.Surveys.Application.Features.Orders.GetManagerSurveyOrderCaptureAttempts;
 using AgriDrone.Modules.Surveys.Application.Features.Results.GetSurveyResultReview;
 using AgriDrone.Modules.Surveys.Domain;
 using AgriDrone.SharedInfrastructure.Authorization;
@@ -247,6 +248,25 @@ public sealed class V3SystemManagerSurveyOrdersController(
                 request.Notes), cancellationToken);
         return CoordinatorResult(result.Success, result,
             StatusCodes.Status201Created, result.ErrorCode, result.ErrorMessage);
+    }
+
+    /// <summary>Đọc danh sách các lần bay (CaptureAttempt), mission gắn kèm và lịch sử chuyển trạng thái cho đơn V3.</summary>
+    [HttpGet("{orderId:guid}/capture-attempts")]
+    [ProducesResponseType<IReadOnlyList<V3CaptureAttemptApiResponse>>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IResult> GetCaptureAttempts(
+        [FromRoute] Guid orderId,
+        CancellationToken cancellationToken)
+    {
+        var result = await sender.Send(
+            new GetManagerSurveyOrderCaptureAttemptsQuery(orderId),
+            cancellationToken);
+        return result.ToHttpResult(
+            HttpContext,
+            response => Results.Ok(V3SurveyResultAndInvoiceMapper.ToResponse(response)));
     }
 
     [HttpPost("{orderId:guid}/capture-attempts/{parentAttemptId:guid}/quality-reflights")]

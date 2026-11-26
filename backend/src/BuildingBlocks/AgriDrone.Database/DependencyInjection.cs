@@ -70,6 +70,8 @@ public static class DependencyInjection
             SurveyInvoiceQueries>();
         services.AddScoped<ISystemManagerSurveyOrderQueries,
             SystemManagerSurveyOrderQueries>();
+        services.AddScoped<ISurveyCaptureAttemptQueries,
+            SurveyCaptureAttemptQueries>();
         services.AddScoped<IV3FollowUpBaselineQuery,
             V3FollowUpBaselineQuery>();
         services.AddScoped<V3FollowUpBaselineEligibilityReader>();
@@ -361,6 +363,8 @@ public static class DependencyInjection
             SurveyPaymentProcessingOutbox>();
         services.AddScoped<IV3BalanceCheckoutTransaction,
             V3BalanceCheckoutTransaction>();
+        services.AddScoped<IV3FundingReconciliationTransaction,
+            V3FundingReconciliationTransaction>();
 
         return services;
     }

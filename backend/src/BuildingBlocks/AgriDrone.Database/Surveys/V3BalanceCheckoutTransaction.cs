@@ -22,6 +22,7 @@ internal sealed class V3BalanceCheckoutTransaction(
     ISurveyPaymentGateway gateway,
     TimeProvider timeProvider) : IV3BalanceCheckoutTransaction
 {
+    private const string SucceededPaymentEventType = "payment.succeeded";
     private static readonly Regex Hex64Regex = new("^[0-9a-f]{64}$", RegexOptions.Compiled);
 
     public async Task<Result<V3BalanceCheckoutIntentResult>> BeginCheckoutIntentAsync(
@@ -87,14 +88,15 @@ internal sealed class V3BalanceCheckoutTransaction(
                     ErrorMessage: "Survey order was not found."));
             }
 
-            if (scope.TenantId != request.TenantId)
+            if (scope.TenantId != request.TenantId ||
+                (request.ExpectedFarmId.HasValue && scope.FarmId != request.ExpectedFarmId.Value))
             {
                 await tx.RollbackAsync(cancellationToken);
                 return Result.Success(new V3BalanceCheckoutIntentResult(
                     Outcome: V3BalanceCheckoutOutcome.Forbidden,
                     OrderId: request.OrderId,
                     ErrorCode: "Payment.Forbidden",
-                    ErrorMessage: "Order does not belong to caller tenant."));
+                    ErrorMessage: "Order does not belong to caller tenant or expected farm."));
             }
 
             // ADR 0020 Rank 1: Verify active Owner membership and Farm BEFORE reading payment/receipt rows
@@ -123,6 +125,7 @@ internal sealed class V3BalanceCheckoutTransaction(
                     ErrorMessage: "Survey order was not found."));
             }
 
+            // ADR 0020 Rank 3: Idempotency replay by key and fingerprint before new intent checks
             var intentReceipt = await FindOperationAsync(
                 request.TenantId, request.ActorId, request.OperationId,
                 SurveyResultReviewOperation.ActionBeginBalanceCheckout, cancellationToken);
@@ -179,7 +182,20 @@ internal sealed class V3BalanceCheckoutTransaction(
                     ErrorMessage: $"Order is not in the expected AwaitingSettlement version (status: {order.Status}, version: {order.Version})."));
             }
 
-            // ADR 0020 Rank 5: Lock DepositObligation + active/open FinalBalance checkouts + funding
+            if (!order.CurrentInvoiceRevisionId.HasValue ||
+                !order.CurrentApprovedResultRevisionId.HasValue ||
+                !order.VerifiedPoleCountSnapshotId.HasValue)
+            {
+                await tx.RollbackAsync(cancellationToken);
+                return Result.Success(new V3BalanceCheckoutIntentResult(
+                    Outcome: V3BalanceCheckoutOutcome.StaleContext,
+                    OrderId: order.Id,
+                    OrderVersion: order.Version,
+                    ErrorCode: "Invoice.NotFinalized",
+                    ErrorMessage: "Order is missing current finalized invoice pointers."));
+            }
+
+            // ADR 0020 Rank 5: Lock DepositObligation + all Order payments (FOR UPDATE) + Funding rows (FOR SHARE)
             SurveyDepositObligation? depositObligation = null;
             if (order.DepositObligationId.HasValue)
             {
@@ -198,54 +214,23 @@ internal sealed class V3BalanceCheckoutTransaction(
                 }
             }
 
-            var depositPayments = depositObligation is null
-                ? new Dictionary<Guid, SurveyPayment>()
-                : await db.Set<SurveyPayment>()
-                    .FromSqlInterpolated($"""
-                        SELECT *, xmin FROM survey.survey_payments
-                        WHERE survey_order_id = {order.Id}
-                          AND deposit_obligation_id = {depositObligation.Id}
-                        ORDER BY id
-                        FOR SHARE
-                        """)
-                    .ToDictionaryAsync(p => p.Id, cancellationToken);
-
-            var activeBalanceCheckout = await db.Set<SurveyPayment>()
+            var orderPayments = await db.Set<SurveyPayment>()
                 .FromSqlInterpolated($"""
-                    SELECT *, xmin FROM survey.survey_payments
-                    WHERE survey_order_id = {order.Id}
-                      AND purpose = 'FinalBalance'
-                      AND status IN (
-                        'PENDING'::system.survey_payment_status,
-                        'PROCESSING'::system.survey_payment_status,
-                        'PAID'::system.survey_payment_status,
-                        'ADJUSTMENT_REQUIRED'::system.survey_payment_status)
-                    ORDER BY id
+                    SELECT payment.*, payment.xmin FROM survey.survey_payments AS payment
+                    WHERE payment.survey_order_id = {order.Id}
+                    ORDER BY payment.id
                     FOR UPDATE
                     """)
-                .SingleOrDefaultAsync(cancellationToken);
-
-            if (activeBalanceCheckout is not null)
-            {
-                await tx.RollbackAsync(cancellationToken);
-                return Result.Success(new V3BalanceCheckoutIntentResult(
-                    Outcome: V3BalanceCheckoutOutcome.ActiveCheckoutExists,
-                    OrderId: order.Id,
-                    PaymentId: activeBalanceCheckout.Id,
-                    OrderNumber: order.OrderNumber,
-                    OrderVersion: order.Version,
-                    InvoiceRevisionId: activeBalanceCheckout.InvoiceRevisionId,
-                    DueAmount: activeBalanceCheckout.Amount,
-                    Currency: activeBalanceCheckout.Currency,
-                    Provider: activeBalanceCheckout.Provider,
-                    ExistingProviderReference: activeBalanceCheckout.ProviderReference,
-                    IntentCreatedAt: activeBalanceCheckout.CreatedAt,
-                    ErrorCode: "Payment.ActivePaymentExists",
-                    ErrorMessage: "An active FinalBalance checkout already exists for this order."));
-            }
+                .ToDictionaryAsync(p => p.Id, cancellationToken);
 
             var fundingResult = await SurveyInvoiceFunding.ReadAsync(
-                db, order, depositObligation, depositPayments, lockRows: true, cancellationToken);
+                db,
+                order,
+                depositObligation,
+                currentInvoiceRevisionId: order.CurrentInvoiceRevisionId,
+                lockRows: true,
+                cancellationToken,
+                preloadedOrderPayments: orderPayments);
             if (fundingResult.IsFailure)
             {
                 await tx.RollbackAsync(cancellationToken);
@@ -258,19 +243,6 @@ internal sealed class V3BalanceCheckoutTransaction(
             }
 
             // ADR 0020 Rank 6: Lock and verify exact V3-05F current invoice/approval/count revision tokens
-            if (!order.CurrentInvoiceRevisionId.HasValue ||
-                !order.CurrentApprovedResultRevisionId.HasValue ||
-                !order.VerifiedPoleCountSnapshotId.HasValue)
-            {
-                await tx.RollbackAsync(cancellationToken);
-                return Result.Success(new V3BalanceCheckoutIntentResult(
-                    Outcome: V3BalanceCheckoutOutcome.StaleContext,
-                    OrderId: order.Id,
-                    OrderVersion: order.Version,
-                    ErrorCode: "Invoice.NotFinalized",
-                    ErrorMessage: "Order is missing current finalized invoice pointers."));
-            }
-
             var invoice = await db.Set<SurveyInvoiceRevision>()
                 .FromSqlInterpolated($"SELECT * FROM survey.survey_invoice_revisions WHERE id = {order.CurrentInvoiceRevisionId.Value} AND survey_order_id = {order.Id} AND tenant_id = {order.TenantId} AND farm_id = {order.FarmId} FOR SHARE")
                 .SingleOrDefaultAsync(cancellationToken);
@@ -308,13 +280,142 @@ internal sealed class V3BalanceCheckoutTransaction(
                     ErrorMessage: "Invoice, approval, or count snapshot tokens no longer match the current finalized revision."));
             }
 
-            var dueAmount = Math.Max(0m, invoice.TotalAmount - fundingResult.Value.ValidAllocatedDepositNet);
+            var funding = fundingResult.Value;
+            if (funding.HasOpenReconciliation)
+            {
+                await tx.RollbackAsync(cancellationToken);
+                return Result.Success(new V3BalanceCheckoutIntentResult(
+                    Outcome: V3BalanceCheckoutOutcome.ReconciliationHold,
+                    OrderId: order.Id,
+                    OrderVersion: order.Version,
+                    InvoiceRevisionId: invoice.Id,
+                    InvoiceRevisionNumber: invoice.RevisionNumber,
+                    InvoiceFingerprint: invoice.EvidenceFingerprint,
+                    ErrorCode: SurveyInvoiceFunding.HoldErrorCode,
+                    ErrorMessage: string.Join(" ", funding.ReconciliationReasons)));
+            }
+
+            if (funding.ActiveOtherRefundReservations > 0m)
+            {
+                await tx.RollbackAsync(cancellationToken);
+                return Result.Success(new V3BalanceCheckoutIntentResult(
+                    Outcome: V3BalanceCheckoutOutcome.ReconciliationHold,
+                    OrderId: order.Id,
+                    OrderVersion: order.Version,
+                    InvoiceRevisionId: invoice.Id,
+                    InvoiceRevisionNumber: invoice.RevisionNumber,
+                    InvoiceFingerprint: invoice.EvidenceFingerprint,
+                    ErrorCode: "Settlement.ConflictingActiveRefundReservations",
+                    ErrorMessage: "Order has active refund reservations for another origin and requires reconciliation before balance checkout."));
+            }
+
+            var dueAmount = funding.ComputeInvoiceSettlement(invoice.TotalAmount).DueAmount;
+
+            // Check any FinalBalance checkout requiring reconciliation first, then open checkouts (Pending/Processing).
+            // Prior Paid FinalBalance checkouts do NOT block creating a supplemental checkout when live dueAmount > 0.
+            var balancePayments = orderPayments.Values
+                .Where(p => p.Purpose == PaymentPurpose.FinalBalance)
+                .OrderBy(p => p.Id)
+                .ToList();
+
+            var adjustmentPayment = balancePayments
+                .FirstOrDefault(p => p.Status == SurveyPaymentStatus.AdjustmentRequired);
+            if (adjustmentPayment is not null)
+            {
+                await tx.RollbackAsync(cancellationToken);
+                return Result.Success(new V3BalanceCheckoutIntentResult(
+                    Outcome: V3BalanceCheckoutOutcome.ReconciliationHold,
+                    OrderId: order.Id,
+                    PaymentId: adjustmentPayment.Id,
+                    OrderNumber: order.OrderNumber,
+                    OrderVersion: order.Version,
+                    InvoiceRevisionId: adjustmentPayment.InvoiceRevisionId,
+                    DueAmount: adjustmentPayment.Amount,
+                    Currency: adjustmentPayment.Currency,
+                    Provider: adjustmentPayment.Provider,
+                    ExistingProviderReference: adjustmentPayment.ProviderReference,
+                    IntentCreatedAt: adjustmentPayment.CreatedAt,
+                    ErrorCode: "Checkout.AdjustmentRequired",
+                    ErrorMessage: "An existing FinalBalance payment requires reconciliation before a new checkout can be created."));
+            }
+
+            var openBalancePayment = balancePayments
+                .FirstOrDefault(p => p.Status is SurveyPaymentStatus.Pending or SurveyPaymentStatus.Processing);
+            if (openBalancePayment is not null)
+            {
+                var hasUncertainOutcome = openBalancePayment.Status == SurveyPaymentStatus.Pending &&
+                    await HasUncertainCheckoutOutcomeAsync(order.Id, openBalancePayment.Id, cancellationToken);
+                var hasCallbackMoney = await HasCallbackMoneyRecordedAsync(order.Id, openBalancePayment.Id, cancellationToken);
+
+                if (hasUncertainOutcome || hasCallbackMoney || string.IsNullOrWhiteSpace(openBalancePayment.ProviderReference))
+                {
+                    await tx.RollbackAsync(cancellationToken);
+                    return Result.Success(new V3BalanceCheckoutIntentResult(
+                        Outcome: V3BalanceCheckoutOutcome.ReconciliationHold,
+                        OrderId: order.Id,
+                        PaymentId: openBalancePayment.Id,
+                        OrderNumber: order.OrderNumber,
+                        OrderVersion: order.Version,
+                        InvoiceRevisionId: openBalancePayment.InvoiceRevisionId,
+                        DueAmount: openBalancePayment.Amount,
+                        Currency: openBalancePayment.Currency,
+                        Provider: openBalancePayment.Provider,
+                        ExistingProviderReference: openBalancePayment.ProviderReference,
+                        IntentCreatedAt: openBalancePayment.CreatedAt,
+                        ErrorCode: "Checkout.UncertainProviderOutcome",
+                        ErrorMessage: "An open FinalBalance checkout has an uncertain provider outcome or pending callback evidence and requires reconciliation."));
+                }
+
+                if (openBalancePayment.InvoiceRevisionId != invoice.Id ||
+                    !string.Equals(openBalancePayment.Currency, invoice.Currency, StringComparison.OrdinalIgnoreCase) ||
+                    openBalancePayment.Amount != dueAmount ||
+                    !string.Equals(openBalancePayment.Provider, normalizedProvider, StringComparison.OrdinalIgnoreCase))
+                {
+                    await tx.RollbackAsync(cancellationToken);
+                    return Result.Success(new V3BalanceCheckoutIntentResult(
+                        Outcome: V3BalanceCheckoutOutcome.ReconciliationHold,
+                        OrderId: order.Id,
+                        PaymentId: openBalancePayment.Id,
+                        OrderNumber: order.OrderNumber,
+                        OrderVersion: order.Version,
+                        InvoiceRevisionId: openBalancePayment.InvoiceRevisionId,
+                        DueAmount: openBalancePayment.Amount,
+                        Currency: openBalancePayment.Currency,
+                        Provider: openBalancePayment.Provider,
+                        ExistingProviderReference: openBalancePayment.ProviderReference,
+                        IntentCreatedAt: openBalancePayment.CreatedAt,
+                        ErrorCode: "Checkout.OpenCheckoutMismatch",
+                        ErrorMessage: $"Open FinalBalance checkout ({openBalancePayment.Amount} {openBalancePayment.Currency}) no longer matches current invoice ({invoice.Id}) or due ({dueAmount}); held for reconciliation."));
+                }
+
+                await tx.RollbackAsync(cancellationToken);
+                return Result.Success(new V3BalanceCheckoutIntentResult(
+                    Outcome: V3BalanceCheckoutOutcome.ActiveCheckoutExists,
+                    OrderId: order.Id,
+                    PaymentId: openBalancePayment.Id,
+                    OrderNumber: order.OrderNumber,
+                    OrderVersion: order.Version,
+                    InvoiceRevisionId: openBalancePayment.InvoiceRevisionId,
+                    InvoiceRevisionNumber: invoice.RevisionNumber,
+                    InvoiceFingerprint: invoice.EvidenceFingerprint,
+                    DueAmount: openBalancePayment.Amount,
+                    Currency: openBalancePayment.Currency,
+                    Provider: openBalancePayment.Provider,
+                    ExistingProviderReference: openBalancePayment.ProviderReference,
+                    IntentCreatedAt: openBalancePayment.CreatedAt,
+                    ErrorCode: "Payment.ActivePaymentExists",
+                    ErrorMessage: "An active FinalBalance checkout already exists for this order."));
+            }
+
             if (dueAmount <= 0m)
             {
+                var latestPaid = balancePayments
+                    .LastOrDefault(p => p.Status == SurveyPaymentStatus.Paid);
                 await tx.RollbackAsync(cancellationToken);
                 return Result.Success(new V3BalanceCheckoutIntentResult(
                     Outcome: V3BalanceCheckoutOutcome.ZeroBalanceSettled,
                     OrderId: order.Id,
+                    PaymentId: latestPaid?.Id,
                     OrderNumber: order.OrderNumber,
                     OrderVersion: order.Version,
                     InvoiceRevisionId: invoice.Id,
@@ -322,6 +423,9 @@ internal sealed class V3BalanceCheckoutTransaction(
                     InvoiceFingerprint: invoice.EvidenceFingerprint,
                     DueAmount: 0m,
                     Currency: invoice.Currency,
+                    Provider: latestPaid?.Provider,
+                    ExistingProviderReference: latestPaid?.ProviderReference,
+                    IntentCreatedAt: latestPaid?.CreatedAt,
                     ErrorCode: "Checkout.ZeroBalanceDue",
                     ErrorMessage: "Finalized invoice has zero remaining balance due."));
             }
@@ -494,7 +598,7 @@ internal sealed class V3BalanceCheckoutTransaction(
                     ErrorMessage: "Caller is not authorized for this farm."));
             }
 
-            // ADR 0020 Rank 2 -> Rank 5: Lock Order FOR UPDATE before SurveyPayment FOR UPDATE
+            // ADR 0020 Rank 2 -> Rank 3 -> Rank 5: Lock Order FOR UPDATE before SurveyPayment FOR UPDATE
             var order = await db.Set<SurveyOrder>()
                 .FromSqlInterpolated($"SELECT *, xmin FROM survey.survey_orders WHERE id = {request.OrderId} FOR UPDATE")
                 .SingleAsync(cancellationToken);
@@ -515,9 +619,17 @@ internal sealed class V3BalanceCheckoutTransaction(
             if (receipt is not null && receipt.RequestFingerprint != fingerprint)
                 return Result.Failure<V3BalanceCheckoutResult>(OperationConflict());
 
-            var payment = await db.Set<SurveyPayment>()
-                .FromSqlInterpolated($"SELECT *, xmin FROM survey.survey_payments WHERE id = {request.PaymentId} AND survey_order_id = {request.OrderId} AND purpose = 'FinalBalance' FOR UPDATE")
-                .SingleOrDefaultAsync(cancellationToken);
+            var orderPayments = await db.Set<SurveyPayment>()
+                .FromSqlInterpolated($"""
+                    SELECT payment.*, payment.xmin FROM survey.survey_payments AS payment
+                    WHERE payment.survey_order_id = {order.Id}
+                    ORDER BY payment.id
+                    FOR UPDATE
+                    """)
+                .ToDictionaryAsync(p => p.Id, cancellationToken);
+
+            var payment = orderPayments.Values
+                .SingleOrDefault(p => p.Id == request.PaymentId && p.Purpose == PaymentPurpose.FinalBalance);
 
             if (payment is null)
             {
@@ -564,20 +676,60 @@ internal sealed class V3BalanceCheckoutTransaction(
                 return Result.Success(prior);
             }
 
-            if (payment.Status != SurveyPaymentStatus.Pending)
+            // Check whether a payment callback already recorded money BEFORE mutating payment status.
+            var hasCallbackMoney = await HasCallbackMoneyRecordedAsync(order.Id, payment.Id, cancellationToken);
+            if (hasCallbackMoney || payment.Status != SurveyPaymentStatus.Pending)
             {
-                await tx.RollbackAsync(cancellationToken);
-                return Result.Success(new V3BalanceCheckoutResult(
-                    Outcome: V3BalanceCheckoutOutcome.StaleContext,
-                    OrderId: order.Id,
-                    PaymentId: payment.Id,
-                    PaymentVersion: payment.Version,
-                    OrderVersion: order.Version,
-                    InvoiceRevisionId: payment.InvoiceRevisionId,
-                    ProviderReference: payment.ProviderReference,
-                    PaymentStatus: payment.Status.ToString().ToUpperInvariant(),
-                    ErrorCode: "Checkout.UnexpectedPaymentState",
-                    ErrorMessage: $"Checkout intent is no longer Pending (current: {payment.Status})."));
+                if (payment.Status is SurveyPaymentStatus.Failed or SurveyPaymentStatus.Processing or SurveyPaymentStatus.Refunded &&
+                    !hasCallbackMoney)
+                {
+                    await tx.RollbackAsync(cancellationToken);
+                    return Result.Success(new V3BalanceCheckoutResult(
+                        Outcome: V3BalanceCheckoutOutcome.StaleContext,
+                        OrderId: order.Id,
+                        PaymentId: payment.Id,
+                        PaymentVersion: payment.Version,
+                        OrderVersion: order.Version,
+                        InvoiceRevisionId: payment.InvoiceRevisionId,
+                        ProviderReference: payment.ProviderReference,
+                        PaymentStatus: payment.Status.ToString().ToUpperInvariant(),
+                        ErrorCode: "Checkout.UnexpectedPaymentState",
+                        ErrorMessage: $"Checkout intent is no longer Pending (current: {payment.Status})."));
+                }
+
+                var (cbObligation, cbFundingResult, cbInvoice) = await LoadLiveFundingAndInvoiceAsync(
+                    order, payment.InvoiceRevisionId, orderPayments, cancellationToken);
+
+                if (payment.Status == SurveyPaymentStatus.Paid &&
+                    cbObligation?.Status != SurveyDepositObligationStatus.Cancelled &&
+                    cbFundingResult.IsSuccess &&
+                    !cbFundingResult.Value.HasOpenReconciliation &&
+                    cbFundingResult.Value.ActiveOtherRefundReservations == 0m &&
+                    cbInvoice is { Status: SurveyInvoiceRevision.StatusCurrent } &&
+                    cbFundingResult.Value.ComputeInvoiceSettlement(cbInvoice.TotalAmount).DueAmount == 0m)
+                {
+                    return await CommitOutcomeAsync(
+                        V3BalanceCheckoutOutcome.ZeroBalanceSettled,
+                        "Checkout.AlreadyPaidByCallback",
+                        "Balance checkout was already settled by a verified payment callback.");
+                }
+
+                if (payment.Status == SurveyPaymentStatus.Pending && hasCallbackMoney)
+                {
+                    payment.RequireAdjustment(effectiveAt);
+                }
+
+                var cbHoldCode = payment.Status == SurveyPaymentStatus.Paid
+                    ? "Checkout.PaidBalanceInsufficientForNewDue"
+                    : "Checkout.CallbackRecordedBeforeOutcome";
+                var cbHoldMessage = payment.Status == SurveyPaymentStatus.Paid
+                    ? "A verified callback already marked this checkout Paid, but remaining due or reconciliation state requires review."
+                    : "Callback payment evidence was recorded before checkout outcome completion; routed to reconciliation.";
+
+                return await CommitOutcomeAsync(
+                    V3BalanceCheckoutOutcome.ReconciliationHold,
+                    cbHoldCode,
+                    cbHoldMessage);
             }
 
             if (request.ProviderOutcomeUncertain)
@@ -638,6 +790,83 @@ internal sealed class V3BalanceCheckoutTransaction(
                     V3BalanceCheckoutOutcome.ProviderUnavailable,
                     request.FailureCode ?? PaymentError.ProviderUnavailableCode,
                     request.FailureMessage ?? PaymentError.ProviderUnavailable().Description);
+            }
+
+            // Re-verify live settlement funding (Rank 5) and current invoice (Rank 6) before marking Processing.
+            var (outcomeObligation, liveFundingResult, liveInvoice) = await LoadLiveFundingAndInvoiceAsync(
+                order, payment.InvoiceRevisionId, orderPayments, cancellationToken);
+
+            string? holdCode = null;
+            string? holdMessage = null;
+            if (outcomeObligation?.Status == SurveyDepositObligationStatus.Cancelled)
+            {
+                holdCode = "DepositObligation.Invalid";
+                holdMessage = "Order deposit obligation was cancelled before checkout completion.";
+            }
+            else if (liveFundingResult.IsFailure)
+            {
+                holdCode = liveFundingResult.Error.Code;
+                holdMessage = liveFundingResult.Error.Description;
+            }
+            else if (liveFundingResult.Value.HasOpenReconciliation)
+            {
+                holdCode = SurveyInvoiceFunding.HoldErrorCode;
+                holdMessage = string.Join(" ", liveFundingResult.Value.ReconciliationReasons);
+            }
+            else if (liveInvoice is null || liveInvoice.Status != SurveyInvoiceRevision.StatusCurrent)
+            {
+                holdCode = "Checkout.InvalidatedByCorrection";
+                holdMessage = "The bound invoice revision is no longer current.";
+            }
+            else if (liveFundingResult.Value.ActiveOtherRefundReservations > 0m)
+            {
+                holdCode = "Settlement.ConflictingActiveRefundReservations";
+                holdMessage = "Order has active refund reservations for another origin and requires reconciliation.";
+            }
+            else
+            {
+                var liveDueAmount = liveFundingResult.Value.ComputeInvoiceSettlement(liveInvoice.TotalAmount).DueAmount;
+                if (liveDueAmount != payment.Amount)
+                {
+                    holdCode = "Checkout.DueAmountChanged";
+                    holdMessage = $"Live remaining balance due ({liveDueAmount}) no longer matches checkout intent amount ({payment.Amount}); routed to reconciliation.";
+                }
+            }
+
+            if (holdCode is not null)
+            {
+                payment.RequireAdjustment(effectiveAt);
+
+                using var holdDoc = JsonSerializer.SerializeToDocument(new
+                {
+                    request.OperationId,
+                    payment.Id,
+                    payment.SurveyOrderId,
+                    payment.InvoiceRevisionId,
+                    payment.Amount,
+                    payment.Currency,
+                    payment.Provider,
+                    payment.ProviderReference,
+                    holdCode,
+                    holdMessage,
+                    paymentStatus = "ADJUSTMENT_REQUIRED"
+                });
+                db.Set<AuditLog>().Add(AuditLog.ForUserAction(
+                    order.TenantId,
+                    order.FarmId,
+                    request.ActorId,
+                    request.CorrelationId,
+                    nameof(SurveyPayment),
+                    payment.Id,
+                    "V3_BALANCE_CHECKOUT_RECONCILIATION_HOLD",
+                    null,
+                    holdDoc,
+                    effectiveAt));
+
+                return await CommitOutcomeAsync(
+                    V3BalanceCheckoutOutcome.ReconciliationHold,
+                    holdCode,
+                    holdMessage);
             }
 
             payment.StartProcessing(providerReference!, effectiveAt);
@@ -733,7 +962,6 @@ internal sealed class V3BalanceCheckoutTransaction(
                 await tx.CommitAsync(cancellationToken);
                 return Result.Success(result);
             }
-
         }
         catch (PostgresException ex) when (ex.SqlState is PostgresErrorCodes.UniqueViolation or PostgresErrorCodes.SerializationFailure or PostgresErrorCodes.DeadlockDetected)
         {
@@ -754,6 +982,76 @@ internal sealed class V3BalanceCheckoutTransaction(
         {
             db.ChangeTracker.Clear();
         }
+    }
+
+    private async Task<(
+        SurveyDepositObligation? DepositObligation,
+        Result<SurveyInvoiceFundingSummary> FundingResult,
+        SurveyInvoiceRevision? Invoice)> LoadLiveFundingAndInvoiceAsync(
+        SurveyOrder order,
+        Guid? invoiceRevisionId,
+        IReadOnlyDictionary<Guid, SurveyPayment> orderPayments,
+        CancellationToken cancellationToken)
+    {
+        SurveyDepositObligation? obligation = null;
+        if (order.DepositObligationId.HasValue)
+        {
+            obligation = await db.Set<SurveyDepositObligation>()
+                .FromSqlInterpolated($"SELECT * FROM survey.survey_deposit_obligations WHERE id = {order.DepositObligationId.Value} AND survey_order_id = {order.Id} FOR SHARE")
+                .SingleOrDefaultAsync(cancellationToken);
+        }
+
+        var fundingResult = obligation is null && order.DepositObligationId.HasValue
+            ? Result.Failure<SurveyInvoiceFundingSummary>(AppError.Conflict("DepositObligation.Invalid", "Order deposit obligation is missing."))
+            : await SurveyInvoiceFunding.ReadAsync(
+                db,
+                order,
+                obligation,
+                currentInvoiceRevisionId: invoiceRevisionId,
+                lockRows: true,
+                cancellationToken,
+                preloadedOrderPayments: orderPayments);
+
+        var invoice = invoiceRevisionId.HasValue
+            ? await db.Set<SurveyInvoiceRevision>()
+                .FromSqlInterpolated($"SELECT * FROM survey.survey_invoice_revisions WHERE id = {invoiceRevisionId.Value} AND survey_order_id = {order.Id} AND tenant_id = {order.TenantId} AND farm_id = {order.FarmId} FOR SHARE")
+                .SingleOrDefaultAsync(cancellationToken)
+            : null;
+
+        return (obligation, fundingResult, invoice);
+    }
+
+    private async Task<bool> HasUncertainCheckoutOutcomeAsync(
+        Guid orderId,
+        Guid paymentId,
+        CancellationToken cancellationToken)
+    {
+        var uncertainOps = await db.Set<SurveyResultReviewOperation>().AsNoTracking()
+            .Where(op =>
+                op.SurveyOrderId == orderId &&
+                op.ApiVersion == SurveyResultReviewOperation.ApiVersionV3 &&
+                op.Action == SurveyResultReviewOperation.ActionBalanceCheckoutUncertain)
+            .ToListAsync(cancellationToken);
+
+        return uncertainOps.Any(op =>
+        {
+            var outcome = op.Outcome.Deserialize<V3BalanceCheckoutResult>();
+            return outcome?.PaymentId == paymentId;
+        });
+    }
+
+    private async Task<bool> HasCallbackMoneyRecordedAsync(
+        Guid orderId,
+        Guid paymentId,
+        CancellationToken cancellationToken)
+    {
+        var hasReceipt = await db.Set<SurveyFundingReceipt>().AsNoTracking()
+            .AnyAsync(r => r.SurveyOrderId == orderId && r.SurveyPaymentId == paymentId, cancellationToken);
+        if (hasReceipt)
+            return true;
+
+        return await db.Set<PaymentEvent>().AsNoTracking()
+            .AnyAsync(e => e.SurveyPaymentId == paymentId && e.EventType == SucceededPaymentEventType, cancellationToken);
     }
 
     private static bool HasCurrentCheckoutContext(SurveyOrder order, SurveyResultReviewOperation intent) =>
@@ -798,35 +1096,27 @@ internal sealed class V3BalanceCheckoutTransaction(
         "Checkout.OperationConflict", "The checkout operation identifier is already bound to a different request or intent.");
 
     private async Task<bool> HasActiveOwnerFarmAccessAsync(
-        Guid tenantId,
-        Guid farmId,
-        Guid actorId,
-        CancellationToken cancellationToken)
+        Guid tenantId, Guid farmId, Guid actorId, CancellationToken cancellationToken)
     {
         if (!db.Database.IsRelational())
             return false;
 
-        var matchedId = await db.Database.SqlQuery<Guid>($"""
-            SELECT farm.id AS "Value"
-            FROM identity.tenants tenant
-            JOIN identity.users app_user
-              ON app_user.id = {actorId}
-             AND app_user.status = 'ACTIVE'::system.user_status
-            JOIN identity.tenant_memberships membership
-              ON membership.tenant_id = tenant.id
-             AND membership.user_id = app_user.id
-             AND membership.role = 'OWNER'::system.tenant_member_role
-             AND membership.status = 'ACTIVE'::system.general_status
-            JOIN farm.farms farm
-              ON farm.id = {farmId}
-             AND farm.tenant_id = tenant.id
-             AND farm.status = 'ACTIVE'::system.general_status
-             AND farm.deleted_at IS NULL
-            WHERE tenant.id = {tenantId}
-              AND tenant.status = 'ACTIVE'::system.general_status
-            FOR SHARE OF tenant, app_user, membership, farm
+        var matched = await db.Database.SqlQuery<Guid>($"""
+            SELECT membership.id AS "Value"
+            FROM identity.tenant_memberships membership
+            JOIN identity.users app_user ON app_user.id = membership.user_id
+            JOIN farm.farms farm ON farm.tenant_id = membership.tenant_id
+            WHERE membership.tenant_id = {tenantId}
+              AND membership.user_id = {actorId}
+              AND membership.role = 'OWNER'::system.tenant_member_role
+              AND membership.status = 'ACTIVE'::system.general_status
+              AND app_user.status = 'ACTIVE'::system.user_status
+              AND farm.id = {farmId}
+              AND farm.status = 'ACTIVE'::system.general_status
+              AND farm.deleted_at IS NULL
+            FOR SHARE OF membership, app_user, farm
             """).FirstOrDefaultAsync(cancellationToken);
 
-        return matchedId == farmId;
+        return matched != Guid.Empty;
     }
 }

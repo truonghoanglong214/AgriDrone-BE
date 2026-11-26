@@ -42,6 +42,11 @@ internal sealed class SurveyPaymentProviderOptionsValidator
             failures.Add("SurveyPayments:SessionLifetimeMinutes must be between 1 and 60.");
         }
 
+        if (options.BalanceCheckoutTokenLifetimeMinutes is < 1 or > 60)
+        {
+            failures.Add("SurveyPayments:BalanceCheckoutTokenLifetimeMinutes must be between 1 and 60.");
+        }
+
         if (options.CallbackToleranceMinutes is < 1 or > 30)
         {
             failures.Add("SurveyPayments:CallbackToleranceMinutes must be between 1 and 30.");

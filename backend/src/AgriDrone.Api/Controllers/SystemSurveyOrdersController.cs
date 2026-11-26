@@ -119,7 +119,7 @@ public sealed class SystemSurveyOrdersController(
     {
         var result = await sender.Send(
             new GetSystemAdminSurveyOrdersQuery(
-                MapStatus(request.Status),
+                SurveyOrderResponseMapper.MapFilterStatus(request.Status),
                 request.TenantId,
                 request.FarmId,
                 request.PageNumber,
@@ -445,47 +445,6 @@ public sealed class SystemSurveyOrdersController(
             response.ReviewedAt,
             response.Version,
             response.CreatedAt);
-
-    private static SurveyOrderStatus? MapStatus(
-        SurveyOrderStatusFilterValue? status) =>
-        status switch
-        {
-            null => null,
-            SurveyOrderStatusFilterValue.PENDING_BOUNDARY_VERIFICATION =>
-                SurveyOrderStatus.PendingBoundaryVerification,
-            SurveyOrderStatusFilterValue.AWAITING_BASELINE_APPOINTMENT =>
-                SurveyOrderStatus.AwaitingBaselineAppointment,
-            SurveyOrderStatusFilterValue.AWAITING_BASELINE_DEPOSIT =>
-                SurveyOrderStatus.AwaitingBaselineDeposit,
-            SurveyOrderStatusFilterValue.AWAITING_BOUNDARY_CAPTURE =>
-                SurveyOrderStatus.AwaitingBoundaryCapture,
-            SurveyOrderStatusFilterValue.BASELINE_READY =>
-                SurveyOrderStatus.BaselineReady,
-            SurveyOrderStatusFilterValue.BASELINE_IN_PROGRESS =>
-                SurveyOrderStatus.BaselineInProgress,
-            SurveyOrderStatusFilterValue.AWAITING_BASELINE_REVIEW =>
-                SurveyOrderStatus.AwaitingBaselineReview,
-            SurveyOrderStatusFilterValue.AWAITING_PRICING =>
-                SurveyOrderStatus.AwaitingPricing,
-            SurveyOrderStatusFilterValue.AWAITING_PAID_APPOINTMENT =>
-                SurveyOrderStatus.AwaitingPaidAppointment,
-            SurveyOrderStatusFilterValue.AWAITING_PAYMENT =>
-                SurveyOrderStatus.AwaitingPayment,
-            SurveyOrderStatusFilterValue.READY_FOR_PAID_SERVICE =>
-                SurveyOrderStatus.ReadyForPaidService,
-            SurveyOrderStatusFilterValue.IN_PROGRESS =>
-                SurveyOrderStatus.InProgress,
-            SurveyOrderStatusFilterValue.PENDING_REVIEW =>
-                SurveyOrderStatus.PendingReview,
-            SurveyOrderStatusFilterValue.COMPLETED =>
-                SurveyOrderStatus.Completed,
-            SurveyOrderStatusFilterValue.CANCELLED =>
-                SurveyOrderStatus.Cancelled,
-            _ => throw new ArgumentOutOfRangeException(
-                nameof(status),
-                status,
-                "Unsupported survey-order status.")
-        };
 
     /// <summary>Dọn dẹp các tài liệu ủy quyền khảo sát mồ côi trong MinIO bucket (dành cho SystemAdmin).</summary>
     [HttpPost("evidences/purge-orphaned")]

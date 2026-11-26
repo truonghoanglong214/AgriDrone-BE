@@ -23,6 +23,7 @@ public sealed class SurveyPaymentProcessingDbContext(
     public DbSet<SurveyFundingReceipt> SurveyFundingReceipts => Set<SurveyFundingReceipt>();
     public DbSet<SurveyFundingAllocation> SurveyFundingAllocations => Set<SurveyFundingAllocation>();
     public DbSet<SurveyFundingReversal> SurveyFundingReversals => Set<SurveyFundingReversal>();
+    public DbSet<SurveyFundingReconciliationDecision> SurveyFundingReconciliationDecisions => Set<SurveyFundingReconciliationDecision>();
     public DbSet<SurveyRefundObligation> SurveyRefundObligations => Set<SurveyRefundObligation>();
     public DbSet<PaymentEvent> PaymentEvents => Set<PaymentEvent>();
     public DbSet<PriceAdjustment> PriceAdjustments => Set<PriceAdjustment>();
@@ -111,6 +112,7 @@ public sealed class SurveyPaymentProcessingDbContext(
         modelBuilder.ApplyConfiguration(new SurveyFundingReceiptConfiguration());
         modelBuilder.ApplyConfiguration(new SurveyFundingAllocationConfiguration());
         modelBuilder.ApplyConfiguration(new SurveyFundingReversalConfiguration());
+        modelBuilder.ApplyConfiguration(new SurveyFundingReconciliationDecisionConfiguration());
         modelBuilder.ApplyConfiguration(new SurveyRefundObligationConfiguration());
         modelBuilder.ApplyConfiguration(new PaymentEventConfiguration());
         modelBuilder.ApplyConfiguration(new PriceAdjustmentConfiguration());

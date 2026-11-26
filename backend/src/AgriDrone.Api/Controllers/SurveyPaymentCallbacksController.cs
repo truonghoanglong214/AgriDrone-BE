@@ -113,7 +113,8 @@ public sealed class SurveyPaymentCallbacksController(
                 paymentEvent.Currency,
                 paymentEvent.OccurredAt,
                 receivedAt,
-                payload),
+                payload,
+                paymentEvent.ProviderTransactionId),
             cancellationToken);
         if (result.IsFailure && result.Error.Code == PaymentError.NotFoundCode)
         {

@@ -16,6 +16,17 @@ internal sealed class SurveyPaymentGateway(
 
     public string Provider => _options.Provider.Trim().ToLowerInvariant();
 
+    public bool SupportsV3BalanceCheckout =>
+        _options.Enabled &&
+        !string.IsNullOrWhiteSpace(_options.SigningSecret) &&
+        Uri.TryCreate(_options.CheckoutBaseUrl, UriKind.Absolute, out var checkoutUri) &&
+        checkoutUri.Scheme is "http" or "https";
+
+    public string? GetBalanceCheckoutReference(Guid paymentId) =>
+        SupportsV3BalanceCheckout
+            ? $"BAL-{paymentId:N}".ToUpperInvariant()
+            : null;
+
     public Task<Result<PaymentSessionResult>> CreateSessionAsync(
         CreatePaymentSession request,
         CancellationToken cancellationToken = default)
@@ -28,7 +39,9 @@ internal sealed class SurveyPaymentGateway(
                     PaymentError.ProviderUnavailable()));
         }
 
-        var providerReference = $"pay_{Guid.CreateVersion7():N}";
+        var providerReference = string.IsNullOrWhiteSpace(request.BalanceCheckoutReference)
+            ? $"pay_{Guid.CreateVersion7():N}"
+            : request.BalanceCheckoutReference.Trim();
         var expiresAt = request.RequestedAt.AddMinutes(
             _options.SessionLifetimeMinutes);
         var tokenPayload = string.Join(

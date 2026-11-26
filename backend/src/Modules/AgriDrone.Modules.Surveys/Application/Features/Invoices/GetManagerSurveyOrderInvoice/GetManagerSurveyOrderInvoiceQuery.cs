@@ -42,4 +42,8 @@ public sealed record ManagerSurveyOrderInvoiceResponse(
     Guid? ComboReviewRevisionId,
     string? ComboReviewFingerprint,
     IReadOnlyList<Guid> OpenFinalBalanceCheckoutPaymentIds,
-    DateTimeOffset FinalizedAt);
+    DateTimeOffset FinalizedAt,
+    bool HasOpenReconciliation = false,
+    IReadOnlyList<string>? ReconciliationReasons = null,
+    decimal OrderConfirmedNetCash = 0m,
+    decimal OrderAvailableRefundCap = 0m);

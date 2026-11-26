@@ -1,3 +1,4 @@
+using AgriDrone.Modules.Surveys.Domain;
 using AgriDrone.SharedKernel.Application;
 using MediatR;
 
@@ -11,5 +12,11 @@ public sealed record ReconcileSurveyPaymentCommand(
     string Reason,
     string EvidenceReference,
     uint ExpectedPaymentVersion,
-    uint ExpectedOrderVersion)
+    uint ExpectedOrderVersion,
+    Guid? SurveyOrderId = null,
+    Guid? OperationId = null,
+    SurveyReconciliationDispositionKind? DispositionKind = null,
+    Guid? FundingReceiptId = null,
+    Guid? TargetInvoiceRevisionId = null,
+    string? ProviderTransactionId = null)
     : IRequest<Result<ReconcileSurveyPaymentResponse>>;

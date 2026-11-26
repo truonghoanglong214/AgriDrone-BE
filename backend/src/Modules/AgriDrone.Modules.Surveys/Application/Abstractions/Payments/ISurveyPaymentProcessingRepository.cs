@@ -25,6 +25,8 @@ public interface ISurveyPaymentProcessingRepository
         string provider,
         string providerReference,
         string deduplicationKey,
+        string? providerTransactionId = null,
+        (decimal Amount, string Currency)? receivedMoney = null,
         CancellationToken cancellationToken = default);
 
     Task<Result<SurveyPriceAdjustmentRequestState>>
@@ -66,7 +68,16 @@ public sealed record SurveyPaymentEventState(
     bool EventAlreadyProcessed,
     SurveyDepositObligation? DepositObligation,
     SurveyCancellationReceiptDisposition? CancellationDecision,
-    SurveyDepositReversalSource? ReversalSource = null);
+    SurveyDepositReversalSource? ReversalSource = null,
+    bool ReceiptAlreadyRecorded = false,
+    SurveyBalanceInvoiceContext? CurrentInvoice = null,
+    decimal PriorReceiptsForPaymentAmount = 0m);
+
+public sealed record SurveyBalanceInvoiceContext(
+    Guid InvoiceRevisionId,
+    string Currency,
+    decimal TotalAmount,
+    string Status);
 
 public sealed record SurveyDepositReversalSource(
     Guid FundingReceiptId,

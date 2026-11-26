@@ -37,4 +37,5 @@ public sealed record VerifiedSurveyPaymentEvent(
     decimal Amount,
     string Currency,
     DateTimeOffset OccurredAt,
-    JsonDocument Payload);
+    JsonDocument Payload,
+    string? ProviderTransactionId = null);

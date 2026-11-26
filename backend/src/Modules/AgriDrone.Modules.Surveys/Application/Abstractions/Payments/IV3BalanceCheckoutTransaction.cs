@@ -32,7 +32,8 @@ public sealed record V3BalanceCheckoutIntentRequest(
     Guid ExpectedCountSnapshotId,
     string ExpectedCountSnapshotFingerprint,
     string Provider,
-    Guid CorrelationId);
+    Guid CorrelationId,
+    Guid? ExpectedFarmId = null);
 
 public sealed record V3BalanceCheckoutIntentResult(
     V3BalanceCheckoutOutcome Outcome,

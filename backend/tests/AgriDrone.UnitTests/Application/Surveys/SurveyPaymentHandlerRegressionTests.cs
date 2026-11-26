@@ -296,7 +296,9 @@ public sealed class SurveyPaymentHandlerRegressionTests
         public Task<Result<IReadOnlyList<SurveyPayment>>> GetSystemAdminPaymentHistoryAsync(Guid surveyOrderId,
             CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<Result<SurveyPaymentEventState>> GetForProviderEventAsync(string provider,
-            string providerReference, string deduplicationKey, CancellationToken cancellationToken = default) =>
+            string providerReference, string deduplicationKey, string? providerTransactionId = null,
+            (decimal Amount, string Currency)? receivedMoney = null,
+            CancellationToken cancellationToken = default) =>
             Task.FromResult(Result.Success(new SurveyPaymentEventState(order, payment!, false, null, null)));
         public Task<Result<SurveyPriceAdjustmentRequestState>> GetForPriceAdjustmentRequestAsync(Guid surveyOrderId,
             Guid actorUserId, DateTimeOffset evaluatedAt, CancellationToken cancellationToken = default) =>

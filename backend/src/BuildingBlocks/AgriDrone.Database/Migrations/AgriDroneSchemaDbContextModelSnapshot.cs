@@ -12259,10 +12259,15 @@ namespace AgriDrone.Database.Migrations
                     b.HasIndex("SupersededByInvoiceRevisionId", "SurveyOrderId")
                         .HasDatabaseName("ix_survey_payments_superseded_by_invoice_revision");
 
+                    b.HasIndex("SurveyOrderId")
+                        .IsUnique()
+                        .HasDatabaseName("uq_survey_payments_one_open_v3_balance_per_order")
+                        .HasFilter("purpose = 'FinalBalance' AND invoice_revision_id IS NOT NULL AND status IN ('PENDING'::system.survey_payment_status, 'PROCESSING'::system.survey_payment_status, 'ADJUSTMENT_REQUIRED'::system.survey_payment_status)");
+
                     b.HasIndex("SurveyOrderId", "Purpose")
                         .IsUnique()
                         .HasDatabaseName("uq_survey_payments_one_active_per_order_purpose")
-                        .HasFilter("status IN ('PENDING'::system.survey_payment_status, 'PROCESSING'::system.survey_payment_status, 'PAID'::system.survey_payment_status, 'ADJUSTMENT_REQUIRED'::system.survey_payment_status)");
+                        .HasFilter("(purpose <> 'FinalBalance' OR invoice_revision_id IS NULL) AND status IN ('PENDING'::system.survey_payment_status, 'PROCESSING'::system.survey_payment_status, 'PAID'::system.survey_payment_status, 'ADJUSTMENT_REQUIRED'::system.survey_payment_status)");
 
                     b.ToTable("survey_payments", "survey", t =>
                         {
@@ -12281,6 +12286,143 @@ namespace AgriDrone.Database.Migrations
                             t.HasCheckConstraint("ck_survey_payments_provider_session", "status IN ('PENDING'::system.survey_payment_status, 'INVALIDATED'::system.survey_payment_status) OR provider_reference IS NOT NULL");
 
                             t.HasCheckConstraint("ck_survey_payments_purpose", "purpose IN ('BaselineDeposit', 'FinalBalance', 'OrderDeposit')");
+                        });
+                });
+
+            modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.SurveyFundingReconciliationDecision", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("amount");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character(3)")
+                        .HasColumnName("currency")
+                        .IsFixedLength();
+
+                    b.Property<string>("DispositionKind")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("disposition_kind");
+
+                    b.Property<string>("EvidenceReference")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("evidence_reference");
+
+                    b.Property<long>("ExpectedOrderVersion")
+                        .HasColumnType("bigint")
+                        .HasColumnName("expected_order_version");
+
+                    b.Property<Guid?>("FundingReceiptId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("funding_receipt_id");
+
+                    b.Property<Guid>("OperationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("operation_id");
+
+                    b.Property<string>("PayloadFingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("payload_fingerprint");
+
+                    b.Property<string>("ProviderReference")
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)")
+                        .HasColumnName("provider_reference");
+
+                    b.Property<string>("ProviderTransactionId")
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)")
+                        .HasColumnName("provider_transaction_id");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("reason");
+
+                    b.Property<DateTimeOffset>("ReconciledAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("reconciled_at");
+
+                    b.Property<Guid>("ReconciledBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("reconciled_by");
+
+                    b.Property<Guid>("SurveyOrderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("survey_order_id");
+
+                    b.Property<Guid?>("SurveyPaymentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("survey_payment_id");
+
+                    b.Property<Guid?>("TargetInvoiceRevisionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("target_invoice_revision_id");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_survey_funding_reconciliation_decisions");
+
+                    b.HasIndex("FundingReceiptId")
+                        .IsUnique()
+                        .HasDatabaseName("uq_survey_reconciliation_final_receipt")
+                        .HasFilter("funding_receipt_id IS NOT NULL AND disposition_kind IN ('AllocateToCurrentInvoice', 'RouteToRefund')");
+
+                    b.HasIndex("FundingReceiptId", "SurveyOrderId")
+                        .HasDatabaseName("ix_survey_funding_reconciliation_decisions_receipt");
+
+                    b.HasIndex("SurveyOrderId", "OperationId")
+                        .IsUnique()
+                        .HasDatabaseName("uq_survey_funding_reconciliation_decisions_order_operation");
+
+                    b.HasIndex("SurveyOrderId", "ReconciledAt", "Id")
+                        .HasDatabaseName("ix_survey_funding_reconciliation_decisions_order_time");
+
+                    b.HasIndex("SurveyPaymentId", "SurveyOrderId")
+                        .HasDatabaseName("ix_survey_funding_reconciliation_decisions_payment");
+
+                    b.HasIndex("TargetInvoiceRevisionId", "SurveyOrderId")
+                        .HasDatabaseName("ix_survey_funding_reconciliation_decisions_invoice");
+
+                    b.ToTable("survey_funding_reconciliation_decisions", "survey", t =>
+                        {
+                            t.HasCheckConstraint("ck_survey_funding_reconciliation_decisions_amount", "amount >= 0 AND amount = FLOOR(amount) AND (disposition_kind = 'KeepExcluded' OR amount > 0)");
+
+                            t.HasCheckConstraint("ck_survey_funding_reconciliation_decisions_currency", "currency = 'VND'");
+
+                            t.HasCheckConstraint("ck_survey_funding_reconciliation_decisions_disposition", "disposition_kind IN ('KeepExcluded', 'AllocateToCurrentInvoice', 'RouteToRefund')");
+
+                            t.HasCheckConstraint("ck_survey_funding_reconciliation_decisions_fingerprint", "payload_fingerprint ~ '^[0-9a-f]{64}$'");
+
+                            t.HasCheckConstraint("ck_survey_funding_reconciliation_decisions_invoice_target", "disposition_kind <> 'AllocateToCurrentInvoice' OR target_invoice_revision_id IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_survey_funding_reconciliation_decisions_order_version", "expected_order_version >= 1");
+
+                            t.HasCheckConstraint("ck_survey_funding_reconciliation_decisions_target", "survey_payment_id IS NOT NULL OR funding_receipt_id IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_survey_funding_reconciliation_decisions_time", "created_at >= reconciled_at");
                         });
                 });
 
@@ -16582,6 +16724,37 @@ namespace AgriDrone.Database.Migrations
                         .HasConstraintName("fk_survey_payments_superseded_by_invoice_revision");
 
                     b.Navigation("SurveyOrder");
+                });
+
+            modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.SurveyFundingReconciliationDecision", b =>
+                {
+                    b.HasOne("AgriDrone.Modules.Surveys.Domain.SurveyOrder", null)
+                        .WithMany()
+                        .HasForeignKey("SurveyOrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_survey_funding_reconciliation_decisions_order");
+
+                    b.HasOne("AgriDrone.Modules.Surveys.Domain.SurveyPayment", null)
+                        .WithMany()
+                        .HasForeignKey("SurveyPaymentId", "SurveyOrderId")
+                        .HasPrincipalKey("Id", "SurveyOrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_survey_funding_reconciliation_decisions_payment_order");
+
+                    b.HasOne("AgriDrone.Modules.Surveys.Domain.SurveyFundingReceipt", null)
+                        .WithMany()
+                        .HasForeignKey("FundingReceiptId", "SurveyOrderId")
+                        .HasPrincipalKey("Id", "SurveyOrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_survey_funding_reconciliation_decisions_receipt_order");
+
+                    b.HasOne("AgriDrone.Modules.Surveys.Domain.SurveyInvoiceRevision", null)
+                        .WithMany()
+                        .HasForeignKey("TargetInvoiceRevisionId", "SurveyOrderId")
+                        .HasPrincipalKey("Id", "SurveyOrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_survey_funding_reconciliation_decisions_invoice_order");
                 });
 
             modelBuilder.Entity("AgriDrone.Modules.Surveys.Domain.SurveyRefundObligation", b =>

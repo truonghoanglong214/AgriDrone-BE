@@ -56,7 +56,14 @@ public sealed class SurveyPaymentConfiguration : IEntityTypeConfiguration<Survey
         builder.Property(payment => payment.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp with time zone").HasDefaultValueSql("NOW()").IsRequired();
         builder.Property(payment => payment.UpdatedAt).HasColumnName("updated_at").HasColumnType("timestamp with time zone").HasDefaultValueSql("NOW()").IsRequired();
         builder.HasIndex(payment => new { payment.Provider, payment.ProviderReference }).HasDatabaseName("uq_survey_payments_provider_reference").HasFilter("provider_reference IS NOT NULL").IsUnique();
-        builder.HasIndex(payment => new { payment.SurveyOrderId, payment.Purpose }).HasDatabaseName("uq_survey_payments_one_active_per_order_purpose").HasFilter("status IN ('PENDING'::system.survey_payment_status, 'PROCESSING'::system.survey_payment_status, 'PAID'::system.survey_payment_status, 'ADJUSTMENT_REQUIRED'::system.survey_payment_status)").IsUnique();
+        builder.HasIndex(payment => new { payment.SurveyOrderId, payment.Purpose })
+            .HasDatabaseName("uq_survey_payments_one_active_per_order_purpose")
+            .HasFilter("(purpose <> 'FinalBalance' OR invoice_revision_id IS NULL) AND status IN ('PENDING'::system.survey_payment_status, 'PROCESSING'::system.survey_payment_status, 'PAID'::system.survey_payment_status, 'ADJUSTMENT_REQUIRED'::system.survey_payment_status)")
+            .IsUnique();
+        builder.HasIndex(payment => payment.SurveyOrderId)
+            .HasDatabaseName("uq_survey_payments_one_open_v3_balance_per_order")
+            .HasFilter("purpose = 'FinalBalance' AND invoice_revision_id IS NOT NULL AND status IN ('PENDING'::system.survey_payment_status, 'PROCESSING'::system.survey_payment_status, 'ADJUSTMENT_REQUIRED'::system.survey_payment_status)")
+            .IsUnique();
         builder.HasIndex(payment => payment.DepositObligationId)
             .HasDatabaseName("uq_survey_payments_active_deposit_obligation")
             .HasFilter("deposit_obligation_id IS NOT NULL AND status IN ('PENDING'::system.survey_payment_status, 'PROCESSING'::system.survey_payment_status, 'PAID'::system.survey_payment_status, 'ADJUSTMENT_REQUIRED'::system.survey_payment_status)")

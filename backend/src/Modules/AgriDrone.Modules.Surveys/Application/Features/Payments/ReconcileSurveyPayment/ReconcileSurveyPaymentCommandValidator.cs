@@ -28,5 +28,6 @@ internal sealed class ReconcileSurveyPaymentCommandValidator
             .MaximumLength(1000);
         RuleFor(command => command.ExpectedPaymentVersion).GreaterThan(0u);
         RuleFor(command => command.ExpectedOrderVersion).GreaterThan(0u);
+        RuleFor(command => command.ProviderTransactionId).MaximumLength(150);
     }
 }

@@ -120,6 +120,7 @@ internal sealed class SurveyPaymentProcessingRepository(
                 FROM survey.survey_payments AS payment
                 WHERE payment.survey_order_id = {{surveyOrderId}}
                   AND payment.purpose = {{purposeString}}
+                  AND payment.invoice_revision_id IS NULL
                   AND payment.status IN (
                     'PENDING'::system.survey_payment_status,
                     'PROCESSING'::system.survey_payment_status,
@@ -141,6 +142,8 @@ internal sealed class SurveyPaymentProcessingRepository(
             string provider,
             string providerReference,
             string deduplicationKey,
+            string? providerTransactionId = null,
+            (decimal Amount, string Currency)? receivedMoney = null,
             CancellationToken cancellationToken = default)
     {
         context.EnsureTransaction();
@@ -212,6 +215,78 @@ internal sealed class SurveyPaymentProcessingRepository(
                     item.DeduplicationKey == deduplicationKey,
             cancellationToken);
 
+        var normalizedTxId = string.IsNullOrWhiteSpace(providerTransactionId)
+            ? null
+            : providerTransactionId.Trim();
+        var receiptAlreadyRecorded = false;
+        if (!duplicate && normalizedTxId is not null)
+        {
+            // Both callback and Admin transactions check both tables at Serializable isolation.
+            await using var checkTransaction = CreateCommand(
+                """
+                SELECT BOOL_AND(
+                    transaction_owner.survey_order_id = @survey_order_id
+                    AND transaction_owner.payment_reference = @provider_reference
+                    AND (transaction_owner.survey_payment_id IS NULL OR transaction_owner.survey_payment_id = @payment_id)
+                    AND (NOT @check_money OR
+                         (transaction_owner.amount = @amount AND transaction_owner.currency = @currency)))
+                FROM (
+                    SELECT receipt.survey_order_id, receipt.payment_reference, receipt.survey_payment_id, receipt.amount, receipt.currency
+                    FROM survey.survey_funding_receipts AS receipt
+                    WHERE LOWER(receipt.provider) = LOWER(@provider)
+                      AND receipt.provider_transaction_id = @provider_transaction_id
+                    UNION ALL
+                    SELECT decision.survey_order_id, receipt.payment_reference, receipt.survey_payment_id, receipt.amount, receipt.currency
+                    FROM survey.survey_funding_reconciliation_decisions AS decision
+                    JOIN survey.survey_funding_receipts AS receipt
+                      ON receipt.id = decision.funding_receipt_id
+                     AND receipt.survey_order_id = decision.survey_order_id
+                    WHERE decision.provider_transaction_id = @provider_transaction_id
+                      AND decision.disposition_kind IN ('AllocateToCurrentInvoice', 'RouteToRefund')
+                      AND LOWER(receipt.provider) = LOWER(@provider)
+                ) AS transaction_owner
+                """,
+                Id("survey_order_id", orderId),
+                Id("payment_id", payment.Id),
+                Text("provider", provider),
+                Text("provider_reference", providerReference),
+                Text("provider_transaction_id", normalizedTxId),
+                new NpgsqlParameter("check_money", receivedMoney.HasValue),
+                new NpgsqlParameter("amount", receivedMoney?.Amount ?? 0m),
+                Text("currency", receivedMoney?.Currency.Trim().ToUpperInvariant() ?? string.Empty));
+
+            if (await checkTransaction.ExecuteScalarAsync(cancellationToken) is bool matchesPayment)
+            {
+                if (!matchesPayment)
+                {
+                    return Result.Failure<SurveyPaymentEventState>(PaymentError.ReconciliationMismatch());
+                }
+
+                receiptAlreadyRecorded = true;
+            }
+        }
+
+        SurveyBalanceInvoiceContext? currentInvoice = null;
+        var priorReceiptsForPaymentAmount = 0m;
+        if (!duplicate && !receiptAlreadyRecorded &&
+            order.Scope == ContractScope.V3 &&
+            payment.Purpose == PaymentPurpose.FinalBalance)
+        {
+            if (order.CurrentInvoiceRevisionId.HasValue)
+            {
+                currentInvoice = await ReadBalanceInvoiceContextAsync(
+                    order.CurrentInvoiceRevisionId.Value,
+                    order.Id,
+                    cancellationToken);
+            }
+
+            priorReceiptsForPaymentAmount = await ReadPriorReceiptsAmountForPaymentAsync(
+                order.Id,
+                payment.Id,
+                currentInvoice?.InvoiceRevisionId,
+                cancellationToken);
+        }
+
         var reversalSource = !duplicate && payment.Purpose == PaymentPurpose.OrderDeposit &&
             depositObligation is not null && payment.DepositObligationId == depositObligation.Id
             ? await ReadDepositReversalSourceAsync(order, payment, depositObligation, cancellationToken)
@@ -223,7 +298,78 @@ internal sealed class SurveyPaymentProcessingRepository(
             duplicate,
             depositObligation,
             cancellationDecision,
-            reversalSource));
+            reversalSource,
+            receiptAlreadyRecorded,
+            currentInvoice,
+            priorReceiptsForPaymentAmount));
+    }
+
+    private async Task<SurveyBalanceInvoiceContext?> ReadBalanceInvoiceContextAsync(
+        Guid invoiceRevisionId,
+        Guid surveyOrderId,
+        CancellationToken cancellationToken)
+    {
+        await using var command = CreateCommand(
+            """
+            SELECT inv.id, inv.currency, inv.total_amount, inv.status
+            FROM survey.survey_invoice_revisions AS inv
+            WHERE inv.id = @invoice_id
+              AND inv.survey_order_id = @order_id
+            FOR SHARE OF inv
+            """,
+            Id("invoice_id", invoiceRevisionId),
+            Id("order_id", surveyOrderId));
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        if (!await reader.ReadAsync(cancellationToken))
+        {
+            return null;
+        }
+
+        return new SurveyBalanceInvoiceContext(
+            reader.GetGuid(0),
+            reader.GetString(1),
+            reader.GetDecimal(2),
+            reader.GetString(3));
+    }
+
+    private async Task<decimal> ReadPriorReceiptsAmountForPaymentAsync(
+        Guid surveyOrderId,
+        Guid surveyPaymentId,
+        Guid? currentInvoiceRevisionId,
+        CancellationToken cancellationToken)
+    {
+        if (!currentInvoiceRevisionId.HasValue)
+        {
+            return 0m;
+        }
+
+        // The caller holds the Order lock. Use the effective disposition for each receipt.
+        return await context.Database.SqlQuery<decimal>($"""
+            SELECT COALESCE(SUM(
+                CASE
+                    WHEN decision.disposition_kind = 'AllocateToCurrentInvoice'
+                         AND decision.target_invoice_revision_id = {currentInvoiceRevisionId.Value}
+                         AND (receipt.provider_transaction_id NOT LIKE 'unverified-tx:%'
+                              OR decision.provider_transaction_id IS NOT NULL)
+                        THEN decision.amount
+                    WHEN decision.id IS NULL
+                         AND NOT receipt.requires_reconciliation
+                         AND receipt.provider_transaction_id NOT LIKE 'unverified-tx:%'
+                         AND receipt.invoice_revision_id = {currentInvoiceRevisionId.Value}
+                        THEN receipt.amount
+                    ELSE 0
+                END), 0) AS "Value"
+            FROM survey.survey_funding_receipts AS receipt
+            LEFT JOIN LATERAL (
+                SELECT d.id, d.disposition_kind, d.target_invoice_revision_id, d.provider_transaction_id, d.amount
+                FROM survey.survey_funding_reconciliation_decisions AS d
+                WHERE d.funding_receipt_id = receipt.id AND d.survey_order_id = receipt.survey_order_id
+                ORDER BY (d.disposition_kind <> 'KeepExcluded') DESC, d.reconciled_at DESC, d.id DESC
+                LIMIT 1
+            ) AS decision ON TRUE
+            WHERE receipt.survey_order_id = {surveyOrderId}
+              AND receipt.survey_payment_id = {surveyPaymentId}
+            """).SingleAsync(cancellationToken);
     }
 
     private async Task<SurveyDepositReversalSource?> ReadDepositReversalSourceAsync(
@@ -232,29 +378,54 @@ internal sealed class SurveyPaymentProcessingRepository(
         SurveyDepositObligation obligation,
         CancellationToken cancellationToken)
     {
-        var receipts = await context.Set<SurveyFundingReceipt>().AsNoTracking()
-            .Where(r => r.SurveyOrderId == order.Id && r.TenantId == order.TenantId &&
-                r.DepositObligationId == obligation.Id && r.Provider == payment.Provider &&
-                r.Currency == obligation.Currency && r.PaymentReference == payment.ProviderReference &&
-                (r.SurveyPaymentId == payment.Id || r.SurveyPaymentId == null))
+        var receipts = await context.Set<SurveyFundingReceipt>()
+            .FromSqlInterpolated($$"""
+                SELECT receipt.*
+                FROM survey.survey_funding_receipts AS receipt
+                WHERE receipt.survey_order_id = {{order.Id}}
+                  AND receipt.tenant_id = {{order.TenantId}}
+                  AND receipt.deposit_obligation_id = {{obligation.Id}}
+                  AND receipt.provider = {{payment.Provider}}
+                  AND receipt.currency = {{obligation.Currency}}
+                  AND receipt.payment_reference = {{payment.ProviderReference}}
+                  AND (receipt.survey_payment_id = {{payment.Id}} OR receipt.survey_payment_id IS NULL)
+                ORDER BY receipt.received_at, receipt.created_at, receipt.id
+                FOR SHARE OF receipt
+                """)
             .Take(2)
             .ToListAsync(cancellationToken);
         if (receipts.Count != 1)
             return null;
 
         var receipt = receipts[0];
-        var prior = await context.Set<SurveyFundingReversal>().AsNoTracking()
-            .Where(r => r.SurveyOrderId == order.Id && r.SurveyPaymentId == payment.Id)
+        var allocations = await context.Set<SurveyFundingAllocation>()
+            .FromSqlInterpolated($$"""
+                SELECT allocation.*
+                FROM survey.survey_funding_allocations AS allocation
+                WHERE allocation.funding_receipt_id = {{receipt.Id}}
+                  AND allocation.survey_order_id = {{order.Id}}
+                  AND allocation.deposit_obligation_id = {{obligation.Id}}
+                  AND allocation.currency = {{receipt.Currency}}
+                ORDER BY allocation.id
+                FOR SHARE OF allocation
+                """)
+            .ToListAsync(cancellationToken);
+        var allocated = allocations.Sum(a => a.AllocatedAmount);
+        if (allocated > receipt.Amount)
+            return null;
+
+        var prior = await context.Set<SurveyFundingReversal>()
+            .FromSqlInterpolated($$"""
+                SELECT reversal.*
+                FROM survey.survey_funding_reversals AS reversal
+                WHERE reversal.survey_order_id = {{order.Id}}
+                  AND reversal.survey_payment_id = {{payment.Id}}
+                ORDER BY reversal.id
+                FOR SHARE OF reversal
+                """)
             .ToListAsync(cancellationToken);
         if (prior.Any(r => r.FundingReceiptId != receipt.Id || r.CashAmount is null ||
             r.DepositObligationId != obligation.Id || r.Currency != obligation.Currency))
-            return null;
-
-        var allocated = await context.Set<SurveyFundingAllocation>().AsNoTracking()
-            .Where(a => a.FundingReceiptId == receipt.Id && a.SurveyOrderId == order.Id &&
-                a.DepositObligationId == obligation.Id && a.Currency == receipt.Currency)
-            .SumAsync(a => a.AllocatedAmount, cancellationToken);
-        if (allocated > receipt.Amount)
             return null;
 
         return new SurveyDepositReversalSource(
@@ -376,10 +547,7 @@ internal sealed class SurveyPaymentProcessingRepository(
             """
             SELECT payment.survey_order_id
             FROM survey.survey_payments AS payment
-            JOIN survey.survey_orders AS survey_order
-              ON survey_order.id = payment.survey_order_id
             WHERE payment.id = @payment_id
-            FOR UPDATE OF payment, survey_order
             """,
             Id("payment_id", paymentId)))
         {
@@ -393,9 +561,30 @@ internal sealed class SurveyPaymentProcessingRepository(
             orderId = id;
         }
 
-        var payment = await context.SurveyPayments.SingleAsync(
-            item => item.Id == paymentId,
-            cancellationToken);
+        // ADR 0020 Rank 2 -> Rank 5: Lock Order FOR UPDATE before Payment FOR UPDATE
+        if (!await LockOrderAsync(orderId, cancellationToken))
+        {
+            return Result.Failure<SurveyPaymentReconciliationState>(
+                SurveyOrderError.NotFound(orderId));
+        }
+
+        var lockedPayments = await context.SurveyPayments
+            .FromSqlInterpolated($$"""
+                SELECT payment.*, payment.xmin
+                FROM survey.survey_payments AS payment
+                WHERE payment.id = {{paymentId}}
+                  AND payment.survey_order_id = {{orderId}}
+                FOR UPDATE OF payment
+                """)
+            .ToListAsync(cancellationToken);
+
+        var payment = lockedPayments.SingleOrDefault();
+        if (payment is null)
+        {
+            return Result.Failure<SurveyPaymentReconciliationState>(
+                PaymentError.PersistenceConflict());
+        }
+
         var order = await context.SurveyOrders.SingleAsync(
             item => item.Id == orderId,
             cancellationToken);

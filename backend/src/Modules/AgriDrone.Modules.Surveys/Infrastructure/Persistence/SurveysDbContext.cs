@@ -64,6 +64,7 @@ internal sealed class SurveysDbContext(DbContextOptions<SurveysDbContext> option
     public DbSet<SurveyDepositObligation> SurveyDepositObligations => Set<SurveyDepositObligation>();
     public DbSet<SurveyFundingReceipt> SurveyFundingReceipts => Set<SurveyFundingReceipt>();
     public DbSet<SurveyFundingAllocation> SurveyFundingAllocations => Set<SurveyFundingAllocation>();
+    public DbSet<SurveyFundingReconciliationDecision> SurveyFundingReconciliationDecisions => Set<SurveyFundingReconciliationDecision>();
     public DbSet<SurveyCancellationDecision> SurveyCancellationDecisions => Set<SurveyCancellationDecision>();
     public DbSet<SurveyRefundObligation> SurveyRefundObligations => Set<SurveyRefundObligation>();
     public DbSet<CancellationRetention> CancellationRetentions => Set<CancellationRetention>();

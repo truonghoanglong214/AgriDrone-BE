@@ -13,5 +13,6 @@ public sealed record ProcessSurveyPaymentEventCommand(
     string Currency,
     DateTimeOffset OccurredAt,
     DateTimeOffset ReceivedAt,
-    JsonDocument Payload)
+    JsonDocument Payload,
+    string? ProviderTransactionId = null)
     : IRequest<Result<ProcessSurveyPaymentEventResponse>>;

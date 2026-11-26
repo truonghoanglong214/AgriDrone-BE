@@ -58,7 +58,7 @@ internal sealed class SurveyInvoiceTransaction(
     private sealed record VerifiedInvoiceContext(
         SurveyOrder Order,
         SurveyOrderCommercialSnapshot Commercial,
-        SurveyInvoiceFundingTotals Funding,
+        SurveyInvoiceFundingSummary Funding,
         IReadOnlyList<SurveyPayment> OpenFinalBalanceCheckouts,
         SurveyInvoiceRevision? CurrentInvoice,
         SurveyInternalApprovedResultRevision ApprovedResult,
@@ -999,40 +999,49 @@ internal sealed class SurveyInvoiceTransaction(
                 return Result.Failure<VerifiedInvoiceContext>(AppError.Conflict("DepositObligation.Invalid", "Deposit obligation is missing or cancelled."));
         }
 
-        var depositPayments = depositObligation is null
-            ? new Dictionary<Guid, SurveyPayment>()
-            : await db.Set<SurveyPayment>()
-                .FromSqlInterpolated($"""
-                    SELECT *, xmin FROM survey.survey_payments
-                    WHERE survey_order_id = {order.Id}
-                      AND deposit_obligation_id = {depositObligation.Id}
-                    ORDER BY id
-                    FOR SHARE
-                    """)
-                .ToDictionaryAsync(p => p.Id, cancellationToken);
+        var orderPayments = await db.Set<SurveyPayment>()
+            .FromSqlInterpolated($"""
+                SELECT payment.*, payment.xmin FROM survey.survey_payments AS payment
+                WHERE payment.survey_order_id = {order.Id}
+                ORDER BY payment.id
+                FOR UPDATE
+                """)
+            .ToDictionaryAsync(p => p.Id, cancellationToken);
 
-        List<SurveyPayment> openFinalBalanceCheckouts = [];
-        if (isCorrection)
-        {
-            openFinalBalanceCheckouts = await db.Set<SurveyPayment>()
-                .FromSqlInterpolated($"""
-                    SELECT *, xmin FROM survey.survey_payments
-                    WHERE survey_order_id = {order.Id}
-                      AND purpose = 'FinalBalance'
-                      AND status IN (
-                        'PENDING'::system.survey_payment_status,
-                        'PROCESSING'::system.survey_payment_status,
-                        'ADJUSTMENT_REQUIRED'::system.survey_payment_status)
-                    ORDER BY id
-                    FOR UPDATE
-                    """)
-                .ToListAsync(cancellationToken);
-        }
+        List<SurveyPayment> openFinalBalanceCheckouts = isCorrection
+            ? orderPayments.Values
+                .Where(p => p.Purpose == PaymentPurpose.FinalBalance &&
+                            p.Status is SurveyPaymentStatus.Pending or
+                                SurveyPaymentStatus.Processing or
+                                SurveyPaymentStatus.AdjustmentRequired)
+                .OrderBy(p => p.Id)
+                .ToList()
+            : [];
 
         var fundingResult = await SurveyInvoiceFunding.ReadAsync(
-            db, order, depositObligation, depositPayments, lockRows: true, cancellationToken);
+            db,
+            order,
+            depositObligation,
+            currentInvoiceRevisionId: isCorrection ? order.CurrentInvoiceRevisionId : null,
+            lockRows: true,
+            cancellationToken,
+            preloadedOrderPayments: orderPayments);
         if (fundingResult.IsFailure)
             return Result.Failure<VerifiedInvoiceContext>(fundingResult.Error);
+
+        if (fundingResult.Value.HasOpenReconciliation)
+        {
+            return Result.Failure<VerifiedInvoiceContext>(AppError.Conflict(
+                SurveyInvoiceFunding.HoldErrorCode,
+                string.Join(" ", fundingResult.Value.ReconciliationReasons)));
+        }
+
+        if (fundingResult.Value.ActiveOtherRefundReservations > 0m)
+        {
+            return Result.Failure<VerifiedInvoiceContext>(AppError.Conflict(
+                SurveyInvoiceFunding.HoldErrorCode,
+                "Order has active refund reservations for another origin and requires reconciliation before invoicing."));
+        }
 
         var hasCancellation = await db.Set<SurveyCancellationDecision>()
             .FromSqlInterpolated($"SELECT * FROM survey.survey_cancellation_decisions WHERE survey_order_id = {order.Id} FOR SHARE")

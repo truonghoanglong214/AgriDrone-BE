@@ -25,6 +25,8 @@ internal sealed class SePayPaymentService(
 
     public string Provider => ProviderName;
 
+    public bool SupportsV3BalanceCheckout => IsActive;
+
     public string GetBalanceCheckoutReference(Guid paymentId) =>
         $"{_sePayOptions.PaymentCodePrefix}{ToBase36(paymentId)}".ToUpperInvariant();
 
@@ -176,12 +178,21 @@ internal sealed class SePayPaymentService(
         }
 
         var providerReference = GetString(order, "order_invoice_number");
-        var eventId = GetString(transaction, "id") ??
-                      GetString(transaction, "transaction_id");
+        var providerTransactionId = NullIfWhiteSpace(
+            GetString(transaction, "id") ??
+            GetString(transaction, "transaction_id"));
+        var deliveryEventId = NullIfWhiteSpace(
+            GetString(root, "event_id") ??
+            GetString(root, "notification_id") ??
+            providerTransactionId);
+        if (deliveryEventId is null)
+        {
+            deliveryEventId = $"payload:{Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(rawPayload)))}";
+        }
+
         var currency = GetString(transaction, "transaction_currency") ??
                        GetString(order, "order_currency");
         if (string.IsNullOrWhiteSpace(providerReference) ||
-            string.IsNullOrWhiteSpace(eventId) ||
             string.IsNullOrWhiteSpace(currency) ||
             !TryGetDecimal(transaction, "transaction_amount", out var amount) ||
             amount <= 0 ||
@@ -194,17 +205,18 @@ internal sealed class SePayPaymentService(
 
         try
         {
-            _ = PaymentEventIdentity.Create(ProviderName, providerReference, eventId);
+            _ = PaymentEventIdentity.Create(ProviderName, providerReference, deliveryEventId);
             return PaymentCallbackVerificationResult.Valid(
                 new VerifiedSurveyPaymentEvent(
                     ProviderName,
                     providerReference.Trim(),
-                    eventId.Trim(),
+                    deliveryEventId,
                     "payment.succeeded",
                     Money.Round(amount),
                     currency.Trim().ToUpperInvariant(),
                     occurredAt,
-                    JsonDocument.Parse(rawPayload)));
+                    JsonDocument.Parse(rawPayload),
+                    providerTransactionId));
         }
         catch (Exception exception) when (exception is ArgumentException or JsonException)
         {
@@ -332,6 +344,9 @@ internal sealed class SePayPaymentService(
         occurredAt = default;
         return false;
     }
+
+    private static string? NullIfWhiteSpace(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     private static string ToBase36(Guid value)
     {

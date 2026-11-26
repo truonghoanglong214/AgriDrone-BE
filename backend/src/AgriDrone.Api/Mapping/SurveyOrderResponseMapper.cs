@@ -185,9 +185,80 @@ internal static class SurveyOrderResponseMapper
             SurveyOrderStatus.PendingReview => "PENDING_REVIEW",
             SurveyOrderStatus.Completed => "COMPLETED",
             SurveyOrderStatus.Cancelled => "CANCELLED",
+            SurveyOrderStatus.AwaitingAppointment => "AWAITING_APPOINTMENT",
+            SurveyOrderStatus.AwaitingDeposit => "AWAITING_DEPOSIT",
+            SurveyOrderStatus.ReadyForCapture => "READY_FOR_CAPTURE",
+            SurveyOrderStatus.Capturing => "CAPTURING",
+            SurveyOrderStatus.AwaitingCaptureUpload => "AWAITING_CAPTURE_UPLOAD",
+            SurveyOrderStatus.AwaitingInputReview => "AWAITING_INPUT_REVIEW",
+            SurveyOrderStatus.AwaitingProcessing => "AWAITING_PROCESSING",
+            SurveyOrderStatus.Processing => "PROCESSING",
+            SurveyOrderStatus.AwaitingReflightDecision => "AWAITING_REFLIGHT_DECISION",
+            SurveyOrderStatus.AwaitingSettlement => "AWAITING_SETTLEMENT",
             _ => throw new ArgumentOutOfRangeException(
                 nameof(status),
                 status,
                 "Unsupported SurveyOrder status.")
+        };
+
+    internal static SurveyOrderStatus? MapFilterStatus(
+        SurveyOrderStatusFilterValue? status) =>
+        status switch
+        {
+            null => null,
+            SurveyOrderStatusFilterValue.PENDING_BOUNDARY_VERIFICATION =>
+                SurveyOrderStatus.PendingBoundaryVerification,
+            SurveyOrderStatusFilterValue.AWAITING_BASELINE_APPOINTMENT =>
+                SurveyOrderStatus.AwaitingBaselineAppointment,
+            SurveyOrderStatusFilterValue.AWAITING_BASELINE_DEPOSIT =>
+                SurveyOrderStatus.AwaitingBaselineDeposit,
+            SurveyOrderStatusFilterValue.AWAITING_BOUNDARY_CAPTURE =>
+                SurveyOrderStatus.AwaitingBoundaryCapture,
+            SurveyOrderStatusFilterValue.BASELINE_READY =>
+                SurveyOrderStatus.BaselineReady,
+            SurveyOrderStatusFilterValue.BASELINE_IN_PROGRESS =>
+                SurveyOrderStatus.BaselineInProgress,
+            SurveyOrderStatusFilterValue.AWAITING_BASELINE_REVIEW =>
+                SurveyOrderStatus.AwaitingBaselineReview,
+            SurveyOrderStatusFilterValue.AWAITING_PRICING =>
+                SurveyOrderStatus.AwaitingPricing,
+            SurveyOrderStatusFilterValue.AWAITING_PAID_APPOINTMENT =>
+                SurveyOrderStatus.AwaitingPaidAppointment,
+            SurveyOrderStatusFilterValue.AWAITING_PAYMENT =>
+                SurveyOrderStatus.AwaitingPayment,
+            SurveyOrderStatusFilterValue.READY_FOR_PAID_SERVICE =>
+                SurveyOrderStatus.ReadyForPaidService,
+            SurveyOrderStatusFilterValue.IN_PROGRESS =>
+                SurveyOrderStatus.InProgress,
+            SurveyOrderStatusFilterValue.PENDING_REVIEW =>
+                SurveyOrderStatus.PendingReview,
+            SurveyOrderStatusFilterValue.COMPLETED =>
+                SurveyOrderStatus.Completed,
+            SurveyOrderStatusFilterValue.CANCELLED =>
+                SurveyOrderStatus.Cancelled,
+            SurveyOrderStatusFilterValue.AWAITING_APPOINTMENT =>
+                SurveyOrderStatus.AwaitingAppointment,
+            SurveyOrderStatusFilterValue.AWAITING_DEPOSIT =>
+                SurveyOrderStatus.AwaitingDeposit,
+            SurveyOrderStatusFilterValue.READY_FOR_CAPTURE =>
+                SurveyOrderStatus.ReadyForCapture,
+            SurveyOrderStatusFilterValue.CAPTURING =>
+                SurveyOrderStatus.Capturing,
+            SurveyOrderStatusFilterValue.AWAITING_CAPTURE_UPLOAD =>
+                SurveyOrderStatus.AwaitingCaptureUpload,
+            SurveyOrderStatusFilterValue.AWAITING_INPUT_REVIEW =>
+                SurveyOrderStatus.AwaitingInputReview,
+            SurveyOrderStatusFilterValue.AWAITING_PROCESSING =>
+                SurveyOrderStatus.AwaitingProcessing,
+            SurveyOrderStatusFilterValue.PROCESSING =>
+                SurveyOrderStatus.Processing,
+            SurveyOrderStatusFilterValue.AWAITING_REFLIGHT_DECISION =>
+                SurveyOrderStatus.AwaitingReflightDecision,
+            SurveyOrderStatusFilterValue.AWAITING_SETTLEMENT =>
+                SurveyOrderStatus.AwaitingSettlement,
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(status),
+                status,
+                "Unsupported survey-order status.")
         };
 }

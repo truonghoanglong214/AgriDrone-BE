@@ -27,6 +27,7 @@ using AgriDrone.SharedInfrastructure.Auditing;
 using AgriDrone.SharedInfrastructure.Messaging;
 using AgriDrone.SharedInfrastructure.Messaging.Consumers;
 using AgriDrone.SharedInfrastructure.Persistence;
+using Microsoft.AspNetCore.DataProtection;
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -153,8 +154,29 @@ public static class DependencyInjection
             SurveyPaymentCallbackVerifier>();
         services.AddScoped<ISurveyOrderReadinessService,
             SurveyOrderReadinessService>();
-        services.AddDataProtection();
+        var dataProtectionAppName = configuration["DataProtection:ApplicationName"]?.Trim();
+        if (string.IsNullOrWhiteSpace(dataProtectionAppName))
+        {
+            dataProtectionAppName = "AgriDrone";
+        }
+
+        var dataProtectionBuilder = services.AddDataProtection()
+            .SetApplicationName(dataProtectionAppName);
+
+        var configuredKeyRingPath = configuration["DataProtection:KeyRingPath"]?.Trim();
+        var effectiveKeyRingPath = string.IsNullOrWhiteSpace(configuredKeyRingPath)
+            ? Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData) is { Length: > 0 } localAppData
+                    ? localAppData
+                    : Path.GetTempPath(),
+                "AgriDrone",
+                "DataProtectionKeys")
+            : configuredKeyRingPath;
+        Directory.CreateDirectory(effectiveKeyRingPath);
+        dataProtectionBuilder.PersistKeysToFileSystem(new DirectoryInfo(effectiveKeyRingPath));
+
         services.AddSingleton<ITrackingTokenProtector, TrackingTokenProtector>();
+        services.AddSingleton<IBalanceCheckoutTokenService, BalanceCheckoutTokenService>();
         services.AddSingleton<ISurveyRequestNumberGenerator, SurveyRequestNumberGenerator>();
         services.AddSingleton<
             ISurveyApprovalNumberGenerator,

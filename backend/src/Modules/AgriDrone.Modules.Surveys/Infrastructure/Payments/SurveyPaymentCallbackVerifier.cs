@@ -87,7 +87,6 @@ internal sealed class SurveyPaymentCallbackVerifier(
 
         if (callback is null ||
             string.IsNullOrWhiteSpace(callback.ProviderReference) ||
-            string.IsNullOrWhiteSpace(callback.EventId) ||
             string.IsNullOrWhiteSpace(callback.EventType) ||
             callback.Amount <= 0 ||
             string.IsNullOrWhiteSpace(callback.Currency) ||
@@ -100,24 +99,32 @@ internal sealed class SurveyPaymentCallbackVerifier(
                 "PaymentCallback.PayloadInvalid");
         }
 
+        var explicitTxId = NullIfWhiteSpace(callback.ProviderTransactionId) ?? NullIfWhiteSpace(callback.TransactionId);
+        var explicitDeliveryId = NullIfWhiteSpace(callback.DeliveryEventId);
+        var legacyEventId = NullIfWhiteSpace(callback.EventId);
+        var providerTransactionId = explicitTxId ?? (explicitDeliveryId is null ? legacyEventId : null);
+        var deliveryEventId = explicitDeliveryId ?? legacyEventId ?? explicitTxId ??
+            $"payload:{Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(rawPayload)))}";
+
         try
         {
             _ = PaymentEventIdentity.Create(
                 provider,
                 callback.ProviderReference,
-                callback.EventId);
+                deliveryEventId);
             var currency = CurrencyCode.Create(callback.Currency);
             var payload = JsonDocument.Parse(rawPayload);
             return PaymentCallbackVerificationResult.Valid(
                 new VerifiedSurveyPaymentEvent(
                     provider.Trim().ToLowerInvariant(),
                     callback.ProviderReference.Trim(),
-                    callback.EventId.Trim(),
+                    deliveryEventId,
                     callback.EventType.Trim().ToLowerInvariant(),
                     Money.Round(callback.Amount),
                     currency.Value,
                     callback.OccurredAt,
-                    payload));
+                    payload,
+                    providerTransactionId));
         }
         catch (Exception exception) when (exception is
             ArgumentException or
@@ -166,11 +173,17 @@ internal sealed class SurveyPaymentCallbackVerifier(
                    expectedSignature);
     }
 
+    private static string? NullIfWhiteSpace(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
     private sealed record CallbackPayload(
-        string ProviderReference,
-        string EventId,
+        string? ProviderReference,
+        string? EventId,
         string EventType,
         decimal Amount,
         string Currency,
-        DateTimeOffset OccurredAt);
+        DateTimeOffset OccurredAt,
+        string? DeliveryEventId = null,
+        string? ProviderTransactionId = null,
+        string? TransactionId = null);
 }

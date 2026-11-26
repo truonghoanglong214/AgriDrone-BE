@@ -102,6 +102,10 @@ internal sealed class ProcessSurveyPaymentEventCommandHandler(
             identity.Provider,
             identity.ProviderReference,
             identity.DeduplicationKey,
+            command.ProviderTransactionId,
+            string.Equals(command.EventType.Trim(), SurveyPaymentCommandSupport.SucceededEvent, StringComparison.OrdinalIgnoreCase)
+                ? (command.Amount, command.Currency)
+                : null,
             cancellationToken);
         if (stateResult.IsFailure)
         {
@@ -149,9 +153,24 @@ internal sealed class ProcessSurveyPaymentEventCommandHandler(
             {
                 (transitionApplied, disposition) = ApplyInvalidatedV3BalanceCallback(
                     command,
+                    identity,
                     payment,
                     order,
+                    state.ReceiptAlreadyRecorded,
                     repository);
+            }
+            else if (payment.Purpose == PaymentPurpose.FinalBalance)
+            {
+                var balanceResult = ApplyOpenV3FinalBalanceCallback(
+                    command,
+                    identity,
+                    payment,
+                    order,
+                    state,
+                    repository);
+                transitionApplied = balanceResult.Applied;
+                disposition = balanceResult.Disposition;
+                settlementFundingReceiptId = balanceResult.FundingReceiptId;
             }
             else if (payment.Purpose == PaymentPurpose.OrderDeposit &&
                      string.Equals(
@@ -161,10 +180,12 @@ internal sealed class ProcessSurveyPaymentEventCommandHandler(
             {
                 var fundingResult = ApplyOrderDepositReceipt(
                     command,
+                    identity,
                     payment,
                     order,
                     state.DepositObligation,
                     state.CancellationDecision,
+                    state.ReceiptAlreadyRecorded,
                     repository);
                 transitionApplied = fundingResult.Applied;
                 disposition = fundingResult.Disposition;
@@ -439,10 +460,12 @@ internal sealed class ProcessSurveyPaymentEventCommandHandler(
 
     private static (bool Applied, string Disposition, Guid? FundingReceiptId) ApplyOrderDepositReceipt(
         ProcessSurveyPaymentEventCommand command,
+        PaymentEventIdentity identity,
         SurveyPayment payment,
         SurveyOrder order,
         SurveyDepositObligation? obligation,
         SurveyCancellationReceiptDisposition? cancellationDecision,
+        bool receiptAlreadyRecorded,
         ISurveyPaymentProcessingRepository repository)
     {
         if (obligation is null ||
@@ -450,6 +473,11 @@ internal sealed class ProcessSurveyPaymentEventCommandHandler(
             obligation.SurveyOrderId != order.Id)
         {
             return (false, "DEPOSIT_OBLIGATION_NOT_FOUND", null);
+        }
+
+        if (receiptAlreadyRecorded)
+        {
+            return (false, "DUPLICATE_PROVIDER_TRANSACTION", null);
         }
 
         if (!string.Equals(command.Currency.Trim(), "VND", StringComparison.Ordinal) ||
@@ -468,23 +496,39 @@ internal sealed class ProcessSurveyPaymentEventCommandHandler(
         var receiptId = Guid.CreateVersion7();
         var payloadBytes = Encoding.UTF8.GetBytes(
             command.Payload.RootElement.GetRawText());
-        var payloadFingerprint = Convert.ToHexString(
+        var payloadFingerprint = Convert.ToHexStringLower(
             SHA256.HashData(payloadBytes));
+        var normalizedTxId = string.IsNullOrWhiteSpace(command.ProviderTransactionId)
+            ? null
+            : command.ProviderTransactionId.Trim();
+        var missingTxId = normalizedTxId is null;
         var receipt = SurveyFundingReceipt.Create(
             receiptId,
             order.TenantId,
             order.Id,
             obligation.Id,
             payment.Provider,
-            command.ProviderEventId,
+            normalizedTxId ?? $"unverified-tx:{identity.DeduplicationKey}",
             command.Amount,
             command.Currency,
             command.ProviderReference,
             payloadFingerprint,
             command.ReceivedAt,
             command.ReceivedAt,
-            surveyPaymentId: payment.Id);
+            surveyPaymentId: payment.Id,
+            requiresReconciliation: missingTxId,
+            reconciliationReason: missingTxId ? "MISSING_PROVIDER_TRANSACTION_ID" : null);
         repository.AddFundingReceipt(receipt);
+
+        if (missingTxId)
+        {
+            if (payment.Status is SurveyPaymentStatus.Pending or SurveyPaymentStatus.Processing or SurveyPaymentStatus.Paid)
+            {
+                payment.RequireAdjustment(EffectiveEventTime(command, payment));
+            }
+
+            return (true, "MISSING_PROVIDER_TRANSACTION_ID_REQUIRES_RECONCILIATION", null);
+        }
 
         if (order.Status == SurveyOrderStatus.Cancelled ||
             obligation.Status == SurveyDepositObligationStatus.Cancelled)
@@ -661,8 +705,10 @@ internal sealed class ProcessSurveyPaymentEventCommandHandler(
 
     private static (bool Applied, string Disposition) ApplyInvalidatedV3BalanceCallback(
         ProcessSurveyPaymentEventCommand command,
+        PaymentEventIdentity identity,
         SurveyPayment payment,
         SurveyOrder order,
+        bool receiptAlreadyRecorded,
         ISurveyPaymentProcessingRepository repository)
     {
         var eventType = command.EventType.Trim().ToLowerInvariant();
@@ -674,6 +720,11 @@ internal sealed class ProcessSurveyPaymentEventCommandHandler(
         if (eventType != SurveyPaymentCommandSupport.SucceededEvent)
         {
             return (false, "IGNORED_INVALIDATED_CHECKOUT");
+        }
+
+        if (receiptAlreadyRecorded)
+        {
+            return (false, "DUPLICATE_PROVIDER_TRANSACTION");
         }
 
         if (!string.Equals(command.Currency.Trim(), "VND", StringComparison.Ordinal) ||
@@ -688,9 +739,14 @@ internal sealed class ProcessSurveyPaymentEventCommandHandler(
         var payloadFingerprint = Convert.ToHexStringLower(
             SHA256.HashData(payloadBytes));
 
-        var reconciliationReason = payment.InvoiceRevisionId.HasValue
-            ? "LATE_RECEIPT_ON_INVALIDATED_CHECKOUT"
-            : "LATE_RECEIPT_ON_INVALIDATED_CHECKOUT_MISSING_INVOICE_LINKAGE";
+        var normalizedTxId = string.IsNullOrWhiteSpace(command.ProviderTransactionId)
+            ? null
+            : command.ProviderTransactionId.Trim();
+        var reconciliationReason = normalizedTxId is null
+            ? "MISSING_PROVIDER_TRANSACTION_ID_ON_INVALIDATED_CHECKOUT"
+            : payment.InvoiceRevisionId.HasValue
+                ? "LATE_RECEIPT_ON_INVALIDATED_CHECKOUT"
+                : "LATE_RECEIPT_ON_INVALIDATED_CHECKOUT_MISSING_INVOICE_LINKAGE";
 
         var receipt = SurveyFundingReceipt.Create(
             id: Guid.CreateVersion7(),
@@ -698,7 +754,7 @@ internal sealed class ProcessSurveyPaymentEventCommandHandler(
             surveyOrderId: order.Id,
             depositObligationId: null,
             provider: payment.Provider,
-            providerTransactionId: command.ProviderEventId,
+            providerTransactionId: normalizedTxId ?? $"unverified-tx:{identity.DeduplicationKey}",
             amount: command.Amount,
             currency: command.Currency,
             paymentReference: command.ProviderReference,
@@ -713,9 +769,251 @@ internal sealed class ProcessSurveyPaymentEventCommandHandler(
         repository.AddFundingReceipt(receipt);
 
         // Preserve payment.Status == Invalidated and never auto-credit the replacement invoice.
-        return (true, payment.InvoiceRevisionId.HasValue
-            ? "LATE_RECEIPT_RECORDED_FOR_RECONCILIATION"
-            : "LATE_RECEIPT_MISSING_INVOICE_LINKAGE_RECONCILIATION");
+        return (true, normalizedTxId is null
+            ? "MISSING_PROVIDER_TRANSACTION_ID_REQUIRES_RECONCILIATION"
+            : payment.InvoiceRevisionId.HasValue
+                ? "LATE_RECEIPT_RECORDED_FOR_RECONCILIATION"
+                : "LATE_RECEIPT_MISSING_INVOICE_LINKAGE_RECONCILIATION");
+    }
+
+    private static (bool Applied, string Disposition, Guid? FundingReceiptId) ApplyOpenV3FinalBalanceCallback(
+        ProcessSurveyPaymentEventCommand command,
+        PaymentEventIdentity identity,
+        SurveyPayment payment,
+        SurveyOrder order,
+        SurveyPaymentEventState state,
+        ISurveyPaymentProcessingRepository repository)
+    {
+        var eventType = command.EventType.Trim().ToLowerInvariant();
+        var effectiveAt = EffectiveEventTime(command, payment);
+
+        if (eventType is SurveyPaymentCommandSupport.RefundedEvent or SurveyPaymentCommandSupport.ChargebackEvent)
+        {
+            if (payment.Status is SurveyPaymentStatus.Pending or
+                SurveyPaymentStatus.Processing or
+                SurveyPaymentStatus.Paid)
+            {
+                payment.RequireAdjustment(effectiveAt);
+                return (true, "BALANCE_REVERSAL_REQUIRES_RECONCILIATION", null);
+            }
+
+            return (false, "BALANCE_REVERSAL_REQUIRES_RECONCILIATION", null);
+        }
+
+        if (eventType == SurveyPaymentCommandSupport.ProcessingEvent)
+        {
+            if (command.OccurredAt < payment.UpdatedAt ||
+                payment.Status != SurveyPaymentStatus.Pending)
+            {
+                return (false, "IGNORED_CURRENT_STATE", null);
+            }
+
+            payment.StartProcessing(command.ProviderReference, effectiveAt);
+            return (true, "PAYMENT_PROCESSING", null);
+        }
+
+        if (eventType == SurveyPaymentCommandSupport.FailedEvent)
+        {
+            if (command.OccurredAt < payment.UpdatedAt ||
+                payment.Status is not (SurveyPaymentStatus.Pending or SurveyPaymentStatus.Processing))
+            {
+                return (false, "IGNORED_CURRENT_STATE", null);
+            }
+
+            payment.Fail(effectiveAt);
+            return (true, "PAYMENT_FAILED", null);
+        }
+
+        if (eventType != SurveyPaymentCommandSupport.SucceededEvent)
+        {
+            return (false, "IGNORED_UNSUPPORTED_EVENT", null);
+        }
+
+        if (state.ReceiptAlreadyRecorded)
+        {
+            return (false, "DUPLICATE_PROVIDER_TRANSACTION", null);
+        }
+
+        var normalizedCurrency = command.Currency.Trim().ToUpperInvariant();
+        if (!string.Equals(normalizedCurrency, "VND", StringComparison.Ordinal) ||
+            !string.Equals(payment.Currency, normalizedCurrency, StringComparison.OrdinalIgnoreCase) ||
+            command.Amount <= 0m ||
+            decimal.Floor(command.Amount) != command.Amount)
+        {
+            if (payment.Status is SurveyPaymentStatus.Pending or
+                SurveyPaymentStatus.Processing or
+                SurveyPaymentStatus.Paid)
+            {
+                payment.RequireAdjustment(effectiveAt);
+                return (true, "AMOUNT_OR_CURRENCY_MISMATCH", null);
+            }
+
+            return (false, "AMOUNT_OR_CURRENCY_MISMATCH", null);
+        }
+
+        var payloadBytes = Encoding.UTF8.GetBytes(
+            command.Payload.RootElement.GetRawText());
+        var payloadFingerprint = Convert.ToHexStringLower(
+            SHA256.HashData(payloadBytes));
+
+        var normalizedTxId = string.IsNullOrWhiteSpace(command.ProviderTransactionId)
+            ? null
+            : command.ProviderTransactionId.Trim();
+
+        if (normalizedTxId is null)
+        {
+            var missingTxReceipt = SurveyFundingReceipt.Create(
+                id: Guid.CreateVersion7(),
+                tenantId: order.TenantId,
+                surveyOrderId: order.Id,
+                depositObligationId: null,
+                provider: payment.Provider,
+                providerTransactionId: $"unverified-tx:{identity.DeduplicationKey}",
+                amount: command.Amount,
+                currency: normalizedCurrency,
+                paymentReference: command.ProviderReference,
+                payloadFingerprint: payloadFingerprint,
+                receivedAt: command.ReceivedAt,
+                createdAt: command.ReceivedAt,
+                surveyPaymentId: payment.Id,
+                invoiceRevisionId: payment.InvoiceRevisionId,
+                requiresReconciliation: true,
+                reconciliationReason: "MISSING_PROVIDER_TRANSACTION_ID");
+            repository.AddFundingReceipt(missingTxReceipt);
+
+            if (payment.Status is SurveyPaymentStatus.Pending or
+                SurveyPaymentStatus.Processing)
+            {
+                payment.RequireAdjustment(effectiveAt);
+            }
+
+            return (true, "MISSING_PROVIDER_TRANSACTION_ID_REQUIRES_RECONCILIATION", null);
+        }
+
+        var currentInvoice = state.CurrentInvoice;
+        string? holdReason = null;
+        if (order.Status == SurveyOrderStatus.Cancelled)
+        {
+            holdReason = "LATE_RECEIPT_AFTER_ORDER_CANCELLATION";
+        }
+        else if (order.Status == SurveyOrderStatus.Completed)
+        {
+            holdReason = "EXTRA_RECEIPT_AFTER_ORDER_COMPLETION";
+        }
+        else if (order.Status != SurveyOrderStatus.AwaitingSettlement)
+        {
+            holdReason = "RECEIPT_OUTSIDE_AWAITING_SETTLEMENT";
+        }
+        else if (!payment.InvoiceRevisionId.HasValue ||
+                 currentInvoice is null ||
+                 currentInvoice.Status != SurveyInvoiceRevision.StatusCurrent ||
+                 payment.InvoiceRevisionId.Value != currentInvoice.InvoiceRevisionId)
+        {
+            holdReason = "INVOICE_REVISION_MISMATCH_OR_MISSING_LINKAGE";
+        }
+        else if (!string.Equals(currentInvoice.Currency, normalizedCurrency, StringComparison.OrdinalIgnoreCase))
+        {
+            holdReason = "INVOICE_CURRENCY_MISMATCH";
+        }
+
+        if (holdReason is not null)
+        {
+            var holdReceipt = SurveyFundingReceipt.Create(
+                id: Guid.CreateVersion7(),
+                tenantId: order.TenantId,
+                surveyOrderId: order.Id,
+                depositObligationId: null,
+                provider: payment.Provider,
+                providerTransactionId: normalizedTxId,
+                amount: command.Amount,
+                currency: normalizedCurrency,
+                paymentReference: command.ProviderReference,
+                payloadFingerprint: payloadFingerprint,
+                receivedAt: command.ReceivedAt,
+                createdAt: command.ReceivedAt,
+                surveyPaymentId: payment.Id,
+                invoiceRevisionId: payment.InvoiceRevisionId,
+                requiresReconciliation: true,
+                reconciliationReason: holdReason);
+            repository.AddFundingReceipt(holdReceipt);
+
+            if (payment.Status is SurveyPaymentStatus.Pending or
+                SurveyPaymentStatus.Processing)
+            {
+                payment.RequireAdjustment(effectiveAt);
+            }
+
+            return (true, $"{holdReason}_RECONCILIATION", null);
+        }
+
+        var cumulativeAmount = state.PriorReceiptsForPaymentAmount + command.Amount;
+        if (cumulativeAmount > payment.Amount)
+        {
+            var overIntentReceipt = SurveyFundingReceipt.Create(
+                id: Guid.CreateVersion7(),
+                tenantId: order.TenantId,
+                surveyOrderId: order.Id,
+                depositObligationId: null,
+                provider: payment.Provider,
+                providerTransactionId: normalizedTxId,
+                amount: command.Amount,
+                currency: normalizedCurrency,
+                paymentReference: command.ProviderReference,
+                payloadFingerprint: payloadFingerprint,
+                receivedAt: command.ReceivedAt,
+                createdAt: command.ReceivedAt,
+                surveyPaymentId: payment.Id,
+                invoiceRevisionId: payment.InvoiceRevisionId,
+                requiresReconciliation: true,
+                reconciliationReason: "RECEIPT_EXCEEDS_CHECKOUT_INTENT_AMOUNT");
+            repository.AddFundingReceipt(overIntentReceipt);
+
+            if (payment.Status is SurveyPaymentStatus.Pending or
+                SurveyPaymentStatus.Processing)
+            {
+                payment.RequireAdjustment(effectiveAt);
+            }
+
+            return (true, "BALANCE_RECEIPT_EXCEEDS_INTENT_RECONCILIATION", null);
+        }
+
+        var validReceipt = SurveyFundingReceipt.Create(
+            id: Guid.CreateVersion7(),
+            tenantId: order.TenantId,
+            surveyOrderId: order.Id,
+            depositObligationId: null,
+            provider: payment.Provider,
+            providerTransactionId: normalizedTxId,
+            amount: command.Amount,
+            currency: normalizedCurrency,
+            paymentReference: command.ProviderReference,
+            payloadFingerprint: payloadFingerprint,
+            receivedAt: command.ReceivedAt,
+            createdAt: command.ReceivedAt,
+            surveyPaymentId: payment.Id,
+            invoiceRevisionId: payment.InvoiceRevisionId,
+            requiresReconciliation: false,
+            reconciliationReason: null);
+        repository.AddFundingReceipt(validReceipt);
+
+        if (cumulativeAmount == payment.Amount)
+        {
+            if (payment.Status is SurveyPaymentStatus.Pending or
+                SurveyPaymentStatus.Processing or
+                SurveyPaymentStatus.AdjustmentRequired)
+            {
+                payment.Confirm(command.ProviderReference, effectiveAt);
+            }
+
+            return (true, "FINAL_BALANCE_RECEIPT_CONFIRMED", validReceipt.Id);
+        }
+
+        if (payment.Status == SurveyPaymentStatus.Pending)
+        {
+            payment.StartProcessing(command.ProviderReference, effectiveAt);
+        }
+
+        return (true, "PARTIAL_FINAL_BALANCE_RECEIPT_RECORDED", validReceipt.Id);
     }
 
     private static DateTimeOffset EffectiveEventTime(
