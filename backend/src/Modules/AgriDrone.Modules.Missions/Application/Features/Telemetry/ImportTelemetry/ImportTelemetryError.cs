@@ -24,12 +24,6 @@ internal static class ImportTelemetryError
             "Mission start and end timestamps are required " +
             "before telemetry can be imported.");
 
-    public static AppError TimestampOutsideMission() =>
-        AppError.Validation(
-            "TelemetryImport.TimestampOutsideMission",
-            "Telemetry timestamps must be within the " +
-            "Mission flight interval.");
-
     public static AppError CaptureUploadClosed() =>
         AppError.Conflict(
             "TelemetryImport.CaptureUploadClosed",

@@ -449,7 +449,8 @@ public sealed class V303H2MediaSecurityAcceptanceTests : V303H2IntegrationTestBa
         context.Set<MissionMedia>().Add(missionMedia);
         await context.SaveChangesAsync();
 
-        await SeedCaptureTelemetryAsync(context, prepRes.MissionId, seeded.ManagerUserId);
+        await SeedCaptureTelemetryAsync(
+            context, prepRes.MissionId, seeded.ManagerUserId, clockOffset: TimeSpan.FromHours(-7));
         var orderVerFreeze = await GetOrderVersionAsync(DatabaseName, seeded.OrderId);
         var freezeRes = await coordinator.FreezeInputManifestAsync(new FreezeCaptureInputManifestRequest(
             seeded.OrderId,

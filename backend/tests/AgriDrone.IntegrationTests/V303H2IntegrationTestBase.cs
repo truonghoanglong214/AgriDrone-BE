@@ -89,11 +89,12 @@ public abstract class V303H2IntegrationTestBase : IAsyncLifetime
     protected static async Task SeedCaptureTelemetryAsync(
         AgriDroneSchemaDbContext context,
         Guid missionId,
-        Guid actorId)
+        Guid actorId,
+        TimeSpan clockOffset = default)
     {
         var mission = await context.Set<DroneMission>().AsNoTracking().SingleAsync(value => value.Id == missionId);
-        var startedAt = mission.StartedAt!.Value;
-        var endedAt = mission.EndedAt!.Value;
+        var startedAt = mission.StartedAt!.Value + clockOffset;
+        var endedAt = mission.EndedAt!.Value + clockOffset;
         var importedAt = DateTimeOffset.UtcNow;
         using var segment = JsonSerializer.SerializeToDocument(new
         {

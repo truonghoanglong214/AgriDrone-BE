@@ -130,20 +130,11 @@ internal sealed class ImportTelemetryCommandHandler(
                     request.MissionId,
                     cancellationToken);
 
-        if (mission.StartedAt is not DateTimeOffset startedAt ||
-            mission.EndedAt is not DateTimeOffset endedAt)
+        if (mission.StartedAt is null || mission.EndedAt is null)
         {
             return Result.Failure<ImportTelemetryResult>(
                 ImportTelemetryError
                     .FlightTimelineMissing());
-        }
-
-        if (orderedInput[0].RecordedAt < startedAt ||
-            orderedInput[^1].RecordedAt > endedAt)
-        {
-            return Result.Failure<ImportTelemetryResult>(
-                ImportTelemetryError
-                    .TimestampOutsideMission());
         }
 
         var now = timeProvider.GetUtcNow();

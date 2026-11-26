@@ -931,8 +931,7 @@ internal sealed class SurveyCaptureExecutionCoordinator(
             telemetry.SelectedSegmentJson?.RootElement is not { ValueKind: JsonValueKind.Object } segment ||
             !segment.TryGetProperty("points", out var points) ||
             points.ValueKind != JsonValueKind.Array || points.GetArrayLength() != telemetry.PointCount ||
-            mission.StartedAt is not DateTimeOffset startedAt || mission.EndedAt is not DateTimeOffset endedAt ||
-            telemetry.FirstRecordedAt < startedAt || telemetry.LastRecordedAt > endedAt ||
+            mission.StartedAt is null || mission.EndedAt is null ||
             telemetry.FirstRecordedAt >= telemetry.LastRecordedAt)
         {
             return null;
