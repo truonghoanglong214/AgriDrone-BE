@@ -116,7 +116,18 @@ public sealed class V3SettlementAndStateTests
         order.TransitionToAwaitingProcessingV3(Now.AddMinutes(6));
         order.TransitionToProcessingV3(Now.AddMinutes(7));
 
-        order.TransitionToAwaitingSettlementV3(Now.AddMinutes(8));
+        var snapshot = SurveyOrderPoleCountSnapshot.Create(
+            Guid.NewGuid(), order.Id, order.TenantId, order.FarmId,
+            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
+            Guid.NewGuid(), Guid.NewGuid(), new string('a', 64), [], ActorId, Now.AddMinutes(8));
+
+        order.RecordInitialMapApproval(snapshot, order.Version);
+
+        Assert.Equal(SurveyOrderStatus.Processing, order.Status);
+        Assert.Equal(snapshot.Id, order.VerifiedPoleCountSnapshotId);
+        Assert.Equal(snapshot.FarmBaseMapVersionId, order.BaselineMapVersionId);
+
+        order.TransitionToAwaitingSettlementV3(Now.AddMinutes(9));
         Assert.Equal(SurveyOrderStatus.AwaitingSettlement, order.Status);
     }
 

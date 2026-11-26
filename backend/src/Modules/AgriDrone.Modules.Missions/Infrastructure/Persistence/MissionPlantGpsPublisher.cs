@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using AgriDrone.IntegrationContracts.Mapping;
+using AgriDrone.IntegrationContracts.Surveys;
 using AgriDrone.IntegrationContracts.Messaging;
 using AgriDrone.IntegrationContracts.Messaging.Validation;
 using AgriDrone.Modules.Missions.Application.Abstractions.Missions;
@@ -15,7 +16,8 @@ namespace AgriDrone.Modules.Missions.Infrastructure.Persistence;
 internal sealed class MissionPlantGpsPublisher(
     MissionsDbContext db,
     OutboxMessageFactory outboxMessageFactory,
-    TimeProvider timeProvider) : IMissionPlantGpsPublisher
+    TimeProvider timeProvider,
+    ISurveyOrderCommercialSnapshotQuery commercialSnapshotQuery) : IMissionPlantGpsPublisher
 {
     public async Task<MissionPlantGpsPublishResult> PublishAsync(
         Guid tenantId,
@@ -64,11 +66,12 @@ internal sealed class MissionPlantGpsPublisher(
         var captureAttemptMatches = await db.Database.SqlQueryRaw<int>(
                 "SELECT 1 AS \"Value\" FROM survey.capture_attempts " +
                 "WHERE id = {0} AND order_id = {1} " +
-                "AND tenant_id = {2} AND farm_id = {3}",
+                "AND tenant_id = {2} AND farm_id = {3} AND mission_id = {4}",
                 captureAttemptId,
                 request.SurveyOrderId,
                 tenantId,
-                farmId)
+                farmId,
+                missionId)
             .AnyAsync(cancellationToken);
         if (!captureAttemptMatches)
         {
@@ -86,10 +89,30 @@ internal sealed class MissionPlantGpsPublisher(
 
         var farmBoundaryVersionId = mission.FarmBoundaryVersionId.Value;
 
-        // Whitelist mapping kind according to mission purpose
         MappingKind determinedKind;
         Guid? expectedCurrentMapId;
-        if (mission.Purpose == MissionPurpose.BaselineMapping)
+        if (mission.Purpose == MissionPurpose.Capture)
+        {
+            var context = await commercialSnapshotQuery.GetMappingContextAsync(
+                request.SurveyOrderId, tenantId, farmId, missionId, captureAttemptId, cancellationToken);
+            if (context is null || context.FarmBoundaryVersionId != farmBoundaryVersionId)
+            {
+                return new MissionPlantGpsPublishResult(
+                    MissionPlantGpsPublishStatus.Conflict,
+                    Errors: ["Mapping requires a V3 order with MapsPoles enabled and a matching Processing capture attempt and boundary."]);
+            }
+
+            determinedKind = context.RequiresBaselineMapping ? MappingKind.FirstBaseline : MappingKind.FollowUpSnapshot;
+            expectedCurrentMapId = context.RequiresBaselineMapping ? null : context.FarmBaseMapVersionId;
+            if (mission.SourceMapVersionId != expectedCurrentMapId ||
+                (!context.RequiresBaselineMapping && (!expectedCurrentMapId.HasValue || expectedCurrentMapId == Guid.Empty)))
+            {
+                return new MissionPlantGpsPublishResult(
+                    MissionPlantGpsPublishStatus.Conflict,
+                    Errors: ["The mission source map does not match the mapping lineage pinned on the survey order."]);
+            }
+        }
+        else if (mission.Purpose == MissionPurpose.BaselineMapping)
         {
             determinedKind = MappingKind.FirstBaseline;
             expectedCurrentMapId = null;

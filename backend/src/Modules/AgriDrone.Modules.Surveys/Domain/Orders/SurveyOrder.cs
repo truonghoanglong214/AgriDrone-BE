@@ -833,9 +833,12 @@ public sealed class SurveyOrder : AggregateRoot
             throw new InvalidOperationException("Initial map approval is only valid for first baseline orders.");
         }
 
-        if (Status != SurveyOrderStatus.AwaitingBaselineReview)
+        var expectedStatus = Scope == ContractScope.V3
+            ? SurveyOrderStatus.Processing
+            : SurveyOrderStatus.AwaitingBaselineReview;
+        if (Status != expectedStatus)
         {
-            throw new InvalidOperationException($"Cannot record initial map approval in status '{Status}'. Must be AwaitingBaselineReview.");
+            throw new InvalidOperationException($"Cannot record initial map approval in status '{Status}'. Must be {expectedStatus}.");
         }
 
         if (snapshot.RevisionNumber != 1)
@@ -877,6 +880,13 @@ public sealed class SurveyOrder : AggregateRoot
         VerifiedBillablePoleCount = snapshot.VerifiedBillablePoleCount;
         CountVerifiedBy = snapshot.VerifiedBy;
         CountVerifiedAt = snapshot.VerifiedAt;
+
+        if (Scope == ContractScope.V3)
+        {
+            UpdatedAt = snapshot.VerifiedAt;
+            Version++;
+            return;
+        }
 
         var targetStatus = IsPostFlightPlantHealthOrder && RequiresBaselineMapping
             ? SurveyOrderStatus.AwaitingPaidAppointment

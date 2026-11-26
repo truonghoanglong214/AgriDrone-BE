@@ -8,6 +8,7 @@ using AgriDrone.Modules.Farms.Domain.Maps;
 using AgriDrone.Modules.Farms.Domain.Maps.Staging;
 using AgriDrone.Modules.Surveys.Domain;
 using AgriDrone.Modules.Missions.Domain.Processing;
+using AgriDrone.Modules.Missions.Domain.Missions;
 using AgriDrone.SharedInfrastructure.Messaging.Consumers;
 using AgriDrone.SharedInfrastructure.Messaging.Inbox;
 using AgriDrone.SharedKernel.Domain.Spatial;
@@ -40,16 +41,18 @@ internal sealed class MappingCandidatesReadyV4Handler(
         var producedAt = payload.ProducedAt;
         var payloadFingerprint = ComputePayloadFingerprint(payload);
 
-        var order = await context.SurveyOrders.SingleOrDefaultAsync(
-            o => o.Id == payload.SurveyOrderId, cancellationToken);
+        var orderContext = await context.SurveyOrders.AsNoTracking()
+            .Where(o => o.Id == payload.SurveyOrderId)
+            .Select(o => new { o.TenantId, o.FarmId })
+            .SingleOrDefaultAsync(cancellationToken);
 
-        if (order is null)
+        if (orderContext is null)
         {
             return InboxHandlerResult.Retry("The survey order is not available yet.");
         }
 
-        if (envelope.TenantId.HasValue && order.TenantId != envelope.TenantId.Value ||
-            order.FarmId != payload.FarmId)
+        if (envelope.TenantId.HasValue && orderContext.TenantId != envelope.TenantId.Value ||
+            orderContext.FarmId != payload.FarmId)
         {
             return InboxHandlerResult.PermanentFailure(
                 "MappingCandidatesReadyV4.ContextMismatch",
@@ -86,11 +89,19 @@ internal sealed class MappingCandidatesReadyV4Handler(
 
         // Lock farm row FOR UPDATE with tenant isolation to prevent concurrent map ingestion
         var farm = await context.Farms
-            .FromSqlInterpolated($"SELECT * FROM farm.farms WHERE id = {payload.FarmId} AND tenant_id = {order.TenantId} FOR UPDATE")
+            .FromSqlInterpolated($"SELECT * FROM farm.farms WHERE id = {payload.FarmId} AND tenant_id = {orderContext.TenantId} FOR UPDATE")
             .SingleOrDefaultAsync(cancellationToken);
         if (farm is null)
         {
             return InboxHandlerResult.Retry("The target farm is not available yet.");
+        }
+
+        var order = await context.SurveyOrders
+            .FromSqlInterpolated($"SELECT *, xmin FROM survey.survey_orders WHERE id = {payload.SurveyOrderId} AND tenant_id = {orderContext.TenantId} AND farm_id = {payload.FarmId} FOR UPDATE")
+            .SingleOrDefaultAsync(cancellationToken);
+        if (order is null)
+        {
+            return InboxHandlerResult.Retry("The survey order is not available yet.");
         }
 
         var processingJob = await context.AiProcessingJobs
@@ -156,12 +167,9 @@ internal sealed class MappingCandidatesReadyV4Handler(
         }
 
         // Load and validate CaptureAttempt context
-        var attempt = await context.CaptureAttempts.SingleOrDefaultAsync(
-            a => a.Id == payload.CaptureAttemptId &&
-                 a.TenantId == order.TenantId &&
-                 a.FarmId == order.FarmId &&
-                 a.OrderId == order.Id &&
-                 a.MissionId == payload.MissionId, cancellationToken);
+        var attempt = await context.CaptureAttempts
+            .FromSqlInterpolated($"SELECT * FROM survey.capture_attempts WHERE id = {payload.CaptureAttemptId} AND order_id = {order.Id} AND mission_id = {payload.MissionId} AND tenant_id = {order.TenantId} AND farm_id = {order.FarmId} FOR SHARE")
+            .SingleOrDefaultAsync(cancellationToken);
         if (attempt is null)
         {
             return InboxHandlerResult.PermanentFailure(
@@ -222,6 +230,20 @@ internal sealed class MappingCandidatesReadyV4Handler(
                 "No effective spatial policy exists for the survey capture time.");
         }
 
+        var isV3 = order.Scope == ContractScope.V3;
+        if (isV3 && (mission.Purpose != MissionPurpose.Capture ||
+                     order.Status != SurveyOrderStatus.Processing ||
+                     attempt.Status != CaptureAttemptStatus.Processing ||
+                     order.FarmBoundaryVersionId != payload.FarmBoundaryVersionId ||
+                     mission.SourceMapVersionId != payload.ExpectedCurrentFarmBaseMapVersionId ||
+                     (!order.RequiresBaselineMapping &&
+                      order.FarmBaseMapVersionId != payload.ExpectedCurrentFarmBaseMapVersionId)))
+        {
+            return InboxHandlerResult.PermanentFailure(
+                "MappingCandidatesReadyV4.InvalidCaptureContext",
+                "The V3 order and capture attempt must be Processing and match the mission and pinned mapping lineage.");
+        }
+
         // Pointer Resolution
         var pointer = await context.FarmBaselinePointers
             .SingleOrDefaultAsync(p => p.FarmId == payload.FarmId && p.TenantId == order.TenantId, cancellationToken);
@@ -236,7 +258,7 @@ internal sealed class MappingCandidatesReadyV4Handler(
                     $"Survey order {order.Id} does not require baseline mapping.");
             }
 
-            if (order.Status != SurveyOrderStatus.BaselineInProgress)
+            if (!isV3 && order.Status != SurveyOrderStatus.BaselineInProgress)
             {
                 return InboxHandlerResult.PermanentFailure(
                     "MappingCandidatesReadyV4.InvalidOrderStatus",
@@ -503,7 +525,7 @@ internal sealed class MappingCandidatesReadyV4Handler(
 
         try
         {
-            if (payload.MappingKind == MappingKind.FirstBaseline)
+            if (!isV3 && payload.MappingKind == MappingKind.FirstBaseline)
             {
                 order.MarkBaselineCandidatesReady(producedAt);
             }

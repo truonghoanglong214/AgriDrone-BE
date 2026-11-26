@@ -205,16 +205,28 @@ internal sealed class FarmBaseMapInternalApprovalOrchestrator(
                 }
 
                 var order = await dbContext.SurveyOrders
-                    .SingleOrDefaultAsync(
-                        o => o.Id == draft.SourceSurveyOrderId &&
-                             o.TenantId == draft.TenantId &&
-                             o.FarmId == draft.FarmId,
-                        transactionToken);
+                    .FromSqlInterpolated($"SELECT *, xmin FROM survey.survey_orders WHERE id = {draft.SourceSurveyOrderId} AND tenant_id = {draft.TenantId} AND farm_id = {draft.FarmId} FOR UPDATE")
+                    .SingleOrDefaultAsync(transactionToken);
 
                 if (order is null)
                 {
                     return Result.Failure<FarmBaseMapInternallyApprovedResult>(
                         AppError.NotFound("SurveyOrder.NotFound", "Associated survey order not found."));
+                }
+
+                var isV3 = order.Scope == ContractScope.V3;
+                if (isV3)
+                {
+                    var attempt = await dbContext.CaptureAttempts
+                        .FromSqlInterpolated($"SELECT * FROM survey.capture_attempts WHERE id = {batch.CaptureAttemptId} AND order_id = {order.Id} AND mission_id = {batch.MissionId} AND tenant_id = {order.TenantId} AND farm_id = {order.FarmId} FOR SHARE")
+                        .SingleOrDefaultAsync(transactionToken);
+                    if (attempt?.Status != CaptureAttemptStatus.Processing ||
+                        order.FarmBoundaryVersionId != batch.FarmBoundaryVersionId)
+                    {
+                        return Result.Failure<FarmBaseMapInternallyApprovedResult>(
+                            AppError.Conflict("CaptureAttempt.InvalidMappingContext",
+                                "Map approval requires the matching Processing capture attempt and pinned boundary."));
+                    }
                 }
 
                 if (batch.MappingKind == MappingKind.FirstBaseline)
@@ -236,7 +248,10 @@ internal sealed class FarmBaseMapInternalApprovalOrchestrator(
                                 $"Survey order {order.Id} does not require baseline mapping."));
                     }
 
-                    if (order.Status != SurveyOrderStatus.AwaitingBaselineReview)
+                    var expectedStatus = isV3
+                        ? SurveyOrderStatus.Processing
+                        : SurveyOrderStatus.AwaitingBaselineReview;
+                    if (order.Status != expectedStatus)
                     {
                         return Result.Failure<FarmBaseMapInternallyApprovedResult>(
                             AppError.Conflict(

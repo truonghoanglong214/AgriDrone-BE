@@ -58,9 +58,10 @@ internal sealed class FarmBaseMapInternallyApprovedV1Handler(
 
         var isPurposeValid = payload.MappingKind switch
         {
-            MappingKind.FirstBaseline => sourceMission.Purpose == MissionPurpose.BaselineMapping,
+            MappingKind.FirstBaseline => sourceMission.Purpose is
+                MissionPurpose.Capture or MissionPurpose.BaselineMapping,
             MappingKind.FollowUpSnapshot => sourceMission.Purpose is
-                MissionPurpose.PlantHealth or MissionPurpose.HarvestReadiness,
+                MissionPurpose.Capture or MissionPurpose.PlantHealth or MissionPurpose.HarvestReadiness,
             _ => false
         };
 
@@ -86,7 +87,7 @@ internal sealed class FarmBaseMapInternallyApprovedV1Handler(
 
         var updatedMissions = outcome == DroneMissionApprovalOutcome.Applied ? 1 : 0;
 
-        if (payload.MappingKind == MappingKind.FirstBaseline)
+        if (payload.MappingKind == MappingKind.FirstBaseline && sourceMission.Purpose != MissionPurpose.Capture)
         {
             var dependentMissions = await context.DroneMissions
                 .Where(m => m.SurveyOrderId == payload.SurveyOrderId &&

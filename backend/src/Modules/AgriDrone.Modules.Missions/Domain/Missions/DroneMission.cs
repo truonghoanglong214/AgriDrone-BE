@@ -955,6 +955,30 @@ public sealed class DroneMission : AggregateRoot
             return DroneMissionApprovalOutcome.Conflict;
         }
 
+        if (Purpose == global::AgriDrone.Modules.Missions.Domain.Missions.MissionPurpose.Capture)
+        {
+            if (InternallyApprovedMapVersionId.HasValue)
+            {
+                return InternallyApprovedMapVersionId == farmBaseMapVersionId && MappingApprovalId == approvalId
+                    ? DroneMissionApprovalOutcome.NoChange
+                    : DroneMissionApprovalOutcome.Conflict;
+            }
+
+            if (!CaptureAttemptId.HasValue || Status is MissionStatus.Cancelled or MissionStatus.FlightFailed)
+            {
+                return DroneMissionApprovalOutcome.Conflict;
+            }
+
+            InternallyApprovedMapVersionId = farmBaseMapVersionId;
+            MappingApprovalId = approvalId;
+            MapInternallyApprovedAt = approvedAt;
+            if (approvedAt > UpdatedAt)
+            {
+                UpdatedAt = approvedAt;
+            }
+            return DroneMissionApprovalOutcome.Applied;
+        }
+
         if (Purpose == global::AgriDrone.Modules.Missions.Domain.Missions.MissionPurpose.BaselineMapping)
         {
             if (InternallyApprovedMapVersionId == farmBaseMapVersionId &&
