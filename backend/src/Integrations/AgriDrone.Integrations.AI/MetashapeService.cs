@@ -430,66 +430,7 @@ public sealed class MetashapeService(
                     $"YOLO detection error ({response.StatusCode}): {responseBody}");
             }
 
-            using var doc = JsonDocument.Parse(responseBody);
-            var root = doc.RootElement;
-
-            var modelName = root.TryGetProperty("model_name", out var mn) ? mn.GetString() ?? "" : "";
-            var totalScanned = root.TryGetProperty("total_tiles_scanned", out var ts) ? ts.GetInt32() : 0;
-            var totalRaw = root.TryGetProperty("total_raw_detections", out var tr) ? tr.GetInt32() : 0;
-            var totalUnique = root.TryGetProperty("total_unique_trees", out var tu) ? tu.GetInt32() : 0;
-            var totalMissing = root.TryGetProperty("total_missing_trees", out var tm) ? tm.GetInt32() : 0;
-            double? sugRow = root.TryGetProperty("suggested_row_spacing", out var sr) && sr.ValueKind == JsonValueKind.Number ? sr.GetDouble() : null;
-            double? sugCol = root.TryGetProperty("suggested_col_spacing", out var sc) && sc.ValueKind == JsonValueKind.Number ? sc.GetDouble() : null;
-            var maxRow = root.TryGetProperty("max_row", out var mr) ? mr.GetInt32() : 0;
-            var maxCol = root.TryGetProperty("max_col", out var mc) ? mc.GetInt32() : 0;
-            var csvUrl = root.TryGetProperty("csv_download_url", out var cu) ? cu.GetString() : null;
-
-            static List<TreeDetectionItem> ParseTrees(JsonElement element)
-            {
-                var list = new List<TreeDetectionItem>();
-                if (element.ValueKind == JsonValueKind.Array)
-                {
-                    foreach (var item in element.EnumerateArray())
-                    {
-                        var id = item.GetProperty("id").GetString() ?? "";
-                        var row = item.GetProperty("row").GetInt32();
-                        var col = item.GetProperty("col").GetInt32();
-                        var lat = item.GetProperty("lat").GetDouble();
-                        var lon = item.GetProperty("lon").GetDouble();
-                        var conf = item.TryGetProperty("confidence", out var c) ? c.GetDouble() : 1.0;
-                        var st = item.TryGetProperty("status", out var s) ? s.GetString() ?? "" : "";
-                        var src = item.TryGetProperty("source", out var srcElem) ? srcElem.GetString() ?? "" : "";
-                        var isAnchor = item.TryGetProperty("is_anchor", out var a) && a.GetBoolean();
-
-                        list.Add(new TreeDetectionItem(id, row, col, lat, lon, conf, st, src, isAnchor));
-                    }
-                }
-                return list;
-            }
-
-            var activeTrees = root.TryGetProperty("active_trees", out var atElem)
-                ? ParseTrees(atElem)
-                : new List<TreeDetectionItem>();
-
-            var missingTrees = root.TryGetProperty("missing_trees", out var mtElem)
-                ? ParseTrees(mtElem)
-                : new List<TreeDetectionItem>();
-
-            return new DetectMissionTreesResult(
-                true,
-                missionId,
-                modelName,
-                totalScanned,
-                totalRaw,
-                totalUnique,
-                totalMissing,
-                sugRow,
-                sugCol,
-                maxRow,
-                maxCol,
-                csvUrl,
-                activeTrees,
-                missingTrees);
+            return ParseDetectMissionTreesResponse(missionId, responseBody);
         }
         catch (Exception ex)
         {
@@ -503,6 +444,146 @@ public sealed class MetashapeService(
                 Array.Empty<TreeDetectionItem>(),
                 ex.Message);
         }
+    }
+
+    public async Task<DetectMissionTreesResult> RecalculateTreeGridAsync(
+        Guid missionId,
+        IReadOnlyList<TreeDetectionItem> activeTrees,
+        double rowSpacing = 2.8,
+        double colSpacing = 2.5,
+        object? polygonGeoJson = null,
+        double? anchorLat = null,
+        double? anchorLon = null,
+        double? customAngleDeg = null,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var payload = new
+            {
+                mission_id = missionId.ToString("D"),
+                active_trees = activeTrees.Select(t => new
+                {
+                    id = t.Id,
+                    row = t.Row,
+                    col = t.Col,
+                    lat = t.Lat,
+                    lon = t.Lon,
+                    confidence = t.Confidence,
+                    status = t.Status,
+                    source = t.Source,
+                    is_anchor = t.IsAnchor
+                }).ToList(),
+                row_spacing = rowSpacing,
+                col_spacing = colSpacing,
+                anchor_lat = anchorLat,
+                anchor_lon = anchorLon,
+                custom_angle_deg = customAngleDeg,
+                polygon_geojson = CleanPolygonGeoJson(polygonGeoJson)
+            };
+
+            var json = JsonSerializer.Serialize(payload, JsonOpts);
+            var requestUri = $"{_options.Endpoint.TrimEnd('/')}/api/v1/yolo/recalculate-grid";
+            using var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+            var response = await httpClient.PostAsync(requestUri, content, cancellationToken);
+            var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                logger.LogError(
+                    "Tree grid recalculation failed with HTTP {Status}: {Body}",
+                    (int)response.StatusCode,
+                    responseBody);
+
+                return new DetectMissionTreesResult(
+                    false,
+                    missionId,
+                    string.Empty,
+                    0, 0, 0, 0, null, null, 0, 0, null,
+                    Array.Empty<TreeDetectionItem>(),
+                    Array.Empty<TreeDetectionItem>(),
+                    $"Recalculate grid error ({response.StatusCode}): {responseBody}");
+            }
+
+            return ParseDetectMissionTreesResponse(missionId, responseBody);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to recalculate tree grid for mission {MissionId}", missionId);
+            return new DetectMissionTreesResult(
+                false,
+                missionId,
+                string.Empty,
+                0, 0, 0, 0, null, null, 0, 0, null,
+                Array.Empty<TreeDetectionItem>(),
+                Array.Empty<TreeDetectionItem>(),
+                ex.Message);
+        }
+    }
+
+    private static DetectMissionTreesResult ParseDetectMissionTreesResponse(Guid missionId, string responseBody)
+    {
+        using var doc = JsonDocument.Parse(responseBody);
+        var root = doc.RootElement;
+
+        var modelName = root.TryGetProperty("model_name", out var mn) ? mn.GetString() ?? "" : "";
+        var totalScanned = root.TryGetProperty("total_tiles_scanned", out var ts) ? ts.GetInt32() : 0;
+        var totalRaw = root.TryGetProperty("total_raw_detections", out var tr) ? tr.GetInt32() : 0;
+        var totalUnique = root.TryGetProperty("total_unique_trees", out var tu) ? tu.GetInt32() : 0;
+        var totalMissing = root.TryGetProperty("total_missing_trees", out var tm) ? tm.GetInt32() : 0;
+        double? sugRow = root.TryGetProperty("suggested_row_spacing", out var sr) && sr.ValueKind == JsonValueKind.Number ? sr.GetDouble() : null;
+        double? sugCol = root.TryGetProperty("suggested_col_spacing", out var sc) && sc.ValueKind == JsonValueKind.Number ? sc.GetDouble() : null;
+        var maxRow = root.TryGetProperty("max_row", out var mr) ? mr.GetInt32() : 0;
+        var maxCol = root.TryGetProperty("max_col", out var mc) ? mc.GetInt32() : 0;
+        var csvUrl = root.TryGetProperty("csv_download_url", out var cu) ? cu.GetString() : null;
+
+        static List<TreeDetectionItem> ParseTrees(JsonElement element)
+        {
+            var list = new List<TreeDetectionItem>();
+            if (element.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in element.EnumerateArray())
+                {
+                    var id = item.GetProperty("id").GetString() ?? "";
+                    var row = item.GetProperty("row").GetInt32();
+                    var col = item.GetProperty("col").GetInt32();
+                    var lat = item.GetProperty("lat").GetDouble();
+                    var lon = item.GetProperty("lon").GetDouble();
+                    var conf = item.TryGetProperty("confidence", out var c) ? c.GetDouble() : 1.0;
+                    var st = item.TryGetProperty("status", out var s) ? s.GetString() ?? "" : "";
+                    var src = item.TryGetProperty("source", out var srcElem) ? srcElem.GetString() ?? "" : "";
+                    var isAnchor = item.TryGetProperty("is_anchor", out var a) && a.GetBoolean();
+
+                    list.Add(new TreeDetectionItem(id, row, col, lat, lon, conf, st, src, isAnchor));
+                }
+            }
+            return list;
+        }
+
+        var activeTrees = root.TryGetProperty("active_trees", out var atElem)
+            ? ParseTrees(atElem)
+            : new List<TreeDetectionItem>();
+
+        var missingTrees = root.TryGetProperty("missing_trees", out var mtElem)
+            ? ParseTrees(mtElem)
+            : new List<TreeDetectionItem>();
+
+        return new DetectMissionTreesResult(
+            true,
+            missionId,
+            modelName,
+            totalScanned,
+            totalRaw,
+            totalUnique,
+            totalMissing,
+            sugRow,
+            sugCol,
+            maxRow,
+            maxCol,
+            csvUrl,
+            activeTrees,
+            missingTrees);
     }
 
     public async Task<(byte[] Bytes, string FileName)?> DownloadTreesCsvAsync(

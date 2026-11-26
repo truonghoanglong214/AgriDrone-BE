@@ -11,6 +11,15 @@ public sealed record DetectMissionTreesRequest(
     double? CustomAngleDeg = null,
     JsonElement? PolygonGeoJson = null);
 
+public sealed record RecalculateMissionTreeGridRequest(
+    IReadOnlyList<DetectedTreeItemResponse> ActiveTrees,
+    double RowSpacing = 2.8,
+    double ColSpacing = 2.5,
+    double? AnchorLat = null,
+    double? AnchorLon = null,
+    double? CustomAngleDeg = null,
+    JsonElement? PolygonGeoJson = null);
+
 public sealed record DetectedTreeItemResponse(
     string Id,
     int Row,
