@@ -67,20 +67,31 @@ public sealed class SurveyRefundObligationConfiguration
             .OnDelete(DeleteBehavior.Restrict)
             .HasConstraintName("fk_survey_refund_obligations_order");
 
+        builder.Property<Guid?>("CancellationDecisionId")
+            .HasColumnName("cancellation_decision_id")
+            .HasComputedColumnSql("CASE WHEN origin_kind <> 'OVERPAYMENT'::system.survey_refund_origin_kind THEN origin_decision_id END", stored: true);
+        builder.Property<Guid?>("OverpaymentInvoiceRevisionId")
+            .HasColumnName("overpayment_invoice_revision_id")
+            .HasComputedColumnSql("CASE WHEN origin_kind = 'OVERPAYMENT'::system.survey_refund_origin_kind THEN origin_decision_id END", stored: true);
+
+        builder.HasIndex("CancellationDecisionId", nameof(SurveyRefundObligation.SurveyOrderId))
+            .HasDatabaseName("ix_survey_refund_obligations_cancellation_order");
+        builder.HasIndex("OverpaymentInvoiceRevisionId", nameof(SurveyRefundObligation.SurveyOrderId))
+            .HasDatabaseName("ix_survey_refund_obligations_overpayment_invoice_order");
+
         builder.HasOne<SurveyCancellationDecision>()
             .WithMany()
-            .HasForeignKey(obligation => new
-            {
-                obligation.OriginDecisionId,
-                obligation.SurveyOrderId
-            })
-            .HasPrincipalKey(decision => new
-            {
-                decision.Id,
-                decision.SurveyOrderId
-            })
+            .HasForeignKey("CancellationDecisionId", nameof(SurveyRefundObligation.SurveyOrderId))
+            .HasPrincipalKey(nameof(SurveyCancellationDecision.Id), nameof(SurveyCancellationDecision.SurveyOrderId))
             .OnDelete(DeleteBehavior.Restrict)
             .HasConstraintName("fk_survey_refund_obligations_decision_order");
+
+        builder.HasOne<SurveyInvoiceRevision>()
+            .WithMany()
+            .HasForeignKey("OverpaymentInvoiceRevisionId", nameof(SurveyRefundObligation.SurveyOrderId))
+            .HasPrincipalKey(nameof(SurveyInvoiceRevision.Id), nameof(SurveyInvoiceRevision.SurveyOrderId))
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_survey_refund_obligations_overpayment_invoice");
 
         builder.HasOne<SurveyFundingReceipt>()
             .WithMany()

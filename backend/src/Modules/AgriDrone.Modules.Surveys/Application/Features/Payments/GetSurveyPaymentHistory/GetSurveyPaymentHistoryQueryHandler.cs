@@ -106,6 +106,7 @@ internal sealed class GetSurveyPaymentHistoryQueryHandler(
     {
         PaymentPurpose.BaselineDeposit => "BASELINE_DEPOSIT",
         PaymentPurpose.FinalBalance => "FINAL_BALANCE",
+        PaymentPurpose.OrderDeposit => "ORDER_DEPOSIT",
         _ => throw new ArgumentOutOfRangeException(nameof(purpose))
     };
 

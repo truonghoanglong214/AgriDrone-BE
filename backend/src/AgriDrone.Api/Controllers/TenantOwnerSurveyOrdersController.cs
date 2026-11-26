@@ -193,7 +193,7 @@ public sealed class TenantOwnerSurveyOrdersController(
         var result = await qualityRefunds.ReportAsync(orderId, issues,
             request.Description, request.EvidenceReference,
             request.RecipientBankName, request.RecipientAccountNumber,
-            request.RecipientAccountName, cancellationToken);
+            request.RecipientAccountName, cancellationToken, request.PublicationId);
         return result.ToHttpResult(HttpContext,
             response => Results.Json(response, statusCode: StatusCodes.Status201Created));
     }

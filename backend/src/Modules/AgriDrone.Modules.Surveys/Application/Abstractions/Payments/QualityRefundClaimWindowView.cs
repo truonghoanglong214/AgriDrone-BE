@@ -5,4 +5,5 @@ public sealed record QualityRefundClaimWindowView(
     DateTimeOffset? NoticeCreatedAt,
     DateTimeOffset? DeadlineExclusive,
     bool CanReport,
-    string? Reason);
+    string? Reason,
+    Guid? V3PublicationId = null);

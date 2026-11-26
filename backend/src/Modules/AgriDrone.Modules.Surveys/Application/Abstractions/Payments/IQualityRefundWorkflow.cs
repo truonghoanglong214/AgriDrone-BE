@@ -14,7 +14,8 @@ public interface IQualityRefundWorkflow
         string recipientBankName,
         string recipientAccountNumber,
         string recipientAccountName,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken,
+        Guid? publicationId = null);
 
     Task<Result<QualityRefundClaimWindowView>> GetOwnerClaimWindowAsync(Guid orderId, CancellationToken cancellationToken);
 
@@ -67,7 +68,7 @@ public interface IQualityRefundWorkflow
 public sealed record QualityRefundCaseView(
     Guid Id,
     Guid SurveyOrderId,
-    Guid SurveyResultId,
+    Guid? SurveyResultId,
     QualityRefundStatus Status,
     IReadOnlyList<ReportedPoleIssue> Issues,
     string Description,
@@ -86,12 +87,13 @@ public sealed record QualityRefundCaseView(
     DateTimeOffset? TransferredAt,
     uint Version,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    Guid? V3PublicationId = null);
 
 public sealed record ManagerQualityRefundCaseView(
     Guid Id,
     Guid SurveyOrderId,
-    Guid SurveyResultId,
+    Guid? SurveyResultId,
     QualityRefundStatus Status,
     IReadOnlyList<ReportedPoleIssue> Issues,
     string Description,
@@ -102,7 +104,8 @@ public sealed record ManagerQualityRefundCaseView(
     string? ManagerVerificationReason,
     uint Version,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    Guid? V3PublicationId = null);
 
 public sealed record QualityRefundOrderView(
     Guid SurveyOrderId,

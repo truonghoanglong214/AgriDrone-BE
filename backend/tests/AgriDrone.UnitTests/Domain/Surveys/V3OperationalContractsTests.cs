@@ -190,6 +190,47 @@ public sealed class V3OperationalContractsTests
     }
 
     [Fact]
+    public void V3ClaimUsesPublicationInsteadOfLegacyResult()
+    {
+        var order = SurveyOrder.CreateV3CaptureOrder(
+            "ORD-V3-002", TenantId, FarmId, SurveyRequestId, SurveyServiceId,
+            CreateSampleSnapshot(), requiresBaselineMapping: true, createdAt: Now);
+        var publicationId = Guid.NewGuid();
+        var admin = Guid.NewGuid();
+        var owner = Guid.NewGuid();
+
+        QualityRefundCase Report() => QualityRefundCase.ReportV3(
+            order, publicationId, owner,
+            [new ReportedPoleIssue("P-12", "WRONG_POLE", "Incorrect location")],
+            "Wrong pole on the published map", "evidence-12", "Test Bank",
+            "1234567890", "OWNER TEST", Now.AddHours(1));
+
+        Assert.Throws<InvalidOperationException>(() => Report());
+        order.TransitionToReadyForCaptureV3(Now.AddMinutes(1));
+        order.TransitionToCapturingV3(Now.AddMinutes(2));
+        order.TransitionToAwaitingCaptureUploadV3(Now.AddMinutes(3));
+        order.TransitionToAwaitingInputReviewV3(Now.AddMinutes(4));
+        order.TransitionToAwaitingProcessingV3(Now.AddMinutes(5));
+        order.TransitionToProcessingV3(Now.AddMinutes(6));
+        order.TransitionToAwaitingSettlementV3(Now.AddMinutes(7));
+        order.TransitionToCompletedV3(Now.AddMinutes(8));
+
+        var claim = Report();
+        Assert.Null(claim.SurveyResultId);
+        Assert.Equal(publicationId, claim.V3PublicationId);
+        Assert.Equal(QualityRefundStatus.Submitted, claim.Status);
+
+        claim.VerifyByManager(
+            Guid.NewGuid(), [new VerifiedPoleIssue("P-12", true, "Verified location")],
+            "Checked the published map", Now.AddHours(2), claim.Version);
+        claim.Approve(admin, "Confirmed mapping error", 130_000m, Now.AddHours(3));
+        claim.RecordTransfer(admin, "TX-1", Now.AddHours(4), claim.Version, "receipt-1");
+
+        Assert.Equal(QualityRefundStatus.Refunded, claim.Status);
+        Assert.Equal(130_000m, claim.ApprovedAmount);
+    }
+
+    [Fact]
     public void V3TransitionMethodsRejectNonV3Orders()
     {
         var legacyOrder = SurveyOrder.Create(

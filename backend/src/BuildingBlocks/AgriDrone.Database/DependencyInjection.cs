@@ -75,10 +75,13 @@ public static class DependencyInjection
         services.AddScoped<IV3FollowUpBaselineQuery,
             V3FollowUpBaselineQuery>();
         services.AddScoped<V3FollowUpBaselineEligibilityReader>();
-        services.TryAddScoped<IV3BaselineDeliveryProofReader,
-            UnavailableV3BaselineDeliveryProofReader>();
-        services.TryAddScoped<IV3ResultReleaseProofReader,
-            UnavailableV3ResultReleaseProofReader>();
+        services.AddScoped<V3SurveyReleaseStore>();
+        services.AddScoped<IV3OwnerSurveyResults, V3OwnerSurveyResults>();
+        services.TryAddScoped<IV3BaselineDeliveryProofReader>(
+            provider => provider.GetRequiredService<V3SurveyReleaseStore>());
+        services.TryAddScoped<IV3QualityRefundFundingReader, V3QualityRefundFundingReader>();
+        services.TryAddScoped<IV3ResultReleaseProofReader>(
+            provider => provider.GetRequiredService<V3SurveyReleaseStore>());
         services.TryAddScoped<IV3FinancialLedgerFactsReader,
             UnavailableV3FinancialLedgerFactsReader>();
         services.TryAddScoped<ISurveySettlementReleaseCoordinator,

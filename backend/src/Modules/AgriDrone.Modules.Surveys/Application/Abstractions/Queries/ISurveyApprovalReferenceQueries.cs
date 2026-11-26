@@ -121,7 +121,8 @@ public sealed record SurveyApprovalFarmBaselineReference(
     Guid TenantId,
     Guid FarmId,
     Guid? CurrentPublishedBaseMapVersionId,
-    int? ConfirmedActivePoleCount);
+    int? ConfirmedActivePoleCount,
+    Guid? V3BaselineMapVersionId = null);
 
 public sealed record SurveyApprovalPreviousOrderReference(
     Guid SurveyOrderId,

@@ -72,6 +72,9 @@ internal sealed class ExistingFarmSurveyApprovalOrchestrator(
                 previousOrderCompatibilityPolicyVersion: prerequisites.OrderCompatibility.PolicyVersion,
                 previousOrderCompatibilityReason: prerequisites.OrderCompatibility.Reason,
                 createdAt: context.ApprovedAt);
+            var baselineId = prerequisites.FarmBaseline.V3BaselineMapVersionId ??
+                prerequisites.FarmBaseline.CurrentPublishedBaseMapVersionId.Value;
+            order.SetBaselineMapVersion(baselineId, order.Version, context.ApprovedAt);
             orderRepository.Add(order);
 
             var commercialSnapshot = SurveyOrderCommercialSnapshot.Create(
