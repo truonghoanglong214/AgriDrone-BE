@@ -262,6 +262,59 @@ public sealed class MissionOrthophotoController(
     }
 
     /// <summary>
+    /// Chuẩn hóa Hàng &amp; Cột: tính lại hàng/cột + cây khuyết cho danh sách cây hiện có (đã sửa tay) mà không quét YOLO lại.
+    /// Cây neo (nếu có) luôn là Hàng 1 - Cột 1.
+    /// </summary>
+    [HttpPost("api/missions/{missionId:guid}/farms/{farmId:guid}/yolo-recalculate-grid")]
+    [Authorize(Policy = AccessAuthorizationPolicies.SystemManager)]
+    public async Task<IResult> RecalculateTreeGrid(
+        [FromRoute] Guid farmId,
+        [FromRoute] Guid missionId,
+        [FromBody] RecalculateMissionTreeGridRequest request,
+        CancellationToken cancellationToken)
+    {
+        var access = await managerAccessService.ResolveFarmAccessAsync(farmId, cancellationToken);
+        if (!access.IsAllowed || access.TenantId is not Guid tenantId || access.FarmId != farmId)
+        {
+            return Results.Forbid();
+        }
+
+        var command = new RecalculateMissionTreeGridCommand(
+            tenantId,
+            farmId,
+            missionId,
+            (request.ActiveTrees ?? []).Select(t => new TreeDetectionItem(
+                t.Id, t.Row, t.Col, t.Lat, t.Lon, t.Confidence, t.Status, t.Source, t.IsAnchor)).ToList(),
+            request.RowSpacing,
+            request.ColSpacing,
+            request.AnchorLat,
+            request.AnchorLon,
+            request.CustomAngleDeg,
+            request.PolygonGeoJson);
+
+        var result = await sender.Send(command, cancellationToken);
+
+        return result.ToHttpResult(
+            HttpContext,
+            value => Results.Ok(new DetectMissionTreesResponse(
+                value.MissionId,
+                value.ModelName,
+                value.TotalTilesScanned,
+                value.TotalRawDetections,
+                value.TotalUniqueTrees,
+                value.TotalMissingTrees,
+                value.SuggestedRowSpacing,
+                value.SuggestedColSpacing,
+                value.MaxRow,
+                value.MaxCol,
+                value.CsvDownloadUrl,
+                value.ActiveTrees.Select(t => new DetectedTreeItemResponse(
+                    t.Id, t.Row, t.Col, t.Lat, t.Lon, t.Confidence, t.Status, t.Source, t.IsAnchor)).ToList(),
+                value.MissingTrees.Select(t => new DetectedTreeItemResponse(
+                    t.Id, t.Row, t.Col, t.Lat, t.Lon, t.Confidence, t.Status, t.Source, t.IsAnchor)).ToList())));
+    }
+
+    /// <summary>
     /// Tải file CSV chứa toàn bộ tọa độ GPS và hàng/cột của các cây đã nhận diện.
     /// </summary>
     [HttpGet("api/missions/{missionId:guid}/farms/{farmId:guid}/yolo-csv")]

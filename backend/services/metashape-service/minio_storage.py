@@ -12,7 +12,8 @@ class MinioStorage:
             endpoint=settings.minio_endpoint,
             access_key=settings.minio_access_key,
             secret_key=settings.minio_secret_key,
-            secure=settings.minio_secure
+            secure=settings.minio_secure,
+            region=settings.minio_region
         )
         self.bucket = settings.minio_bucket
         self._bucket_checked = False
