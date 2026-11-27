@@ -45,4 +45,5 @@ public sealed record DetectMissionTreesResponse(
     int MaxCol,
     string? CsvDownloadUrl,
     IReadOnlyList<DetectedTreeItemResponse> ActiveTrees,
-    IReadOnlyList<DetectedTreeItemResponse> MissingTrees);
+    IReadOnlyList<DetectedTreeItemResponse> MissingTrees,
+    double? DetectedBearingDeg = null);

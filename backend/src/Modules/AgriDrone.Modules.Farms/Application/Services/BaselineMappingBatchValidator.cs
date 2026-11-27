@@ -219,7 +219,7 @@ public sealed class BaselineMappingBatchValidator : IBaselineMappingBatchValidat
                         next.Candidate.CandidateId,
                         "PlantSpacingToleranceExceeded",
                         $"Distance between {points} in row {rowGroup.Key}, columns {cur.Col} and {next.Col}, is {measuredDist:F2}m (expected ~{expectedDist:F2}m, tolerance +/-{spacingTolerance:F2}m).",
-                        "Error"));
+                        "Warning"));
                 }
 
                 // Row bearing check between adjacent columns in the row
@@ -234,7 +234,7 @@ public sealed class BaselineMappingBatchValidator : IBaselineMappingBatchValidat
                         next.Candidate.CandidateId,
                         "RowBearingToleranceExceeded",
                         $"Row {rowGroup.Key} bearing between {points}, columns {cur.Col} and {next.Col}, is {bearing:F1} deg (expected ~{batch.GridBearingDeg:F1} deg, tolerance +/-{batch.RowBearingToleranceDeg:F1} deg).",
-                        "Error"));
+                        "Warning"));
                 }
             }
         }
@@ -267,7 +267,7 @@ public sealed class BaselineMappingBatchValidator : IBaselineMappingBatchValidat
                         next.Candidate.CandidateId,
                         "RowSpacingToleranceExceeded",
                         $"Perpendicular distance between {PointLabel(cur.Candidate)} and {PointLabel(next.Candidate)}, rows {cur.Row} and {next.Row} in column {colGroup.Key}, is {measuredDist:F2}m (expected ~{expectedDist:F2}m, tolerance +/-{spacingTolerance:F2}m).",
-                        "Error"));
+                        "Warning"));
                 }
             }
         }

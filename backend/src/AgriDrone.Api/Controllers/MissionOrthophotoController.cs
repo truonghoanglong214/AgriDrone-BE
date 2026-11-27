@@ -325,7 +325,8 @@ public sealed class MissionOrthophotoController(
                 value.ActiveTrees.Select(t => new DetectedTreeItemResponse(
                     t.Id, t.Row, t.Col, t.Lat, t.Lon, t.Confidence, t.Status, t.Source, t.IsAnchor)).ToList(),
                 value.MissingTrees.Select(t => new DetectedTreeItemResponse(
-                    t.Id, t.Row, t.Col, t.Lat, t.Lon, t.Confidence, t.Status, t.Source, t.IsAnchor)).ToList())));
+                    t.Id, t.Row, t.Col, t.Lat, t.Lon, t.Confidence, t.Status, t.Source, t.IsAnchor)).ToList(),
+                value.DetectedBearingDeg)));
     }
 
     /// <summary>

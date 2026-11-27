@@ -191,6 +191,7 @@ class YoloDetectMissionResponse(BaseModel):
     total_missing_trees: int
     suggested_row_spacing: Optional[float] = None
     suggested_col_spacing: Optional[float] = None
+    detected_bearing_deg: Optional[float] = None
     max_row: int
     max_col: int
     csv_download_url: Optional[str] = None

@@ -1037,7 +1037,7 @@ def detect_trees_from_tiles(request: YoloDetectMissionRequest, tiles_dir: str, m
     if request.anchor_lat is not None and request.anchor_lon is not None:
         anchor = {"lat": request.anchor_lat, "lon": request.anchor_lon}
 
-    active_trees, missing_trees, suggested_row, suggested_col = assign_grid_and_detect_missing(
+    active_trees, missing_trees, suggested_row, suggested_col, detected_bearing_deg = assign_grid_and_detect_missing(
         trees=unique_trees,
         row_spacing=request.row_spacing,
         col_spacing=request.col_spacing,
@@ -1069,6 +1069,7 @@ def detect_trees_from_tiles(request: YoloDetectMissionRequest, tiles_dir: str, m
         total_missing_trees=len(missing_trees),
         suggested_row_spacing=suggested_row,
         suggested_col_spacing=suggested_col,
+        detected_bearing_deg=detected_bearing_deg,
         max_row=max_row,
         max_col=max_col,
         csv_download_url=csv_url,
@@ -1094,7 +1095,7 @@ def recalculate_tree_grid(request: YoloRecalculateGridRequest):
     if request.anchor_lat is not None and request.anchor_lon is not None:
         anchor = {"lat": request.anchor_lat, "lon": request.anchor_lon}
 
-    active_trees, missing_trees, suggested_row, suggested_col = assign_grid_and_detect_missing(
+    active_trees, missing_trees, suggested_row, suggested_col, detected_bearing_deg = assign_grid_and_detect_missing(
         trees=request.active_trees,
         row_spacing=request.row_spacing,
         col_spacing=request.col_spacing,
@@ -1122,6 +1123,7 @@ def recalculate_tree_grid(request: YoloRecalculateGridRequest):
         total_missing_trees=len(missing_trees),
         suggested_row_spacing=suggested_row,
         suggested_col_spacing=suggested_col,
+        detected_bearing_deg=detected_bearing_deg,
         max_row=max_row,
         max_col=max_col,
         csv_download_url=csv_url,

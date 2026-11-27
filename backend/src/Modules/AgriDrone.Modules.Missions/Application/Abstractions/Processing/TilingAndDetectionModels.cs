@@ -52,4 +52,5 @@ public sealed record DetectMissionTreesResult(
     string? CsvDownloadUrl,
     IReadOnlyList<TreeDetectionItem> ActiveTrees,
     IReadOnlyList<TreeDetectionItem> MissingTrees,
-    string? ErrorMessage = null);
+    string? ErrorMessage = null,
+    double? DetectedBearingDeg = null);

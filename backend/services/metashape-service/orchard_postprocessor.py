@@ -233,7 +233,7 @@ def assign_grid_and_detect_missing(
     anchor_point: Optional[Dict[str, float]] = None,
     custom_angle_deg: Optional[float] = None,
     polygon_geojson: Optional[Dict[str, Any]] = None
-) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], float, float]:
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], float, float, Optional[float]]:
     """
     1. Xác định hướng chuẩn của hàng cây qua Neighbor Angle Voting.
     2. Phân cụm hàng theo trục v_across (1D clustering) - bảo đảm cây trên cùng 1 luống KHÔNG BAO GIỜ bị nhảy hàng.
@@ -241,12 +241,12 @@ def assign_grid_and_detect_missing(
     4. Sắp xếp thứ tự cột trong từng hàng và phát hiện cây khuyết (Missing Trees) theo khoảng cách thực tế giữa các cây kề nhau.
     """
     if not trees:
-        return [], [], 2.5, 2.5
+        return [], [], 2.5, 2.5, None
 
     # Tự động lọc trùng (Spatial NMS) với ngưỡng động theo khoảng cách thực tế
     trees = deduplicate_trees(trees, row_spacing=row_spacing, col_spacing=col_spacing)
     if not trees:
-        return [], [], 2.5, 2.5
+        return [], [], 2.5, 2.5, None
 
     ref_lat = trees[0]["lat"]
     ref_lon = trees[0]["lon"]
@@ -514,8 +514,10 @@ def assign_grid_and_detect_missing(
 
     max_row = max(t["row"] for t in active_trees)
     max_col = max(t["col"] for t in active_trees)
-    logger.info(f"Grid analysis: Max Rows={max_row}, Max Cols={max_col}. Dominant angle={detected_angle}°. Detected {len(active_trees)} trees, found {len(missing_trees)} missing trees.")
-    return active_trees, missing_trees, suggested_row, suggested_col
+    # Convert mathematical East-CCW axis v_along=(east, north) to geographic bearing [0, 360) clockwise from North
+    detected_bearing_deg = round(math.degrees(math.atan2(float(v_along[0]), float(v_along[1]))) % 360.0, 1) % 360.0
+    logger.info(f"Grid analysis: Max Rows={max_row}, Max Cols={max_col}. Dominant angle={detected_angle}° (bearing={detected_bearing_deg}°). Detected {len(active_trees)} trees, found {len(missing_trees)} missing trees.")
+    return active_trees, missing_trees, suggested_row, suggested_col, detected_bearing_deg
 
 
 def export_trees_to_csv(

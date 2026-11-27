@@ -544,6 +544,9 @@ public sealed class MetashapeService(
         var totalMissing = root.TryGetProperty("total_missing_trees", out var tm) ? tm.GetInt32() : 0;
         double? sugRow = root.TryGetProperty("suggested_row_spacing", out var sr) && sr.ValueKind == JsonValueKind.Number ? sr.GetDouble() : null;
         double? sugCol = root.TryGetProperty("suggested_col_spacing", out var sc) && sc.ValueKind == JsonValueKind.Number ? sc.GetDouble() : null;
+        double? detectedBearing = root.TryGetProperty("detected_bearing_deg", out var db) && db.ValueKind == JsonValueKind.Number && double.IsFinite(db.GetDouble())
+            ? NormalizeBearingDeg(db.GetDouble())
+            : null;
         var maxRow = root.TryGetProperty("max_row", out var mr) ? mr.GetInt32() : 0;
         var maxCol = root.TryGetProperty("max_col", out var mc) ? mc.GetInt32() : 0;
         var csvUrl = root.TryGetProperty("csv_download_url", out var cu) ? cu.GetString() : null;
@@ -593,7 +596,14 @@ public sealed class MetashapeService(
             maxCol,
             csvUrl,
             activeTrees,
-            missingTrees);
+            missingTrees,
+            DetectedBearingDeg: detectedBearing);
+    }
+
+    private static double NormalizeBearingDeg(double value)
+    {
+        var normalized = ((value % 360.0) + 360.0) % 360.0;
+        return normalized >= 360.0 ? 0.0 : normalized;
     }
 
     public async Task<(byte[] Bytes, string FileName)?> DownloadTreesCsvAsync(
