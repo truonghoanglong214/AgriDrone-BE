@@ -358,6 +358,7 @@ public sealed class MissionOrthophotoController(
     /// </summary>
     [HttpPost("api/missions/{missionId:guid}/farms/{farmId:guid}/disease-detect")]
     [Authorize(Policy = AccessAuthorizationPolicies.SystemManager)]
+    [ProducesResponseType<MissionDiseaseJobResponse>(StatusCodes.Status202Accepted)]
     public async Task<IResult> DetectDiseases(
         [FromRoute] Guid farmId,
         [FromRoute] Guid missionId,
@@ -371,36 +372,7 @@ public sealed class MissionOrthophotoController(
         }
 
         var req = request ?? new DetectMissionDiseasesRequest();
-
-        object? polygon = null;
-        if (req.PolygonGeoJson is System.Text.Json.JsonElement je)
-        {
-            if (je.ValueKind == System.Text.Json.JsonValueKind.Object)
-            {
-                polygon = je;
-            }
-            else if (je.ValueKind == System.Text.Json.JsonValueKind.String)
-            {
-                var s = je.GetString()?.Trim();
-                if (!string.IsNullOrWhiteSpace(s) &&
-                    !s.Equals("string", StringComparison.OrdinalIgnoreCase) &&
-                    !s.Equals("null", StringComparison.OrdinalIgnoreCase))
-                {
-                    try
-                    {
-                        using var doc = System.Text.Json.JsonDocument.Parse(s);
-                        if (doc.RootElement.ValueKind == System.Text.Json.JsonValueKind.Object)
-                        {
-                            polygon = doc.RootElement.Clone();
-                        }
-                    }
-                    catch
-                    {
-                        polygon = null;
-                    }
-                }
-            }
-        }
+        var polygon = ParsePolygonGeoJson(req.PolygonGeoJson);
 
         var command = new DetectMissionDiseasesCommand(
             tenantId,
@@ -414,31 +386,66 @@ public sealed class MissionOrthophotoController(
 
         var result = await sender.Send(command, cancellationToken);
 
-        return result.ToHttpResult(
-            HttpContext,
-            value => Results.Ok(new DetectMissionDiseasesResponse(
-                value.MissionId,
-                value.ModelName,
-                value.TotalImagesScanned,
-                value.TotalDetections,
-                value.DiseaseSummary,
-                value.CsvDownloadUrl,
-                value.Detections.Select(d => new DiseaseDetectionItemResponse(
-                    d.Id,
-                    d.ClassId,
-                    d.ClassName,
-                    d.Lat,
-                    d.Lon,
-                    d.Confidence,
-                    d.BboxX,
-                    d.BboxY,
-                    d.BboxW,
-                    d.BboxH,
-                    d.ImageName,
-                    d.CropImageUrl,
-                    d.AnnotatedImageUrl)).ToList(),
-                value.AnnotatedImageUrls,
-                value.JobId,
-                value.SourceRevision)));
+        return result.ToHttpResult(HttpContext, job => Results.Accepted(
+            Url.RouteUrl("GetMissionDiseaseJob", new { missionId, farmId, jobId = job.JobId }), job));
+    }
+
+    [HttpGet("api/missions/{missionId:guid}/farms/{farmId:guid}/disease-detect/jobs/{jobId:guid}", Name = "GetMissionDiseaseJob")]
+    [HttpGet("api/missions/{missionId:guid}/farms/{farmId:guid}/disease-detect/jobs/latest")]
+    [Authorize(Policy = AccessAuthorizationPolicies.SystemManager)]
+    [ProducesResponseType<MissionDiseaseJobResponse>(StatusCodes.Status200OK)]
+    public async Task<IResult> GetDiseaseJob(
+        [FromRoute] Guid farmId,
+        [FromRoute] Guid missionId,
+        [FromRoute] Guid? jobId,
+        CancellationToken cancellationToken)
+    {
+        var access = await managerAccessService.ResolveFarmAccessAsync(farmId, cancellationToken);
+        if (!access.IsAllowed || access.TenantId is not Guid tenantId || access.FarmId != farmId)
+        {
+            return Results.Forbid();
+        }
+
+        Response.Headers.CacheControl = "no-store";
+        var result = await sender.Send(
+            new GetMissionDiseaseJobQuery(tenantId, farmId, missionId, jobId), cancellationToken);
+        return result.ToHttpResult(HttpContext, Results.Ok);
+    }
+
+    private static System.Text.Json.JsonElement? ParsePolygonGeoJson(System.Text.Json.JsonElement? element)
+    {
+        if (element is not System.Text.Json.JsonElement je)
+        {
+            return null;
+        }
+
+        if (je.ValueKind == System.Text.Json.JsonValueKind.Object)
+        {
+            return je;
+        }
+
+        if (je.ValueKind == System.Text.Json.JsonValueKind.String)
+        {
+            var s = je.GetString()?.Trim();
+            if (!string.IsNullOrWhiteSpace(s) &&
+                !s.Equals("string", StringComparison.OrdinalIgnoreCase) &&
+                !s.Equals("null", StringComparison.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    using var doc = System.Text.Json.JsonDocument.Parse(s);
+                    if (doc.RootElement.ValueKind == System.Text.Json.JsonValueKind.Object)
+                    {
+                        return doc.RootElement.Clone();
+                    }
+                }
+                catch
+                {
+                    return null;
+                }
+            }
+        }
+
+        return null;
     }
 }

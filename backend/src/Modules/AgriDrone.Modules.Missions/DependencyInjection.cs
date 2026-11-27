@@ -23,6 +23,7 @@ using AgriDrone.SharedInfrastructure.Messaging;
 using AgriDrone.SharedInfrastructure.Messaging.Consumers;
 using AgriDrone.SharedInfrastructure.Persistence;
 using AgriDrone.Modules.Missions.Application.Abstractions.Processing;
+using AgriDrone.Modules.Missions.Application.Features.Processing;
 using AgriDrone.Modules.Missions.Infrastructure.Processing;
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
@@ -187,6 +188,7 @@ public static class DependencyInjection
         services.AddScoped<IMissionProcessor, MissionProcessor>();
         services.AddHostedService<MissionProcessingBackgroundService>();
         services.AddScoped<MissionImageJobStore>();
+        services.AddScoped<IMissionDiseaseJobProcessor, MissionDiseaseJobProcessor>();
         services.AddHostedService<MissionImageJobWorker>();
 
         return services;

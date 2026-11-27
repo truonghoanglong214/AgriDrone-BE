@@ -56,6 +56,34 @@ internal sealed class MissionImageJobWorker(
                 if (await jobs.StartAsync(job.Id, runId, clock.GetUtcNow(), token) == 0)
                     continue;
 
+                if (job.Kind == MissionImageJobStore.Disease)
+                {
+                    var handled = false;
+                    string? diseaseError = null;
+                    try
+                    {
+                        (handled, diseaseError) = await scope.ServiceProvider
+                            .GetRequiredService<IMissionDiseaseJobProcessor>()
+                            .ExecuteJobAsync(job, runId, token);
+                        token.ThrowIfCancellationRequested();
+                    }
+                    catch (Exception ex) when (!token.IsCancellationRequested)
+                    {
+                        logger.LogError(ex, "Image job {JobId} ({Kind}) failed.", job.Id, job.Kind);
+                        diseaseError = $"DetectDiseases.Failed: {ex.Message}";
+                    }
+
+                    if (!handled)
+                    {
+                        await jobs.FinishAsync(
+                            job.Id, runId, null,
+                            diseaseError ?? "Disease detection failed. Verify FastAPI availability and frozen inputs, then retry.",
+                            clock.GetUtcNow(), token);
+                    }
+
+                    return true;
+                }
+
                 string? output = null;
                 try
                 {

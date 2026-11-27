@@ -1,4 +1,4 @@
-using AgriDrone.Modules.Surveys.Infrastructure.Persistence;
+/*  */using AgriDrone.Modules.Surveys.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Npgsql;

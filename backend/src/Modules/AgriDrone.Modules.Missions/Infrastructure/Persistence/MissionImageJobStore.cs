@@ -9,6 +9,7 @@ internal sealed class MissionImageJobStore(MissionsDbContext db)
 {
     public const string Tiling = "TILING";
     public const string Yolo = "YOLO";
+    public const string Disease = "DISEASE";
 
     internal sealed record Job(
         Guid Id, Guid MissionId, Guid TenantId, Guid FarmId, string Kind, string Status, string Input, string? Output,
@@ -19,6 +20,10 @@ internal sealed class MissionImageJobStore(MissionsDbContext db)
         public MissionYoloJobResponse ToYoloResponse() => new(
             Id, MissionId, ReadInput<MissionYoloInput>().TilingJobId, Status, CreatedAt, StartedAt, CompletedAt,
             Output is null ? null : JsonSerializer.Deserialize<DetectMissionTreesResult>(Output), Error);
+
+        public MissionDiseaseJobResponse ToDiseaseResponse() => new(
+            Id, MissionId, Status, CreatedAt, StartedAt, CompletedAt,
+            Output is null ? null : JsonSerializer.Deserialize<DetectMissionDiseasesResult>(Output), Error);
 
         public MissionTilingJobResponse ToResponse() => new(
             Id, MissionId, Status, CreatedAt, StartedAt, CompletedAt, ReadInput<MissionTilingInput>().PolygonGeoJson,
