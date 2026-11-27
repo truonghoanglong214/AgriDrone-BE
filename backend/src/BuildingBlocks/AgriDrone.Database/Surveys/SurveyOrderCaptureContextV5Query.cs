@@ -29,10 +29,11 @@ internal sealed class SurveyOrderCaptureContextV5Query(
             .AsNoTracking()
             .Where(value =>
                 value.SurveyOrderId == order.Id &&
-                value.Purpose == SurveyAppointmentPurpose.Capture &&
+                (value.Purpose == SurveyAppointmentPurpose.Capture || value.Purpose == SurveyAppointmentPurpose.DiseaseCapture) &&
                 value.Status != SurveyAppointmentStatus.Cancelled &&
                 value.Status != SurveyAppointmentStatus.Superseded)
-            .OrderByDescending(value => value.RevisionNumber)
+            .OrderByDescending(value => value.Purpose == SurveyAppointmentPurpose.DiseaseCapture)
+            .ThenByDescending(value => value.RevisionNumber)
             .FirstOrDefaultAsync(cancellationToken);
 
         var obligation = order.DepositObligationId.HasValue

@@ -156,21 +156,24 @@ internal sealed class SystemManagerSurveyOrderQueries(
                     .Where(item => item.Status == SurveyAppointmentStatus.Proposed ||
                                    item.Status == SurveyAppointmentStatus.Confirmed ||
                                    item.Status == SurveyAppointmentStatus.RescheduleRequested)
-                    .OrderByDescending(item => item.RevisionNumber)
+                    .OrderByDescending(item => item.Purpose == SurveyAppointmentPurpose.DiseaseCapture)
+                    .ThenByDescending(item => item.RevisionNumber)
                     .Select(item => (Guid?)item.Id)
                     .FirstOrDefault(),
                 row.Order.Appointments
                     .Where(item => item.Status == SurveyAppointmentStatus.Proposed ||
                                    item.Status == SurveyAppointmentStatus.Confirmed ||
                                    item.Status == SurveyAppointmentStatus.RescheduleRequested)
-                    .OrderByDescending(item => item.RevisionNumber)
+                    .OrderByDescending(item => item.Purpose == SurveyAppointmentPurpose.DiseaseCapture)
+                    .ThenByDescending(item => item.RevisionNumber)
                     .Select(item => (uint?)item.Version)
                     .FirstOrDefault(),
                 row.Order.Appointments
                     .Where(item => item.Status == SurveyAppointmentStatus.Proposed ||
                                    item.Status == SurveyAppointmentStatus.Confirmed ||
                                    item.Status == SurveyAppointmentStatus.RescheduleRequested)
-                    .OrderByDescending(item => item.RevisionNumber)
+                    .OrderByDescending(item => item.Purpose == SurveyAppointmentPurpose.DiseaseCapture)
+                    .ThenByDescending(item => item.RevisionNumber)
                     .Select(item => (SurveyAppointmentStatus?)item.Status)
                     .FirstOrDefault(),
                 row.Order.CreatedAt,
@@ -253,7 +256,9 @@ internal sealed class SystemManagerSurveyOrderQueries(
         from order in orders
         from appointment in order.Appointments
         where appointment.Purpose == (order.Scope == ContractScope.V3
-            ? SurveyAppointmentPurpose.Capture
+            ? (order.Appointments.Any(item => item.Purpose == SurveyAppointmentPurpose.DiseaseCapture)
+                ? SurveyAppointmentPurpose.DiseaseCapture
+                : SurveyAppointmentPurpose.Capture)
             : (!order.RequiresBaselineMapping ||
                (order.PostFlightSettlement ? order.FarmBaseMapVersionId.HasValue : order.PricingConfirmedAt.HasValue)
                 ? SurveyAppointmentPurpose.PaidService

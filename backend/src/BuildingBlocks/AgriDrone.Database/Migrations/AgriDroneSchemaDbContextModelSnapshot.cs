@@ -96,7 +96,7 @@ namespace AgriDrone.Database.Migrations
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "review_status", new[] { "PENDING", "CONFIRMED", "REJECTED" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "scan_media_role", new[] { "PRIMARY", "CONTEXT", "DETECTION_RESULT" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "scan_source", new[] { "DRONE_AI", "FIELD_MANUAL", "MANAGER" });
-            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "survey_appointment_purpose", new[] { "BASELINE_MAPPING", "PAID_SERVICE", "CAPTURE" });
+            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "survey_appointment_purpose", new[] { "BASELINE_MAPPING", "PAID_SERVICE", "CAPTURE", "DISEASE_CAPTURE" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "survey_appointment_status", new[] { "PROPOSED", "CONFIRMED", "RESCHEDULE_REQUESTED", "CANCELLED", "SUPERSEDED" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "survey_deposit_obligation_status", new[] { "PENDING", "SATISFIED", "CANCELLED" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "system", "survey_order_status", new[] { "PENDING_BOUNDARY_VERIFICATION", "AWAITING_BASELINE_APPOINTMENT", "AWAITING_BASELINE_DEPOSIT", "AWAITING_BOUNDARY_CAPTURE", "BASELINE_READY", "BASELINE_IN_PROGRESS", "AWAITING_BASELINE_REVIEW", "AWAITING_PRICING", "AWAITING_PAID_APPOINTMENT", "AWAITING_PAYMENT", "READY_FOR_PAID_SERVICE", "IN_PROGRESS", "PENDING_REVIEW", "COMPLETED", "CANCELLED", "AWAITING_APPOINTMENT", "AWAITING_DEPOSIT", "READY_FOR_CAPTURE", "CAPTURING", "AWAITING_CAPTURE_UPLOAD", "AWAITING_INPUT_REVIEW", "AWAITING_PROCESSING", "PROCESSING", "AWAITING_REFLIGHT_DECISION", "AWAITING_SETTLEMENT" });
@@ -7657,6 +7657,10 @@ namespace AgriDrone.Database.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("last_predecessor_history_id");
 
+                    b.Property<Guid?>("MappingSourceAttemptId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("mapping_source_attempt_id");
+
                     b.Property<Guid>("OrderId")
                         .HasColumnType("uuid")
                         .HasColumnName("order_id");
@@ -7739,6 +7743,11 @@ namespace AgriDrone.Database.Migrations
                     b.HasAlternateKey("Id", "TenantId", "FarmId", "OrderId")
                         .HasName("uq_capture_attempts_id_owner");
 
+                    b.HasIndex("MappingSourceAttemptId")
+                        .IsUnique()
+                        .HasDatabaseName("uq_capture_attempts_disease_root")
+                        .HasFilter("mapping_source_attempt_id IS NOT NULL AND superseded_attempt_id IS NULL");
+
                     b.HasIndex("OrderId")
                         .IsUnique()
                         .HasDatabaseName("uq_capture_attempts_active_order")
@@ -7761,6 +7770,9 @@ namespace AgriDrone.Database.Migrations
 
                     b.HasIndex("SupersededAttemptId", "TenantId", "FarmId", "OrderId")
                         .HasDatabaseName("ix_capture_attempts_parent_owner");
+
+                    b.HasIndex("MappingSourceAttemptId", "TenantId", "FarmId", "OrderId")
+                        .HasDatabaseName("ix_capture_attempts_mapping_source_owner");
 
                     b.ToTable("capture_attempts", "survey", t =>
                         {
@@ -9634,7 +9646,7 @@ namespace AgriDrone.Database.Migrations
 
                     b.ToTable("survey_appointments", "survey", t =>
                         {
-                            t.HasCheckConstraint("ck_survey_appointments_confirmation", "(status = 'CONFIRMED'::system.survey_appointment_status AND confirmed_at IS NOT NULL AND ((confirmed_by_tenant_owner_id IS NOT NULL AND confirmed_by_system_manager_id IS NULL) OR (purpose = 'PAID_SERVICE'::system.survey_appointment_purpose AND confirmed_by_tenant_owner_id IS NULL AND confirmed_by_system_manager_id IS NOT NULL))) OR (status <> 'CONFIRMED'::system.survey_appointment_status AND confirmed_at IS NULL AND confirmed_by_system_manager_id IS NULL)");
+                            t.HasCheckConstraint("ck_survey_appointments_confirmation", "(status = 'CONFIRMED'::system.survey_appointment_status AND confirmed_at IS NOT NULL AND ((purpose::text <> 'DISEASE_CAPTURE' AND confirmed_by_tenant_owner_id IS NOT NULL AND confirmed_by_system_manager_id IS NULL) OR (purpose::text IN ('PAID_SERVICE', 'DISEASE_CAPTURE') AND confirmed_by_tenant_owner_id IS NULL AND confirmed_by_system_manager_id IS NOT NULL))) OR (status <> 'CONFIRMED'::system.survey_appointment_status AND confirmed_at IS NULL AND confirmed_by_system_manager_id IS NULL)");
 
                             t.HasCheckConstraint("ck_survey_appointments_reschedule_reason", "status <> 'RESCHEDULE_REQUESTED'::system.survey_appointment_status OR (reschedule_reason IS NOT NULL AND length(btrim(reschedule_reason)) > 0)");
 
@@ -15570,6 +15582,13 @@ namespace AgriDrone.Database.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_capture_attempts_order_same_owner");
+
+                    b.HasOne("AgriDrone.Modules.Surveys.Domain.CaptureAttempt", null)
+                        .WithMany()
+                        .HasForeignKey("MappingSourceAttemptId", "TenantId", "FarmId", "OrderId")
+                        .HasPrincipalKey("Id", "TenantId", "FarmId", "OrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_capture_attempts_mapping_source_owner");
 
                     b.HasOne("AgriDrone.Modules.Surveys.Domain.CaptureAttempt", null)
                         .WithMany()

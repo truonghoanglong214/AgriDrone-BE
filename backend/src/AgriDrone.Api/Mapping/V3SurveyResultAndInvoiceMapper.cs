@@ -431,6 +431,7 @@ internal static class V3SurveyResultAndInvoiceMapper
                 ManifestId: attempt.ManifestId,
                 ManifestFingerprint: attempt.ManifestFingerprint,
                 ProcessingJobId: attempt.ProcessingJobId,
-                OrderVersion: attempt.OrderVersion))
+                OrderVersion: attempt.OrderVersion,
+                MappingSourceAttemptId: attempt.MappingSourceAttemptId))
             .ToArray();
 }

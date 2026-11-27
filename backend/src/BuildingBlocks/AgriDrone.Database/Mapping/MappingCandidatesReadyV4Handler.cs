@@ -177,6 +177,13 @@ internal sealed class MappingCandidatesReadyV4Handler(
                 "CaptureAttempt not found or does not match tenant, farm, order and mission context.");
         }
 
+        if (attempt.MappingSourceAttemptId.HasValue)
+        {
+            return InboxHandlerResult.PermanentFailure(
+                "MappingCandidatesReadyV4.DiseaseCapture",
+                "A disease capture uses its approved source map and cannot publish mapping candidates.");
+        }
+
         if (mission.CaptureAttemptId != payload.CaptureAttemptId)
         {
             return InboxHandlerResult.PermanentFailure(
