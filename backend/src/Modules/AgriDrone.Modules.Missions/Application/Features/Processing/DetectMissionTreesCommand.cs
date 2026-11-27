@@ -1,3 +1,4 @@
+using System.Text.Json;
 using AgriDrone.Modules.Missions.Application.Abstractions.Processing;
 using AgriDrone.SharedKernel.Application;
 using MediatR;
@@ -14,5 +15,16 @@ public sealed record DetectMissionTreesCommand(
     double? AnchorLat = null,
     double? AnchorLon = null,
     double? CustomAngleDeg = null,
-    object? PolygonGeoJson = null,
-    Guid? TilingJobId = null) : IRequest<Result<DetectMissionTreesResult>>;
+    JsonElement? PolygonGeoJson = null,
+    Guid? TilingJobId = null) : IRequest<Result<MissionYoloJobResponse>>;
+
+public sealed record GetMissionYoloJobQuery(
+    Guid TenantId, Guid FarmId, Guid MissionId, Guid? JobId) : IRequest<Result<MissionYoloJobResponse>>;
+
+public sealed record MissionYoloJobResponse(
+    Guid JobId, Guid MissionId, Guid TilingJobId, string Status, DateTimeOffset CreatedAt,
+    DateTimeOffset? StartedAt, DateTimeOffset? CompletedAt, DetectMissionTreesResult? Result, string? Error);
+
+internal sealed record MissionYoloInput(
+    Guid TilingJobId, string ManifestStorageKey, int TotalTiles, double ConfidenceThreshold, double RowSpacing,
+    double ColSpacing, double? AnchorLat, double? AnchorLon, double? CustomAngleDeg, JsonElement? PolygonGeoJson);

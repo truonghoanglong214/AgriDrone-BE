@@ -13,7 +13,7 @@ namespace AgriDrone.Modules.Missions.Application.Features.Processing;
 internal sealed class SliceMissionTilesCommandHandler(
     IDroneMissionRepository missions,
     MissionsDbContext db,
-    MissionTilingJobStore jobs,
+    MissionImageJobStore jobs,
     ISystemManagerAccessService managerAccess,
     TimeProvider clock)
     : IRequestHandler<SliceMissionTilesCommand, Result<MissionTilingJobResponse>>,
@@ -59,7 +59,7 @@ internal sealed class SliceMissionTilesCommandHandler(
             request.DualScale ? 640 : request.TileSize, request.DualScale ? 64 : request.Overlap,
             request.DualScale, request.PolygonGeoJson));
 
-        var active = await jobs.FindActiveAsync(request.MissionId, token);
+        var active = await jobs.FindActiveAsync(request.MissionId, MissionImageJobStore.Tiling, token);
         if (active is not null)
         {
             if (!await jobs.MatchesAsync(active.Id, input, token))
@@ -72,7 +72,7 @@ internal sealed class SliceMissionTilesCommandHandler(
 
         var id = Guid.CreateVersion7();
         var now = clock.GetUtcNow();
-        await jobs.InsertAsync(id, request.TenantId, request.FarmId, request.MissionId, input, now, token);
+        await jobs.InsertAsync(id, request.TenantId, request.FarmId, request.MissionId, MissionImageJobStore.Tiling, input, now, token);
         await tx.CommitAsync(token);
         return Result.Success(new MissionTilingJobResponse(id, request.MissionId, "QUEUED", now, null, null,
             request.PolygonGeoJson, null, null));
@@ -82,7 +82,7 @@ internal sealed class SliceMissionTilesCommandHandler(
     {
         if (!await CanAccessAsync(request.TenantId, request.FarmId, token))
             return Denied();
-        var job = await jobs.FindAsync(request.TenantId, request.FarmId, request.MissionId, request.JobId, token);
+        var job = await jobs.FindAsync(request.TenantId, request.FarmId, request.MissionId, MissionImageJobStore.Tiling, request.JobId, token);
         return job is null
             ? Result.Failure<MissionTilingJobResponse>(AppError.NotFound("Tiling.JobNotFound", "Tiling job was not found."))
             : Result.Success(job.ToResponse());
