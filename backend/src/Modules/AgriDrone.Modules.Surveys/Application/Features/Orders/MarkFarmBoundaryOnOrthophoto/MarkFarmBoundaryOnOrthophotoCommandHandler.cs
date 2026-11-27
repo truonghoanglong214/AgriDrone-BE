@@ -38,24 +38,37 @@ internal sealed class MarkFarmBoundaryOnOrthophotoCommandHandler(
                 SurveyOrderError.Forbidden());
         }
 
-        if (command.Corners is null || command.Corners.Count != 4)
+        var isCapture = command.CaptureAttemptId.HasValue;
+        if (command.Corners is not { Count: >= 3 } corners ||
+            (!isCapture && corners.Count != 4))
         {
             return Result.Failure<MarkFarmBoundaryOnOrthophotoResponse>(
                 SurveyBoundaryVerificationError.InvalidGeometry(
-                    "Exactly four corners are required to mark farm boundary on orthophoto."));
+                    isCapture
+                        ? "At least three vertices are required to mark a capture boundary."
+                        : "Exactly four corners are required to mark farm boundary on orthophoto."));
         }
 
-        var orderedCorners = command.Corners.OrderBy(c => c.Sequence).ToList();
-        if (!orderedCorners.Select(c => c.Sequence).SequenceEqual([1, 2, 3, 4]))
+        if (corners.Any(corner => corner is null))
         {
             return Result.Failure<MarkFarmBoundaryOnOrthophotoResponse>(
                 SurveyBoundaryVerificationError.InvalidGeometry(
-                    "Corners must have sequences exactly 1, 2, 3, and 4."));
+                    "Boundary vertices must not contain null entries."));
         }
 
-        for (var i = 0; i < 4; i++)
+        var orderedCorners = corners.OrderBy(c => c.Sequence).ToArray();
+        if (!orderedCorners.Select(c => c.Sequence)
+                .SequenceEqual(Enumerable.Range(1, orderedCorners.Length)))
         {
-            var corner = orderedCorners[i];
+            return Result.Failure<MarkFarmBoundaryOnOrthophotoResponse>(
+                SurveyBoundaryVerificationError.InvalidGeometry(
+                    isCapture
+                        ? "Boundary vertex sequences must be consecutive and start at 1."
+                        : "Corners must have sequences exactly 1, 2, 3, and 4."));
+        }
+
+        foreach (var corner in orderedCorners)
+        {
             if (!double.IsFinite(corner.Longitude) || !double.IsFinite(corner.Latitude) ||
                 corner.Longitude is < -180 or > 180 ||
                 corner.Latitude is < -90 or > 90)
@@ -70,11 +83,11 @@ internal sealed class MarkFarmBoundaryOnOrthophotoCommandHandler(
             .Select(c => new Coordinate(c.Longitude, c.Latitude))
             .ToList();
 
-        if (coordinates.DistinctBy(c => (c.X, c.Y)).Count() < 4)
+        if (coordinates.DistinctBy(c => (c.X, c.Y)).Count() != coordinates.Count)
         {
             return Result.Failure<MarkFarmBoundaryOnOrthophotoResponse>(
                 SurveyBoundaryVerificationError.InvalidGeometry(
-                    "All four corners must be distinct points."));
+                    "All boundary vertices must be distinct points."));
         }
 
         coordinates.Add(coordinates[0].Copy()); // Close polygon loop
@@ -89,7 +102,7 @@ internal sealed class MarkFarmBoundaryOnOrthophotoCommandHandler(
             {
                 return Result.Failure<MarkFarmBoundaryOnOrthophotoResponse>(
                     SurveyBoundaryVerificationError.InvalidGeometry(
-                        "Four corners do not form a valid simple polygon."));
+                        "Boundary vertices do not form a valid simple polygon."));
             }
         }
         catch (Exception ex)
@@ -99,19 +112,22 @@ internal sealed class MarkFarmBoundaryOnOrthophotoCommandHandler(
                     $"Failed to construct valid polygon from corners: {ex.Message}"));
         }
 
-        var areaHectares = CalculateMetricAreaHectares(polygon);
-        if (areaHectares < 0.01)
+        if (!isCapture)
         {
-            return Result.Failure<MarkFarmBoundaryOnOrthophotoResponse>(
-                SurveyBoundaryVerificationError.InvalidGeometry(
-                    $"Marked boundary area ({areaHectares:F4} ha) is below the minimum allowed threshold of 0.01 hectares (100 m²)."));
-        }
+            var areaHectares = CalculateMetricAreaHectares(polygon);
+            if (areaHectares < 0.01)
+            {
+                return Result.Failure<MarkFarmBoundaryOnOrthophotoResponse>(
+                    SurveyBoundaryVerificationError.InvalidGeometry(
+                        $"Marked boundary area ({areaHectares:F4} ha) is below the minimum allowed threshold of 0.01 hectares (100 m²)."));
+            }
 
-        if (areaHectares > 5000.0)
-        {
-            return Result.Failure<MarkFarmBoundaryOnOrthophotoResponse>(
-                SurveyBoundaryVerificationError.InvalidGeometry(
-                    $"Marked boundary area ({areaHectares:F2} ha) exceeds the maximum allowed threshold of 5000 hectares."));
+            if (areaHectares > 5000.0)
+            {
+                return Result.Failure<MarkFarmBoundaryOnOrthophotoResponse>(
+                    SurveyBoundaryVerificationError.InvalidGeometry(
+                        $"Marked boundary area ({areaHectares:F2} ha) exceeds the maximum allowed threshold of 5000 hectares."));
+            }
         }
 
         var markedAt = timeProvider.GetUtcNow();
@@ -213,7 +229,7 @@ internal sealed class MarkFarmBoundaryOnOrthophotoCommandHandler(
             polygon,
             command.ExpectedBoundaryVersionNumber,
             actorId,
-            command.Reason ?? "Marked 4 boundary corners on Orthophoto base map.",
+            command.Reason ?? $"Marked {polygon.NumPoints - 1} boundary corners on Orthophoto base map.",
             evidenceReference,
             markedAt,
             cancellationToken);
