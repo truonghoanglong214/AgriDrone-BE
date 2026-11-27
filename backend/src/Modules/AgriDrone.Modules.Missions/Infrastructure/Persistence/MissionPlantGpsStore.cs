@@ -1,5 +1,6 @@
 using System.Text.Json;
 using AgriDrone.Modules.Missions.Application.Abstractions.Missions;
+using AgriDrone.Modules.Missions.Application.Features.Processing;
 using AgriDrone.Modules.Missions.Domain.Processing;
 using Microsoft.EntityFrameworkCore;
 
@@ -73,7 +74,7 @@ internal sealed class MissionPlantGpsStore(
             Confidence = decimal.Round(row.Confidence, 15, MidpointRounding.ToEven)
         }).ToArray();
         var outputFingerprint = MissionPlantGpsFingerprint.Compute(normalizedRows);
-        var snapshot = new MappingProcessingSnapshot(
+        var submission = new MappingProcessingSnapshot(
             completion.SourceVersion,
             completion.GridBearingDeg,
             completion.RowSpacingM,
@@ -107,7 +108,7 @@ internal sealed class MissionPlantGpsStore(
                 existingJob.ModelVersionId == completion.ModelVersionId &&
                 existingJob.JobType == AiJobType.Mapping &&
                 existingJob.Status == AiJobStatus.Completed &&
-                existingSnapshot == snapshot)
+                existingSnapshot?.MatchesSubmission(submission) == true)
             {
                 var currentRows = await db.Database.SqlQueryRaw<MissionPlantGpsRow>(
                         "SELECT tree_id AS \"TreeId\", row_number AS \"Row\", " +
@@ -119,7 +120,7 @@ internal sealed class MissionPlantGpsStore(
                     .ToListAsync(cancellationToken);
                 if (string.Equals(
                         MissionPlantGpsFingerprint.Compute(currentRows),
-                        snapshot.OutputFingerprint,
+                        submission.OutputFingerprint,
                         StringComparison.Ordinal))
                 {
                     return new MissionPlantGpsReplaceResult(
@@ -132,6 +133,16 @@ internal sealed class MissionPlantGpsStore(
                 MissionPlantGpsReplaceStatus.Conflict,
                 Errors: ["ClientOperationId was already used for a different mapping import."]);
         }
+
+        var grid = MappingGridEstimator.Estimate(normalizedRows);
+        var snapshot = submission with
+        {
+            GridBearingDeg = grid.BearingDeg ?? submission.GridBearingDeg,
+            RowSpacingM = grid.RowSpacingM ?? submission.RowSpacingM,
+            PlantSpacingM = grid.PlantSpacingM ?? submission.PlantSpacingM,
+            SubmittedGrid = new MappingProcessingSnapshot.GridMeasurements(
+                submission.GridBearingDeg, submission.RowSpacingM, submission.PlantSpacingM)
+        };
 
         using var inputManifest = JsonSerializer.SerializeToDocument(new
         {
@@ -179,8 +190,8 @@ internal sealed class MissionPlantGpsStore(
         completion.ModelVersionId != Guid.Empty &&
         completion.SourceVersion >= 1 &&
         completion.GridBearingDeg is >= 0 and < 360 &&
-        completion.RowSpacingM > 0 &&
-        completion.PlantSpacingM > 0 &&
+        double.IsFinite(completion.RowSpacingM) && completion.RowSpacingM > 0 &&
+        double.IsFinite(completion.PlantSpacingM) && completion.PlantSpacingM > 0 &&
         !string.IsNullOrWhiteSpace(completion.AlgorithmVersion) &&
         !string.IsNullOrWhiteSpace(completion.InputSource) &&
         completion.InputFingerprint is { Length: 64 } &&

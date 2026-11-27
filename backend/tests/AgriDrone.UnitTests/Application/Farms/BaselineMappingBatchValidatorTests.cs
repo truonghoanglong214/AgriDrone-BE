@@ -267,7 +267,61 @@ public sealed class BaselineMappingBatchValidatorTests
         Assert.Equal(2, result.AcceptedCount);
     }
 
-    private static MappingCandidateBatch CreateSampleBatch()
+    [Fact]
+    public void ValidateStaggeredRowsUsesPerpendicularSeparation()
+    {
+        var batch = CreateSampleBatch(gridBearingDeg: 90);
+        AddReviewedPoint(batch, row: 1, col: 1, east: 0, north: 0);
+        AddReviewedPoint(batch, row: 2, col: 1, east: 2.5, north: 2.5);
+
+        var result = _validator.Validate(batch, boundary: null);
+
+        Assert.True(result.IsValid);
+        Assert.Empty(result.Issues);
+    }
+
+    [Fact]
+    public void ValidateSpacingAcrossSkippedColumnsReportsBothPointsAndScaledTolerance()
+    {
+        var batch = CreateSampleBatch(gridBearingDeg: 90);
+        AddReviewedPoint(batch, row: 1, col: 1, east: 0, north: 0);
+        AddReviewedPoint(batch, row: 1, col: 3, east: 7, north: 0);
+
+        var result = _validator.Validate(batch, boundary: null);
+
+        var issue = Assert.Single(result.Issues, issue => issue.Code == "PlantSpacingToleranceExceeded");
+        Assert.Contains("tree_r1_c1 and tree_r1_c3", issue.Message, StringComparison.Ordinal);
+        Assert.Contains($"tolerance +/-{1.0:F2}m", issue.Message, StringComparison.Ordinal);
+    }
+
+    private static void AddReviewedPoint(MappingCandidateBatch batch, int row, int col, double east, double north)
+    {
+        const double degreesPerMeter = 180.0 / (Math.PI * 6_371_000.0);
+        var now = DateTimeOffset.UtcNow;
+        var point = new Point(east * degreesPerMeter, north * degreesPerMeter) { SRID = 4326 };
+        var candidate = MappingCandidate.Create(
+            id: Guid.NewGuid(),
+            batchId: batch.Id,
+            zoneId: null,
+            candidateId: Guid.NewGuid(),
+            sourceObservationId: null,
+            evidenceMediaAssetIds: [],
+            originalPosition: point,
+            proposedRowIndex: row,
+            proposedColumnIndex: col,
+            positionConfidence: 1,
+            boundaryClassification: "IN_BOUNDARY",
+            measuredBoundaryDistanceM: 5,
+            boundaryThresholdM: 1,
+            proposedMatchedPlantId: null,
+            matchConfidence: null,
+            createdAt: now,
+            treeId: $"tree_r{row}_c{col}");
+        candidate.ApplyReview(MappingCandidateReviewDecision.CreateNew, null, null, null, null, Guid.NewGuid(), null, now);
+        batch.AddCandidate(candidate);
+    }
+
+    private static MappingCandidateBatch CreateSampleBatch(double gridBearingDeg = 45.0)
     {
         var now = DateTimeOffset.UtcNow;
         var batchId = Guid.NewGuid();
@@ -283,7 +337,7 @@ public sealed class BaselineMappingBatchValidatorTests
             farmBoundaryVersionId: Guid.NewGuid(),
             farmBaseMapVersionId: Guid.NewGuid(),
             expectedCurrentFarmBaseMapVersionId: null,
-            gridBearingDeg: 45.0,
+            gridBearingDeg: gridBearingDeg,
             rowSpacingM: 2.5,
             plantSpacingM: 2.5,
             jobId: Guid.NewGuid(),

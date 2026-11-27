@@ -210,13 +210,15 @@ public sealed class BaselineMappingBatchValidator : IBaselineMappingBatchValidat
                 var measuredDist = GeodesicSpatialCalculator.CalculateDistanceMeters(
                     cur.Pos.Y, cur.Pos.X, next.Pos.Y, next.Pos.X);
                 var expectedDist = colDelta * batch.PlantSpacingM;
+                var spacingTolerance = batch.GridSpacingToleranceM * colDelta;
+                var points = $"{PointLabel(cur.Candidate)} and {PointLabel(next.Candidate)}";
 
-                if (Math.Abs(measuredDist - expectedDist) > batch.GridSpacingToleranceM * colDelta)
+                if (Math.Abs(measuredDist - expectedDist) > spacingTolerance)
                 {
                     issues.Add(new MappingBatchValidationIssue(
                         next.Candidate.CandidateId,
                         "PlantSpacingToleranceExceeded",
-                        $"Candidate {next.Candidate.CandidateId} distance to previous column in row {rowGroup.Key} is {measuredDist:F2}m (expected ~{expectedDist:F2}m, tolerance +/-{batch.GridSpacingToleranceM:F2}m).",
+                        $"Distance between {points} in row {rowGroup.Key}, columns {cur.Col} and {next.Col}, is {measuredDist:F2}m (expected ~{expectedDist:F2}m, tolerance +/-{spacingTolerance:F2}m).",
                         "Error"));
                 }
 
@@ -231,7 +233,7 @@ public sealed class BaselineMappingBatchValidator : IBaselineMappingBatchValidat
                     issues.Add(new MappingBatchValidationIssue(
                         next.Candidate.CandidateId,
                         "RowBearingToleranceExceeded",
-                        $"Row {rowGroup.Key} bearing between col {cur.Col} and {next.Col} is {bearing:F1} deg (expected ~{batch.GridBearingDeg:F1} deg, tolerance +/-{batch.RowBearingToleranceDeg:F1} deg).",
+                        $"Row {rowGroup.Key} bearing between {points}, columns {cur.Col} and {next.Col}, is {bearing:F1} deg (expected ~{batch.GridBearingDeg:F1} deg, tolerance +/-{batch.RowBearingToleranceDeg:F1} deg).",
                         "Error"));
                 }
             }
@@ -250,16 +252,21 @@ public sealed class BaselineMappingBatchValidator : IBaselineMappingBatchValidat
                 if (rowDelta <= 0) continue;
 
                 pairCount++;
-                var measuredDist = GeodesicSpatialCalculator.CalculateDistanceMeters(
+                var distance = GeodesicSpatialCalculator.CalculateDistanceMeters(
                     cur.Pos.Y, cur.Pos.X, next.Pos.Y, next.Pos.X);
+                var bearing = GeodesicSpatialCalculator.CalculateInitialBearingDegrees(
+                    cur.Pos.Y, cur.Pos.X, next.Pos.Y, next.Pos.X);
+                var measuredDist = GeodesicSpatialCalculator.CalculateLateralDistanceMeters(
+                    distance, bearing, batch.GridBearingDeg);
                 var expectedDist = rowDelta * batch.RowSpacingM;
+                var spacingTolerance = batch.GridSpacingToleranceM * rowDelta;
 
-                if (Math.Abs(measuredDist - expectedDist) > batch.GridSpacingToleranceM * rowDelta)
+                if (Math.Abs(measuredDist - expectedDist) > spacingTolerance)
                 {
                     issues.Add(new MappingBatchValidationIssue(
                         next.Candidate.CandidateId,
                         "RowSpacingToleranceExceeded",
-                        $"Candidate {next.Candidate.CandidateId} distance to previous row in column {colGroup.Key} is {measuredDist:F2}m (expected ~{expectedDist:F2}m, tolerance +/-{batch.GridSpacingToleranceM:F2}m).",
+                        $"Perpendicular distance between {PointLabel(cur.Candidate)} and {PointLabel(next.Candidate)}, rows {cur.Row} and {next.Row} in column {colGroup.Key}, is {measuredDist:F2}m (expected ~{expectedDist:F2}m, tolerance +/-{spacingTolerance:F2}m).",
                         "Error"));
                 }
             }
@@ -274,6 +281,9 @@ public sealed class BaselineMappingBatchValidator : IBaselineMappingBatchValidat
                 "Info"));
         }
     }
+
+    private static string PointLabel(MappingCandidate candidate) =>
+        candidate.TreeId ?? candidate.CandidateId.ToString();
 
     private static void ValidateMinimumDistancesSpatialBucketing(
         List<MappingCandidate> activeCandidates,
