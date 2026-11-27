@@ -600,7 +600,8 @@ internal sealed class SurveySettlementReleaseCoordinator(
                         join input in db.Set<CaptureInputApproval>() on file.ManifestId equals input.InputManifestId
                         where input.Id == inputApprovalId && input.CaptureAttemptId == approval.CaptureAttemptId &&
                               input.SurveyOrderId == approval.SurveyOrderId && input.MissionId == approval.MissionId &&
-                              input.TenantId == approval.TenantId && input.FarmId == approval.FarmId && file.MediaRole == "RawImage"
+                              input.TenantId == approval.TenantId && input.FarmId == approval.FarmId &&
+                              (file.MediaRole == "RawImage" || file.MediaRole == "RAW_IMAGE")
                         select file.MediaAssetId;
         }
 

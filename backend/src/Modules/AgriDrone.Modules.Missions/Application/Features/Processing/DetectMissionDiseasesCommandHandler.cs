@@ -175,7 +175,7 @@ internal sealed class DetectMissionDiseasesCommandHandler(
             var frozenFiles = await dbContext.Database.SqlQuery<FrozenFileRow>($"""
                 SELECT media_asset_id AS "MediaAssetId", sha256 AS "Sha256", size_bytes AS "SizeBytes", media_role AS "MediaRole"
                 FROM survey.capture_input_manifest_files
-                WHERE manifest_id = {preApproval.ManifestId} AND media_role = 'RawImage'
+                WHERE manifest_id = {preApproval.ManifestId} AND media_role IN ('RawImage', 'RAW_IMAGE')
                 """).ToListAsync(cancellationToken);
 
             if (frozenFiles.Count == 0)
@@ -210,10 +210,10 @@ internal sealed class DetectMissionDiseasesCommandHandler(
                 WHERE id = {approvedSnapshot.MappingCandidateBatchId} AND tenant_id = {request.TenantId} AND farm_id = {request.FarmId}
                 """).SingleOrDefaultAsync(cancellationToken);
 
-            if (mappingBatchRow is null || mappingBatchRow.Status != "Approved")
+            if (mappingBatchRow is null || mappingBatchRow.Status is not ("Approved" or "Applied"))
             {
                 return Result.Failure<DetectMissionDiseasesResult>(AppError.Conflict(
-                    "DetectDiseases.MappingBatchNotApproved", "Mapping candidate batch must be approved for this snapshot."));
+                    "DetectDiseases.MappingBatchNotApproved", "Mapping candidate batch must be approved or applied for this snapshot."));
             }
 
             if (!Enum.TryParse<AgriDrone.IntegrationContracts.Mapping.MappingKind>(mappingBatchRow.MappingKind, out var parsedMappingKind))

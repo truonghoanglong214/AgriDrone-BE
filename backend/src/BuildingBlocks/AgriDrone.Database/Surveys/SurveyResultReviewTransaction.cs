@@ -892,7 +892,7 @@ internal sealed class SurveyResultReviewTransaction(
 
                 // Verify input manifest files equal COMBO job MediaIds
                 var frozenFiles = await db.Set<CaptureInputManifestFile>().AsNoTracking()
-                    .Where(f => f.ManifestId == inputApproval.InputManifestId && f.MediaRole == "RawImage")
+                    .Where(f => f.ManifestId == inputApproval.InputManifestId && (f.MediaRole == "RawImage" || f.MediaRole == "RAW_IMAGE"))
                     .Select(f => f.MediaAssetId)
                     .ToListAsync(cancellationToken);
 

@@ -199,7 +199,7 @@ internal sealed class ComboAnalysisPendingImport(
         }
 
         var frozenManifestFiles = await db.CaptureInputManifestFiles.AsNoTracking()
-            .Where(f => f.ManifestId == dbManifest.Id && f.MediaRole == "RawImage")
+            .Where(f => f.ManifestId == dbManifest.Id && (f.MediaRole == "RawImage" || f.MediaRole == "RAW_IMAGE"))
             .Select(f => f.MediaAssetId)
             .ToListAsync(cancellationToken);
 
