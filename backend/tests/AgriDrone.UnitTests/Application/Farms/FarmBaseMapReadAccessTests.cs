@@ -29,7 +29,12 @@ public sealed class FarmBaseMapReadAccessTests
         var map = FarmBaseMapVersion.CreateFirstBaseline(
             new FarmBaseMapPublicationContext(Guid.NewGuid(), TenantId, FarmId, 1, sourceMissionId: Guid.NewGuid()),
             DateTimeOffset.UtcNow);
-        if (!ownerDraft) map.Publish(ActorId, DateTimeOffset.UtcNow);
+        if (!ownerDraft)
+        {
+            var now = DateTimeOffset.UtcNow;
+            map.ApproveInternal(ActorId, now);
+            map.Publish(ActorId, now);
+        }
         context.FarmBaseMapVersions.Add(map);
         await context.SaveChangesAsync();
         var access = new FarmBaseMapReadAccess(new Context(TenantId, ActorId),
@@ -72,7 +77,9 @@ public sealed class FarmBaseMapReadAccessTests
         var map = FarmBaseMapVersion.CreateFirstBaseline(
             new FarmBaseMapPublicationContext(Guid.NewGuid(), TenantId, FarmId, 1, sourceMissionId: Guid.NewGuid()),
             DateTimeOffset.UtcNow);
-        map.Publish(ActorId, DateTimeOffset.UtcNow);
+        var now = DateTimeOffset.UtcNow;
+        map.ApproveInternal(ActorId, now);
+        map.Publish(ActorId, now);
         context.FarmBaseMapVersions.Add(map);
         await context.SaveChangesAsync();
         var access = new FarmBaseMapReadAccess(new Context(TenantId, ActorId), new EffectiveAccess(true), new ManagerAccess());
@@ -95,7 +102,9 @@ public sealed class FarmBaseMapReadAccessTests
         context.Farms.Add(farm);
         var map = FarmBaseMapVersion.CreateFirstBaseline(
             new FarmBaseMapPublicationContext(Guid.NewGuid(), TenantId, farm.Id, 1), DateTimeOffset.UtcNow);
-        map.Publish(ActorId, DateTimeOffset.UtcNow);
+        var now = DateTimeOffset.UtcNow;
+        map.ApproveInternal(ActorId, now);
+        map.Publish(ActorId, now);
         context.FarmBaseMapVersions.Add(map);
         await context.SaveChangesAsync();
         var access = new FarmBaseMapReadAccess(new Context(TenantId, ActorId), new EffectiveAccess(true), new ManagerAccess());

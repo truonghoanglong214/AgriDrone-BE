@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Buffers.Text;
 using System.Security.Cryptography;
 using System.Text;
@@ -34,7 +35,8 @@ internal sealed class RefreshTokenService : IRefreshTokenService
         }
 
         Span<byte> decoded = stackalloc byte[TokenByteLength];
-        if (!Base64Url.TryDecodeFromChars(trimmed, decoded, out var bytesWritten) ||
+        if (Base64Url.DecodeFromChars(trimmed, decoded, out var charsConsumed, out var bytesWritten) != OperationStatus.Done ||
+            charsConsumed != trimmed.Length ||
             bytesWritten != TokenByteLength)
         {
             return false;

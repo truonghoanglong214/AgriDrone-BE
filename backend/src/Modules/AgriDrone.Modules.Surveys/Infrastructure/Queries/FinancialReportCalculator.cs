@@ -29,7 +29,10 @@ internal static class FinancialReportCalculator
         var payments = latest.Where(x => x.Source == "survey_payments" && x.Time("confirmed_at") is not null &&
             x.Text("purpose") != "OrderDeposit" &&
             !(x.Text("purpose") == "FinalBalance" && receipts.Any(r => r.Text("deposit_obligation_id") is null)) &&
-            !receipts.Any(r => r.Text("provider") == x.Text("provider") &&
+            !receipts.Any(r =>
+                !string.IsNullOrEmpty(r.Text("provider")) &&
+                !string.IsNullOrEmpty(r.Text("provider_transaction_id")) &&
+                r.Text("provider") == x.Text("provider") &&
                 r.Text("provider_transaction_id") == x.Text("provider_reference"))).ToArray();
         var pendingPayments = latest.Where(x => x.Source == "survey_payments" &&
             x.Text("status") is "PENDING" or "PROCESSING").Sum(x => x.Money("amount"));
