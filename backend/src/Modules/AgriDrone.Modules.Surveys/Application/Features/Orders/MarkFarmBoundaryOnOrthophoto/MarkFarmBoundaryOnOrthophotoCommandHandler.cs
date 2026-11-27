@@ -180,22 +180,41 @@ internal sealed class MarkFarmBoundaryOnOrthophotoCommandHandler(
                 SurveyOrderError.VersionConflict());
         }
 
-        if (order.Status is not (
-            SurveyOrderStatus.AwaitingBaselineReview or
-            SurveyOrderStatus.PendingBoundaryVerification))
+        var evidenceReference = command.EvidenceReference ?? "ORTHOPHOTO_BASE_MAP";
+        if (command.CaptureAttemptId is { } captureAttemptId)
+        {
+            if (order.Scope != ContractScope.V3 || !order.RequiresBaselineMapping ||
+                order.Status != SurveyOrderStatus.Processing || command.ExpectedMissionVersion is not { } version)
+            {
+                return Result.Failure<MarkFarmBoundaryOnOrthophotoResponse>(
+                    SurveyOrderError.InvalidTransition("A V3 First order in Processing and an expected Mission version are required."));
+            }
+
+            var evidence = await boundaryRepository.FindCaptureOrthophotoAsync(
+                order, captureAttemptId, version, cancellationToken);
+            if (evidence is not { } mediaId)
+            {
+                return Result.Failure<MarkFarmBoundaryOnOrthophotoResponse>(
+                    AppError.Conflict("CaptureBoundary.OrthophotoUnavailable",
+                        "The active Capture Mission or its orthophoto has changed. Reload and verify the evidence."));
+            }
+            evidenceReference = $"mission-media:{mediaId:D}";
+        }
+        else if (order.Scope == ContractScope.V3 ||
+                 order.Status is not (SurveyOrderStatus.AwaitingBaselineReview or SurveyOrderStatus.PendingBoundaryVerification))
         {
             return Result.Failure<MarkFarmBoundaryOnOrthophotoResponse>(
                 SurveyOrderError.InvalidTransition(
-                    $"Order in state '{order.Status}' cannot set farm boundary from orthophoto. Must be in AwaitingBaselineReview."));
+                    $"Order in state '{order.Status}' cannot set farm boundary through this route."));
         }
 
         var boundaryResult = await boundaryRepository.StageApprovedBoundaryAsync(
             order,
             polygon,
-            expectedCurrentBoundaryVersionNumber: null,
+            command.ExpectedBoundaryVersionNumber,
             actorId,
             command.Reason ?? "Marked 4 boundary corners on Orthophoto base map.",
-            command.EvidenceReference ?? "ORTHOPHOTO_BASE_MAP",
+            evidenceReference,
             markedAt,
             cancellationToken);
         if (boundaryResult.IsFailure)
@@ -219,6 +238,8 @@ internal sealed class MarkFarmBoundaryOnOrthophotoCommandHandler(
         {
             farmBoundaryVersionId = order.FarmBoundaryVersionId,
             boundaryVersionNumber = boundaryResult.Value.VersionNumber,
+            captureAttemptId = command.CaptureAttemptId,
+            evidenceReference,
             orderStatus = order.Status.ToString(),
             markedAt
         });
@@ -238,12 +259,23 @@ internal sealed class MarkFarmBoundaryOnOrthophotoCommandHandler(
 
         await unitOfWork.FlushAsync(cancellationToken);
 
+        uint? missionVersion = null;
+        if (command.CaptureAttemptId is { } attemptId && command.ExpectedMissionVersion is { } expectedMissionVersion)
+        {
+            missionVersion = await boundaryRepository.BindCaptureBoundaryAsync(
+                order, attemptId, expectedMissionVersion, boundaryResult.Value.FarmBoundaryId, markedAt, cancellationToken);
+            if (missionVersion is null)
+                return Result.Failure<MarkFarmBoundaryOnOrthophotoResponse>(
+                    SurveyBoundaryVerificationError.PersistenceConflict());
+        }
+
         return Result.Success(new MarkFarmBoundaryOnOrthophotoResponse(
             order.Id,
             boundaryResult.Value.FarmBoundaryId,
             boundaryResult.Value.VersionNumber,
             order.Version,
-            markedAt));
+            markedAt,
+            missionVersion));
     }
 
     private static double CalculateMetricAreaHectares(Polygon polygon)

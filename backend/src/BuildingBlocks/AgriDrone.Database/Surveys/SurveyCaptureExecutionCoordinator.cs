@@ -31,6 +31,46 @@ internal sealed class SurveyCaptureExecutionCoordinator(
 {
     private readonly ISurveyCaptureExecutionProbe _probe = probe ?? new NoopSurveyCaptureExecutionProbe();
     private readonly IObjectStorage? _objectStorage = objectStorage;
+    public Task<CaptureDroneSelection?> GetDroneSelectionAsync(
+        Guid orderId, Guid actorId, DateTimeOffset? startAt, DateTimeOffset? endAt,
+        CancellationToken cancellationToken = default) => ExecuteAsync<CaptureDroneSelection?>(
+        async token =>
+        {
+            var order = await db.Set<SurveyOrder>().AsNoTracking().SingleOrDefaultAsync(
+                value => value.Id == orderId && value.Scope == ContractScope.V3, token);
+            if (order is null || !await IsAssignedManagerAsync(order.TenantId, order.FarmId, actorId, token))
+                return null;
+
+            if (order.DepositObligationId is not { } obligationId ||
+                (await db.Set<SurveyDepositObligation>().AsNoTracking().SingleOrDefaultAsync(
+                    value => value.Id == obligationId && value.SurveyOrderId == orderId, token))?.IsSatisfied != true)
+                return null;
+
+            if (order.Status == SurveyOrderStatus.ReadyForCapture && startAt is null && endAt is null)
+            {
+                var appointment = await db.Set<SurveyAppointment>().AsNoTracking().SingleOrDefaultAsync(
+                    value => value.SurveyOrderId == orderId && value.Purpose == SurveyAppointmentPurpose.Capture &&
+                             value.Status == SurveyAppointmentStatus.Confirmed, token);
+                startAt = appointment?.ProposedStartAt;
+                endAt = appointment?.ProposedEndAt;
+            }
+            else if (order.Status != SurveyOrderStatus.AwaitingReflightDecision ||
+                     startAt is not { } reflightStart || reflightStart <= clock.GetUtcNow())
+            {
+                return null;
+            }
+
+            if (startAt is not { } start || endAt is not { } end || end <= start)
+                return null;
+
+            var commercial = await db.Set<SurveyOrderCommercialSnapshot>().AsNoTracking()
+                .SingleOrDefaultAsync(value => value.SurveyOrderId == orderId, token);
+            return commercial is null ? null : new CaptureDroneSelection(
+                order.FarmId, start.ToUniversalTime(), end.ToUniversalTime(), commercial.MapsPoles, commercial.ScreensDisease);
+        },
+        _ => null,
+        cancellationToken);
+
     public Task<PrepareCaptureAttemptResult> PrepareAttemptAsync(
         PrepareCaptureAttemptRequest request,
         CancellationToken cancellationToken = default) => ExecuteAsync(

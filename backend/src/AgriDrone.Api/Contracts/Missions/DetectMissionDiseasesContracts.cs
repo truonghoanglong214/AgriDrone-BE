@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace AgriDrone.Api.Contracts.Missions;
 
@@ -32,4 +33,6 @@ public sealed record DetectMissionDiseasesResponse(
     IReadOnlyDictionary<string, int> DiseaseSummary,
     string? CsvDownloadUrl,
     IReadOnlyList<DiseaseDetectionItemResponse> Detections,
-    IReadOnlyList<string>? AnnotatedImageUrls = null);
+    IReadOnlyList<string>? AnnotatedImageUrls = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Guid? JobId = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? SourceRevision = null);

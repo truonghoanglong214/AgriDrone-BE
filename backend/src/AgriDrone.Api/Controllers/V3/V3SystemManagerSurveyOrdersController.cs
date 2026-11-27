@@ -1,3 +1,8 @@
+using AgriDrone.Modules.Missions.Application.Features.Drones.GetAvailableDrones;
+using AgriDrone.Modules.Missions.Domain.Drones;
+using AgriDrone.Modules.Missions.Domain.Missions;
+using AgriDrone.Api.Contracts.Surveys.Orders;
+using AgriDrone.Modules.Surveys.Application.Features.Orders.MarkFarmBoundaryOnOrthophoto;
 using AgriDrone.Api.Contracts.Surveys.Appointments;
 using AgriDrone.Api.Contracts.Surveys.V3;
 using AgriDrone.Api.Mapping;
@@ -25,6 +30,46 @@ public sealed class V3SystemManagerSurveyOrdersController(
     IExecutionContext executionContext,
     TimeProvider timeProvider) : ControllerBase
 {
+    [HttpGet("{orderId:guid}/drones/available")]
+    [ProducesResponseType<AvailableDronesForOrderResponse>(StatusCodes.Status200OK)]
+    public async Task<IResult> GetAvailableCaptureDrones(
+        Guid orderId, [FromQuery] DateTimeOffset? startAt, [FromQuery] DateTimeOffset? endAt,
+        CancellationToken cancellationToken)
+    {
+        if (!executionContext.IsInitialized || executionContext.ActorId is not Guid actorId)
+            return Results.Forbid();
+
+        if ((startAt is null) != (endAt is null) || endAt <= startAt)
+            return Results.BadRequest("Provide both startAt and endAt in chronological order for a re-flight.");
+
+        var selection = await captureCoordinator.GetDroneSelectionAsync(
+            orderId, actorId, startAt, endAt, cancellationToken);
+        if (selection is null)
+            return Results.Problem(statusCode: StatusCodes.Status404NotFound,
+                title: "A Capture scheduling window is unavailable for this order.");
+
+        var result = await sender.Send(new GetAvailableDronesQuery(
+            selection.FarmId, selection.StartAt, selection.EndAt), cancellationToken);
+        return result.ToHttpResult(HttpContext, drones => Results.Ok(new AvailableDronesForOrderResponse(
+            orderId, selection.FarmId, nameof(MissionPurpose.Capture), selection.StartAt, selection.EndAt,
+            drones.Where(drone =>
+                (!selection.MapsPoles || DroneCapabilityPolicy.Supports(drone.Specifications, MissionPurpose.BaselineMapping)) &&
+                (!selection.ScreensDisease || DroneCapabilityPolicy.Supports(drone.Specifications, MissionPurpose.PlantHealth))).ToArray())));
+    }
+
+    [HttpPost("{orderId:guid}/capture-attempts/{attemptId:guid}/farm-boundary/mark-orthophoto-corners")]
+    [ProducesResponseType<MarkFarmBoundaryOnOrthophotoResponse>(StatusCodes.Status200OK)]
+    public async Task<IResult> MarkCaptureFarmBoundary(
+        Guid orderId, Guid attemptId, [FromBody] MarkCaptureOrthophotoCornersRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await sender.Send(new MarkFarmBoundaryOnOrthophotoCommand(
+            orderId, request.Corners, request.ExpectedOrderVersion, request.Reason,
+            CaptureAttemptId: attemptId, ExpectedMissionVersion: request.ExpectedMissionVersion,
+            ExpectedBoundaryVersionNumber: request.ExpectedBoundaryVersionNumber), cancellationToken);
+        return result.ToHttpResult(HttpContext, Results.Ok);
+    }
+
     [HttpPost("{orderId:guid}/capture-appointments")]
     [ProducesResponseType<SurveyAppointmentApiResponse>(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]

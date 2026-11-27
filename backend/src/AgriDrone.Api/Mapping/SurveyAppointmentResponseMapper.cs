@@ -37,7 +37,7 @@ internal static class SurveyAppointmentResponseMapper
             response.ProposedEndAt,
             MapAppointmentStatus(response.Status),
             response.AppointmentVersion,
-            MapOrderStatus(response.OrderStatus),
+            SurveyOrderResponseMapper.MapStatus(response.OrderStatus),
             response.OrderVersion,
             null,
             null,
@@ -66,7 +66,7 @@ internal static class SurveyAppointmentResponseMapper
             MapAppointmentStatus(
                 response.AppointmentStatus),
             response.AppointmentVersion,
-            MapOrderStatus(response.OrderStatus),
+            SurveyOrderResponseMapper.MapStatus(response.OrderStatus),
             response.OrderVersion,
             response.ConfirmedBy,
             response.ConfirmedAt,
@@ -95,7 +95,7 @@ internal static class SurveyAppointmentResponseMapper
             MapAppointmentStatus(
                 response.AppointmentStatus),
             response.AppointmentVersion,
-            MapOrderStatus(response.OrderStatus),
+            SurveyOrderResponseMapper.MapStatus(response.OrderStatus),
             response.OrderVersion,
             null,
             null,
@@ -119,20 +119,6 @@ internal static class SurveyAppointmentResponseMapper
             response.IsReady,
             response.ReadinessFailures,
             response.EvaluatedAt);
-
-    private static string MapOrderStatus(SurveyOrderStatus status) =>
-        status switch
-        {
-            SurveyOrderStatus.AwaitingBaselineAppointment =>
-                "AWAITING_BASELINE_APPOINTMENT",
-            SurveyOrderStatus.AwaitingBoundaryCapture =>
-                "AWAITING_BOUNDARY_CAPTURE",
-            SurveyOrderStatus.BaselineReady => "BASELINE_READY",
-            SurveyOrderStatus.AwaitingPaidAppointment =>
-                "AWAITING_PAID_APPOINTMENT",
-            SurveyOrderStatus.AwaitingPayment => "AWAITING_PAYMENT",
-            _ => status.ToString().ToUpperInvariant()
-        };
 
     internal static string MapPurpose(SurveyAppointmentPurpose purpose) =>
         purpose switch

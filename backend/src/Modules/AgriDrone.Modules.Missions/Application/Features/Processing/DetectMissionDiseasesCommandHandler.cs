@@ -110,7 +110,7 @@ internal sealed class DetectMissionDiseasesCommandHandler(
         {
             var commercial = await dbContext.Database.SqlQuery<CommercialSnapshotRow>($"""
                 SELECT service_code AS "ServiceCode", screens_disease AS "ScreensDisease", business_policy_version_id AS "BusinessPolicyVersionId"
-                FROM survey.survey_order_commercial_snapshots
+                FROM survey.order_commercial_snapshots
                 WHERE survey_order_id = {orderId}
                 """).SingleOrDefaultAsync(cancellationToken);
 
@@ -388,7 +388,8 @@ internal sealed class DetectMissionDiseasesCommandHandler(
         // Lưu kết quả nhận diện bệnh vào cơ sở dữ liệu PostgreSQL
         try
         {
-            await SaveDiseaseDetectionsToDatabaseAsync(request, result, mediaList, captureMap, mission.EndedAt ?? mission.StartedAt, startedAt, v3Context, cancellationToken);
+            var committedRun = await SaveDiseaseDetectionsToDatabaseAsync(request, result, mediaList, captureMap, mission.EndedAt ?? mission.StartedAt, startedAt, v3Context, cancellationToken);
+            return Result.Success(result with { JobId = committedRun.JobId, SourceRevision = committedRun.SourceRevision });
         }
         catch (DiseaseDetectionLocationException error)
         {
@@ -398,11 +399,9 @@ internal sealed class DetectMissionDiseasesCommandHandler(
         {
             return Result.Failure<DetectMissionDiseasesResult>(AppError.Conflict("DetectDiseases.ProvenanceRequired", error.Message));
         }
-
-        return Result.Success(result);
     }
 
-    private async Task SaveDiseaseDetectionsToDatabaseAsync(
+    private async Task<(Guid? JobId, int? SourceRevision)> SaveDiseaseDetectionsToDatabaseAsync(
         DetectMissionDiseasesCommand request,
         DetectMissionDiseasesResult result,
         List<MissionMedia> mediaList,
@@ -449,7 +448,7 @@ internal sealed class DetectMissionDiseasesCommandHandler(
             {
                 // ADR 0020 - Rank 2: Khóa Order FOR UPDATE để serialize với cancel/re-flight
                 var orderRow = await dbContext.Database.SqlQuery<OrderLockRow>($"""
-                    SELECT id AS "Id", status AS "Status", baseline_map_version_id AS "BaselineMapVersionId"
+                    SELECT id AS "Id", status::text AS "Status", baseline_map_version_id AS "BaselineMapVersionId"
                     FROM survey.survey_orders
                     WHERE id = {v3Context.OrderId}
                     FOR UPDATE
@@ -462,7 +461,7 @@ internal sealed class DetectMissionDiseasesCommandHandler(
 
                 // ADR 0020 - Rank 7: Khóa CaptureAttempt FOR UPDATE
                 var attemptRow = await dbContext.Database.SqlQuery<AttemptLockRow>($"""
-                    SELECT id AS "Id", status AS "Status", input_approval_reference AS "InputApprovalReference", processing_job_reference AS "ProcessingJobReference"
+                    SELECT id AS "Id", status::text AS "Status", input_approval_reference AS "InputApprovalReference", processing_job_reference AS "ProcessingJobReference"
                     FROM survey.capture_attempts
                     WHERE id = {v3Context.AttemptId} AND order_id = {v3Context.OrderId}
                     FOR UPDATE
@@ -529,7 +528,7 @@ internal sealed class DetectMissionDiseasesCommandHandler(
 
                 var commercialPolicyRow = await dbContext.Database.SqlQuery<CommercialPolicyRow>($"""
                     SELECT business_policy_version_id AS "PolicyVersionId"
-                    FROM survey.survey_order_commercial_snapshots
+                    FROM survey.order_commercial_snapshots
                     WHERE survey_order_id = {v3Context.OrderId}
                     """).SingleOrDefaultAsync(cancellationToken);
                 var policyVersionId = commercialPolicyRow?.PolicyVersionId ?? Guid.Empty;
@@ -854,6 +853,8 @@ internal sealed class DetectMissionDiseasesCommandHandler(
                         observationsToInsert.Count, request.MissionId, infectedPlantIds.Count);
                 }
             }
+
+            return v3Context is null ? (null, null) : (job.Id, version);
         }
         catch (Exception ex)
         {

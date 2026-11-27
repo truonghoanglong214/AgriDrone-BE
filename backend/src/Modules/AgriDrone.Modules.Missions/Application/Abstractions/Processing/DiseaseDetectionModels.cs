@@ -46,4 +46,6 @@ public sealed record DetectMissionDiseasesResult(
     IReadOnlyList<DiseaseDetectionItem> Detections,
     IReadOnlyList<string>? AnnotatedImageUrls = null,
     string? ErrorMessage = null,
-    IReadOnlyList<ImageInferenceOutcome>? ImageOutcomes = null);
+    IReadOnlyList<ImageInferenceOutcome>? ImageOutcomes = null,
+    Guid? JobId = null,
+    int? SourceRevision = null);

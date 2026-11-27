@@ -799,13 +799,14 @@ public sealed class SurveyOrder : AggregateRoot
         DomainGuard.Utc(verifiedAt);
         SurveyTransitionGuard.EnsureTimestamp(verifiedAt, UpdatedAt);
 
-        if (Status is not (
-            SurveyOrderStatus.AwaitingBaselineReview or
-            SurveyOrderStatus.PendingBoundaryVerification))
+        var canMark = Scope == ContractScope.V3
+            ? RequiresBaselineMapping && Status == SurveyOrderStatus.Processing
+            : Status is SurveyOrderStatus.AwaitingBaselineReview or SurveyOrderStatus.PendingBoundaryVerification;
+        if (!canMark)
         {
             throw new SurveyDomainException(
                 SurveyOrderDomainErrorCodes.InvalidTransition,
-                $"Order in state '{Status}' cannot set farm boundary from orthophoto. Must be in AwaitingBaselineReview.");
+                $"Order in state '{Status}' cannot set farm boundary from orthophoto.");
         }
 
         FarmBoundaryVersionId = farmBoundaryVersionId;

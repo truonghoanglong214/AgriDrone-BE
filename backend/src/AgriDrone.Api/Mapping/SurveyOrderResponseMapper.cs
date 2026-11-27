@@ -162,7 +162,7 @@ internal static class SurveyOrderResponseMapper
             response.MappingSubtotal, response.PlantHealthSubtotal,
             response.ComboDiscountPercentage, response.ComboDiscountAmount);
 
-    private static string MapStatus(SurveyOrderStatus status) =>
+    internal static string MapStatus(SurveyOrderStatus status) =>
         status switch
         {
             SurveyOrderStatus.PendingBoundaryVerification =>

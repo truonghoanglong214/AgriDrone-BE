@@ -422,6 +422,8 @@ public sealed class MissionOrthophotoController(
                     d.ImageName,
                     d.CropImageUrl,
                     d.AnnotatedImageUrl)).ToList(),
-                value.AnnotatedImageUrls)));
+                value.AnnotatedImageUrls,
+                value.JobId,
+                value.SourceRevision)));
     }
 }

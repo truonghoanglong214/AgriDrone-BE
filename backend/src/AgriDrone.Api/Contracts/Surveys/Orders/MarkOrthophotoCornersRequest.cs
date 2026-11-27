@@ -13,3 +13,10 @@ public sealed record MarkOrthophotoCornersRequest(
 
     string? Reason = null,
     string? EvidenceReference = null);
+
+public sealed record MarkCaptureOrthophotoCornersRequest(
+    [param: Range(typeof(uint), "1", "4294967295")] uint ExpectedOrderVersion,
+    [param: Required] uint? ExpectedMissionVersion,
+    [param: Required] IReadOnlyList<CornerPointDto> Corners,
+    [param: Range(1, int.MaxValue)] int? ExpectedBoundaryVersionNumber = null,
+    string? Reason = null);

@@ -8,5 +8,8 @@ public sealed record MarkFarmBoundaryOnOrthophotoCommand(
     IReadOnlyList<CornerPointDto> Corners,
     uint ExpectedOrderVersion,
     string? Reason = null,
-    string? EvidenceReference = null)
+    string? EvidenceReference = null,
+    Guid? CaptureAttemptId = null,
+    uint? ExpectedMissionVersion = null,
+    int? ExpectedBoundaryVersionNumber = null)
     : IRequest<Result<MarkFarmBoundaryOnOrthophotoResponse>>;

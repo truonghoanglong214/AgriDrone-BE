@@ -256,6 +256,10 @@ public record RecordCaptureNoShowResult(
 
 public interface ISurveyCaptureExecutionCoordinator
 {
+    Task<CaptureDroneSelection?> GetDroneSelectionAsync(
+        Guid orderId, Guid actorId, DateTimeOffset? startAt, DateTimeOffset? endAt,
+        CancellationToken cancellationToken = default) => Task.FromResult<CaptureDroneSelection?>(null);
+
     Task<PrepareCaptureAttemptResult> PrepareAttemptAsync(
         PrepareCaptureAttemptRequest request,
         CancellationToken cancellationToken = default);
@@ -300,3 +304,6 @@ public interface ISurveyCaptureExecutionCoordinator
         RecordCaptureNoShowRequest request,
         CancellationToken cancellationToken = default);
 }
+
+public sealed record CaptureDroneSelection(
+    Guid FarmId, DateTimeOffset StartAt, DateTimeOffset EndAt, bool MapsPoles, bool ScreensDisease);

@@ -118,6 +118,60 @@ internal sealed class SurveyOrderBoundaryRepository(
             activeZoneSnapshots));
     }
 
+    public async Task<Guid?> FindCaptureOrthophotoAsync(
+        SurveyOrder order, Guid attemptId, uint missionVersion, CancellationToken cancellationToken)
+    {
+        context.EnsureTransaction();
+        await using var command = CreateCommand("""
+            SELECT asset.id
+            FROM survey.capture_attempts AS attempt
+            JOIN mission.drone_missions AS mission ON mission.capture_attempt_id = attempt.id
+                AND mission.survey_order_id = attempt.order_id
+                AND mission.tenant_id = attempt.tenant_id AND mission.farm_id = attempt.farm_id
+            JOIN mission.mission_media AS link ON link.mission_id = mission.id
+            JOIN media.media_assets AS asset ON asset.id = link.media_id
+                AND asset.tenant_id = mission.tenant_id AND asset.farm_id = mission.farm_id
+            WHERE attempt.id = @attempt_id AND attempt.order_id = @order_id
+              AND attempt.tenant_id = @tenant_id AND attempt.farm_id = @farm_id
+              AND attempt.status = 'PROCESSING' AND mission.mission_purpose = 'CAPTURE'
+              AND mission.xmin::text::bigint = @mission_version
+              AND link.media_role = 'PROCESSED_IMAGE' AND asset.mime_type = 'image/jpeg'
+              AND asset.storage_status = 'ACTIVE' AND asset.deleted_at IS NULL
+              AND jsonb_typeof(asset.metadata->'corners') = 'object'
+              AND NOT EXISTS (
+                  SELECT 1 FROM farm.mapping_candidate_batches AS batch
+                  WHERE batch.capture_attempt_id = attempt.id)
+            ORDER BY asset.created_at DESC, asset.id DESC
+            LIMIT 1
+            FOR UPDATE OF attempt, mission
+            FOR SHARE OF link, asset
+            """,
+            Id("attempt_id", attemptId), Id("order_id", order.Id),
+            Id("tenant_id", order.TenantId), Id("farm_id", order.FarmId),
+            new NpgsqlParameter("mission_version", (long)missionVersion));
+        return await command.ExecuteScalarAsync(cancellationToken) is Guid mediaId ? mediaId : null;
+    }
+
+    public async Task<uint?> BindCaptureBoundaryAsync(
+        SurveyOrder order, Guid attemptId, uint missionVersion, Guid boundaryId,
+        DateTimeOffset markedAt, CancellationToken cancellationToken)
+    {
+        context.EnsureTransaction();
+        await using var command = CreateCommand("""
+            UPDATE mission.drone_missions
+            SET farm_boundary_version_id = @boundary_id, updated_at = @marked_at
+            WHERE capture_attempt_id = @attempt_id AND survey_order_id = @order_id
+              AND tenant_id = @tenant_id AND farm_id = @farm_id
+              AND xmin::text::bigint = @mission_version
+            RETURNING xmin::text::bigint
+            """,
+            Id("boundary_id", boundaryId), Id("attempt_id", attemptId), Id("order_id", order.Id),
+            Id("tenant_id", order.TenantId), Id("farm_id", order.FarmId),
+            new NpgsqlParameter("mission_version", (long)missionVersion),
+            new NpgsqlParameter("marked_at", markedAt));
+        return await command.ExecuteScalarAsync(cancellationToken) is long version ? (uint)version : null;
+    }
+
     public async Task<Result<SurveyBoundaryApprovalSnapshot>>
         StageApprovedBoundaryAsync(
             SurveyOrder order,
