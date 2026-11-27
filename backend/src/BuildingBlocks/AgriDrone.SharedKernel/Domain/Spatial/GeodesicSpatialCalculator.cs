@@ -41,6 +41,12 @@ public static class GeodesicSpatialCalculator
         return (RadiansToDegrees(initialBearing) + 360.0) % 360.0;
     }
 
+    public static double CalculateLateralDistanceMeters(
+        double distanceMeters,
+        double segmentBearingDegrees,
+        double axisBearingDegrees) =>
+        distanceMeters * Math.Abs(Math.Sin(DegreesToRadians(segmentBearingDegrees - axisBearingDegrees)));
+
     private static double DegreesToRadians(double degrees) => degrees * Math.PI / 180.0;
     private static double RadiansToDegrees(double radians) => radians * 180.0 / Math.PI;
 }

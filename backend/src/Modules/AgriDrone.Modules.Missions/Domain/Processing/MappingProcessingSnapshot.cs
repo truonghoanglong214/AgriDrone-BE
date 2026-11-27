@@ -7,4 +7,25 @@ public sealed record MappingProcessingSnapshot(
     double PlantSpacingM,
     string AlgorithmVersion,
     string InputFingerprint,
-    string OutputFingerprint);
+    string OutputFingerprint)
+{
+    public GridMeasurements? SubmittedGrid { get; init; }
+
+    internal bool MatchesSubmission(MappingProcessingSnapshot submission)
+    {
+        if (SubmittedGrid is null)
+        {
+            return this == submission;
+        }
+
+        return (this with
+        {
+            GridBearingDeg = SubmittedGrid.BearingDeg,
+            RowSpacingM = SubmittedGrid.RowSpacingM,
+            PlantSpacingM = SubmittedGrid.PlantSpacingM,
+            SubmittedGrid = null
+        }) == submission;
+    }
+
+    public sealed record GridMeasurements(double BearingDeg, double RowSpacingM, double PlantSpacingM);
+}
