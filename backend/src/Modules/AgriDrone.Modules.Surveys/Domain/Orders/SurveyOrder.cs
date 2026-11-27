@@ -581,6 +581,24 @@ public sealed class SurveyOrder : AggregateRoot
     public void TransitionToReadyForCaptureV3(DateTimeOffset occurredAt) =>
         ApplyV3Transition(SurveyOrderStatus.ReadyForCapture, occurredAt);
 
+    public void RecordDiseaseCaptureSchedule(DateTimeOffset occurredAt)
+    {
+        EnsureV3Scope();
+        if (Status is not (SurveyOrderStatus.Processing or SurveyOrderStatus.ReadyForCapture) || !RequiresBaselineMapping ||
+            !FarmBaseMapVersionId.HasValue || !VerifiedPoleCountSnapshotId.HasValue ||
+            CurrentApprovedResultRevisionId.HasValue || CurrentInvoiceRevisionId.HasValue)
+        {
+            throw new SurveyDomainException(
+                "SurveyOrder.DiseaseCaptureNotReady",
+                "Disease capture requires a verified initial map and an open result.");
+        }
+
+        DomainGuard.Utc(occurredAt, nameof(occurredAt));
+        ArgumentOutOfRangeException.ThrowIfLessThan(occurredAt, UpdatedAt);
+
+        ApplyTransition(SurveyOrderStatus.ReadyForCapture, occurredAt);
+    }
+
     public void TransitionToCapturingV3(DateTimeOffset occurredAt) =>
         ApplyV3Transition(SurveyOrderStatus.Capturing, occurredAt);
 

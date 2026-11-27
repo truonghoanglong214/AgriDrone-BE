@@ -39,12 +39,24 @@ internal sealed class MissionPlantGpsStore(
         MappingProcessingCompletion completion,
         CancellationToken cancellationToken)
     {
-        var missionExists = await db.DroneMissions.AsNoTracking().AnyAsync(
-            mission => mission.Id == missionId && mission.FarmId == farmId &&
-                mission.TenantId == tenantId, cancellationToken);
-        if (!missionExists)
+        var mission = await db.DroneMissions.AsNoTracking()
+            .Where(value => value.Id == missionId && value.FarmId == farmId && value.TenantId == tenantId)
+            .Select(value => new { value.CaptureAttemptId })
+            .SingleOrDefaultAsync(cancellationToken);
+        if (mission is null)
         {
             return new MissionPlantGpsReplaceResult(MissionPlantGpsReplaceStatus.NotFound);
+        }
+        if (mission.CaptureAttemptId is Guid attemptId &&
+            await db.Database.SqlQuery<int>($"""
+                SELECT 1 AS "Value" FROM survey.capture_attempts
+                WHERE id = {attemptId} AND tenant_id = {tenantId} AND farm_id = {farmId}
+                  AND mapping_source_attempt_id IS NOT NULL
+                """).AnyAsync(cancellationToken))
+        {
+            return new MissionPlantGpsReplaceResult(
+                MissionPlantGpsReplaceStatus.Conflict,
+                Errors: ["A disease capture uses its approved source map and cannot submit plant GPS mapping output."]);
         }
 
         var completedAt = timeProvider.GetUtcNow();

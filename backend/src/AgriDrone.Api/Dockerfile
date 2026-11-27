@@ -50,6 +50,21 @@ RUN dotnet ef migrations bundle \
     -r linux-x64 \
     --no-build
 
+# Install the official INAV decoder for the target architecture.
+FROM debian:bookworm-slim AS blackbox-decoder
+ARG TARGETARCH
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl zstd \
+    && rm -rf /var/lib/apt/lists/*
+RUN case "$TARGETARCH" in \
+        amd64) archive_arch=x64_64; sha256=8aaa56c319ad1c614635331ed1246ff293fcd55d548783124ce521cc14a8e05d ;; \
+        arm64) archive_arch=aarch64; sha256=ad1442449186a7372e60f277a69787ca91d5b00c8d23eb7417d88644b36edc37 ;; \
+        *) echo "Unsupported INAV decoder architecture: $TARGETARCH" >&2; exit 1 ;; \
+    esac \
+    && curl -fsSL --retry 3 "https://github.com/iNavFlight/blackbox-tools/releases/download/v9.0.0/blackbox-tools-9.0.0_linux-${archive_arch}.tar.zst" -o /tmp/blackbox-tools.tar.zst \
+    && echo "$sha256  /tmp/blackbox-tools.tar.zst" | sha256sum --check \
+    && tar --zstd -xf /tmp/blackbox-tools.tar.zst -C /tmp ./bin/blackbox_decode \
+    && install -m 0755 /tmp/bin/blackbox_decode /usr/local/bin/blackbox_decode
+
 # Stage 2: Production API Runtime
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
@@ -58,7 +73,11 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*
 
+COPY --from=blackbox-decoder /usr/local/bin/blackbox_decode /usr/local/bin/blackbox_decode
+
 USER $APP_UID
+
+RUN ["/usr/local/bin/blackbox_decode", "--version"]
 
 COPY --from=build /app/publish ./
 
@@ -70,7 +89,11 @@ EXPOSE 8080
 HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
     CMD curl -f http://localhost:8080/health/live || exit 1
 
-ENTRYPOINT ["dotnet", "AgriDrone.Api.dll"]
+# Apply the image's decoder settings even if an older Compose env file supplies overrides.
+ENTRYPOINT ["env", \
+    "Telemetry__BlackboxDecoder__Enabled=true", \
+    "Telemetry__BlackboxDecoder__ExecutablePath=/usr/local/bin/blackbox_decode", \
+    "dotnet", "AgriDrone.Api.dll"]
 
 # Stage 3: One-shot Database Migrator
 FROM mcr.microsoft.com/dotnet/runtime-deps:10.0 AS migrator

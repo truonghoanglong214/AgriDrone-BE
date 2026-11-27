@@ -453,6 +453,23 @@ internal sealed class SurveySettlementReleaseCoordinator(
                     order.Id, "SettlementRelease.MapUnavailable", "The exact approved capture map could not be verified.");
             }
 
+            SurveyComboImportBatch? comboBatch = null;
+            if (approval.ComboBatchId is Guid comboBatchId)
+            {
+                comboBatch = await db.Set<SurveyComboImportBatch>().AsNoTracking().SingleOrDefaultAsync(b =>
+                    b.Id == comboBatchId && b.SurveyOrderId == order.Id && b.TenantId == order.TenantId &&
+                    b.FarmId == order.FarmId && b.FarmBaseMapVersionId == approval.FarmBaseMapVersionId &&
+                    b.FarmBoundaryVersionId == approval.FarmBoundaryVersionId &&
+                    b.MappingCandidateBatchId == approval.MappingCandidateBatchId, cancellationToken);
+                if (comboBatch is null ||
+                    !await DiseaseCaptureMappingProof.HasAcceptedDiseaseCaptureAsync(
+                        db, order, snapshot, approval, comboBatch, cancellationToken))
+                {
+                    return EvaluateSurveySettlementReleaseResult.StaleContext(
+                        order.Id, "SettlementRelease.ComboCaptureMismatch", "The approved disease capture could not be verified for release.");
+                }
+            }
+
             var now = SurveyInternalApprovedResultRevision.NormalizeUtcToMicroseconds(timeProvider.GetUtcNow());
             var previous = await db.Set<FarmBaseMapVersion>().SingleOrDefaultAsync(m =>
                 m.TenantId == order.TenantId && m.FarmId == order.FarmId &&
@@ -476,7 +493,13 @@ internal sealed class SurveySettlementReleaseCoordinator(
                 map.Id, approval.BaselineMapVersionId, approval.ComboReviewRevisionId, invoice.TotalAmount,
                 invoice.Currency, paidAt, now, now, now, publicationId, deadline, claimPolicy.Id);
 
-            var mediaIds = await ReadReleaseMediaAsync(approval, cancellationToken);
+            var mediaIds = await ReadReleaseMediaAsync(approval, approval.CaptureAttemptId, approval.MissionId, cancellationToken);
+            if (comboBatch is not null && comboBatch.CaptureAttemptId != approval.CaptureAttemptId)
+            {
+                var diseaseMedia = await ReadReleaseMediaAsync(
+                    approval, comboBatch.CaptureAttemptId, comboBatch.MissionId, cancellationToken);
+                mediaIds = mediaIds.Union(diseaseMedia).OrderBy(id => id).ToArray();
+            }
             var reservations = overpayment?.CreateObligations(order.Id, order.TenantId, now) ?? [];
             db.Set<SurveyRefundObligation>().AddRange(reservations);
             map.Publish(approval.ReviewedBy, now);
@@ -588,25 +611,26 @@ internal sealed class SurveySettlementReleaseCoordinator(
     }
 
     private async Task<Guid[]> ReadReleaseMediaAsync(
-        SurveyInternalApprovedResultRevision approval, CancellationToken cancellationToken)
+        SurveyInternalApprovedResultRevision approval, Guid attemptId, Guid missionId, CancellationToken cancellationToken)
     {
         var reference = await db.Set<CaptureAttempt>().AsNoTracking()
-            .Where(a => a.Id == approval.CaptureAttemptId && a.OrderId == approval.SurveyOrderId)
+            .Where(a => a.Id == attemptId && a.OrderId == approval.SurveyOrderId &&
+                a.TenantId == approval.TenantId && a.FarmId == approval.FarmId)
             .Select(a => a.InputApprovalReference).SingleOrDefaultAsync(cancellationToken);
         var rawImages = db.Set<CaptureInputManifestFile>().AsNoTracking().Where(_ => false).Select(f => f.MediaAssetId);
         if (Guid.TryParse(reference, out var inputApprovalId))
         {
             rawImages = from file in db.Set<CaptureInputManifestFile>()
                         join input in db.Set<CaptureInputApproval>() on file.ManifestId equals input.InputManifestId
-                        where input.Id == inputApprovalId && input.CaptureAttemptId == approval.CaptureAttemptId &&
-                              input.SurveyOrderId == approval.SurveyOrderId && input.MissionId == approval.MissionId &&
+                        where input.Id == inputApprovalId && input.CaptureAttemptId == attemptId &&
+                              input.SurveyOrderId == approval.SurveyOrderId && input.MissionId == missionId &&
                               input.TenantId == approval.TenantId && input.FarmId == approval.FarmId &&
                               (file.MediaRole == "RawImage" || file.MediaRole == "RAW_IMAGE")
                         select file.MediaAssetId;
         }
 
         var media = await db.Set<MissionMedia>().AsNoTracking()
-            .Where(m => m.MissionId == approval.MissionId && m.Media.TenantId == approval.TenantId &&
+            .Where(m => m.MissionId == missionId && m.Media.TenantId == approval.TenantId &&
                 m.Media.FarmId == approval.FarmId && m.Media.DeletedAt == null &&
                 m.Media.StorageStatus == MediaStorageStatus.Active &&
                 (m.MediaRole == MissionMediaRole.ProcessedImage || m.MediaRole == MissionMediaRole.Thumbnail ||

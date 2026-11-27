@@ -233,11 +233,10 @@ internal sealed class ComboAnalysisPendingImport(
         if (!evidenceIds.IsSubsetOf(source.EvidenceMediaIds))
             return Reject("ContextMismatch", "Evidence media does not belong to the source Mission/Tenant/Farm.");
 
-        // Map validity predicate: status IN ('INTERNALLY_APPROVED', 'PUBLISHED')
         var snapshot = await db.Database.SqlQuery<SnapshotRow>($"""
             SELECT f.tenant_id AS "TenantId", f.id AS "FarmId",
                 (fb.reviewed_at IS NOT NULL AND fb.status IN ('APPROVED', 'SUPERSEDED')) AS "BoundaryValid",
-                COALESCE(bm.status IN ('INTERNALLY_APPROVED', 'PUBLISHED') AND bm.farm_boundary_version_id = fb.id, FALSE) AS "MapValid"
+                COALESCE(bm.status IN ('INTERNAL_APPROVED', 'PUBLISHED') AND bm.farm_boundary_version_id = fb.id, FALSE) AS "MapValid"
             FROM farm.farms f
             JOIN farm.farm_boundaries fb ON fb.farm_id = f.id AND fb.tenant_id = f.tenant_id AND fb.id = {p.FarmBoundaryVersionId}
             JOIN farm.farm_base_map_versions bm ON bm.farm_id = f.id AND bm.tenant_id = f.tenant_id AND bm.id = {p.FarmBaseMapVersionId}
@@ -248,6 +247,32 @@ internal sealed class ComboAnalysisPendingImport(
 
         if (snapshot.TenantId != tenantId || !snapshot.BoundaryValid || !snapshot.MapValid)
             return Reject("MapVersionMismatch", "An approved boundary and internally approved or published capture map are required.");
+
+        if (attempt.MappingSourceAttemptId is Guid sourceAttemptId)
+        {
+            var hasMappingSource = await db.Database.SqlQuery<Guid>($"""
+                SELECT snapshot.id AS "Value"
+                FROM survey.survey_order_pole_count_snapshots snapshot
+                JOIN survey.capture_attempts source
+                  ON source.id = snapshot.capture_attempt_id AND source.order_id = snapshot.survey_order_id
+                  AND source.tenant_id = snapshot.tenant_id AND source.farm_id = snapshot.farm_id
+                JOIN mission.drone_missions map_mission
+                  ON map_mission.id = snapshot.mission_id AND map_mission.capture_attempt_id = source.id
+                  AND map_mission.survey_order_id = snapshot.survey_order_id
+                  AND map_mission.tenant_id = snapshot.tenant_id AND map_mission.farm_id = snapshot.farm_id
+                WHERE snapshot.id = {order.VerifiedPoleCountSnapshotId}
+                  AND snapshot.survey_order_id = {order.Id} AND snapshot.tenant_id = {tenantId}
+                  AND snapshot.farm_id = {p.FarmId} AND snapshot.mission_id <> {p.MissionId}
+                  AND source.id = {sourceAttemptId} AND source.status = 'ACCEPTED'
+                  AND source.mapping_source_attempt_id IS NULL
+                  AND source.processing_acceptance_receipt = snapshot.id::text
+                  AND snapshot.farm_base_map_version_id = {p.FarmBaseMapVersionId}
+                  AND snapshot.farm_boundary_version_id = {p.FarmBoundaryVersionId}
+                  AND snapshot.mapping_candidate_batch_id = {p.MappingCandidateBatchId}
+                """).AnyAsync(cancellationToken);
+            if (!hasMappingSource)
+                return Reject("MapVersionMismatch", "The disease capture must reference the verified map from its linked mapping capture.");
+        }
 
         // Candidate verification
         var candidates = p.Findings.Where(f => f.MappingCandidateId.HasValue).Select(f => f.MappingCandidateId!.Value).Distinct().ToArray();

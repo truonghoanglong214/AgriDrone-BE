@@ -17,6 +17,7 @@ public sealed class CaptureAttempt : AggregateRoot
 
     public Guid? MissionId { get; private set; }
     public Guid? ParentMissionId { get; private set; }
+    public Guid? MappingSourceAttemptId { get; private set; }
 
     // Re-flight / Successor linkage
     public Guid? SupersededAttemptId { get; private set; }
@@ -157,6 +158,33 @@ public sealed class CaptureAttempt : AggregateRoot
         return attempt;
     }
 
+    public static CaptureAttempt CreateDiseaseCapture(
+        Guid id,
+        CaptureAttempt mappingAttempt,
+        Guid missionId,
+        Guid actorId,
+        Guid correlationId,
+        Guid operationId,
+        string payloadFingerprint,
+        DateTimeOffset createdAt)
+    {
+        ArgumentNullException.ThrowIfNull(mappingAttempt);
+        if (mappingAttempt.Status != CaptureAttemptStatus.Accepted || mappingAttempt.MappingSourceAttemptId.HasValue)
+        {
+            throw new SurveyDomainException(
+                CaptureAttemptDomainErrorCodes.InvalidTransition,
+                "Disease capture requires an accepted mapping attempt.");
+        }
+
+        var attempt = CreateInitial(
+            id, mappingAttempt.OrderId, mappingAttempt.TenantId, mappingAttempt.FarmId,
+            missionId, actorId, "V3_CAPTURE_COORDINATOR", "COMBO disease capture preparation",
+            correlationId, operationId, payloadFingerprint, createdAt);
+        attempt.AttemptIndex = mappingAttempt.AttemptIndex + 1;
+        attempt.MappingSourceAttemptId = mappingAttempt.Id;
+        return attempt;
+    }
+
     public static CaptureAttempt CreateSuccessor(
         Guid id,
         CaptureAttempt parentAttempt,
@@ -169,7 +197,8 @@ public sealed class CaptureAttempt : AggregateRoot
         Guid correlationId,
         Guid? operationId,
         string? payloadFingerprint,
-        DateTimeOffset createdAt)
+        DateTimeOffset createdAt,
+        Guid? parentMissionId = null)
     {
         ArgumentNullException.ThrowIfNull(parentAttempt);
         return CreateSuccessor(
@@ -187,7 +216,8 @@ public sealed class CaptureAttempt : AggregateRoot
             correlationId,
             operationId,
             payloadFingerprint,
-            createdAt);
+            createdAt,
+            parentMissionId);
     }
 
     public static CaptureAttempt CreateSuccessor(
@@ -205,7 +235,8 @@ public sealed class CaptureAttempt : AggregateRoot
         Guid correlationId,
         Guid? operationId,
         string? payloadFingerprint,
-        DateTimeOffset createdAt)
+        DateTimeOffset createdAt,
+        Guid? parentMissionId = null)
     {
         ArgumentNullException.ThrowIfNull(parentAttempt);
         DomainGuard.NotEmpty(id, nameof(id));
@@ -215,6 +246,20 @@ public sealed class CaptureAttempt : AggregateRoot
         DomainGuard.NotEmpty(approvedBy, nameof(approvedBy));
         DomainGuard.NotEmpty(correlationId, nameof(correlationId));
         DomainGuard.Utc(createdAt, nameof(createdAt));
+        if (parentMissionId is Guid sourceMissionId)
+        {
+            DomainGuard.NotEmpty(sourceMissionId, nameof(parentMissionId));
+            if (parentAttempt.MissionId is Guid boundMissionId && boundMissionId != sourceMissionId)
+            {
+                throw new SurveyDomainException(
+                    CaptureAttemptDomainErrorCodes.BoundMissionRequired,
+                    "Supplied parent mission does not match the parent attempt binding.");
+            }
+        }
+        else
+        {
+            parentMissionId = parentAttempt.MissionId;
+        }
 
         if (actorId.HasValue && actorId.Value == Guid.Empty)
         {
@@ -276,7 +321,7 @@ public sealed class CaptureAttempt : AggregateRoot
                 throw new ArgumentException("Mission identifier cannot be empty.", nameof(missionId));
             }
 
-            if (parentAttempt.MissionId.HasValue && missionId.Value == parentAttempt.MissionId.Value)
+            if (missionId == parentMissionId)
             {
                 throw new SurveyDomainException(
                     CaptureAttemptDomainErrorCodes.BoundMissionRequired,
@@ -311,8 +356,9 @@ public sealed class CaptureAttempt : AggregateRoot
             Status = CaptureAttemptStatus.Planned,
             Version = 1,
             MissionId = missionId,
-            ParentMissionId = parentAttempt.MissionId,
+            ParentMissionId = parentMissionId,
             SupersededAttemptId = parentAttempt.Id,
+            MappingSourceAttemptId = parentAttempt.MappingSourceAttemptId,
             ReflightApprovedBy = approvedBy,
             ReflightApprovalReason = normalizedReason,
             ReflightApprovedAt = createdAt,

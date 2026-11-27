@@ -28,6 +28,26 @@ public record PrepareCaptureAttemptResult(
     string? ErrorCode = null,
     string? ErrorMessage = null);
 
+public record ScheduleDiseaseCaptureRequest(
+    Guid OrderId,
+    uint ExpectedOrderVersion,
+    Guid ActorId,
+    Guid DroneId,
+    DateTimeOffset StartAt,
+    DateTimeOffset EndAt,
+    Guid CorrelationId,
+    Guid OperationId);
+
+public record RescheduleDiseaseCaptureRequest(
+    Guid OrderId,
+    Guid AttemptId,
+    uint ExpectedOrderVersion,
+    Guid ActorId,
+    Guid DroneId,
+    DateTimeOffset StartAt,
+    DateTimeOffset EndAt,
+    Guid CorrelationId);
+
 public record StartCaptureFlightRequest(
     Guid OrderId,
     uint ExpectedOrderVersion,
@@ -262,6 +282,14 @@ public interface ISurveyCaptureExecutionCoordinator
 
     Task<PrepareCaptureAttemptResult> PrepareAttemptAsync(
         PrepareCaptureAttemptRequest request,
+        CancellationToken cancellationToken = default);
+
+    Task<PrepareCaptureAttemptResult> ScheduleDiseaseCaptureAsync(
+        ScheduleDiseaseCaptureRequest request,
+        CancellationToken cancellationToken = default);
+
+    Task<PrepareCaptureAttemptResult> RescheduleDiseaseCaptureAsync(
+        RescheduleDiseaseCaptureRequest request,
         CancellationToken cancellationToken = default);
 
     Task<StartCaptureFlightResult> StartFlightAsync(

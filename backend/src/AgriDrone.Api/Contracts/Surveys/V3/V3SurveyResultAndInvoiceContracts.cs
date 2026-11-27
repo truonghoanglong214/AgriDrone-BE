@@ -390,7 +390,8 @@ public sealed record V3CaptureAttemptApiResponse(
     Guid? ManifestId = null,
     string? ManifestFingerprint = null,
     Guid? ProcessingJobId = null,
-    uint? OrderVersion = null);
+    uint? OrderVersion = null,
+    Guid? MappingSourceAttemptId = null);
 
 public sealed record V3TenantOwnerInvoiceApiResponse(
     Guid OrderId,

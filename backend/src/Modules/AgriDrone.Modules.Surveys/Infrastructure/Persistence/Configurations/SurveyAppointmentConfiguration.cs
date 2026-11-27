@@ -17,8 +17,8 @@ public sealed class SurveyAppointmentConfiguration : IEntityTypeConfiguration<Su
                 table.HasCheckConstraint(
                     "ck_survey_appointments_confirmation",
                     "(status = 'CONFIRMED'::system.survey_appointment_status AND confirmed_at IS NOT NULL AND " +
-                    "((confirmed_by_tenant_owner_id IS NOT NULL AND confirmed_by_system_manager_id IS NULL) OR " +
-                    "(purpose = 'PAID_SERVICE'::system.survey_appointment_purpose AND confirmed_by_tenant_owner_id IS NULL AND confirmed_by_system_manager_id IS NOT NULL))) OR " +
+                    "((purpose::text <> 'DISEASE_CAPTURE' AND confirmed_by_tenant_owner_id IS NOT NULL AND confirmed_by_system_manager_id IS NULL) OR " +
+                    "(purpose::text IN ('PAID_SERVICE', 'DISEASE_CAPTURE') AND confirmed_by_tenant_owner_id IS NULL AND confirmed_by_system_manager_id IS NOT NULL))) OR " +
                     "(status <> 'CONFIRMED'::system.survey_appointment_status AND confirmed_at IS NULL AND confirmed_by_system_manager_id IS NULL)");
                 table.HasCheckConstraint(
                     "ck_survey_appointments_revision_chain",

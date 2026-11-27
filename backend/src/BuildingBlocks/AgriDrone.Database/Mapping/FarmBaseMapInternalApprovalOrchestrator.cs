@@ -165,12 +165,13 @@ internal sealed class FarmBaseMapInternalApprovalOrchestrator(
                         AppError.NotFound("MappingCandidateBatch.NotFound", "Mapping candidate batch not found."));
                 }
 
-                if (batch.Status != MappingCandidateBatchStatus.Approved)
+                if (batch.Status is not (MappingCandidateBatchStatus.PendingReview or
+                    MappingCandidateBatchStatus.ReviewInProgress or MappingCandidateBatchStatus.Approved))
                 {
                     return Result.Failure<FarmBaseMapInternallyApprovedResult>(
                         AppError.Validation(
                             "MappingCandidateBatch.NotApproved",
-                            $"Mapping candidate batch must be in 'Approved' status to approve internally. Current status: '{batch.Status}'."));
+                            $"Mapping candidate batch cannot be approved from status '{batch.Status}'."));
                 }
 
                 if (batch.Candidates.Any(c => c.ReviewDecision == MappingCandidateReviewDecision.Pending))
@@ -1004,6 +1005,11 @@ internal sealed class FarmBaseMapInternalApprovalOrchestrator(
                     order.RecordFollowUpMapSnapshot(snapshot, baselineMapId, order.Version);
                 }
 
+                if (batch.Status is MappingCandidateBatchStatus.PendingReview or MappingCandidateBatchStatus.ReviewInProgress)
+                {
+                    batch.Approve(actorId, "Approved during internal farm base map approval.", now);
+                }
+
                 draft.ApproveInternal(actorId, now);
                 batch.MarkApplied(now);
 
@@ -1064,7 +1070,7 @@ internal sealed class FarmBaseMapInternalApprovalOrchestrator(
                     newData: auditData,
                     now);
 
-                await dbContext.SaveChangesAsync(ct);
+                await dbContext.SaveChangesAsync(transactionToken);
 
                 return Result.Success(new FarmBaseMapInternallyApprovedResult(
                     FarmBaseMapVersionId: draft.Id,

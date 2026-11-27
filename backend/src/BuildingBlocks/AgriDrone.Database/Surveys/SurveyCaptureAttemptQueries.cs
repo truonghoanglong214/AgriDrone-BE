@@ -90,6 +90,7 @@ internal sealed class SurveyCaptureAttemptQueries(
                     attempt.Status,
                     attempt.Version,
                     attempt.SupersededAttemptId,
+                    attempt.MappingSourceAttemptId,
                     attempt.ParentMissionId,
                     attempt.StartedAt,
                     attempt.EndedAt,
@@ -193,7 +194,8 @@ internal sealed class SurveyCaptureAttemptQueries(
                         ManifestId: manifest?.Id,
                         ManifestFingerprint: manifest?.ManifestFingerprint,
                         ProcessingJobId: manifest?.ProcessingJobId,
-                        OrderVersion: orderScope.Version);
+                        OrderVersion: orderScope.Version,
+                        MappingSourceAttemptId: attempt.MappingSourceAttemptId);
                 })
                 .ToArray();
 
