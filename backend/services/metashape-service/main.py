@@ -5,6 +5,7 @@ import logging
 import os
 import shutil
 import time
+import tempfile
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
@@ -710,116 +711,147 @@ def slice_orthophoto_tiles(request: TileSliceRequest):
       - 1280x1280 (overlap 128px, prefix tile_1280) for wide spatial context & row continuity
     Minimizes false negatives (bỏ sót cây) when YOLO runs inference.
     """
-    work_dir = os.path.join(settings.temp_dir, f"tiling_{request.mission_id}")
-    os.makedirs(work_dir, exist_ok=True)
+    if (request.tiling_job_id is None) != (request.tiling_run_id is None):
+        raise HTTPException(status_code=422, detail="Tiling job and run IDs must be supplied together.")
+
+    os.makedirs(settings.temp_dir, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="tile-source-", dir=settings.temp_dir) as work_dir:
+        if request.tiling_job_id is not None:
+            storage_prefix = (
+                f"tenants/{request.tenant_id}/media/{request.mission_id}/tiling-jobs/"
+                f"{request.tiling_job_id}/{request.tiling_run_id}"
+            )
+            return slice_tiles_into(request, work_dir, os.path.join(work_dir, "tiles"), storage_prefix)
+
+        legacy_tiles = os.path.join(settings.temp_dir, f"tiling_{request.mission_id}", "tiles")
+        return slice_tiles_into(request, work_dir, legacy_tiles, None)
+
+
+def slice_tiles_into(request: TileSliceRequest, work_dir: str, tiles_output_dir: str, storage_prefix: str | None):
     local_tif = os.path.join(work_dir, "source.tif")
-    tiles_output_dir = os.path.join(work_dir, "tiles")
     os.makedirs(tiles_output_dir, exist_ok=True)
 
-    try:
-        # Determine source GeoTIFF
-        if request.tif_storage_key:
-            minio_storage.download_file(request.tif_storage_key, local_tif)
+    # Determine source GeoTIFF
+    if request.tif_storage_key:
+        minio_storage.download_file(request.tif_storage_key, local_tif)
+    else:
+        default_tif_key = f"tenants/{request.tenant_id}/media/{request.mission_id}/orthophoto.tif"
+        minio_storage.download_file(default_tif_key, local_tif)
+
+    if request.source_sha256:
+        with open(local_tif, "rb") as source:
+            checksum = hashlib.file_digest(source, "sha256").hexdigest()
+        if checksum != request.source_sha256.lower():
+            raise HTTPException(status_code=409, detail="The source GeoTIFF changed after queueing.")
+
+    manifest = []
+    count_640 = 0
+    count_1280 = 0
+
+    if request.dual_scale:
+        # Scale 1: 640x640, overlap 64px
+        c1, m1 = slice_geotiff(
+            tif_path=local_tif,
+            output_dir=tiles_output_dir,
+            tile_size=640,
+            overlap=64,
+            tile_prefix="tile_640",
+            polygon_geojson=request.polygon_geojson,
+            image_format="JPEG",
+            strict_polygon=storage_prefix is not None
+        )
+        count_640 = c1
+        manifest.extend(m1)
+
+        # Scale 2: 1280x1280, overlap 128px
+        c2, m2 = slice_geotiff(
+            tif_path=local_tif,
+            output_dir=tiles_output_dir,
+            tile_size=1280,
+            overlap=128,
+            tile_prefix="tile_1280",
+            polygon_geojson=request.polygon_geojson,
+            image_format="JPEG",
+            strict_polygon=storage_prefix is not None
+        )
+        count_1280 = c2
+        manifest.extend(m2)
+    else:
+        c, m = slice_geotiff(
+            tif_path=local_tif,
+            output_dir=tiles_output_dir,
+            tile_size=request.tile_size,
+            overlap=request.overlap,
+            tile_prefix=f"tile_{request.tile_size}",
+            polygon_geojson=request.polygon_geojson,
+            image_format="JPEG",
+            strict_polygon=storage_prefix is not None
+        )
+        if request.tile_size == 640:
+            count_640 = c
+        elif request.tile_size == 1280:
+            count_1280 = c
+        manifest.extend(m)
+
+    manifest_path = os.path.join(tiles_output_dir, "manifest.json")
+
+    tile_items: list[TileItem] = []
+    for item in manifest:
+        storage_key = None
+        url = None
+        if storage_prefix is not None:
+            storage_key = f"{storage_prefix}/tiles/{item['file_name']}"
+            minio_storage.upload_file(item["local_path"], storage_key, "image/jpeg")
+        elif request.upload_to_minio:
+            storage_key = f"tenants/{request.tenant_id}/media/{request.mission_id}/tiles/{item['file_name']}"
+            minio_storage.upload_file(item["local_path"], storage_key, "image/jpeg")
+            url = minio_storage.get_presigned_url(storage_key)
         else:
-            default_tif_key = f"tenants/{request.tenant_id}/media/{request.mission_id}/orthophoto.tif"
-            minio_storage.download_file(default_tif_key, local_tif)
+            # Provide local preview URL for UI without uploading to MinIO
+            url = f"/api/v1/tiling/temp-preview/{request.mission_id}/{item['file_name']}"
 
-        manifest = []
-        count_640 = 0
-        count_1280 = 0
-
-        if request.dual_scale:
-            # Scale 1: 640x640, overlap 64px
-            c1, m1 = slice_geotiff(
-                tif_path=local_tif,
-                output_dir=tiles_output_dir,
-                tile_size=640,
-                overlap=64,
-                tile_prefix="tile_640",
-                polygon_geojson=request.polygon_geojson,
-                image_format="JPEG"
+        tile_items.append(
+            TileItem(
+                tile_index=item["tile_index"],
+                tile_size=item.get("tile_size"),
+                col_off=item["col_off"],
+                row_off=item["row_off"],
+                width=item["width"],
+                height=item["height"],
+                file_name=item["file_name"],
+                storage_key=storage_key,
+                url=url,
+                bounds=MapBounds(**item["bounds"]),
+                corners=MapCorners(**item["corners"]),
+                affine_transform=item["affine_transform"]
             )
-            count_640 = c1
-            manifest.extend(m1)
-
-            # Scale 2: 1280x1280, overlap 128px
-            c2, m2 = slice_geotiff(
-                tif_path=local_tif,
-                output_dir=tiles_output_dir,
-                tile_size=1280,
-                overlap=128,
-                tile_prefix="tile_1280",
-                polygon_geojson=request.polygon_geojson,
-                image_format="JPEG"
-            )
-            count_1280 = c2
-            manifest.extend(m2)
-        else:
-            c, m = slice_geotiff(
-                tif_path=local_tif,
-                output_dir=tiles_output_dir,
-                tile_size=request.tile_size,
-                overlap=request.overlap,
-                tile_prefix=f"tile_{request.tile_size}",
-                polygon_geojson=request.polygon_geojson,
-                image_format="JPEG"
-            )
-            if request.tile_size == 640:
-                count_640 = c
-            elif request.tile_size == 1280:
-                count_1280 = c
-            manifest.extend(m)
-
-        # Ghi đè file manifest.json tổng hợp chứa TOÀN BỘ cả 640 và 1280 tiles
-        manifest_path = os.path.join(tiles_output_dir, "manifest.json")
-        with open(manifest_path, "w", encoding="utf-8") as f:
-            json.dump(manifest, f, indent=2)
-
-        tile_items: list[TileItem] = []
-        for item in manifest:
-            storage_key = None
-            url = None
-            if request.upload_to_minio:
-                storage_key = f"tenants/{request.tenant_id}/media/{request.mission_id}/tiles/{item['file_name']}"
-                minio_storage.upload_file(item["local_path"], storage_key, "image/jpeg")
-                url = minio_storage.get_presigned_url(storage_key)
-            else:
-                # Provide local preview URL for UI without uploading to MinIO
-                url = f"/api/v1/tiling/temp-preview/{request.mission_id}/{item['file_name']}"
-
-            tile_items.append(
-                TileItem(
-                    tile_index=item["tile_index"],
-                    tile_size=item.get("tile_size"),
-                    col_off=item["col_off"],
-                    row_off=item["row_off"],
-                    width=item["width"],
-                    height=item["height"],
-                    file_name=item["file_name"],
-                    storage_key=storage_key,
-                    url=url,
-                    bounds=MapBounds(**item["bounds"]),
-                    corners=MapCorners(**item["corners"]),
-                    affine_transform=item["affine_transform"]
-                )
-            )
-
-        return TileSliceResponse(
-            mission_id=request.mission_id,
-            total_tiles=len(tile_items),
-            total_tiles_640=count_640,
-            total_tiles_1280=count_1280,
-            dual_scale=request.dual_scale,
-            tiles=tile_items
         )
 
-    finally:
-        # Delete large downloaded GeoTIFF copy to save disk space, but keep tiles for YOLO
-        if os.path.exists(local_tif):
-            try:
-                os.remove(local_tif)
-            except Exception:
-                pass
+    manifest_key = None
+    if storage_prefix is not None:
+        manifest_key = f"{storage_prefix}/manifest.json"
+        durable_manifest = {
+            "mission_id": request.mission_id,
+            "polygon_geojson": request.polygon_geojson,
+            "tiles": [tile.model_dump() for tile in tile_items],
+        }
+        with open(manifest_path, "w", encoding="utf-8") as f:
+            json.dump(durable_manifest, f)
+        minio_storage.upload_file(manifest_path, manifest_key, "application/json")
+    else:
+        with open(manifest_path, "w", encoding="utf-8") as f:
+            json.dump(manifest, f)
+
+    return TileSliceResponse(
+        mission_id=request.mission_id,
+        total_tiles=len(tile_items),
+        total_tiles_640=count_640,
+        total_tiles_1280=count_1280,
+        dual_scale=request.dual_scale,
+        tiles=tile_items,
+        manifest_storage_key=manifest_key,
+        storage_bucket=minio_storage.bucket if manifest_key else None
+    )
 
 
 @app.get("/api/v1/tiling/temp-preview/{mission_id}/{file_name}", tags=["Interactive Map Tool"])
@@ -858,25 +890,51 @@ def detect_mission_trees(request: YoloDetectMissionRequest):
     6. Phát hiện các vị trí BỎ SÓT cây hoặc CÂY CHẾT (Missing Trees).
     7. Xuất ra 1 file CSV tổng hợp duy nhất trees_{mission_id}.csv.
     """
-    model = get_yolo_model()
+    if request.tile_manifest_storage_key:
+        prefix = f"tenants/{request.tenant_id}/media/{request.mission_id}/tiling-jobs/"
+        manifest_key = request.tile_manifest_storage_key
+        if not manifest_key.startswith(prefix) or not manifest_key.endswith("/manifest.json"):
+            raise HTTPException(status_code=422, detail="Invalid tiling manifest for this mission.")
+        storage_prefix = manifest_key.removesuffix("/manifest.json")
+        try:
+            job_id, run_id = storage_prefix[len(prefix):].split("/", 1)
+            uuid.UUID(job_id)
+            uuid.UUID(run_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail="Invalid tiling job or run ID.") from exc
+
+        os.makedirs(settings.temp_dir, exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix="yolo-tiles-", dir=settings.temp_dir) as work_dir:
+            manifest_path = os.path.join(work_dir, "manifest.json")
+            minio_storage.download_file(manifest_key, manifest_path)
+            with open(manifest_path, "r", encoding="utf-8") as f:
+                manifest = json.load(f)
+            if manifest["mission_id"] != request.mission_id:
+                raise HTTPException(status_code=422, detail="Manifest belongs to another mission.")
+            for tile in manifest["tiles"]:
+                name = tile["file_name"]
+                expected_key = f"{storage_prefix}/tiles/{name}"
+                if not name or name != os.path.basename(name) or name in (".", "..") or tile["storage_key"] != expected_key:
+                    raise HTTPException(status_code=422, detail="Manifest contains an invalid tile.")
+                minio_storage.download_file(expected_key, os.path.join(work_dir, name))
+            return detect_trees_from_tiles(request, work_dir, manifest["tiles"])
+
     tiles_dir = os.path.join(settings.temp_dir, f"tiling_{request.mission_id}", "tiles")
     manifest_path = os.path.join(tiles_dir, "manifest.json")
-
-    if not os.path.exists(tiles_dir) or not os.path.exists(manifest_path):
-        raise HTTPException(
-            status_code=400,
-            detail=f"Tiles or manifest not found for mission {request.mission_id}. Vui lòng chạy cắt ảnh (tiling slice) trước."
-        )
+    if not os.path.isfile(manifest_path):
+        raise HTTPException(status_code=400, detail="Tiles or manifest not found. Run tiling first.")
 
     with open(manifest_path, "r", encoding="utf-8") as f:
-        manifest_data = json.load(f)
+        return detect_trees_from_tiles(request, tiles_dir, json.load(f))
 
-    manifest_map = {m["file_name"]: m["affine_transform"] for m in manifest_data}
-    tile_files = [os.path.join(tiles_dir, fn) for fn in manifest_map.keys() if os.path.exists(os.path.join(tiles_dir, fn))]
 
-    if not tile_files:
-        raise HTTPException(status_code=400, detail="Không tìm thấy file ảnh tile nào trong thư mục tạm.")
+def detect_trees_from_tiles(request: YoloDetectMissionRequest, tiles_dir: str, manifest_data: list):
+    manifest_map = {entry["file_name"]: entry["affine_transform"] for entry in manifest_data}
+    tile_files = [os.path.join(tiles_dir, name) for name in manifest_map]
+    if not tile_files or any(not os.path.isfile(path) for path in tile_files):
+        raise HTTPException(status_code=400, detail="The tiling result is empty or incomplete.")
 
+    model = get_yolo_model()
     device = 0 if (torch is not None and torch.cuda.is_available()) else "cpu"
     chunk_size = 50
     logger.info(f"Running YOLO inference on {len(tile_files)} tiles for mission {request.mission_id} (device={device}, chunk_size={chunk_size})...")
@@ -993,8 +1051,12 @@ def detect_mission_trees(request: YoloDetectMissionRequest):
 
     # 6. Export single consolidated CSV file (kèm theo ranh giới viền thửa đất Polygon)
     csv_filename = f"trees_{request.mission_id}.csv"
-    csv_path = os.path.join(tiles_dir, csv_filename)
-    export_trees_to_csv(active_trees, missing_trees, csv_path, polygon_geojson=request.polygon_geojson)
+    csv_dir = os.path.join(settings.temp_dir, f"tiling_{request.mission_id}", "tiles")
+    os.makedirs(csv_dir, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="yolo-csv-", dir=csv_dir) as csv_work_dir:
+        csv_path = os.path.join(csv_work_dir, csv_filename)
+        export_trees_to_csv(active_trees, missing_trees, csv_path, polygon_geojson=request.polygon_geojson)
+        os.replace(csv_path, os.path.join(csv_dir, csv_filename))
 
     csv_url = f"/api/v1/yolo/download-csv/{request.mission_id}"
 

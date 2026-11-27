@@ -1,3 +1,4 @@
+using AgriDrone.Modules.Missions.Application.Abstractions.Media;
 using AgriDrone.Api.Contracts.Missions;
 using AgriDrone.Modules.Missions.Application.Abstractions.Processing;
 using AgriDrone.Modules.Missions.Application.Features.Processing;
@@ -14,7 +15,8 @@ namespace AgriDrone.Api.Controllers;
 [Authorize]
 public sealed class MissionOrthophotoController(
     ISender sender,
-    ISystemManagerAccessService managerAccessService)
+    ISystemManagerAccessService managerAccessService,
+    IObjectStorage objectStorage)
     : ControllerBase
 {
     /// <summary>
@@ -160,53 +162,63 @@ public sealed class MissionOrthophotoController(
     /// </summary>
     [HttpPost("api/missions/{missionId:guid}/farms/{farmId:guid}/tiling-slice")]
     [Authorize(Policy = AccessAuthorizationPolicies.SystemManager)]
-    public async Task<IResult> SliceTiles(
-        [FromRoute] Guid farmId,
-        [FromRoute] Guid missionId,
-        [FromBody] SliceMissionTilesRequest? request,
+    [ProducesResponseType<MissionTilingJobResponse>(StatusCodes.Status202Accepted)]
+    public async Task<IResult> SliceTiles(Guid farmId, Guid missionId,
+        [FromBody] SliceMissionTilesRequest? request, CancellationToken cancellationToken)
+    {
+        var access = await managerAccessService.ResolveFarmAccessAsync(farmId, cancellationToken);
+        if (!access.IsAllowed || access.TenantId is not Guid tenantId || access.FarmId != farmId)
+            return Results.Forbid();
+
+        var req = request ?? new SliceMissionTilesRequest();
+        var result = await sender.Send(new SliceMissionTilesCommand(tenantId, farmId, missionId,
+            req.TileSize, req.Overlap, req.DualScale, req.PolygonGeoJson, req.TifStorageKey), cancellationToken);
+        return result.ToHttpResult(HttpContext, job => Results.Accepted(
+            Url.RouteUrl("GetMissionTilingJob", new { missionId, farmId, jobId = job.JobId }), job));
+    }
+
+    [HttpGet("api/missions/{missionId:guid}/farms/{farmId:guid}/tiling-slice/jobs/{jobId:guid}", Name = "GetMissionTilingJob")]
+    [HttpGet("api/missions/{missionId:guid}/farms/{farmId:guid}/tiling-slice/jobs/latest")]
+    [Authorize(Policy = AccessAuthorizationPolicies.SystemManager)]
+    [ProducesResponseType<MissionTilingJobResponse>(StatusCodes.Status200OK)]
+    public async Task<IResult> GetTilingJob(Guid farmId, Guid missionId, [FromRoute] Guid? jobId,
         CancellationToken cancellationToken)
     {
         var access = await managerAccessService.ResolveFarmAccessAsync(farmId, cancellationToken);
         if (!access.IsAllowed || access.TenantId is not Guid tenantId || access.FarmId != farmId)
-        {
             return Results.Forbid();
-        }
 
-        var req = request ?? new SliceMissionTilesRequest();
-        var command = new SliceMissionTilesCommand(
-            tenantId,
-            farmId,
-            missionId,
-            req.TileSize,
-            req.Overlap,
-            req.DualScale,
-            req.PolygonGeoJson,
-            req.TifStorageKey,
-            req.UploadToMinio);
+        Response.Headers.CacheControl = "no-store";
+        var result = await sender.Send(new GetMissionTilingJobQuery(tenantId, farmId, missionId, jobId), cancellationToken);
+        return result.ToHttpResult(HttpContext, job => Results.Ok(job.Result is { } output
+            ? job with { Result = output with { Tiles = output.Tiles.Select(tile => tile with
+                {
+                    Url = Url.RouteUrl("GetMissionTilingTile", new { missionId, farmId, jobId = job.JobId, fileName = tile.FileName })
+                }).ToArray() } }
+            : job));
+    }
 
-        var result = await sender.Send(command, cancellationToken);
+    [HttpGet("api/missions/{missionId:guid}/farms/{farmId:guid}/tiling-slice/jobs/{jobId:guid}/tiles/{fileName}", Name = "GetMissionTilingTile")]
+    [Authorize(Policy = AccessAuthorizationPolicies.SystemManager)]
+    public async Task<IResult> GetTilingTile(Guid farmId, Guid missionId, Guid jobId, string fileName,
+        CancellationToken cancellationToken)
+    {
+        var access = await managerAccessService.ResolveFarmAccessAsync(farmId, cancellationToken);
+        if (!access.IsAllowed || access.TenantId is not Guid tenantId || access.FarmId != farmId)
+            return Results.Forbid();
 
-        return result.ToHttpResult(
-            HttpContext,
-            value => Results.Ok(new SliceMissionTilesResponse(
-                value.MissionId,
-                value.TotalTiles,
-                value.TotalTiles640,
-                value.TotalTiles1280,
-                value.DualScale,
-                value.Tiles.Select(t => new MissionTileItemResponse(
-                    t.TileIndex,
-                    t.TileSize,
-                    t.ColOff,
-                    t.RowOff,
-                    t.Width,
-                    t.Height,
-                    t.FileName,
-                    t.StorageKey,
-                    t.Url,
-                    t.Bounds,
-                    t.Corners,
-                    t.AffineTransform)).ToList())));
+        var result = await sender.Send(new GetMissionTilingJobQuery(tenantId, farmId, missionId, jobId), cancellationToken);
+        if (result.IsFailure)
+            return result.ToHttpResult(HttpContext, Results.Ok);
+
+        var output = result.Value.Result;
+        var tile = output?.Tiles.SingleOrDefault(tile => tile.FileName == fileName);
+        if (tile?.StorageKey is not { } key || output?.StorageBucket is not { } bucket)
+            return Results.NotFound();
+
+        Response.Headers.CacheControl = "no-store";
+        var uri = await objectStorage.CreateDownloadUriAsync($"minio://{bucket}/{key}", TimeSpan.FromMinutes(15), cancellationToken);
+        return Results.Redirect(uri.AbsoluteUri);
     }
 
     /// <summary>
@@ -237,7 +249,8 @@ public sealed class MissionOrthophotoController(
             req.AnchorLat,
             req.AnchorLon,
             req.CustomAngleDeg,
-            req.PolygonGeoJson);
+            req.PolygonGeoJson,
+            req.TilingJobId);
 
         var result = await sender.Send(command, cancellationToken);
 

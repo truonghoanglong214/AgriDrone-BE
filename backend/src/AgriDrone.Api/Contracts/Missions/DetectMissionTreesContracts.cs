@@ -9,7 +9,8 @@ public sealed record DetectMissionTreesRequest(
     double? AnchorLat = null,
     double? AnchorLon = null,
     double? CustomAngleDeg = null,
-    JsonElement? PolygonGeoJson = null);
+    JsonElement? PolygonGeoJson = null,
+    Guid? TilingJobId = null);
 
 public sealed record RecalculateMissionTreeGridRequest(
     IReadOnlyList<DetectedTreeItemResponse> ActiveTrees,

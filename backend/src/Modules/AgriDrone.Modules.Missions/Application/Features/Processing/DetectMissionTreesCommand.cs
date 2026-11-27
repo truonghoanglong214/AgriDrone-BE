@@ -14,4 +14,5 @@ public sealed record DetectMissionTreesCommand(
     double? AnchorLat = null,
     double? AnchorLon = null,
     double? CustomAngleDeg = null,
-    object? PolygonGeoJson = null) : IRequest<Result<DetectMissionTreesResult>>;
+    object? PolygonGeoJson = null,
+    Guid? TilingJobId = null) : IRequest<Result<DetectMissionTreesResult>>;

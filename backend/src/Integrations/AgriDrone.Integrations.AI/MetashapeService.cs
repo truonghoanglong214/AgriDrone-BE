@@ -259,6 +259,9 @@ public sealed class MetashapeService(
         bool dualScale = true,
         object? polygonGeoJson = null,
         bool uploadToMinio = false,
+        Guid? tilingJobId = null,
+        Guid? tilingRunId = null,
+        string? sourceSha256 = null,
         CancellationToken cancellationToken = default)
     {
         try
@@ -272,14 +275,17 @@ public sealed class MetashapeService(
                 overlap,
                 dual_scale = dualScale,
                 polygon_geojson = polygonGeoJson,
-                upload_to_minio = uploadToMinio
+                upload_to_minio = uploadToMinio,
+                tiling_job_id = tilingJobId,
+                tiling_run_id = tilingRunId,
+                source_sha256 = sourceSha256
             };
 
             var json = JsonSerializer.Serialize(payload, JsonOpts);
             var requestUri = $"{_options.Endpoint.TrimEnd('/')}/api/v1/tiling/slice";
             using var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-            var response = await httpClient.PostAsync(requestUri, content, cancellationToken);
+            using var response = await httpClient.PostAsync(requestUri, content, cancellationToken);
             var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
 
             if (!response.IsSuccessStatusCode)
@@ -362,7 +368,9 @@ public sealed class MetashapeService(
                 total640,
                 total1280,
                 dual,
-                tileItems);
+                tileItems,
+                ManifestStorageKey: root.TryGetProperty("manifest_storage_key", out var manifest) ? manifest.GetString() : null,
+                StorageBucket: root.TryGetProperty("storage_bucket", out var bucket) ? bucket.GetString() : null);
         }
         catch (Exception ex)
         {
@@ -389,6 +397,7 @@ public sealed class MetashapeService(
         double? anchorLat = null,
         double? anchorLon = null,
         double? customAngleDeg = null,
+        string? tileManifestStorageKey = null,
         CancellationToken cancellationToken = default)
     {
         try
@@ -403,14 +412,15 @@ public sealed class MetashapeService(
                 anchor_lat = anchorLat,
                 anchor_lon = anchorLon,
                 custom_angle_deg = customAngleDeg,
-                polygon_geojson = CleanPolygonGeoJson(polygonGeoJson)
+                polygon_geojson = CleanPolygonGeoJson(polygonGeoJson),
+                tile_manifest_storage_key = tileManifestStorageKey
             };
 
             var json = JsonSerializer.Serialize(payload, JsonOpts);
             var requestUri = $"{_options.Endpoint.TrimEnd('/')}/api/v1/yolo/detect-mission";
             using var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-            var response = await httpClient.PostAsync(requestUri, content, cancellationToken);
+            using var response = await httpClient.PostAsync(requestUri, content, cancellationToken);
             var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
 
             if (!response.IsSuccessStatusCode)

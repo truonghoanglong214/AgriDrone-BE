@@ -1,3 +1,4 @@
+using AgriDrone.Modules.Missions.Infrastructure.Persistence;
 using AgriDrone.Modules.Missions.Application.Abstractions.Missions;
 using AgriDrone.Modules.Missions.Application.Abstractions.Processing;
 using AgriDrone.Modules.Missions.Domain.Missions;
@@ -12,6 +13,7 @@ namespace AgriDrone.Modules.Missions.Application.Features.Processing;
 internal sealed class DetectMissionTreesCommandHandler(
     IDroneMissionRepository missionRepository,
     IMetashapeService metashapeService,
+    MissionTilingJobStore jobs,
     ISystemManagerAccessService managerAccessService,
     IExecutionContext executionContext,
     ILogger<DetectMissionTreesCommandHandler> logger)
@@ -46,6 +48,16 @@ internal sealed class DetectMissionTreesCommandHandler(
                 MissionError.NotFound(request.MissionId));
         }
 
+        var job = await jobs.FindAsync(request.TenantId, request.FarmId, request.MissionId, request.TilingJobId, cancellationToken);
+        if (job is null && request.TilingJobId.HasValue)
+            return Result.Failure<DetectMissionTreesResult>(
+                AppError.NotFound("Tiling.JobNotFound", "The selected tiling job was not found."));
+
+        var tiling = job?.ToResponse();
+        if (tiling is not null && (tiling.Status != "COMPLETED" || tiling.Result?.ManifestStorageKey is null))
+            return Result.Failure<DetectMissionTreesResult>(
+                AppError.Conflict("Tiling.JobNotCompleted", "Select a tiling job that has completed successfully."));
+
         logger.LogInformation(
             "Executing YOLO tree detection for Mission {MissionId}...",
             request.MissionId);
@@ -56,11 +68,12 @@ internal sealed class DetectMissionTreesCommandHandler(
             request.ConfidenceThreshold,
             request.RowSpacing,
             request.ColSpacing,
-            request.PolygonGeoJson,
+            request.PolygonGeoJson ?? tiling?.PolygonGeoJson,
             request.AnchorLat,
             request.AnchorLon,
             request.CustomAngleDeg,
-            cancellationToken);
+            tileManifestStorageKey: tiling?.Result?.ManifestStorageKey,
+            cancellationToken: cancellationToken);
 
         if (!result.IsSuccess)
         {

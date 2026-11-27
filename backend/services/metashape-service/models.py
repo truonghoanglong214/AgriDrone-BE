@@ -1,3 +1,4 @@
+from uuid import UUID
 from typing import Any, Dict, List, Optional
 import json
 from pydantic import BaseModel, Field, field_validator
@@ -115,6 +116,9 @@ class TileSliceRequest(BaseModel):
     overlap: int = 64
     polygon_geojson: Optional[Dict[str, Any]] = None
     upload_to_minio: bool = False
+    tiling_job_id: Optional[UUID] = None
+    tiling_run_id: Optional[UUID] = None
+    source_sha256: Optional[str] = None
 
     @field_validator("polygon_geojson", mode="before")
     @classmethod
@@ -128,6 +132,8 @@ class TileSliceResponse(BaseModel):
     total_tiles_1280: Optional[int] = 0
     dual_scale: bool = True
     tiles: List[TileItem] = Field(default_factory=list)
+    manifest_storage_key: Optional[str] = None
+    storage_bucket: Optional[str] = None
 
 
 class TreeItem(BaseModel):
@@ -152,6 +158,7 @@ class YoloDetectMissionRequest(BaseModel):
     anchor_lon: Optional[float] = None
     custom_angle_deg: Optional[float] = None
     polygon_geojson: Optional[Dict[str, Any]] = None
+    tile_manifest_storage_key: Optional[str] = None
 
     @field_validator("polygon_geojson", mode="before")
     @classmethod
