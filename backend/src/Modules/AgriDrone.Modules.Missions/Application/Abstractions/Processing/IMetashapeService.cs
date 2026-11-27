@@ -75,6 +75,9 @@ public interface IMetashapeService
         bool dualScale = true,
         object? polygonGeoJson = null,
         bool uploadToMinio = false,
+        Guid? tilingJobId = null,
+        Guid? tilingRunId = null,
+        string? sourceSha256 = null,
         CancellationToken cancellationToken = default);
 
     Task<DetectMissionTreesResult> DetectMissionTreesAsync(
@@ -87,6 +90,7 @@ public interface IMetashapeService
         double? anchorLat = null,
         double? anchorLon = null,
         double? customAngleDeg = null,
+        string? tileManifestStorageKey = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>

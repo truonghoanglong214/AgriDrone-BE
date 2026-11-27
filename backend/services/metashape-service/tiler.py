@@ -27,7 +27,8 @@ def slice_geotiff(
     polygon_geojson: Optional[Dict[str, Any]] = None,
     image_format: str = "JPEG",
     quality: int = 90,
-    min_valid_pixel_ratio: float = 0.05
+    min_valid_pixel_ratio: float = 0.05,
+    strict_polygon: bool = False
 ) -> Tuple[int, List[Dict[str, Any]]]:
     """
     Slices a large GeoTIFF into manageable chips using rasterio Windowed Reading.
@@ -59,7 +60,12 @@ def slice_geotiff(
             if geom_dict:
                 polygon_geom = shape(geom_dict)
                 logger.info(f"Loaded polygon filter geometry: {polygon_geom.geom_type}")
+            if strict_polygon and (polygon_geom is None or polygon_geom.is_empty or
+                                   not polygon_geom.is_valid or polygon_geom.geom_type not in ("Polygon", "MultiPolygon")):
+                raise ValueError("Clipping geometry must be a valid Polygon or MultiPolygon.")
         except Exception as e:
+            if strict_polygon:
+                raise ValueError("Invalid clipping geometry.") from e
             logger.warning(f"Failed to parse polygon GeoJSON filter: {e}. Slicing entire grid.")
 
     tiles_manifest = []

@@ -186,6 +186,8 @@ public static class DependencyInjection
         services.AddSingleton<IMissionProcessingQueue, MissionProcessingQueue>();
         services.AddScoped<IMissionProcessor, MissionProcessor>();
         services.AddHostedService<MissionProcessingBackgroundService>();
+        services.AddScoped<MissionTilingJobStore>();
+        services.AddHostedService<MissionTilingWorker>();
 
         return services;
     }

@@ -22,7 +22,9 @@ public sealed record SliceTilesResult(
     int TotalTiles1280,
     bool DualScale,
     IReadOnlyList<TileSliceItem> Tiles,
-    string? ErrorMessage = null);
+    string? ErrorMessage = null,
+    string? ManifestStorageKey = null,
+    string? StorageBucket = null);
 
 public sealed record TreeDetectionItem(
     string Id,
