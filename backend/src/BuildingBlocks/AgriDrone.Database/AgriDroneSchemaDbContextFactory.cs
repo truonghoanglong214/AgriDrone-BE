@@ -52,7 +52,7 @@ public sealed class AgriDroneSchemaDbContextFactory
         var dataSource = dataSourceBuilder.Build();
 
         var optionsBuilder = new DbContextOptionsBuilder<AgriDroneSchemaDbContext>();
-        AgriDroneSchemaDbContextOptions.Configure(optionsBuilder, dataSource);
+        AgriDroneSchemaDbContextOptions.Configure(optionsBuilder, dataSource, configuration);
 
         return new AgriDroneSchemaDbContext(optionsBuilder.Options);
     }
