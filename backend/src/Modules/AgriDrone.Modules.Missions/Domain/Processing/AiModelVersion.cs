@@ -57,4 +57,30 @@ public sealed class AiModelVersion : Entity
             UpdatedAt = now
         };
     }
+
+    public static AiModelVersion CreateDiseaseDetectionModel(
+        Guid id,
+        string modelName,
+        string version,
+        JsonDocument metrics,
+        DateTimeOffset now)
+    {
+        DomainGuard.NotEmpty(id);
+        ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(version);
+        ArgumentNullException.ThrowIfNull(metrics);
+        DomainGuard.Utc(now);
+
+        return new AiModelVersion
+        {
+            Id = id,
+            ModelName = modelName.Trim(),
+            Version = version.Trim(),
+            ModelType = AiModelType.DiseaseDetection,
+            Metrics = JsonDocument.Parse(metrics.RootElement.GetRawText()),
+            IsActive = true,
+            CreatedAt = now,
+            UpdatedAt = now
+        };
+    }
 }

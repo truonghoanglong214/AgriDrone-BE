@@ -32,12 +32,14 @@ internal static class AgriDroneSchemaDbContextOptions
                 SystemRoleSeeder.Seed(dbContext);
                 SurveyServiceV3Seeder.Seed(dbContext);
                 DefaultSpatialPolicySeeder.Seed(dbContext, configuration);
+                DefaultDiseaseModelSeeder.Seed(dbContext);
             })
             .UseAsyncSeeding(async (dbContext, _, cancellationToken) =>
             {
                 await SystemRoleSeeder.SeedAsync(dbContext, cancellationToken);
                 await SurveyServiceV3Seeder.SeedAsync(dbContext, cancellationToken);
                 await DefaultSpatialPolicySeeder.SeedAsync(dbContext, configuration, cancellationToken);
+                await DefaultDiseaseModelSeeder.SeedAsync(dbContext, cancellationToken);
             });
     }
 }
