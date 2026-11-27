@@ -112,14 +112,32 @@ internal sealed class GetFarmBaseMapDetailQueryHandler(
         if (version.Status is FarmBaseMapStatus.InternalApproved or FarmBaseMapStatus.Published or FarmBaseMapStatus.Superseded)
         {
             var plantRows = await dbContext.Database.SqlQueryRaw<PlantQueryRow>(
-                @"SELECT id AS ""Id"", plant_code AS ""PlantCode"",
-                         row_index AS ""RowIndex"", column_index AS ""ColumnIndex"",
-                         ST_Y(location::geometry) AS ""Latitude"",
-                         ST_X(location::geometry) AS ""Longitude"",
-                         lifecycle_status::text AS ""LifecycleStatus""
-                  FROM plant.plants
-                  WHERE farm_id = {0} AND farm_base_map_version_id = {1}
-                  ORDER BY row_index, column_index",
+                @"SELECT p.id AS ""Id"", p.plant_code AS ""PlantCode"",
+                         p.row_index AS ""RowIndex"", p.column_index AS ""ColumnIndex"",
+                         ST_Y(p.location::geometry) AS ""Latitude"",
+                         ST_X(p.location::geometry) AS ""Longitude"",
+                         p.lifecycle_status::text AS ""LifecycleStatus""
+                  FROM plant.plants p
+                  WHERE p.farm_id = {0}
+                    AND (
+                        p.farm_base_map_version_id = {1}
+                        OR EXISTS (
+                            SELECT 1
+                            FROM plant.plant_profile_observations o
+                            WHERE o.farm_id = p.farm_id
+                              AND o.plant_profile_id = p.plant_profile_id
+                              AND o.farm_base_map_version_id = {1}
+                        )
+                        OR EXISTS (
+                            SELECT 1
+                            FROM plant.plant_change_events e
+                            WHERE e.farm_id = p.farm_id
+                              AND e.plant_id = p.id
+                              AND e.farm_base_map_version_id = {1}
+                              AND e.source::text = 'MISSION_AI'
+                        )
+                    )
+                  ORDER BY p.row_index, p.column_index",
                 request.FarmId, version.Id)
                 .ToListAsync(cancellationToken);
 
