@@ -24,3 +24,10 @@ Khi `COMPLETED`, đọc `polygonGeoJson` và `result` với số tile, danh sác
 Áp dụng migration `20261127100000_MissionTilingJobs` và triển khai cả .NET API lẫn Metashape service. FE cần đọc response 202, poll GET và chuyển `tilingJobId` vào YOLO. Timeout của HTTP proxy phía FE không còn nằm trên đường tải hoặc cắt GeoTIFF. YOLO giữ cơ chế gọi hiện hành.
 
 Nghiệm thu qua Amplify với GeoTIFF 539 MB đã ghi nhận và kiểm tra POST trả 202 trước khi tải xong. Reload hoặc đóng tab khi job `RUNNING`, mở lại và kiểm tra job ID cùng vùng cắt. Thử hai POST cùng input và một POST khác vùng trong khi job đang chạy. Khi hoàn tất, chạy YOLO và đối chiếu số tiles với manifest của đúng job đã chọn. Thử restart worker giữa lúc cắt để xác minh phục hồi job và cô lập output lần chạy trước.
+
+## YOLO chạy nền
+
+- `POST /yolo-detect` nhận body hiện tại cùng `tilingJobId` đã hoàn tất và trả `202 Accepted` với `jobId`, `tilingJobId`, `status` và `Location`. Khi bỏ qua `tilingJobId`, BE dùng job cutting mới nhất nếu job đó đã hoàn tất. Các mission chỉ còn tiles tạm từ luồng cũ cần chạy tiling một lần để tạo manifest bền vững.
+- `GET /yolo-detect/jobs/{jobId}` để poll. `GET /yolo-detect/jobs/latest` để tìm lại job sau khi reload. Khi `COMPLETED`, đọc `result.activeTrees`, `result.missingTrees` và các số liệu YOLO. Khi `FAILED`, hiển thị `error` và cho phép gửi lại POST. Từng mission chỉ có một job YOLO active. Gửi lại cùng input sẽ nhận cùng job và input khác nhận `409`.
+- Áp dụng migration `20261127120000_MissionYoloJobs` trước khi chạy API mới. FastAPI cần phiên bản hỗ trợ `tile_manifest_storage_key` và endpoint riêng hiện tại phải truy cập được từ container .NET API.
+- Nghiệm thu qua Amplify với một run YOLO kéo dài hơn timeout của proxy. POST trả 202 trước khi suy luận xong, reload tiếp tục theo dõi được cùng job, và kết quả quét đủ tiles trong manifest đã chọn.

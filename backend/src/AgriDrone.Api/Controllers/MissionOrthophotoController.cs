@@ -226,6 +226,7 @@ public sealed class MissionOrthophotoController(
     /// </summary>
     [HttpPost("api/missions/{missionId:guid}/farms/{farmId:guid}/yolo-detect")]
     [Authorize(Policy = AccessAuthorizationPolicies.SystemManager)]
+    [ProducesResponseType<MissionYoloJobResponse>(StatusCodes.Status202Accepted)]
     public async Task<IResult> DetectTrees(
         [FromRoute] Guid farmId,
         [FromRoute] Guid missionId,
@@ -254,24 +255,24 @@ public sealed class MissionOrthophotoController(
 
         var result = await sender.Send(command, cancellationToken);
 
-        return result.ToHttpResult(
-            HttpContext,
-            value => Results.Ok(new DetectMissionTreesResponse(
-                value.MissionId,
-                value.ModelName,
-                value.TotalTilesScanned,
-                value.TotalRawDetections,
-                value.TotalUniqueTrees,
-                value.TotalMissingTrees,
-                value.SuggestedRowSpacing,
-                value.SuggestedColSpacing,
-                value.MaxRow,
-                value.MaxCol,
-                value.CsvDownloadUrl,
-                value.ActiveTrees.Select(t => new DetectedTreeItemResponse(
-                    t.Id, t.Row, t.Col, t.Lat, t.Lon, t.Confidence, t.Status, t.Source, t.IsAnchor)).ToList(),
-                value.MissingTrees.Select(t => new DetectedTreeItemResponse(
-                    t.Id, t.Row, t.Col, t.Lat, t.Lon, t.Confidence, t.Status, t.Source, t.IsAnchor)).ToList())));
+        return result.ToHttpResult(HttpContext, job => Results.Accepted(
+            Url.RouteUrl("GetMissionYoloJob", new { missionId, farmId, jobId = job.JobId }), job));
+    }
+
+    [HttpGet("api/missions/{missionId:guid}/farms/{farmId:guid}/yolo-detect/jobs/{jobId:guid}", Name = "GetMissionYoloJob")]
+    [HttpGet("api/missions/{missionId:guid}/farms/{farmId:guid}/yolo-detect/jobs/latest")]
+    [Authorize(Policy = AccessAuthorizationPolicies.SystemManager)]
+    [ProducesResponseType<MissionYoloJobResponse>(StatusCodes.Status200OK)]
+    public async Task<IResult> GetYoloJob(Guid farmId, Guid missionId, [FromRoute] Guid? jobId,
+        CancellationToken cancellationToken)
+    {
+        var access = await managerAccessService.ResolveFarmAccessAsync(farmId, cancellationToken);
+        if (!access.IsAllowed || access.TenantId is not Guid tenantId || access.FarmId != farmId)
+            return Results.Forbid();
+
+        Response.Headers.CacheControl = "no-store";
+        var result = await sender.Send(new GetMissionYoloJobQuery(tenantId, farmId, missionId, jobId), cancellationToken);
+        return result.ToHttpResult(HttpContext, Results.Ok);
     }
 
     /// <summary>

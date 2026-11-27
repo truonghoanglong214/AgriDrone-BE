@@ -5,35 +5,42 @@ using Microsoft.EntityFrameworkCore;
 
 namespace AgriDrone.Modules.Missions.Infrastructure.Persistence;
 
-internal sealed class MissionTilingJobStore(MissionsDbContext db)
+internal sealed class MissionImageJobStore(MissionsDbContext db)
 {
+    public const string Tiling = "TILING";
+    public const string Yolo = "YOLO";
+
     internal sealed record Job(
-        Guid Id, Guid MissionId, Guid TenantId, Guid FarmId, string Status, string Input, string? Output,
+        Guid Id, Guid MissionId, Guid TenantId, Guid FarmId, string Kind, string Status, string Input, string? Output,
         string? Error, DateTimeOffset CreatedAt, DateTimeOffset? StartedAt, DateTimeOffset? CompletedAt)
     {
-        public MissionTilingInput ReadInput() => JsonSerializer.Deserialize<MissionTilingInput>(Input)!;
+        public T ReadInput<T>() where T : class => JsonSerializer.Deserialize<T>(Input)!;
+
+        public MissionYoloJobResponse ToYoloResponse() => new(
+            Id, MissionId, ReadInput<MissionYoloInput>().TilingJobId, Status, CreatedAt, StartedAt, CompletedAt,
+            Output is null ? null : JsonSerializer.Deserialize<DetectMissionTreesResult>(Output), Error);
 
         public MissionTilingJobResponse ToResponse() => new(
-            Id, MissionId, Status, CreatedAt, StartedAt, CompletedAt, ReadInput().PolygonGeoJson,
+            Id, MissionId, Status, CreatedAt, StartedAt, CompletedAt, ReadInput<MissionTilingInput>().PolygonGeoJson,
             Output is null ? null : JsonSerializer.Deserialize<SliceTilesResult>(Output), Error);
     }
 
     private const string Projection = """
         SELECT id AS "Id", mission_id AS "MissionId", tenant_id AS "TenantId", farm_id AS "FarmId",
-               status AS "Status", input::text AS "Input", output::text AS "Output", error AS "Error",
+               kind AS "Kind", status AS "Status", input::text AS "Input", output::text AS "Output", error AS "Error",
                created_at AS "CreatedAt", started_at AS "StartedAt", completed_at AS "CompletedAt"
         FROM mission.tiling_jobs
         """;
 
-    public Task<Job?> FindAsync(Guid tenantId, Guid farmId, Guid missionId, Guid? jobId, CancellationToken token) =>
+    public Task<Job?> FindAsync(Guid tenantId, Guid farmId, Guid missionId, string kind, Guid? jobId, CancellationToken token) =>
         db.Database.SqlQueryRaw<Job>(Projection)
             .Where(job => job.TenantId == tenantId && job.FarmId == farmId && job.MissionId == missionId &&
-                          (jobId == null || job.Id == jobId))
+                          job.Kind == kind && (jobId == null || job.Id == jobId))
             .OrderByDescending(job => job.CreatedAt).ThenByDescending(job => job.Id).FirstOrDefaultAsync(token);
 
-    public Task<Job?> FindActiveAsync(Guid missionId, CancellationToken token) =>
+    public Task<Job?> FindActiveAsync(Guid missionId, string kind, CancellationToken token) =>
         db.Database.SqlQueryRaw<Job>(Projection)
-            .SingleOrDefaultAsync(job => job.MissionId == missionId &&
+            .SingleOrDefaultAsync(job => job.MissionId == missionId && job.Kind == kind &&
                 (job.Status == "QUEUED" || job.Status == "RUNNING"), token);
 
     public Task<bool> MatchesAsync(Guid id, string input, CancellationToken token) =>
@@ -41,11 +48,11 @@ internal sealed class MissionTilingJobStore(MissionsDbContext db)
             SELECT EXISTS (SELECT 1 FROM mission.tiling_jobs WHERE id = {id} AND input = CAST({input} AS jsonb)) AS "Value"
             """).SingleAsync(token);
 
-    public Task<int> InsertAsync(Guid id, Guid tenantId, Guid farmId, Guid missionId, string input,
+    public Task<int> InsertAsync(Guid id, Guid tenantId, Guid farmId, Guid missionId, string kind, string input,
         DateTimeOffset now, CancellationToken token) =>
         db.Database.ExecuteSqlInterpolatedAsync($"""
-            INSERT INTO mission.tiling_jobs (id, tenant_id, farm_id, mission_id, status, input, created_at)
-            VALUES ({id}, {tenantId}, {farmId}, {missionId}, 'QUEUED', CAST({input} AS jsonb), {now})
+            INSERT INTO mission.tiling_jobs (id, tenant_id, farm_id, mission_id, kind, status, input, created_at)
+            VALUES ({id}, {tenantId}, {farmId}, {missionId}, {kind}, 'QUEUED', CAST({input} AS jsonb), {now})
             """, token);
 
     public Task<List<Job>> ReadPendingAsync(CancellationToken token) =>
