@@ -133,6 +133,7 @@ public sealed class MappingPublicationDbContext(
         modelBuilder.ApplyConfiguration(new AiModelVersionConfiguration());
         modelBuilder.ApplyConfiguration(new AiProcessingJobConfiguration());
         modelBuilder.ApplyConfiguration(new SurveyOrderPoleCountSnapshotConfiguration());
+        modelBuilder.ApplyConfiguration(new SurveyOrderPoleCountSnapshotItemConfiguration());
         modelBuilder.ApplyConfiguration(new SpatialPolicyConfiguration());
         modelBuilder.ApplyConfiguration(new InboxMessageConfiguration());
         modelBuilder.ApplyConfiguration(new OutboxMessageConfiguration());
