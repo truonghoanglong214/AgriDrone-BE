@@ -27,7 +27,10 @@ public sealed class SpatialPolicy : Entity
     public string ReasonCode { get; private set; } = null!;
     public string? EvidenceReference { get; private set; }
 
-    public static SpatialPolicy CreateDefault(DateTimeOffset effectiveFrom, Guid createdBy)
+    public static SpatialPolicy CreateDefault(
+        DateTimeOffset effectiveFrom,
+        Guid createdBy,
+        string evidenceReference = "System initialization default")
     {
         return Create(
             DefaultPolicyId,
@@ -43,7 +46,7 @@ public sealed class SpatialPolicy : Entity
             createdBy: createdBy,
             createdAt: effectiveFrom,
             reasonCode: "INITIAL_DEFAULT_POLICY",
-            evidenceReference: "System initialization default");
+            evidenceReference: evidenceReference);
     }
 
     public static SpatialPolicy Create(

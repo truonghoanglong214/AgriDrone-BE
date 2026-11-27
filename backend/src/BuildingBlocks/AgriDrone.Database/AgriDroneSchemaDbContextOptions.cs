@@ -1,5 +1,6 @@
 using AgriDrone.Modules.Surveys.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Npgsql;
 
 namespace AgriDrone.Database;
@@ -8,7 +9,8 @@ internal static class AgriDroneSchemaDbContextOptions
 {
     public static void Configure(
         DbContextOptionsBuilder optionsBuilder,
-        NpgsqlDataSource dataSource)
+        NpgsqlDataSource dataSource,
+        IConfiguration? configuration = null)
     {
         optionsBuilder
             .UseNpgsql(
@@ -29,11 +31,13 @@ internal static class AgriDroneSchemaDbContextOptions
             {
                 SystemRoleSeeder.Seed(dbContext);
                 SurveyServiceV3Seeder.Seed(dbContext);
+                DefaultSpatialPolicySeeder.Seed(dbContext, configuration);
             })
             .UseAsyncSeeding(async (dbContext, _, cancellationToken) =>
             {
                 await SystemRoleSeeder.SeedAsync(dbContext, cancellationToken);
                 await SurveyServiceV3Seeder.SeedAsync(dbContext, cancellationToken);
+                await DefaultSpatialPolicySeeder.SeedAsync(dbContext, configuration, cancellationToken);
             });
     }
 }

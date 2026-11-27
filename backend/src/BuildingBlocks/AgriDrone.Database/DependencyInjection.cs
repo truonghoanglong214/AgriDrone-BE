@@ -44,7 +44,7 @@ public static class DependencyInjection
         services.AddDbContext<AgriDroneSchemaDbContext>((serviceProvider, options) =>
         {
             var dataSource = serviceProvider.GetRequiredService<NpgsqlDataSource>();
-            AgriDroneSchemaDbContextOptions.Configure(options, dataSource);
+            AgriDroneSchemaDbContextOptions.Configure(options, dataSource, configuration);
         });
 
         services.AddScoped<ISurveyOrderOperationalContextV3Query,
