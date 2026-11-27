@@ -96,32 +96,18 @@ internal sealed class GetFarmBaseMapAnalyticsQueryHandler(
 
         var countByVersion = poleCounts.ToDictionary(r => r.VersionId, r => r.Count);
 
-        // Lấy số lượng cây hoạt động từ plant.plants (không tính cây đã xóa)
-        var plantCounts = await dbContext.Database.SqlQueryRaw<PoleCountRow>(
-            @"SELECT farm_base_map_version_id AS ""VersionId"", COUNT(*)::int AS ""Count""
-              FROM plant.plants
-              WHERE farm_id = {0} AND farm_base_map_version_id IS NOT NULL
-                AND lifecycle_status != 'REMOVED'
-              GROUP BY farm_base_map_version_id",
-            request.FarmId)
-            .ToListAsync(cancellationToken);
+        // Lấy số lượng cây hoạt động từ plant.plants + observations (bao gồm MatchExisting từ v2+)
+        var plantCounts = await FarmBaseMapPlantQueries.GetActivePoleCountsByVersionAsync(
+            dbContext, request.FarmId, cancellationToken);
 
-        foreach (var p in plantCounts)
+        foreach (var (versionId, count) in plantCounts)
         {
-            countByVersion[p.VersionId] = p.Count;
+            countByVersion[versionId] = count;
         }
 
         // Lấy số lượng biến động thủ công từ bảng phụ plant_change_events
-        var manualChangeCounts = await dbContext.Database.SqlQueryRaw<PoleCountRow>(
-            @"SELECT farm_base_map_version_id AS ""VersionId"", COUNT(*)::int AS ""Count""
-              FROM plant.plant_change_events
-              WHERE farm_id = {0} AND farm_base_map_version_id IS NOT NULL
-                AND source::text = 'MANUAL'
-              GROUP BY farm_base_map_version_id",
-            request.FarmId)
-            .ToListAsync(cancellationToken);
-
-        var manualChangesByVersion = manualChangeCounts.ToDictionary(r => r.VersionId, r => r.Count);
+        var manualChangesByVersion = await FarmBaseMapPlantQueries.GetManualChangeCountsByVersionAsync(
+            dbContext, request.FarmId, cancellationToken);
 
         // 3. Xây dựng timeline biến động
         var timeline = new List<BaseMapVersionMetricDto>();

@@ -177,20 +177,12 @@ internal sealed class CompareFarmBaseMapsQueryHandler(
             fromVersion.Id)
             .ToListAsync(cancellationToken);
 
-        // Đếm số lượng trụ thực tế đang hoạt động (đã trừ cây bị xóa)
-        var fromActivePoles = await dbContext.Database.SqlQueryRaw<int>(
-            @"SELECT COUNT(*)::int AS ""Value""
-              FROM plant.plants
-              WHERE farm_id = {0} AND farm_base_map_version_id = {1} AND lifecycle_status != 'REMOVED'",
-            request.FarmId, fromVersion.Id)
-            .FirstOrDefaultAsync(cancellationToken);
+        // Đếm số lượng trụ thực tế đang hoạt động (đã trừ cây bị xóa, gồm cả trụ MatchExisting từ v2+)
+        var activePolesByVersion = await FarmBaseMapPlantQueries.GetActivePoleCountsByVersionAsync(
+            dbContext, request.FarmId, cancellationToken);
 
-        var toActivePoles = await dbContext.Database.SqlQueryRaw<int>(
-            @"SELECT COUNT(*)::int AS ""Value""
-              FROM plant.plants
-              WHERE farm_id = {0} AND farm_base_map_version_id = {1} AND lifecycle_status != 'REMOVED'",
-            request.FarmId, toVersion.Id)
-            .FirstOrDefaultAsync(cancellationToken);
+        var fromActivePoles = activePolesByVersion.GetValueOrDefault(fromVersion.Id, 0);
+        var toActivePoles = activePolesByVersion.GetValueOrDefault(toVersion.Id, 0);
 
         var polesBefore = fromActivePoles > 0 ? fromActivePoles : fromCandidates.Count;
         var polesAfter = toActivePoles > 0 ? toActivePoles : toCandidates.Count;

@@ -67,28 +67,12 @@ internal sealed class GetFarmBaseMapsQueryHandler(
         }
 
         // 1. Thống kê số lượng cây đang hoạt động (không tính cây đã xóa) cho từng version
-        var publishedPoleCounts = await dbContext.Database.SqlQueryRaw<PoleCountRow>(
-            @"SELECT farm_base_map_version_id AS ""VersionId"", COUNT(*)::int AS ""Count""
-              FROM plant.plants
-              WHERE farm_id = {0} AND farm_base_map_version_id IS NOT NULL
-                AND lifecycle_status != 'REMOVED'
-              GROUP BY farm_base_map_version_id",
-            request.FarmId)
-            .ToListAsync(cancellationToken);
-
-        var countByVersion = publishedPoleCounts.ToDictionary(r => r.VersionId, r => r.Count);
+        var countByVersion = await FarmBaseMapPlantQueries.GetActivePoleCountsByVersionAsync(
+            dbContext, request.FarmId, cancellationToken);
 
         // 2. Thống kê số lượng biến động thủ công từ bảng phụ plant_change_events cho từng version
-        var manualChangeCounts = await dbContext.Database.SqlQueryRaw<PoleCountRow>(
-            @"SELECT farm_base_map_version_id AS ""VersionId"", COUNT(*)::int AS ""Count""
-              FROM plant.plant_change_events
-              WHERE farm_id = {0} AND farm_base_map_version_id IS NOT NULL
-                AND source::text = 'MANUAL'
-              GROUP BY farm_base_map_version_id",
-            request.FarmId)
-            .ToListAsync(cancellationToken);
-
-        var manualChangesByVersion = manualChangeCounts.ToDictionary(r => r.VersionId, r => r.Count);
+        var manualChangesByVersion = await FarmBaseMapPlantQueries.GetManualChangeCountsByVersionAsync(
+            dbContext, request.FarmId, cancellationToken);
 
         // 3. Với các bản nháp (Draft), lấy số lượng candidate đã map trong batch
         var draftPoleCounts = await dbContext.Database.SqlQueryRaw<PoleCountRow>(
