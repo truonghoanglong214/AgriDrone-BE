@@ -233,11 +233,10 @@ internal sealed class ComboAnalysisPendingImport(
         if (!evidenceIds.IsSubsetOf(source.EvidenceMediaIds))
             return Reject("ContextMismatch", "Evidence media does not belong to the source Mission/Tenant/Farm.");
 
-        // Map validity predicate: status IN ('INTERNALLY_APPROVED', 'PUBLISHED')
         var snapshot = await db.Database.SqlQuery<SnapshotRow>($"""
             SELECT f.tenant_id AS "TenantId", f.id AS "FarmId",
                 (fb.reviewed_at IS NOT NULL AND fb.status IN ('APPROVED', 'SUPERSEDED')) AS "BoundaryValid",
-                COALESCE(bm.status IN ('INTERNALLY_APPROVED', 'PUBLISHED') AND bm.farm_boundary_version_id = fb.id, FALSE) AS "MapValid"
+                COALESCE(bm.status IN ('INTERNAL_APPROVED', 'PUBLISHED') AND bm.farm_boundary_version_id = fb.id, FALSE) AS "MapValid"
             FROM farm.farms f
             JOIN farm.farm_boundaries fb ON fb.farm_id = f.id AND fb.tenant_id = f.tenant_id AND fb.id = {p.FarmBoundaryVersionId}
             JOIN farm.farm_base_map_versions bm ON bm.farm_id = f.id AND bm.tenant_id = f.tenant_id AND bm.id = {p.FarmBaseMapVersionId}

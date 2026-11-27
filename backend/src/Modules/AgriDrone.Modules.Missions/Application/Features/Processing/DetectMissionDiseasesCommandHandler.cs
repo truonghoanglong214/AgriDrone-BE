@@ -132,7 +132,7 @@ internal sealed class DetectMissionDiseasesCommandHandler(
                 FROM farm.farm_base_map_versions bm
                 WHERE bm.farm_id = {request.FarmId} AND bm.tenant_id = {request.TenantId}
                   AND bm.farm_boundary_version_id = {mission.FarmBoundaryVersionId}
-                  AND bm.status IN ('INTERNALLY_APPROVED', 'PUBLISHED')
+                  AND bm.status IN ('INTERNAL_APPROVED', 'PUBLISHED')
                   AND bm.id = {mapId}
                 """).SingleOrDefaultAsync(cancellationToken);
 
@@ -210,10 +210,10 @@ internal sealed class DetectMissionDiseasesCommandHandler(
                 WHERE id = {approvedSnapshot.MappingCandidateBatchId} AND tenant_id = {request.TenantId} AND farm_id = {request.FarmId}
                 """).SingleOrDefaultAsync(cancellationToken);
 
-            if (mappingBatchRow is null || mappingBatchRow.Status != "Approved")
+            if (mappingBatchRow is null || mappingBatchRow.Status is not ("Approved" or "Applied"))
             {
                 return Result.Failure<DetectMissionDiseasesResult>(AppError.Conflict(
-                    "DetectDiseases.MappingBatchNotApproved", "Mapping candidate batch must be approved for this snapshot."));
+                    "DetectDiseases.MappingBatchNotApproved", "Mapping candidate batch must be approved or applied for this snapshot."));
             }
 
             if (!Enum.TryParse<AgriDrone.IntegrationContracts.Mapping.MappingKind>(mappingBatchRow.MappingKind, out var parsedMappingKind))
