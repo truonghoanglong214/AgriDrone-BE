@@ -89,9 +89,9 @@ public sealed class BaselineMappingBatchValidatorTests
         var reviewerId = Guid.NewGuid();
         var now = DateTimeOffset.UtcNow;
 
-        // Two points ~0.1 meter apart
+        // Two points ~0.03 meters apart (< 0.1m duplicate threshold)
         var p1 = new Point(106.0, 10.0) { SRID = 4326 };
-        var p2 = new Point(106.0000008, 10.0000008) { SRID = 4326 };
+        var p2 = new Point(106.0000002, 10.0000002) { SRID = 4326 };
 
         var c1 = MappingCandidate.Create(
             id: Guid.NewGuid(),
@@ -212,8 +212,9 @@ public sealed class BaselineMappingBatchValidatorTests
         var reviewerId = Guid.NewGuid();
         var now = DateTimeOffset.UtcNow;
 
+        // Two adjacent columns 2.5m apart along GridBearingDeg = 45 deg
         var p1 = new Point(106.0, 10.0) { SRID = 4326 };
-        var p2 = new Point(106.01, 10.01) { SRID = 4326 };
+        var p2 = new Point(106.0000161, 10.0000159) { SRID = 4326 };
 
         var c1 = MappingCandidate.Create(
             id: Guid.NewGuid(),

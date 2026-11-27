@@ -28,19 +28,20 @@ public sealed class FinancialReconciliationNfr07Tests
         // Pending checkout 50,000 VND -> must be excluded from cash receipts and tracked as PendingPayments.
         // Corrected invoice changes final_price to 160,000 -> original_service_publication (150,000) stays authoritative.
         // Complaint refund 20,000 VND completed in December -> belongs to December.
+        var orderRowId = Guid.NewGuid();
         var rows = new List<FinancialHistoryRow>
         {
             Row(1, orderId, "survey_orders", new
             {
                 order_number = "ORD-E2E-05",
-                final_price = 160_000m,
-                status = "COMPLETED",
+                final_price = 150_000m,
+                status = "AWAITING_SETTLEMENT",
                 created_at = "2026-10-15T02:00:00Z"
-            }),
+            }, "2026-10-15T02:00:00Z", orderRowId),
             Row(2, orderId, "order_commercial_snapshots", new
             {
                 service_code = "MAP"
-            }),
+            }, "2026-10-15T02:00:00Z"),
             Row(3, orderId, "survey_funding_receipts", new
             {
                 amount = 100_000m,
@@ -48,41 +49,50 @@ public sealed class FinancialReconciliationNfr07Tests
                 deposit_obligation_id = Guid.NewGuid(),
                 provider = "SEPAY",
                 provider_transaction_id = "TX-OCT-DEP"
-            }),
-            Row(4, orderId, "survey_funding_receipts", new
+            }, "2026-10-31T16:59:59Z"),
+            Row(4, orderId, "survey_orders", new
+            {
+                order_number = "ORD-E2E-05",
+                final_price = 160_000m,
+                status = "COMPLETED",
+                created_at = "2026-10-15T02:00:00Z"
+            }, "2026-10-31T17:00:00Z", orderRowId),
+            Row(5, orderId, "survey_funding_receipts", new
             {
                 amount = 50_000m,
                 received_at = "2026-10-31T17:00:00Z", // 00:00:00 UTC+7 Nov 1
                 provider = "SEPAY",
                 provider_transaction_id = "TX-NOV-BAL"
-            }),
-            Row(5, orderId, "survey_payments", new
+            }, "2026-10-31T17:00:00Z"),
+            Row(6, orderId, "survey_payments", new
             {
                 amount = 50_000m,
                 status = "PROCESSING",
                 purpose = "FinalBalance"
-            }),
-            Row(6, orderId, "original_service_publication", new
+            }, "2026-10-31T17:00:00Z"),
+            Row(7, orderId, "original_service_publication", new
             {
                 amount = 150_000m,
                 published_at = "2026-10-31T17:00:00Z" // 00:00:00 UTC+7 Nov 1
-            }),
-            Row(7, orderId, "survey_refund_obligations", new
+            }, "2026-10-31T17:00:00Z"),
+            Row(8, orderId, "survey_refund_obligations", new
             {
                 amount = 20_000m,
                 completed_at = "2026-12-05T03:00:00Z",
                 origin_kind = "COMPLAINT_REFUND"
-            })
+            }, "2026-12-05T03:00:00Z")
         };
 
-        var octLine = FinancialReportCalculator.Calculate([.. rows], FinancialReportPeriod.Create(2026, 10), Coverage)!;
+        var octPeriod = FinancialReportPeriod.Create(2026, 10);
+        var octLine = FinancialReportCalculator.Calculate(AsOf(rows, octPeriod), octPeriod, Coverage)!;
         Assert.Equal("MAP", octLine.Service);
         Assert.Equal(100_000m, octLine.CashReceipts);
         Assert.Equal(100_000m, octLine.DepositsHeld);
         Assert.Equal(0m, octLine.PublishedServiceValue);
         Assert.False(octLine.PublishedInPeriod);
 
-        var novLine = FinancialReportCalculator.Calculate([.. rows], FinancialReportPeriod.Create(2026, 11), Coverage)!;
+        var novPeriod = FinancialReportPeriod.Create(2026, 11);
+        var novLine = FinancialReportCalculator.Calculate(AsOf(rows, novPeriod), novPeriod, Coverage)!;
         Assert.Equal(150_000m, novLine.PublishedServiceValue);
         Assert.Equal(50_000m, novLine.CashReceipts);
         Assert.Equal(0m, novLine.DepositsHeld);
@@ -90,7 +100,8 @@ public sealed class FinancialReconciliationNfr07Tests
         Assert.Equal(50_000m, novLine.PendingPayments);
         Assert.True(novLine.PublishedInPeriod);
 
-        var decLine = FinancialReportCalculator.Calculate([.. rows], FinancialReportPeriod.Create(2026, 12), Coverage)!;
+        var decPeriod = FinancialReportPeriod.Create(2026, 12);
+        var decLine = FinancialReportCalculator.Calculate(AsOf(rows, decPeriod), decPeriod, Coverage)!;
         Assert.Equal(0m, decLine.PublishedServiceValue);
         Assert.Equal(20_000m, decLine.ServiceRefunds);
         Assert.Equal(20_000m, decLine.ComplaintRefunds);
@@ -130,12 +141,21 @@ public sealed class FinancialReconciliationNfr07Tests
         Assert.Equal(450_000m, lines.Sum(x => x.PublishedServiceValue));
     }
 
-    private static FinancialHistoryRow Row(long seq, Guid orderId, string source, object data)
+    private static FinancialHistoryRow[] AsOf(IEnumerable<FinancialHistoryRow> rows, FinancialReportPeriod period) =>
+        rows.Where(r => r.RecordedAt < period.EndUtc).ToArray();
+
+    private static FinancialHistoryRow Row(
+        long seq,
+        Guid orderId,
+        string source,
+        object data,
+        string recordedAt = "2026-11-01T00:00:00Z",
+        Guid? sourceId = null)
     {
         using var doc = JsonDocument.Parse(JsonSerializer.Serialize(data));
         return new FinancialHistoryRow(
-            seq, source, Guid.NewGuid(), orderId,
-            DateTimeOffset.Parse("2026-11-01T00:00:00Z", CultureInfo.InvariantCulture),
+            seq, source, sourceId ?? Guid.NewGuid(), orderId,
+            DateTimeOffset.Parse(recordedAt, CultureInfo.InvariantCulture),
             doc.RootElement.Clone(), false);
     }
 }

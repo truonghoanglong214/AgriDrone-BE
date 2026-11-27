@@ -82,8 +82,8 @@ public sealed class RefreshSessionTests
             Guid.NewGuid(),
             session.Id,
             first.TokenHash,
-            t0,
-            t0.AddDays(7));
+            now.AddDays(-1),
+            now.AddDays(6));
 
         var repo = new FakeRefreshSessionRepository(session, initialToken, user, [SystemRoles.SystemManager], observedUsedAt: null);
         var handler = new RefreshSessionCommandHandler(
