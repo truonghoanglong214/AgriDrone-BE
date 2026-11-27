@@ -83,6 +83,7 @@ internal sealed class GetFarmBaseMapsQueryHandler(
             @"SELECT farm_base_map_version_id AS ""VersionId"", COUNT(*)::int AS ""Count""
               FROM plant.plant_change_events
               WHERE farm_id = {0} AND farm_base_map_version_id IS NOT NULL
+                AND source::text = 'MANUAL'
               GROUP BY farm_base_map_version_id",
             request.FarmId)
             .ToListAsync(cancellationToken);

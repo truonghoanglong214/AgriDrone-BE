@@ -109,7 +109,7 @@ internal sealed class GetFarmBaseMapDetailQueryHandler(
         // 2. Lấy danh sách cây thuộc version này
         var plantItems = new List<BaseMapPlantItemDto>();
 
-        if (version.Status is FarmBaseMapStatus.Published or FarmBaseMapStatus.Superseded)
+        if (version.Status is FarmBaseMapStatus.InternalApproved or FarmBaseMapStatus.Published or FarmBaseMapStatus.Superseded)
         {
             var plantRows = await dbContext.Database.SqlQueryRaw<PlantQueryRow>(
                 @"SELECT id AS ""Id"", plant_code AS ""PlantCode"",
@@ -226,6 +226,7 @@ internal sealed class GetFarmBaseMapDetailQueryHandler(
                      notes AS ""Notes"", created_at AS ""CreatedAt""
               FROM plant.plant_change_events
               WHERE farm_id = {0} AND farm_base_map_version_id = {1}
+                AND source::text = 'MANUAL'
               ORDER BY created_at DESC",
             request.FarmId, version.Id)
             .ToListAsync(cancellationToken);
