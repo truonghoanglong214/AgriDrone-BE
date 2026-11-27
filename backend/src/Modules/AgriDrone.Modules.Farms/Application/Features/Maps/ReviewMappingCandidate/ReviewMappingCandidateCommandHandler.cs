@@ -32,7 +32,31 @@ internal sealed class ReviewMappingCandidateCommandHandler(
             command.FarmId,
             cancellationToken);
 
-        if (!access.IsAllowed)
+        if (!access.IsAllowed || access.TenantId is not Guid tenantId)
+        {
+            return Result.Failure<CandidateReviewResponse>(FarmError.NotFound());
+        }
+
+        try
+        {
+            return await dbContext.ExecuteInTransactionAsync(
+                token => ReviewAsync(command, actorId, tenantId, token), cancellationToken);
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
+        {
+            dbContext.ChangeTracker.Clear();
+            return Result.Failure<CandidateReviewResponse>(
+                AppError.Validation("MappingCandidate.ReviewFailed", ex.Message));
+        }
+    }
+
+    private async Task<Result<CandidateReviewResponse>> ReviewAsync(
+        ReviewMappingCandidateCommand command,
+        Guid actorId,
+        Guid tenantId,
+        CancellationToken cancellationToken)
+    {
+        if (await dbContext.LockFarmForMappingReviewAsync(tenantId, command.FarmId, cancellationToken) is null)
         {
             return Result.Failure<CandidateReviewResponse>(FarmError.NotFound());
         }
@@ -40,12 +64,18 @@ internal sealed class ReviewMappingCandidateCommandHandler(
         var baseMap = await dbContext.FarmBaseMapVersions
             .AsNoTracking()
             .SingleOrDefaultAsync(
-                m => m.Id == command.DraftId && m.FarmId == command.FarmId,
+                m => m.Id == command.DraftId && m.FarmId == command.FarmId && m.TenantId == tenantId,
                 cancellationToken);
+
+        if (baseMap?.Status == FarmBaseMapStatus.InternalApproved)
+        {
+            return Result.Failure<CandidateReviewResponse>(
+                AppError.Conflict("FarmBaseMapDraft.AlreadyApproved", "This base map has already been internally approved."));
+        }
 
         var batch = await dbContext.MappingCandidateBatches
             .SingleOrDefaultAsync(
-                b => b.FarmBaseMapVersionId == command.DraftId && b.FarmId == command.FarmId,
+                b => b.FarmBaseMapVersionId == command.DraftId && b.FarmId == command.FarmId && b.TenantId == tenantId,
                 cancellationToken);
 
         if (batch is null)
@@ -107,36 +137,28 @@ internal sealed class ReviewMappingCandidateCommandHandler(
             matchedPlantId = await FindTargetPlantIdAsync(command.FarmId, command.DraftId, candidate, cancellationToken);
         }
 
-        try
-        {
-            candidate.ApplyReview(
-                decision: command.Decision,
-                correctedPosition: command.CorrectedPosition,
-                correctedRowIndex: command.CorrectedRowIndex,
-                correctedColumnIndex: command.CorrectedColumnIndex,
-                correctedMatchedPlantId: matchedPlantId,
-                reviewerId: actorId,
-                reason: command.Reason,
-                reviewedAt: now);
+        candidate.ApplyReview(
+            decision: command.Decision,
+            correctedPosition: command.CorrectedPosition,
+            correctedRowIndex: command.CorrectedRowIndex,
+            correctedColumnIndex: command.CorrectedColumnIndex,
+            correctedMatchedPlantId: matchedPlantId,
+            reviewerId: actorId,
+            reason: command.Reason,
+            reviewedAt: now);
 
-            await dbContext.SaveChangesAsync(cancellationToken);
+        await dbContext.SaveChangesAsync(cancellationToken);
 
-            // Nếu là bản đồ PUBLISHED: cập nhật trực tiếp vào plant.plants và lưu biến động vào plant.plant_change_events
-            if (isPublished)
-            {
-                await ApplyPublishedTreeChangesAsync(
-                    command,
-                    candidate,
-                    actorId,
-                    matchedPlantId,
-                    now,
-                    cancellationToken);
-            }
-        }
-        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
+        // Nếu là bản đồ PUBLISHED: cập nhật trực tiếp vào plant.plants và lưu biến động vào plant.plant_change_events
+        if (isPublished)
         {
-            return Result.Failure<CandidateReviewResponse>(
-                AppError.Validation("MappingCandidate.ReviewFailed", ex.Message));
+            await ApplyPublishedTreeChangesAsync(
+                command,
+                candidate,
+                actorId,
+                matchedPlantId,
+                now,
+                cancellationToken);
         }
 
         var response = new CandidateReviewResponse(

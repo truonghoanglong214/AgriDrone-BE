@@ -723,8 +723,8 @@ internal sealed class SurveyResultReviewTransaction(
             if (mappingBatch is null || baseMap is null || boundary is null)
                 return Result.Failure<FreezeSurveyInternalResultResponse>(AppError.Conflict("BaselineProof.Missing", "Mapping batch, base map, or boundary proof could not be found."));
 
-            if (mappingBatch.Status != MappingCandidateBatchStatus.Approved)
-                return Result.Failure<FreezeSurveyInternalResultResponse>(AppError.Conflict("MappingBatch.NotApproved", "Mapping candidate batch is not in Approved status."));
+            if (mappingBatch.Status is not (MappingCandidateBatchStatus.Approved or MappingCandidateBatchStatus.Applied))
+                return Result.Failure<FreezeSurveyInternalResultResponse>(AppError.Conflict("MappingBatch.NotApproved", "Mapping candidate batch is not in an approved or applied state."));
 
             if (boundary.ReviewedAt is null || boundary.Status is not (FarmBoundaryStatus.Approved or FarmBoundaryStatus.Superseded))
                 return Result.Failure<FreezeSurveyInternalResultResponse>(AppError.Conflict("Boundary.NotApproved", "Capture farm boundary is not in a valid approved state."));

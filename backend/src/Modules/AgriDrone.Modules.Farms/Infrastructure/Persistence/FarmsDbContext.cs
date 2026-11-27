@@ -42,6 +42,11 @@ internal sealed class FarmsDbContext(DbContextOptions<FarmsDbContext> options)
         AuditLogs.Add(auditLog);
     }
 
+    public Task<Farm?> LockFarmForMappingReviewAsync(Guid tenantId, Guid farmId, CancellationToken cancellationToken) =>
+        Farms.FromSqlInterpolated($"SELECT * FROM farm.farms WHERE id = {farmId} AND tenant_id = {tenantId} FOR UPDATE")
+            .AsNoTracking()
+            .SingleOrDefaultAsync(cancellationToken);
+
     public async Task<T> ExecuteInTransactionAsync<T>(
         Func<CancellationToken, Task<T>> operation,
         CancellationToken cancellationToken = default)
