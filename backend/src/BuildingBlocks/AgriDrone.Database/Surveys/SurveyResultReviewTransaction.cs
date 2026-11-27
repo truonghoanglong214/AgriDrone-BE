@@ -119,7 +119,9 @@ internal sealed class SurveyResultReviewTransaction(
             if (snapshot is null)
                 return Result.Failure<SurveyResultReviewResponse>(AppError.Conflict("CountSnapshot.NotFound", "Verified pole count snapshot was not found for this order."));
 
-            if (snapshot.CaptureAttemptId != activeAttempt.Id)
+            if (snapshot.CaptureAttemptId != (activeAttempt.MappingSourceAttemptId ?? activeAttempt.Id) ||
+                (activeAttempt.MappingSourceAttemptId.HasValue &&
+                 !await DiseaseCaptureMappingProof.HasAcceptedSourceAsync(db, order, snapshot, cancellationToken)))
                 return Result.Failure<SurveyResultReviewResponse>(AppError.Conflict("CountSnapshot.AttemptMismatch", "Verified pole count snapshot belongs to another capture attempt."));
 
             var mappingBatch = await db.Set<MappingCandidateBatch>().AsNoTracking()
@@ -235,7 +237,7 @@ internal sealed class SurveyResultReviewTransaction(
                 CaptureAttemptId: activeAttempt.Id,
                 CaptureAttemptVersion: activeAttempt.Version,
                 CaptureAttemptStatus: activeAttempt.Status.ToString(),
-                MissionId: snapshot.MissionId,
+                MissionId: pendingBatch?.MissionId ?? snapshot.MissionId,
                 FarmBaseMapVersionId: snapshot.FarmBaseMapVersionId,
                 BaselineMapVersionId: baselineMapVersionId,
                 FarmBoundaryVersionId: snapshot.FarmBoundaryVersionId,
@@ -772,18 +774,25 @@ internal sealed class SurveyResultReviewTransaction(
             if (attempt.Id != command.ExpectedAttemptId || attempt.Status != CaptureAttemptStatus.Processing)
                 return Result.Failure<FreezeSurveyInternalResultResponse>(AppError.Conflict("CaptureAttempt.Stale", "Expected capture attempt is stale or no longer in Processing status."));
 
-            if (snapshot.CaptureAttemptId != attempt.Id || mappingBatch.CaptureAttemptId != attempt.Id)
+            var mappingAttemptId = attempt.MappingSourceAttemptId ?? attempt.Id;
+            if (snapshot.CaptureAttemptId != mappingAttemptId || mappingBatch.CaptureAttemptId != mappingAttemptId ||
+                (attempt.MappingSourceAttemptId.HasValue &&
+                 (!isCombo || !await DiseaseCaptureMappingProof.HasAcceptedSourceAsync(db, order, snapshot, cancellationToken))))
                 return Result.Failure<FreezeSurveyInternalResultResponse>(AppError.Conflict("CaptureAttempt.SnapshotMismatch", "Count snapshot or mapping batch belongs to another capture attempt."));
 
-            if (!attempt.MissionId.HasValue || attempt.MissionId.Value != snapshot.MissionId || mappingBatch.MissionId != snapshot.MissionId)
+            var missionId = await db.Set<DroneMission>().AsNoTracking()
+                .Where(value => value.CaptureAttemptId == attempt.Id && value.SurveyOrderId == order.Id)
+                .Select(value => (Guid?)value.Id).SingleOrDefaultAsync(cancellationToken);
+            if (!missionId.HasValue || mappingBatch.MissionId != snapshot.MissionId ||
+                (attempt.MappingSourceAttemptId is null && missionId.Value != snapshot.MissionId))
                 return Result.Failure<FreezeSurveyInternalResultResponse>(AppError.Conflict("Mission.AttemptMismatch", "Attempt, count snapshot, and mapping batch disagree on execution Mission."));
 
-            var missionId = attempt.MissionId.Value;
-
             // ADR 0020 Rank 8: Lock DroneMission FOR SHARE
-            var mission = await LockMissionForShareAsync(missionId, order.FarmId, cancellationToken);
-            if (mission is null || mission.TenantId != order.TenantId || mission.SurveyOrderId != order.Id || mission.CaptureAttemptId != attempt.Id)
+            var mission = await LockMissionForShareAsync(missionId.Value, order.FarmId, cancellationToken);
+            if (mission is null || mission.TenantId != order.TenantId || mission.SurveyOrderId != order.Id || mission.CaptureAttemptId != attempt.Id ||
+                (attempt.MappingSourceAttemptId.HasValue && !DiseaseCaptureMappingProof.MatchesDiseaseMission(snapshot, mission)))
                 return Result.Failure<FreezeSurveyInternalResultResponse>(AppError.Conflict("Mission.ContextMismatch", "Execution Mission is missing or no longer bound to this order/attempt."));
+            attempt.BindMission(mission.Id);
 
             // ADR 0020 Rank 10: Verify CaptureInputApproval & CaptureInputManifest
             if (string.IsNullOrWhiteSpace(attempt.InputApprovalReference) ||
@@ -993,8 +1002,8 @@ internal sealed class SurveyResultReviewTransaction(
                 revisionNumber: 1,
                 serviceCode: commercial.ServiceCode,
                 screensDisease: commercial.ScreensDisease,
-                captureAttemptId: attempt.Id,
-                missionId: missionId,
+                captureAttemptId: snapshot.CaptureAttemptId,
+                missionId: snapshot.MissionId,
                 farmBaseMapVersionId: snapshot.FarmBaseMapVersionId,
                 baselineMapVersionId: baselineMapVersionId,
                 farmBoundaryVersionId: snapshot.FarmBoundaryVersionId,
@@ -1019,8 +1028,8 @@ internal sealed class SurveyResultReviewTransaction(
                 revisionNumber: 1,
                 serviceCode: commercial.ServiceCode,
                 screensDisease: commercial.ScreensDisease,
-                captureAttemptId: attempt.Id,
-                missionId: missionId,
+                captureAttemptId: snapshot.CaptureAttemptId,
+                missionId: snapshot.MissionId,
                 farmBaseMapVersionId: snapshot.FarmBaseMapVersionId,
                 baselineMapVersionId: baselineMapVersionId,
                 farmBoundaryVersionId: snapshot.FarmBoundaryVersionId,
@@ -1060,7 +1069,7 @@ internal sealed class SurveyResultReviewTransaction(
                 farmId: order.FarmId,
                 orderId: order.Id,
                 attemptId: attempt.Id,
-                missionId: missionId,
+                missionId: mission.Id,
                 processingJobId: attempt.ProcessingJobReference!,
                 acceptanceReceiptId: approvedRevision.Id.ToString("D"));
 
@@ -1090,7 +1099,7 @@ internal sealed class SurveyResultReviewTransaction(
                 AttemptId: attempt.Id,
                 AttemptVersion: attempt.Version,
                 AttemptStatus: attempt.Status.ToString(),
-                MissionId: missionId,
+                MissionId: mission.Id,
                 CountSnapshotId: snapshot.Id,
                 VerifiedBillablePoleCount: snapshot.VerifiedBillablePoleCount,
                 CountSnapshotFingerprint: snapshot.EvidenceFingerprint,
@@ -1200,8 +1209,21 @@ internal sealed class SurveyResultReviewTransaction(
     {
         if (currentApproval is not null)
         {
+            var attemptId = currentApproval.CaptureAttemptId;
+            if (currentApproval.ComboBatchId is Guid comboBatchId)
+            {
+                var comboAttemptId = await db.Set<SurveyComboImportBatch>().AsNoTracking()
+                    .Where(b => b.Id == comboBatchId && b.SurveyOrderId == order.Id &&
+                        b.TenantId == order.TenantId && b.FarmId == order.FarmId)
+                    .Select(b => (Guid?)b.CaptureAttemptId).SingleOrDefaultAsync(cancellationToken);
+                if (!comboAttemptId.HasValue)
+                    return null;
+
+                attemptId = comboAttemptId.Value;
+            }
+
             return await db.Set<CaptureAttempt>().AsNoTracking()
-                .Where(a => a.Id == currentApproval.CaptureAttemptId &&
+                .Where(a => a.Id == attemptId &&
                             a.OrderId == order.Id &&
                             a.TenantId == order.TenantId &&
                             a.FarmId == order.FarmId &&

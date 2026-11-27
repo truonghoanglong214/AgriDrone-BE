@@ -66,7 +66,7 @@ internal sealed class MissionPlantGpsPublisher(
         var captureAttemptMatches = await db.Database.SqlQueryRaw<int>(
                 "SELECT 1 AS \"Value\" FROM survey.capture_attempts " +
                 "WHERE id = {0} AND order_id = {1} " +
-                "AND tenant_id = {2} AND farm_id = {3}",
+                "AND tenant_id = {2} AND farm_id = {3} AND mapping_source_attempt_id IS NULL",
                 captureAttemptId,
                 request.SurveyOrderId,
                 tenantId,
@@ -76,7 +76,7 @@ internal sealed class MissionPlantGpsPublisher(
         {
             return new MissionPlantGpsPublishResult(
                 MissionPlantGpsPublishStatus.Conflict,
-                Errors: ["Mission CaptureAttempt does not match the tenant, farm, order, and mission context."]);
+                Errors: ["Only the matching mapping capture attempt can publish mapping candidates."]);
         }
 
         if (!mission.FarmBoundaryVersionId.HasValue || mission.FarmBoundaryVersionId.Value == Guid.Empty)

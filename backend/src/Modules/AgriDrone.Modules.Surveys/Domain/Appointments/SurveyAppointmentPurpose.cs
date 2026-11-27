@@ -4,5 +4,6 @@ public enum SurveyAppointmentPurpose
 {
     BaselineMapping,
     PaidService,
-    Capture
+    Capture,
+    DiseaseCapture
 }

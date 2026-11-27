@@ -47,6 +47,7 @@ public sealed class CaptureAttemptConfiguration : IEntityTypeConfiguration<Captu
         // ADR 0020: mission.drone_missions.capture_attempt_id is the canonical physical binding.
         builder.Ignore(attempt => attempt.MissionId);
         builder.Property(attempt => attempt.ParentMissionId).HasColumnName("parent_mission_id").HasColumnType("uuid");
+        builder.Property(attempt => attempt.MappingSourceAttemptId).HasColumnName("mapping_source_attempt_id").HasColumnType("uuid");
         builder.Property(attempt => attempt.SupersededAttemptId).HasColumnName("superseded_attempt_id").HasColumnType("uuid");
         builder.Property(attempt => attempt.ReflightApprovedBy).HasColumnName("reflight_approved_by").HasColumnType("uuid");
         builder.Property(attempt => attempt.ReflightApprovalReason).HasColumnName("reflight_approval_reason").HasColumnType("character varying(500)").HasMaxLength(500);
@@ -91,6 +92,18 @@ public sealed class CaptureAttemptConfiguration : IEntityTypeConfiguration<Captu
             .HasDatabaseName("uq_capture_attempts_parent_successor")
             .HasFilter("superseded_attempt_id IS NOT NULL")
             .IsUnique();
+        builder.HasIndex(attempt => attempt.MappingSourceAttemptId)
+            .HasDatabaseName("uq_capture_attempts_disease_root")
+            .HasFilter("mapping_source_attempt_id IS NOT NULL AND superseded_attempt_id IS NULL")
+            .IsUnique();
+        builder.HasIndex(attempt => new { attempt.MappingSourceAttemptId, attempt.TenantId, attempt.FarmId, attempt.OrderId })
+            .HasDatabaseName("ix_capture_attempts_mapping_source_owner");
+        builder.HasOne<CaptureAttempt>()
+            .WithMany()
+            .HasForeignKey(attempt => new { attempt.MappingSourceAttemptId, attempt.TenantId, attempt.FarmId, attempt.OrderId })
+            .HasPrincipalKey(source => new { source.Id, source.TenantId, source.FarmId, source.OrderId })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_capture_attempts_mapping_source_owner");
 
         builder.HasOne<SurveyOrder>()
             .WithMany()

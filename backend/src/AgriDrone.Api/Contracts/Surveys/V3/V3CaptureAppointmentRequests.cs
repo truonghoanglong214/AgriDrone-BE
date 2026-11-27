@@ -42,6 +42,19 @@ public sealed record PrepareV3CaptureAttemptRequest(
     [param: Required, StringLength(128, MinimumLength = 1)] string PayloadFingerprint,
     [param: StringLength(500)] string? Reason = null);
 
+public sealed record ScheduleV3DiseaseCaptureRequest(
+    [param: Required] Guid? DroneId,
+    [param: Required, Range(typeof(uint), "1", "4294967295")] uint? ExpectedOrderVersion,
+    [param: Required] Guid? OperationId,
+    [param: Required] DateTimeOffset? StartAt,
+    [param: Required] DateTimeOffset? EndAt);
+
+public sealed record RescheduleV3DiseaseCaptureRequest(
+    [param: Required] Guid? DroneId,
+    [param: Required, Range(typeof(uint), "1", "4294967295")] uint? ExpectedOrderVersion,
+    [param: Required] DateTimeOffset? StartAt,
+    [param: Required] DateTimeOffset? EndAt);
+
 public sealed record StartV3CaptureFlightRequest(
     [param: Required] Guid? MissionId,
     [param: Required] uint? ExpectedOrderVersion,

@@ -40,7 +40,7 @@ public sealed class V3SystemManagerSurveyOrdersController(
             return Results.Forbid();
 
         if ((startAt is null) != (endAt is null) || endAt <= startAt)
-            return Results.BadRequest("Provide both startAt and endAt in chronological order for a re-flight.");
+            return Results.BadRequest("Provide both startAt and endAt in chronological order for the new capture window.");
 
         var selection = await captureCoordinator.GetDroneSelectionAsync(
             orderId, actorId, startAt, endAt, cancellationToken);
@@ -172,6 +172,46 @@ public sealed class V3SystemManagerSurveyOrdersController(
             StatusCodes.Status201Created,
             result.ErrorCode,
             result.ErrorMessage);
+    }
+
+    [HttpPost("{orderId:guid}/disease-capture-attempts")]
+    public async Task<IResult> ScheduleDiseaseCapture(
+        [FromRoute] Guid orderId,
+        [FromBody] ScheduleV3DiseaseCaptureRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!TryGetActor(out var actorId)) return Results.Forbid();
+        var result = await captureCoordinator.ScheduleDiseaseCaptureAsync(
+            new ScheduleDiseaseCaptureRequest(
+                orderId,
+                request.ExpectedOrderVersion!.Value,
+                actorId,
+                request.DroneId!.Value,
+                request.StartAt!.Value.ToUniversalTime(),
+                request.EndAt!.Value.ToUniversalTime(),
+                executionContext.CorrelationId,
+                request.OperationId!.Value),
+            cancellationToken);
+        return CoordinatorResult(result.Success, result,
+            StatusCodes.Status201Created, result.ErrorCode, result.ErrorMessage);
+    }
+
+    [HttpPut("{orderId:guid}/disease-capture-attempts/{attemptId:guid}/appointment")]
+    public async Task<IResult> RescheduleDiseaseCapture(
+        [FromRoute] Guid orderId,
+        [FromRoute] Guid attemptId,
+        [FromBody] RescheduleV3DiseaseCaptureRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!TryGetActor(out var actorId)) return Results.Forbid();
+        var result = await captureCoordinator.RescheduleDiseaseCaptureAsync(
+            new RescheduleDiseaseCaptureRequest(
+                orderId, attemptId, request.ExpectedOrderVersion!.Value, actorId, request.DroneId!.Value,
+                request.StartAt!.Value.ToUniversalTime(), request.EndAt!.Value.ToUniversalTime(),
+                executionContext.CorrelationId),
+            cancellationToken);
+        return CoordinatorResult(result.Success, result,
+            StatusCodes.Status200OK, result.ErrorCode, result.ErrorMessage);
     }
 
     [HttpPost("{orderId:guid}/capture-attempts/{attemptId:guid}/start")]

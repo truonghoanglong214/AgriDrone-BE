@@ -1219,7 +1219,7 @@ internal sealed class SurveyInvoiceTransaction(
                 .FromSqlInterpolated($"SELECT * FROM survey.survey_combo_import_batches WHERE id = {approved.ComboBatchId.Value} AND survey_order_id = {order.Id} AND tenant_id = {order.TenantId} AND farm_id = {order.FarmId} FOR SHARE")
                 .SingleOrDefaultAsync(cancellationToken);
 
-            if (comboBatch is null || comboBatch.CaptureAttemptId != approved.CaptureAttemptId || comboBatch.MissionId != approved.MissionId ||
+            if (comboBatch is null ||
                 comboBatch.MappingCandidateBatchId != snapshot.MappingCandidateBatchId ||
                 comboBatch.FarmBaseMapVersionId != snapshot.FarmBaseMapVersionId ||
                 comboBatch.FarmBoundaryVersionId != snapshot.FarmBoundaryVersionId ||
@@ -1269,7 +1269,7 @@ internal sealed class SurveyInvoiceTransaction(
         if (attempt is null || attempt.Status != CaptureAttemptStatus.Accepted)
             return Result.Failure<VerifiedInvoiceContext>(AppError.Conflict("CaptureAttempt.NotAccepted", "Associated capture attempt must be in Accepted status."));
 
-        if (!attempt.MissionId.HasValue || attempt.MissionId.Value != approved.MissionId || mappingBatch.MissionId != approved.MissionId)
+        if (mappingBatch.MissionId != approved.MissionId || mappingBatch.CaptureAttemptId != attempt.Id)
             return Result.Failure<VerifiedInvoiceContext>(AppError.Conflict("Mission.AttemptMismatch", "Attempt, approval, and mapping batch disagree on execution Mission."));
 
         var mission = await db.Set<DroneMission>()
@@ -1278,6 +1278,11 @@ internal sealed class SurveyInvoiceTransaction(
 
         if (mission is null || mission.TenantId != order.TenantId || mission.SurveyOrderId != order.Id || mission.CaptureAttemptId != attempt.Id)
             return Result.Failure<VerifiedInvoiceContext>(AppError.Conflict("Mission.ContextMismatch", "Execution Mission is missing or no longer bound to this order/attempt."));
+
+        if (comboEvidence is not null && !await DiseaseCaptureMappingProof.HasAcceptedDiseaseCaptureAsync(
+                db, order, snapshot, approved, comboEvidence.Batch, cancellationToken))
+            return Result.Failure<VerifiedInvoiceContext>(AppError.Conflict(
+                "ComboBatch.CaptureMismatch", "COMBO disease evidence does not come from the accepted capture for this map."));
 
         return Result.Success(new VerifiedInvoiceContext(
             order,

@@ -123,6 +123,13 @@ public sealed class SurveyAppointment : Entity
     public void Confirm(Guid tenantOwnerId, DateTimeOffset confirmedAt)
     {
         DomainGuard.NotEmpty(tenantOwnerId);
+        if (Purpose == SurveyAppointmentPurpose.DiseaseCapture)
+        {
+            throw new SurveyDomainException(
+                AppointmentDomainErrorCodes.InvalidTransition,
+                "Disease capture appointments are confirmed by the proposing Manager.");
+        }
+
         ConfirmWindow(confirmedAt);
         ConfirmedByTenantOwnerId = tenantOwnerId;
     }
@@ -135,6 +142,20 @@ public sealed class SurveyAppointment : Entity
             throw new SurveyDomainException(
                 AppointmentDomainErrorCodes.InvalidTransition,
                 "Manager scheduling is only supported for paid-service appointments.");
+        }
+
+        ConfirmWindow(confirmedAt);
+        ConfirmedBySystemManagerId = systemManagerId;
+    }
+
+    public void ConfirmDiseaseCaptureByManager(Guid systemManagerId, DateTimeOffset confirmedAt)
+    {
+        DomainGuard.NotEmpty(systemManagerId);
+        if (Purpose != SurveyAppointmentPurpose.DiseaseCapture || ProposedBySystemManagerId != systemManagerId)
+        {
+            throw new SurveyDomainException(
+                AppointmentDomainErrorCodes.InvalidTransition,
+                "Only the proposing Manager can confirm a disease capture appointment.");
         }
 
         ConfirmWindow(confirmedAt);

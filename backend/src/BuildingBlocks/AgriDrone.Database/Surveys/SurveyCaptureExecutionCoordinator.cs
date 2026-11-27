@@ -5,6 +5,8 @@ using System.Text;
 using System.Text.Json;
 using AgriDrone.IntegrationContracts.Surveys;
 using AgriDrone.IntegrationContracts.Messaging;
+using AgriDrone.Modules.Farms.Domain.Maps;
+using AgriDrone.Modules.Farms.Domain.Maps.Staging;
 using AgriDrone.Modules.Identity.Domain.SystemManagers;
 using AgriDrone.Modules.Missions.Domain.Drones;
 using AgriDrone.Modules.Missions.Application.Abstractions.Media;
@@ -46,16 +48,24 @@ internal sealed class SurveyCaptureExecutionCoordinator(
                     value => value.Id == obligationId && value.SurveyOrderId == orderId, token))?.IsSatisfied != true)
                 return null;
 
+            var isStagedCapture = await db.Set<CaptureAttempt>().AnyAsync(
+                value => value.OrderId == orderId && value.MappingSourceAttemptId != null, token);
+            var canScheduleDisease = order.Status == SurveyOrderStatus.Processing && order.RequiresBaselineMapping &&
+                order.VerifiedPoleCountSnapshotId.HasValue && !order.CurrentApprovedResultRevisionId.HasValue;
             if (order.Status == SurveyOrderStatus.ReadyForCapture && startAt is null && endAt is null)
             {
-                var appointment = await db.Set<SurveyAppointment>().AsNoTracking().SingleOrDefaultAsync(
-                    value => value.SurveyOrderId == orderId && value.Purpose == SurveyAppointmentPurpose.Capture &&
-                             value.Status == SurveyAppointmentStatus.Confirmed, token);
+                var appointment = await db.Set<SurveyAppointment>().AsNoTracking()
+                    .Where(value => value.SurveyOrderId == orderId &&
+                        (value.Purpose == SurveyAppointmentPurpose.Capture || value.Purpose == SurveyAppointmentPurpose.DiseaseCapture) &&
+                        value.Status == SurveyAppointmentStatus.Confirmed)
+                    .OrderByDescending(value => value.Purpose == SurveyAppointmentPurpose.DiseaseCapture)
+                    .FirstOrDefaultAsync(token);
                 startAt = appointment?.ProposedStartAt;
                 endAt = appointment?.ProposedEndAt;
             }
-            else if (order.Status != SurveyOrderStatus.AwaitingReflightDecision ||
-                     startAt is not { } reflightStart || reflightStart <= clock.GetUtcNow())
+            else if (!(order.Status == SurveyOrderStatus.AwaitingReflightDecision || canScheduleDisease ||
+                       (isStagedCapture && order.Status == SurveyOrderStatus.ReadyForCapture)) ||
+                     startAt is not { } schedulingStart || schedulingStart <= clock.GetUtcNow())
             {
                 return null;
             }
@@ -65,8 +75,11 @@ internal sealed class SurveyCaptureExecutionCoordinator(
 
             var commercial = await db.Set<SurveyOrderCommercialSnapshot>().AsNoTracking()
                 .SingleOrDefaultAsync(value => value.SurveyOrderId == orderId, token);
+            var diseaseOnly = canScheduleDisease || isStagedCapture;
+            if (diseaseOnly && (commercial?.ServiceCode != "COMBO" || !commercial.ScreensDisease))
+                return null;
             return commercial is null ? null : new CaptureDroneSelection(
-                order.FarmId, start.ToUniversalTime(), end.ToUniversalTime(), commercial.MapsPoles, commercial.ScreensDisease);
+                order.FarmId, start.ToUniversalTime(), end.ToUniversalTime(), commercial.MapsPoles && !diseaseOnly, commercial.ScreensDisease);
         },
         _ => null,
         cancellationToken);
@@ -260,6 +273,221 @@ internal sealed class SurveyCaptureExecutionCoordinator(
         PrepareException,
         cancellationToken);
 
+    public Task<PrepareCaptureAttemptResult> ScheduleDiseaseCaptureAsync(
+        ScheduleDiseaseCaptureRequest request,
+        CancellationToken cancellationToken = default) => ExecuteAsync(
+        async token =>
+        {
+            await LockOrderAsync(request.OrderId, token);
+            var order = await db.Set<SurveyOrder>().SingleOrDefaultAsync(value => value.Id == request.OrderId, token);
+            if (order is null)
+                return PrepareFailure("ORDER_NOT_FOUND", "Survey Order was not found.");
+            if (!await IsAssignedManagerAsync(order.TenantId, order.FarmId, request.ActorId, token))
+                return PrepareFailure("MANAGER_FORBIDDEN", "The actor is not the active assigned Manager.");
+
+            var fingerprint = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(
+                $"V3_DISEASE_CAPTURE|{request.OrderId:D}|{request.ActorId:D}|{request.DroneId:D}|{request.StartAt:O}|{request.EndAt:O}|{request.ExpectedOrderVersion}")));
+            var replay = await db.Set<DroneMission>().AsNoTracking()
+                .SingleOrDefaultAsync(value => value.SurveyOrderId == order.Id &&
+                    value.PreparationOperationId == request.OperationId && value.CaptureAttemptId != null, token);
+            if (replay?.CaptureAttemptId is Guid replayAttemptId)
+            {
+                var existing = await db.Set<CaptureAttempt>().AsNoTracking().SingleAsync(value => value.Id == replayAttemptId, token);
+                if (!existing.MappingSourceAttemptId.HasValue ||
+                    !await IsOperationReplayCompatibleAsync(existing.Id, request.OperationId, fingerprint, token))
+                    return PrepareFailure("OPERATION_CONFLICT", "The operation identifier was already used with another payload.");
+
+                return new PrepareCaptureAttemptResult(true, existing.Id, existing.AttemptIndex, replay.Id,
+                    existing.Status.ToString(), existing.Version);
+            }
+
+            var now = clock.GetUtcNow();
+            if (request.DroneId == Guid.Empty || request.OperationId == Guid.Empty ||
+                request.StartAt <= now || request.EndAt <= request.StartAt)
+                return PrepareFailure("APPOINTMENT_WINDOW_INVALID", "A drone, operation identifier and future disease capture window are required.");
+            if (order.Scope != ContractScope.V3 || order.Version != request.ExpectedOrderVersion ||
+                order.Status != SurveyOrderStatus.Processing || !order.RequiresBaselineMapping ||
+                order.VerifiedPoleCountSnapshotId is not Guid snapshotId ||
+                order.CurrentApprovedResultRevisionId.HasValue || order.CurrentInvoiceRevisionId.HasValue)
+                return PrepareFailure("ORDER_NOT_READY", "First COMBO must have a verified mapping result and an open result at the expected Order version.");
+
+            var commercial = await db.Set<SurveyOrderCommercialSnapshot>().AsNoTracking()
+                .SingleOrDefaultAsync(value => value.SurveyOrderId == order.Id, token);
+            if (commercial?.ServiceCode != "COMBO" || !commercial.ScreensDisease || !commercial.MapsPoles)
+                return PrepareFailure("DISEASE_CAPTURE_NOT_SUPPORTED", "Only First COMBO supports a separate disease capture.");
+            if (order.DepositObligationId is not Guid obligationId ||
+                (await db.Set<SurveyDepositObligation>().SingleOrDefaultAsync(value => value.Id == obligationId &&
+                    value.SurveyOrderId == order.Id, token))?.IsSatisfied != true)
+                return PrepareFailure("DEPOSIT_NOT_SATISFIED", "Disease capture requires the original satisfied deposit.");
+
+            var snapshot = await db.Set<SurveyOrderPoleCountSnapshot>().AsNoTracking()
+                .SingleOrDefaultAsync(value => value.Id == snapshotId && value.SurveyOrderId == order.Id &&
+                    value.TenantId == order.TenantId && value.FarmId == order.FarmId, token);
+            if (snapshot is null || snapshot.FarmBaseMapVersionId != order.FarmBaseMapVersionId ||
+                snapshot.FarmBoundaryVersionId != order.FarmBoundaryVersionId ||
+                !await db.Set<FarmBaseMapVersion>().AnyAsync(value =>
+                    value.Id == snapshot.FarmBaseMapVersionId && value.SourceSurveyOrderId == order.Id &&
+                    value.TenantId == order.TenantId && value.FarmId == order.FarmId &&
+                    value.SourceMissionId == snapshot.MissionId && value.FarmBoundaryVersionId == snapshot.FarmBoundaryVersionId &&
+                    value.IsBaseline && value.Status == FarmBaseMapStatus.InternalApproved, token) ||
+                !await db.Set<MappingCandidateBatch>().AnyAsync(value =>
+                    value.Id == snapshot.MappingCandidateBatchId && value.SurveyOrderId == order.Id &&
+                    value.TenantId == order.TenantId && value.FarmId == order.FarmId &&
+                    value.MissionId == snapshot.MissionId && value.CaptureAttemptId == snapshot.CaptureAttemptId &&
+                    value.FarmBaseMapVersionId == snapshot.FarmBaseMapVersionId &&
+                    value.Status == MappingCandidateBatchStatus.Applied, token))
+                return PrepareFailure("DISEASE_CAPTURE_MAP_REQUIRED", "The verified count, applied candidates and internally approved map must belong to the first capture.");
+
+            var mappingAttempt = await db.Set<CaptureAttempt>().Include(value => value.History)
+                .SingleOrDefaultAsync(value => value.Id == snapshot.CaptureAttemptId && value.OrderId == order.Id &&
+                    value.TenantId == order.TenantId && value.FarmId == order.FarmId, token);
+            var mappingMission = await db.Set<DroneMission>().AsNoTracking().SingleOrDefaultAsync(value =>
+                value.Id == snapshot.MissionId && value.SurveyOrderId == order.Id && value.TenantId == order.TenantId &&
+                value.FarmId == order.FarmId && value.CaptureAttemptId == snapshot.CaptureAttemptId &&
+                value.Purpose == MissionPurpose.Capture, token);
+            if (mappingAttempt is null || mappingAttempt.Status != CaptureAttemptStatus.Processing ||
+                mappingAttempt.MappingSourceAttemptId.HasValue || string.IsNullOrWhiteSpace(mappingAttempt.ProcessingJobReference) ||
+                mappingMission is null)
+                return PrepareFailure("DISEASE_CAPTURE_SOURCE_INVALID", "The map must belong to the active first capture mission.");
+
+            if (await db.Set<AiProcessingJob>().AnyAsync(value => value.MissionId == snapshot.MissionId &&
+                    value.JobType == AiJobType.DiseaseDetection && value.Status == AiJobStatus.Completed, token) ||
+                await db.Set<SurveyComboImportBatch>().AnyAsync(value => value.SurveyOrderId == order.Id, token))
+                return PrepareFailure("DISEASE_RESULT_ALREADY_EXISTS", "This order already has disease results from its original capture.");
+
+            if (!await IsDiseaseDroneAvailableAsync(request.DroneId, request.StartAt, request.EndAt, null, token))
+                return PrepareFailure("DRONE_NOT_READY", "The selected drone is not operational or lacks disease capture capability.");
+
+            mappingAttempt.BindMission(snapshot.MissionId);
+            mappingAttempt.AcceptProcessing(
+                new CaptureProcessingAcceptanceEvidence(order.TenantId, order.FarmId, order.Id, mappingAttempt.Id,
+                    snapshot.MissionId, mappingAttempt.ProcessingJobReference, snapshot.Id.ToString("D")),
+                now, "V3_CAPTURE_COORDINATOR", "Verified mapping capture completed before disease capture",
+                request.ActorId, request.CorrelationId);
+            // Release the active-attempt index before inserting the next attempt in the same transaction.
+            await db.SaveChangesAsync(token);
+
+            var appointment = SurveyAppointment.Create(order.Id, SurveyAppointmentPurpose.DiseaseCapture,
+                1, null, request.ActorId, request.StartAt, request.EndAt, now);
+            appointment.ConfirmDiseaseCaptureByManager(request.ActorId, now);
+            var attemptId = Guid.CreateVersion7();
+            using var flightParameters = JsonSerializer.SerializeToDocument(new
+            {
+                contract = "SURVEY_CAPTURE_V3_DISEASE",
+                orderId = order.Id,
+                captureAttemptId = attemptId,
+                mappingSourceAttemptId = mappingAttempt.Id,
+                MapsPoles = false,
+                commercial.ScreensDisease,
+                commercial.PolicyFingerprint
+            });
+            var mission = DroneMission.CreateOrderBound(
+                order.Id, order.TenantId, order.FarmId, mappingMission.ScopeZoneIds, snapshot.FarmBoundaryVersionId,
+                request.DroneId, request.ActorId, $"V3DIS-{order.Id:N}", MissionPurpose.Capture,
+                request.OperationId, snapshot.FarmBaseMapVersionId, requiresBaselineCompletion: false,
+                flightParameters, request.ActorId, now,
+                mappingMission.ScopeType, mappingMission.ScopeSnapshot, mappingMission.ScopeFingerprint);
+            var attempt = CaptureAttempt.CreateDiseaseCapture(attemptId, mappingAttempt, mission.Id, request.ActorId,
+                request.CorrelationId, request.OperationId, fingerprint, now);
+            mission.BindCaptureAttempt(attempt.Id);
+            mission.Schedule(request.StartAt, request.EndAt, now);
+            order.RecordDiseaseCaptureSchedule(now);
+            db.Set<SurveyAppointment>().Add(appointment);
+            db.Set<CaptureAttempt>().Add(attempt);
+            db.Set<DroneMission>().Add(mission);
+            AddCaptureEvidence(order, request.ActorId, request.CorrelationId,
+                "DISEASE_CAPTURE_PREPARED", now, attempt.Id, mission.Id);
+            await db.SaveChangesAsync(token);
+
+            return new PrepareCaptureAttemptResult(true, attempt.Id, attempt.AttemptIndex, mission.Id,
+                attempt.Status.ToString(), attempt.Version);
+        },
+        PrepareException,
+        cancellationToken);
+
+    public Task<PrepareCaptureAttemptResult> RescheduleDiseaseCaptureAsync(
+        RescheduleDiseaseCaptureRequest request,
+        CancellationToken cancellationToken = default) => ExecuteAsync(
+        async token =>
+        {
+            await LockOrderAsync(request.OrderId, token);
+            var order = await db.Set<SurveyOrder>().SingleOrDefaultAsync(value => value.Id == request.OrderId, token);
+            if (order is null)
+                return PrepareFailure("ORDER_NOT_FOUND", "Survey Order was not found.");
+            if (!await IsAssignedManagerAsync(order.TenantId, order.FarmId, request.ActorId, token))
+                return PrepareFailure("MANAGER_FORBIDDEN", "The actor is not the active assigned Manager.");
+
+            var attempt = await db.Set<CaptureAttempt>().AsNoTracking().SingleOrDefaultAsync(value =>
+                value.Id == request.AttemptId && value.OrderId == order.Id && value.TenantId == order.TenantId &&
+                value.FarmId == order.FarmId && value.MappingSourceAttemptId != null &&
+                value.Status == CaptureAttemptStatus.Planned, token);
+            var mission = attempt is null ? null : await db.Set<DroneMission>().SingleOrDefaultAsync(value =>
+                value.CaptureAttemptId == attempt.Id && value.SurveyOrderId == order.Id &&
+                value.TenantId == order.TenantId && value.FarmId == order.FarmId &&
+                value.Status == MissionStatus.Scheduled, token);
+            if (attempt is null || mission is null || order.Status != SurveyOrderStatus.ReadyForCapture)
+                return PrepareFailure("ORDER_NOT_READY", "Only a scheduled disease capture can be rescheduled.");
+
+            var appointment = await db.Set<SurveyAppointment>().SingleOrDefaultAsync(value =>
+                value.SurveyOrderId == order.Id && value.Purpose == SurveyAppointmentPurpose.DiseaseCapture &&
+                value.Status == SurveyAppointmentStatus.Confirmed, token);
+            if (appointment is null)
+                return PrepareFailure("ORDER_NOT_READY", "The current confirmed disease appointment is missing.");
+            if (appointment.ProposedStartAt == request.StartAt && appointment.ProposedEndAt == request.EndAt &&
+                mission.DroneId == request.DroneId)
+                return new PrepareCaptureAttemptResult(true, attempt.Id, attempt.AttemptIndex, mission.Id,
+                    attempt.Status.ToString(), attempt.Version);
+
+            var now = clock.GetUtcNow();
+            if (order.Version != request.ExpectedOrderVersion)
+                return PrepareFailure("ORDER_NOT_READY", "Reload the Order before rescheduling the disease capture.");
+            if (request.DroneId == Guid.Empty || request.StartAt <= now || request.EndAt <= request.StartAt)
+                return PrepareFailure("APPOINTMENT_WINDOW_INVALID", "A drone and future disease capture window are required.");
+            if (!await IsDiseaseDroneAvailableAsync(request.DroneId, request.StartAt, request.EndAt, mission.Id, token))
+                return PrepareFailure("DRONE_NOT_READY", "The selected drone is not available for the disease capture window.");
+
+            if (mission.PreflightOperationId is Guid preflightOperationId)
+            {
+                var preflight = await db.Set<MissionPreflightChecklist>().SingleOrDefaultAsync(value =>
+                    value.MissionId == mission.Id && value.ClientOperationId == preflightOperationId, token);
+                preflight?.Supersede();
+            }
+            mission.Reschedule(request.StartAt, request.EndAt, request.DroneId, now);
+            appointment.Cancel(now);
+            await db.SaveChangesAsync(token);
+
+            var revised = SurveyAppointment.Create(order.Id, SurveyAppointmentPurpose.DiseaseCapture,
+                appointment.RevisionNumber + 1, appointment.Id, request.ActorId, request.StartAt, request.EndAt, now);
+            revised.ConfirmDiseaseCaptureByManager(request.ActorId, now);
+            db.Set<SurveyAppointment>().Add(revised);
+            order.RecordDiseaseCaptureSchedule(now);
+            AddCaptureEvidence(order, request.ActorId, request.CorrelationId,
+                "DISEASE_CAPTURE_RESCHEDULED", now, attempt.Id, mission.Id);
+            await db.SaveChangesAsync(token);
+
+            return new PrepareCaptureAttemptResult(true, attempt.Id, attempt.AttemptIndex, mission.Id,
+                attempt.Status.ToString(), attempt.Version);
+        },
+        PrepareException,
+        cancellationToken);
+
+    private async Task<bool> IsDiseaseDroneAvailableAsync(
+        Guid droneId, DateTimeOffset startAt, DateTimeOffset endAt, Guid? excludedMissionId, CancellationToken token)
+    {
+        await LockDroneAsync(droneId, token);
+        var drone = await db.Set<Drone>().SingleOrDefaultAsync(value => value.Id == droneId, token);
+        return drone is not null && drone.IsOperationalFor(startAt, endAt) &&
+            drone.SupportsPurpose(MissionPurpose.PlantHealth) &&
+            !await HasOverlappingDroneMissionAsync(droneId, startAt, endAt, excludedMissionId, token);
+    }
+
+    private Task<bool> HasOverlappingDroneMissionAsync(
+        Guid droneId, DateTimeOffset startAt, DateTimeOffset endAt, Guid? excludedMissionId, CancellationToken token) =>
+        db.Set<DroneMission>().AnyAsync(value => value.DroneId == droneId &&
+            (!excludedMissionId.HasValue || value.Id != excludedMissionId.Value) &&
+            (value.Status == MissionStatus.Scheduled || value.Status == MissionStatus.InFlight) &&
+            value.ScheduledAt < endAt && value.ScheduledEndAt > startAt, token);
+
     public Task<StartCaptureFlightResult> StartFlightAsync(
         StartCaptureFlightRequest request,
         CancellationToken cancellationToken = default) => ExecuteAsync(
@@ -311,11 +539,14 @@ internal sealed class SurveyCaptureExecutionCoordinator(
             {
                 return StartFailure("CAPTURE_VERSION_CONFLICT", "Capture state or expected version is stale.");
             }
+            var appointmentPurpose = attempt.MappingSourceAttemptId.HasValue
+                ? SurveyAppointmentPurpose.DiseaseCapture
+                : SurveyAppointmentPurpose.Capture;
             var appointment = await db.Set<SurveyAppointment>()
                 .AsNoTracking()
                 .SingleOrDefaultAsync(value =>
                     value.SurveyOrderId == order.Id &&
-                    value.Purpose == SurveyAppointmentPurpose.Capture &&
+                    value.Purpose == appointmentPurpose &&
                     value.Status == SurveyAppointmentStatus.Confirmed,
                     token);
             var obligation = order.DepositObligationId.HasValue
@@ -1173,11 +1404,20 @@ internal sealed class SurveyCaptureExecutionCoordinator(
             var commercial = await db.Set<SurveyOrderCommercialSnapshot>()
                 .AsNoTracking()
                 .SingleOrDefaultAsync(value => value.SurveyOrderId == order.Id, token);
+            var isDiseaseCapture = parent.MappingSourceAttemptId.HasValue;
+            var parentMission = isDiseaseCapture ? await db.Set<DroneMission>().AsNoTracking().SingleOrDefaultAsync(
+                value => value.CaptureAttemptId == parent.Id && value.SurveyOrderId == order.Id &&
+                    value.TenantId == order.TenantId && value.FarmId == order.FarmId, token) : null;
+            if (isDiseaseCapture && parentMission is null)
+                return ReflightFailure("CAPTURE_GRAPH_NOT_FOUND", "The disease capture mission could not be found.");
+
             if (drone is null ||
                 !drone.IsOperationalFor(request.ProposedStartAt, request.ProposedEndAt) ||
                 commercial is null ||
-                (commercial.MapsPoles && !drone.SupportsPurpose(MissionPurpose.BaselineMapping)) ||
-                (commercial.ScreensDisease && !drone.SupportsPurpose(MissionPurpose.PlantHealth)))
+                (!isDiseaseCapture && commercial.MapsPoles && !drone.SupportsPurpose(MissionPurpose.BaselineMapping)) ||
+                (commercial.ScreensDisease && !drone.SupportsPurpose(MissionPurpose.PlantHealth)) ||
+                (isDiseaseCapture && await HasOverlappingDroneMissionAsync(
+                    request.DroneId, request.ProposedStartAt, request.ProposedEndAt, null, token)))
             {
                 return ReflightFailure("DRONE_NOT_READY", "The selected drone is not operational or lacks the pinned service capabilities.");
             }
@@ -1192,10 +1432,13 @@ internal sealed class SurveyCaptureExecutionCoordinator(
                 return ReflightFailure("MANAGER_FORBIDDEN", "The assigned Manager profile was not found.");
             }
 
+            var appointmentPurpose = isDiseaseCapture
+                ? SurveyAppointmentPurpose.DiseaseCapture
+                : SurveyAppointmentPurpose.Capture;
             var latestAppointment = await db.Set<SurveyAppointment>()
                 .Where(value =>
                     value.SurveyOrderId == order.Id &&
-                    value.Purpose == SurveyAppointmentPurpose.Capture)
+                    value.Purpose == appointmentPurpose)
                 .OrderByDescending(value => value.RevisionNumber)
                 .ThenByDescending(value => value.CreatedAt)
                 .FirstOrDefaultAsync(token);
@@ -1207,16 +1450,20 @@ internal sealed class SurveyCaptureExecutionCoordinator(
             {
                 latestAppointment.Supersede(now);
             }
+            if (latestAppointment is not null)
+                await db.SaveChangesAsync(token);
 
             var appointment = SurveyAppointment.Create(
                 order.Id,
-                SurveyAppointmentPurpose.Capture,
+                appointmentPurpose,
                 (latestAppointment?.RevisionNumber ?? 0) + 1,
                 latestAppointment?.Id,
                 request.ActorId,
                 request.ProposedStartAt,
                 request.ProposedEndAt,
                 now);
+            if (isDiseaseCapture)
+                appointment.ConfirmDiseaseCaptureByManager(request.ActorId, now);
 
             var successorId = Guid.CreateVersion7();
             using var flightParameters = JsonSerializer.SerializeToDocument(new
@@ -1225,7 +1472,8 @@ internal sealed class SurveyCaptureExecutionCoordinator(
                 orderId = order.Id,
                 captureAttemptId = successorId,
                 parentAttemptId = parent.Id,
-                commercial.MapsPoles,
+                mappingSourceAttemptId = parent.MappingSourceAttemptId,
+                MapsPoles = commercial.MapsPoles && !isDiseaseCapture,
                 commercial.ScreensDisease,
                 commercial.PolicyFingerprint
             });
@@ -1233,18 +1481,21 @@ internal sealed class SurveyCaptureExecutionCoordinator(
                 order.Id,
                 order.TenantId,
                 order.FarmId,
-                [],
-                order.FarmBoundaryVersionId,
+                parentMission?.ScopeZoneIds ?? [],
+                parentMission?.FarmBoundaryVersionId ?? order.FarmBoundaryVersionId,
                 drone.Id,
                 request.ActorId,
                 $"V3R{parent.AttemptIndex + 1}-{order.Id:N}",
                 MissionPurpose.Capture,
                 request.OperationId,
-                order.FarmBaseMapVersionId,
+                parentMission?.SourceMapVersionId ?? order.FarmBaseMapVersionId,
                 requiresBaselineCompletion: false,
                 flightParameters,
                 request.ActorId,
-                now);
+                now,
+                parentMission?.ScopeType ?? MissionScopeType.FarmWide,
+                parentMission?.ScopeSnapshot,
+                parentMission?.ScopeFingerprint ?? "FARM_WIDE");
             mission.Schedule(request.ProposedStartAt, request.ProposedEndAt, now);
             var successor = CaptureAttempt.CreateSuccessor(
                 successorId,
@@ -1258,9 +1509,13 @@ internal sealed class SurveyCaptureExecutionCoordinator(
                 request.CorrelationId,
                 request.OperationId,
                 request.PayloadFingerprint,
-                now);
+                now,
+                parentMission?.Id);
             mission.BindCaptureAttempt(successor.Id);
-            order.TransitionToAwaitingAppointmentV3(now);
+            if (isDiseaseCapture)
+                order.TransitionToReadyForCaptureV3(now);
+            else
+                order.TransitionToAwaitingAppointmentV3(now);
             db.Set<SurveyAppointment>().Add(appointment);
             db.Set<DroneMission>().Add(mission);
             db.Set<CaptureAttempt>().Add(successor);
@@ -1420,7 +1675,7 @@ internal sealed class SurveyCaptureExecutionCoordinator(
                         SELECT appointment.*, appointment.xmin
                         FROM survey.survey_appointments AS appointment
                         WHERE appointment.survey_order_id = {order.Id}
-                          AND appointment.purpose = 'CAPTURE'::system.survey_appointment_purpose
+                          AND appointment.purpose IN ('CAPTURE', 'DISEASE_CAPTURE')
                           AND appointment.status IN (
                             'PROPOSED'::system.survey_appointment_status,
                             'CONFIRMED'::system.survey_appointment_status,
@@ -1432,7 +1687,7 @@ internal sealed class SurveyCaptureExecutionCoordinator(
                 : await db.Set<SurveyAppointment>()
                     .Where(value =>
                         value.SurveyOrderId == order.Id &&
-                        value.Purpose == SurveyAppointmentPurpose.Capture &&
+                        (value.Purpose == SurveyAppointmentPurpose.Capture || value.Purpose == SurveyAppointmentPurpose.DiseaseCapture) &&
                         (value.Status == SurveyAppointmentStatus.Proposed ||
                          value.Status == SurveyAppointmentStatus.Confirmed ||
                          value.Status == SurveyAppointmentStatus.RescheduleRequested))
@@ -1698,6 +1953,10 @@ internal sealed class SurveyCaptureExecutionCoordinator(
             {
                 return NoShowFailure(request, "MANAGER_FORBIDDEN", "Only the active assigned Manager can record operational no-show evidence.");
             }
+
+            if (await db.Set<CaptureAttempt>().AnyAsync(value =>
+                    value.OrderId == order.Id && value.MappingSourceAttemptId != null, token))
+                return NoShowFailure(request, "APPOINTMENT_VERSION_CONFLICT", "The original Capture appointment is complete. Reschedule the disease capture with the Manager appointment endpoint.");
 
             var appointment = await db.Set<SurveyAppointment>()
                 .SingleOrDefaultAsync(value =>
