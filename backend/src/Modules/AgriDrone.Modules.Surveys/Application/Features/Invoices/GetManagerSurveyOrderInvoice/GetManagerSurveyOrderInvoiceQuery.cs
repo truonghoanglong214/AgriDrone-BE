@@ -1,3 +1,4 @@
+using AgriDrone.Modules.Surveys.Application.Abstractions.Invoices;
 using AgriDrone.SharedKernel.Application;
 using MediatR;
 
@@ -46,4 +47,5 @@ public sealed record ManagerSurveyOrderInvoiceResponse(
     bool HasOpenReconciliation = false,
     IReadOnlyList<string>? ReconciliationReasons = null,
     decimal OrderConfirmedNetCash = 0m,
-    decimal OrderAvailableRefundCap = 0m);
+    decimal OrderAvailableRefundCap = 0m,
+    ComboInvoiceBreakdown? ComboPricing = null);

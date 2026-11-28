@@ -15,6 +15,7 @@ public sealed class SurveyOrderCommercialSnapshotConfiguration
             table =>
             {
                 table.HasCheckConstraint("ck_order_commercial_snapshots_price", "price_per_pole > 0 AND price_per_pole = FLOOR(price_per_pole)");
+                table.HasCheckConstraint("ck_order_commercial_snapshots_component_rates", "(mapping_price_per_pole IS NULL AND plant_health_price_per_pole IS NULL) OR (service_code = 'COMBO' AND mapping_price_per_pole IS NOT NULL AND plant_health_price_per_pole IS NOT NULL AND mapping_price_per_pole > 0 AND mapping_price_per_pole = FLOOR(mapping_price_per_pole) AND plant_health_price_per_pole > 0 AND plant_health_price_per_pole = FLOOR(plant_health_price_per_pole) AND price_per_pole = mapping_price_per_pole + plant_health_price_per_pole)");
                 table.HasCheckConstraint("ck_order_commercial_snapshots_deposit", "deposit_amount > 0 AND deposit_amount = FLOOR(deposit_amount)");
                 table.HasCheckConstraint("ck_order_commercial_snapshots_currency", "currency ~ '^[A-Z]{3}$'");
                 table.HasCheckConstraint("ck_order_commercial_snapshots_claim_window", "claim_window_days >= 1");
@@ -33,6 +34,8 @@ public sealed class SurveyOrderCommercialSnapshotConfiguration
         builder.Property(s => s.PriceVersionId).HasColumnName("price_version_id").HasColumnType("uuid").IsRequired();
         builder.Property(s => s.PriceVersionNumber).HasColumnName("price_version_number").HasColumnType("integer").IsRequired();
         builder.Property(s => s.PricePerPole).HasColumnName("price_per_pole").HasColumnType("numeric(18,2)").HasPrecision(18, 2).IsRequired();
+        builder.Property(s => s.MappingPricePerPole).HasColumnName("mapping_price_per_pole").HasPrecision(18, 2);
+        builder.Property(s => s.PlantHealthPricePerPole).HasColumnName("plant_health_price_per_pole").HasPrecision(18, 2);
         builder.Property(s => s.Currency).HasColumnName("currency").HasColumnType("character(3)").HasMaxLength(3).IsFixedLength().IsRequired();
         builder.Property(s => s.DepositPolicyId).HasColumnName("deposit_policy_id").HasColumnType("uuid").IsRequired();
         builder.Property(s => s.DepositVersionNumber).HasColumnName("deposit_version_number").HasColumnType("integer").IsRequired();

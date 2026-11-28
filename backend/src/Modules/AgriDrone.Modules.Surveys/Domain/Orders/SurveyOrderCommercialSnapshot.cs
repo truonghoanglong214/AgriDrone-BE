@@ -18,6 +18,8 @@ public sealed class SurveyOrderCommercialSnapshot
     public Guid PriceVersionId { get; private set; }
     public int PriceVersionNumber { get; private set; }
     public decimal PricePerPole { get; private set; }
+    public decimal? MappingPricePerPole { get; private set; }
+    public decimal? PlantHealthPricePerPole { get; private set; }
     public string Currency { get; private set; } = null!;
     public Guid DepositPolicyId { get; private set; }
     public int DepositVersionNumber { get; private set; }
@@ -52,6 +54,7 @@ public sealed class SurveyOrderCommercialSnapshot
         DomainGuard.Utc(createdAt, nameof(createdAt));
 
         var validatedPrice = PolicyValidationGuard.ValidatePositiveWholeVnd(snapshot.PricePerPole, nameof(snapshot.PricePerPole));
+        SurveyServicePrice.ValidateComponentRates(validatedPrice, snapshot.MappingPricePerPole, snapshot.PlantHealthPricePerPole);
         var validatedDeposit = PolicyValidationGuard.ValidatePositiveWholeVnd(snapshot.DepositAmount, nameof(snapshot.DepositAmount));
         var validatedCurrency = PolicyValidationGuard.ValidateVndCurrency(CurrencyCode.Create(snapshot.Currency), nameof(snapshot.Currency));
         var normalizedFingerprint = PolicyValidationGuard.NormalizeRequired(snapshot.PolicyFingerprint, 64, nameof(snapshot.PolicyFingerprint));
@@ -81,6 +84,8 @@ public sealed class SurveyOrderCommercialSnapshot
             PriceVersionId = snapshot.PriceVersionId,
             PriceVersionNumber = snapshot.PriceVersionNumber,
             PricePerPole = validatedPrice,
+            MappingPricePerPole = snapshot.MappingPricePerPole,
+            PlantHealthPricePerPole = snapshot.PlantHealthPricePerPole,
             Currency = validatedCurrency,
             DepositPolicyId = snapshot.DepositPolicyId,
             DepositVersionNumber = snapshot.DepositVersionNumber,

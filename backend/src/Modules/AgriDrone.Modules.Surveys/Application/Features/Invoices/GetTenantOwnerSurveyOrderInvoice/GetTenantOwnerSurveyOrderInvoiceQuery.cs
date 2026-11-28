@@ -1,3 +1,4 @@
+using AgriDrone.Modules.Surveys.Application.Abstractions.Invoices;
 using AgriDrone.SharedKernel.Application;
 using MediatR;
 
@@ -17,4 +18,5 @@ public sealed record TenantOwnerSurveyOrderInvoiceResponse(
     decimal TotalAmount,
     decimal DueAmount,
     DateTimeOffset FinalizedAt,
-    string? CheckoutToken = null);
+    string? CheckoutToken = null,
+    ComboInvoiceBreakdown? ComboPricing = null);

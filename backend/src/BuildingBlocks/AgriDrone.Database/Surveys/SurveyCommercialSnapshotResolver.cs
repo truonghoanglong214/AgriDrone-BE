@@ -208,6 +208,8 @@ public sealed class SurveyCommercialSnapshotResolver(
             cancellation.RefundableBeforeCapture,
             cancellation.RetainDepositAfterCapture,
             cancellation.AllowedFreeNoShowReschedules,
-            evaluatedAt));
+            evaluatedAt,
+            price.MappingPricePerPole,
+            price.PlantHealthPricePerPole));
     }
 }

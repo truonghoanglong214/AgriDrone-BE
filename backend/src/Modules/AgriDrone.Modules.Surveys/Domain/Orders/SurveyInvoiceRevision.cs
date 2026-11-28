@@ -4,6 +4,8 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using AgriDrone.SharedKernel.Application;
 using AgriDrone.SharedKernel.Domain;
+using NetTopologySuite.Geometries;
+using NetTopologySuite.IO;
 
 namespace AgriDrone.Modules.Surveys.Domain;
 
@@ -34,6 +36,10 @@ public sealed class SurveyInvoiceRevision : Entity
     public int VerifiedBillablePoleCount { get; private set; }
     public Guid SurveyServicePriceId { get; private set; }
     public decimal PricePerPole { get; private set; }
+    public int? PlantHealthPoleCount { get; private set; }
+    public decimal? MappingPricePerPole { get; private set; }
+    public decimal? PlantHealthPricePerPole { get; private set; }
+    public Polygon? PlantHealthSurveyArea { get; private set; }
     public string Currency { get; private set; } = "VND";
     public Guid CommercialPolicyVersionId { get; private set; }
     public decimal TotalAmount { get; private set; }
@@ -75,7 +81,8 @@ public sealed class SurveyInvoiceRevision : Entity
         Guid? predecessorRevisionId,
         Guid? zeroPoleApprovedBy,
         string? zeroPoleReasonCode,
-        string? zeroPoleEvidenceReference)
+        string? zeroPoleEvidenceReference,
+        ComboInvoicePricing? comboPricing = null)
     {
         var normalizedFinalizedAt = NormalizeUtcToMicroseconds(finalizedAt);
         using var stream = new MemoryStream();
@@ -95,6 +102,14 @@ public sealed class SurveyInvoiceRevision : Entity
             writer.WriteNumber("verified_billable_pole_count", verifiedBillablePoleCount);
             writer.WriteString("survey_service_price_id", surveyServicePriceId.ToString("D"));
             writer.WriteNumber("price_per_pole", (long)decimal.Truncate(pricePerPole));
+            if (comboPricing is not null)
+            {
+                writer.WriteNumber("plant_health_pole_count", comboPricing.PlantHealthPoleCount);
+                writer.WriteNumber("mapping_price_per_pole", (long)comboPricing.MappingPricePerPole);
+                writer.WriteNumber("plant_health_price_per_pole", (long)comboPricing.PlantHealthPricePerPole);
+                if (comboPricing.PlantHealthSurveyArea is { } area)
+                    writer.WriteBase64String("plant_health_survey_area", new WKBWriter().Write(area));
+            }
             writer.WriteString("currency", "VND");
             writer.WriteString("commercial_policy_version_id", commercialPolicyVersionId.ToString("D"));
             writer.WriteNumber("total_amount", (long)decimal.Truncate(totalAmount));
@@ -144,7 +159,8 @@ public sealed class SurveyInvoiceRevision : Entity
         Guid? predecessorRevisionId = null,
         Guid? zeroPoleApprovedBy = null,
         string? zeroPoleReasonCode = null,
-        string? zeroPoleEvidenceReference = null)
+        string? zeroPoleEvidenceReference = null,
+        ComboInvoicePricing? comboPricing = null)
     {
         if (id == Guid.Empty) return Result.Failure<SurveyInvoiceRevision>(AppError.Validation("Id.Required", "Identifier is required."));
         if (tenantId == Guid.Empty) return Result.Failure<SurveyInvoiceRevision>(AppError.Validation("TenantId.Required", "Tenant identifier is required."));
@@ -180,9 +196,9 @@ public sealed class SurveyInvoiceRevision : Entity
         if (validAllocatedDepositNet > MaxPersistableAmount)
             return Result.Failure<SurveyInvoiceRevision>(AppError.Validation("ValidAllocatedDepositNet.Overflow", "Valid allocated deposit net exceeds maximum persistable currency limit."));
 
-        // Numeric(18,2) range guard before multiplication
-        if (verifiedBillablePoleCount > 0 && pricePerPole > MaxPersistableAmount / verifiedBillablePoleCount)
-            return Result.Failure<SurveyInvoiceRevision>(AppError.Validation("TotalAmount.Overflow", "Computed total amount exceeds maximum persistable currency limit."));
+        var total = CalculateTotal(verifiedBillablePoleCount, pricePerPole, comboPricing);
+        if (total.IsFailure)
+            return Result.Failure<SurveyInvoiceRevision>(total.Error);
 
         if (finalizedBy == Guid.Empty) return Result.Failure<SurveyInvoiceRevision>(AppError.Validation("FinalizedBy.Required", "Finalizer actor identifier is required."));
         if (finalizedAt == default || finalizedAt.Offset != TimeSpan.Zero) return Result.Failure<SurveyInvoiceRevision>(AppError.Validation("FinalizedAt.Invalid", "FinalizedAt must be a valid UTC timestamp."));
@@ -211,7 +227,7 @@ public sealed class SurveyInvoiceRevision : Entity
                 return Result.Failure<SurveyInvoiceRevision>(AppError.Validation("ZeroPoleException.Invalid", "Zero-pole exception fields cannot be set when pole count > 0."));
         }
 
-        var totalAmount = verifiedBillablePoleCount * pricePerPole;
+        var totalAmount = total.Value;
         var dueAmount = Math.Max(0m, totalAmount - validAllocatedDepositNet);
         var overpaymentAmount = Math.Max(0m, validAllocatedDepositNet - totalAmount);
 
@@ -224,7 +240,7 @@ public sealed class SurveyInvoiceRevision : Entity
             surveyServicePriceId, pricePerPole, "VND", commercialPolicyVersionId,
             totalAmount, validAllocatedDepositNet, dueAmount, overpaymentAmount,
             finalizedBy, normalizedFinalizedAt, normalizedFinalizationReason, predecessorRevisionId,
-            zeroPoleApprovedBy, normalizedZeroPoleReason, normalizedZeroPoleEvidence);
+            zeroPoleApprovedBy, normalizedZeroPoleReason, normalizedZeroPoleEvidence, comboPricing);
 
         if (!string.Equals(evidenceFingerprint, expectedFingerprint, StringComparison.Ordinal))
             return Result.Failure<SurveyInvoiceRevision>(AppError.Validation("EvidenceFingerprint.Mismatch", "Evidence fingerprint does not match computed immutable token."));
@@ -242,6 +258,10 @@ public sealed class SurveyInvoiceRevision : Entity
             VerifiedBillablePoleCount = verifiedBillablePoleCount,
             SurveyServicePriceId = surveyServicePriceId,
             PricePerPole = pricePerPole,
+            PlantHealthPoleCount = comboPricing?.PlantHealthPoleCount,
+            MappingPricePerPole = comboPricing?.MappingPricePerPole,
+            PlantHealthPricePerPole = comboPricing?.PlantHealthPricePerPole,
+            PlantHealthSurveyArea = (Polygon?)comboPricing?.PlantHealthSurveyArea?.Copy(),
             Currency = "VND",
             CommercialPolicyVersionId = commercialPolicyVersionId,
             TotalAmount = totalAmount,
@@ -257,6 +277,34 @@ public sealed class SurveyInvoiceRevision : Entity
             ZeroPoleReasonCode = normalizedZeroPoleReason,
             ZeroPoleEvidenceReference = normalizedZeroPoleEvidence
         });
+    }
+
+    public static Result<decimal> CalculateTotal(int mappingPoleCount, decimal pricePerPole, ComboInvoicePricing? comboPricing = null)
+    {
+        if (mappingPoleCount < 0 || pricePerPole <= 0m || pricePerPole > MaxPersistableAmount ||
+            pricePerPole != decimal.Truncate(pricePerPole))
+        {
+            return Result.Failure<decimal>(AppError.Validation("InvoicePricing.Invalid", "A valid count and whole-VND rate are required."));
+        }
+
+        if (comboPricing is { } combo &&
+            (combo.PlantHealthPoleCount < 0 || combo.PlantHealthPoleCount > mappingPoleCount ||
+             combo.MappingPricePerPole <= 0m || combo.PlantHealthPricePerPole <= 0m ||
+             combo.MappingPricePerPole > pricePerPole || combo.PlantHealthPricePerPole > pricePerPole ||
+             combo.MappingPricePerPole != decimal.Truncate(combo.MappingPricePerPole) ||
+             combo.PlantHealthPricePerPole != decimal.Truncate(combo.PlantHealthPricePerPole) ||
+             combo.MappingPricePerPole + combo.PlantHealthPricePerPole != pricePerPole ||
+             (combo.PlantHealthSurveyArea is { } area && (area.SRID != 4326 || area.IsEmpty || !area.IsValid))))
+        {
+            return Result.Failure<decimal>(AppError.Validation("ComboPricing.Invalid", "The survey count and the two pinned rates must match the invoice scope and price."));
+        }
+
+        var total = comboPricing is null
+            ? mappingPoleCount * pricePerPole
+            : mappingPoleCount * comboPricing.MappingPricePerPole + comboPricing.PlantHealthPoleCount * comboPricing.PlantHealthPricePerPole;
+        return total <= MaxPersistableAmount
+            ? Result.Success(total)
+            : Result.Failure<decimal>(AppError.Validation("TotalAmount.Overflow", "Computed total amount exceeds maximum persistable currency limit."));
     }
 
     public Result Supersede(Guid actorId, DateTimeOffset supersededAt, string reason, Guid successorRevisionId)

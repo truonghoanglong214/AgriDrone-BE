@@ -1837,7 +1837,7 @@ internal sealed class SurveyResultReviewTransaction(
         return Result.Success();
     }
 
-    private static bool TryBuildValidPolygon(
+    internal static bool TryBuildValidPolygon(
         GeoJsonPolygonV3? source,
         GeometryFactory factory,
         out Polygon? polygon,

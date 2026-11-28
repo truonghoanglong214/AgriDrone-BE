@@ -186,13 +186,31 @@ public sealed class AuditLog : Entity<long>
             ? null
             : JsonDocument.Parse(document.RootElement.GetRawText());
 
+    public static AuditLog ForSystemAction(
+        Guid tenantId,
+        Guid farmId,
+        Guid correlationId,
+        string entityType,
+        Guid entityId,
+        string action,
+        JsonDocument? newData,
+        DateTimeOffset createdAt)
+    {
+        DomainGuard.NotEmpty(tenantId);
+        DomainGuard.NotEmpty(farmId);
+        var log = ForSystemAction(correlationId, entityType, entityId, action, null, newData, createdAt);
+        log.TenantId = tenantId;
+        log.FarmId = farmId;
+        return log;
+    }
+
     public static AuditLog ForIntegrationAction(Guid tenantId, Guid farmId, Guid sourceJobId,
         Guid correlationId, string entityType, Guid entityId, string action,
         JsonDocument? newData, DateTimeOffset createdAt)
     {
-        DomainGuard.NotEmpty(tenantId); DomainGuard.NotEmpty(farmId); DomainGuard.NotEmpty(sourceJobId);
-        var log = ForSystemAction(correlationId, entityType, entityId, action, null, newData, createdAt);
-        log.TenantId = tenantId; log.FarmId = farmId; log.SourceJobId = sourceJobId;
+        DomainGuard.NotEmpty(sourceJobId);
+        var log = ForSystemAction(tenantId, farmId, correlationId, entityType, entityId, action, newData, createdAt);
+        log.SourceJobId = sourceJobId;
         return log;
     }
 }

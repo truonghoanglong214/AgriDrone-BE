@@ -30,7 +30,8 @@ public sealed class InvoiceRevisionStaleTokenTests
         Guid? predecessorRevisionId = null,
         Guid? zeroPoleApprovedBy = null,
         string? zeroPoleReasonCode = null,
-        string? zeroPoleEvidenceReference = null)
+        string? zeroPoleEvidenceReference = null,
+        ComboInvoicePricing? comboPricing = null)
     {
         var id                        = Guid.NewGuid();
         var tenantId                  = Guid.NewGuid();
@@ -42,7 +43,9 @@ public sealed class InvoiceRevisionStaleTokenTests
         var commercialPolicyVersionId = Guid.NewGuid();
         var finalizedBy               = Guid.NewGuid();
 
-        var totalAmount       = poleCount * pricePerPole;
+        var totalAmount = comboPricing is null
+            ? poleCount * pricePerPole
+            : poleCount * comboPricing.MappingPricePerPole + comboPricing.PlantHealthPoleCount * comboPricing.PlantHealthPricePerPole;
         var dueAmount         = Math.Max(0m, totalAmount - deposit);
         var overpaymentAmount = Math.Max(0m, deposit - totalAmount);
 
@@ -68,7 +71,8 @@ public sealed class InvoiceRevisionStaleTokenTests
             predecessorRevisionId:      predecessorRevisionId,
             zeroPoleApprovedBy:         zeroPoleApprovedBy,
             zeroPoleReasonCode:         zeroPoleReasonCode,
-            zeroPoleEvidenceReference:  zeroPoleEvidenceReference);
+            zeroPoleEvidenceReference:  zeroPoleEvidenceReference,
+            comboPricing:               comboPricing);
 
         var result = SurveyInvoiceRevision.Create(
             id:                         id,
@@ -91,7 +95,8 @@ public sealed class InvoiceRevisionStaleTokenTests
             predecessorRevisionId:      predecessorRevisionId,
             zeroPoleApprovedBy:         zeroPoleApprovedBy,
             zeroPoleReasonCode:         zeroPoleReasonCode,
-            zeroPoleEvidenceReference:  zeroPoleEvidenceReference);
+            zeroPoleEvidenceReference:  zeroPoleEvidenceReference,
+            comboPricing:               comboPricing);
 
         Assert.True(result.IsSuccess, $"BuildRevision failed: {result.Error?.Code}");
         return result.Value;
@@ -115,6 +120,18 @@ public sealed class InvoiceRevisionStaleTokenTests
         Assert.Equal(50_000m,  revision.DueAmount);
         Assert.Equal(0m,       revision.OverpaymentAmount);
         Assert.Equal(SurveyInvoiceRevision.StatusCurrent, revision.Status);
+    }
+
+    [Fact]
+    public void ComboInvoiceChargesOnlyTheSurveyedHealthPolesAndAppliesDepositOnce()
+    {
+        var revision = BuildRevision(55, 3_000m, 60_000m, comboPricing: new(30, 2_000m, 1_000m));
+
+        Assert.Equal(55, revision.VerifiedBillablePoleCount);
+        Assert.Equal(30, revision.PlantHealthPoleCount);
+        Assert.Equal(140_000m, revision.TotalAmount);
+        Assert.Equal(80_000m, revision.DueAmount);
+        Assert.Equal(0m, revision.OverpaymentAmount);
     }
 
     // ------------------------------------------------------------------ //

@@ -170,7 +170,9 @@ public sealed class V3SystemAdminCommercialPoliciesController(ISender sender) : 
                 request.Currency,
                 request.ExpectedLatestPriceVersion,
                 request.ReasonCode,
-                request.EvidenceReference),
+                request.EvidenceReference,
+                request.MappingPricePerPole,
+                request.PlantHealthPricePerPole),
             cancellationToken);
 
         return result.ToHttpResult(

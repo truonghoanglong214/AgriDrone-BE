@@ -37,7 +37,9 @@ public sealed record PublishSurveyServicePriceV3ApiRequest(
     [param: Required, StringLength(100, MinimumLength = 1)]
     string ReasonCode,
     [param: StringLength(500)]
-    string? EvidenceReference);
+    string? EvidenceReference,
+    decimal? MappingPricePerPole = null,
+    decimal? PlantHealthPricePerPole = null);
 
 public sealed record PublishSurveyDepositPolicyApiRequest(
     [param: Range(typeof(decimal), "1", "1000000000")]

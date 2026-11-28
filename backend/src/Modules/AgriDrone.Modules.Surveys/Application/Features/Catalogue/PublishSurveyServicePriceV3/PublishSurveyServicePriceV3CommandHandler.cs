@@ -83,6 +83,14 @@ internal sealed class PublishSurveyServicePriceV3CommandHandler(
                     "A retired survey service cannot receive a new price."));
         }
 
+        if (service.Code == "COMBO"
+                ? request.MappingPricePerPole is null || request.PlantHealthPricePerPole is null
+                : request.MappingPricePerPole.HasValue || request.PlantHealthPricePerPole.HasValue)
+        {
+            return Result.Failure<PublishSurveyServicePriceV3Response>(BusinessPolicyError.InvalidAmount(
+                "V3 COMBO prices require both component rates; other services use one rate."));
+        }
+
         var latestPrice = await policyRepository.GetLatestPriceV3Async(
             service.Id,
             cancellationToken);
@@ -129,7 +137,9 @@ internal sealed class PublishSurveyServicePriceV3CommandHandler(
                 createdBy: actorId,
                 createdAt: now,
                 reasonCode: request.ReasonCode,
-                evidenceReference: request.EvidenceReference);
+                evidenceReference: request.EvidenceReference,
+                mappingPricePerPole: request.MappingPricePerPole,
+                plantHealthPricePerPole: request.PlantHealthPricePerPole);
         }
         catch (ArgumentException ex)
         {
@@ -149,6 +159,8 @@ internal sealed class PublishSurveyServicePriceV3CommandHandler(
             newPrice.SurveyServiceId,
             newPrice.VersionNumber,
             AmountPerPole = newPrice.PricePerPole?.Amount,
+            newPrice.MappingPricePerPole,
+            newPrice.PlantHealthPricePerPole,
             newPrice.Currency,
             newPrice.EffectiveFrom,
             newPrice.ReasonCode
@@ -179,6 +191,8 @@ internal sealed class PublishSurveyServicePriceV3CommandHandler(
             newPrice.EffectiveFrom,
             newPrice.EffectiveTo,
             newPrice.ReasonCode!,
-            newPrice.EvidenceReference));
+            newPrice.EvidenceReference,
+            newPrice.MappingPricePerPole,
+            newPrice.PlantHealthPricePerPole));
     }
 }

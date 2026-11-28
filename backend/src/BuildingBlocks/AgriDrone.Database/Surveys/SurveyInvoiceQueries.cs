@@ -212,7 +212,8 @@ internal sealed class SurveyInvoiceQueries(
                 HasOpenReconciliation: funding.Value.HasOpenReconciliation,
                 ReconciliationReasons: funding.Value.ReconciliationReasons,
                 OrderConfirmedNetCash: funding.Value.OrderConfirmedNetCash,
-                OrderAvailableRefundCap: funding.Value.AvailableRefundCap));
+                OrderAvailableRefundCap: funding.Value.AvailableRefundCap,
+                ComboPricing: ReadComboPricing(invoice)));
         }
         catch (PostgresException exception) when (IsReadConflict(exception))
         {
@@ -367,7 +368,8 @@ internal sealed class SurveyInvoiceQueries(
                 TotalAmount: invoice.TotalAmount,
                 DueAmount: currentDueAmount,
                 FinalizedAt: invoice.FinalizedAt,
-                CheckoutToken: checkoutToken));
+                CheckoutToken: checkoutToken,
+                ComboPricing: ReadComboPricing(invoice)));
         }
         catch (PostgresException exception) when (IsReadConflict(exception))
         {
@@ -379,6 +381,13 @@ internal sealed class SurveyInvoiceQueries(
             db.ChangeTracker.Clear();
         }
     }
+
+    private static ComboInvoiceBreakdown? ReadComboPricing(SurveyInvoiceRevision invoice) =>
+        invoice.MappingPricePerPole is decimal mapRate && invoice.PlantHealthPricePerPole is decimal healthRate &&
+        invoice.PlantHealthPoleCount is int healthCount
+            ? new(invoice.VerifiedBillablePoleCount, mapRate, invoice.VerifiedBillablePoleCount * mapRate,
+                healthCount, healthRate, healthCount * healthRate)
+            : null;
 
     private static bool IsReadConflict(PostgresException exception) =>
         exception.SqlState is PostgresErrorCodes.SerializationFailure

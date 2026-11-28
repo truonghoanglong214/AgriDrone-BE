@@ -33,12 +33,15 @@ public sealed class SurveyInvoiceRevisionConfiguration
                 table.HasCheckConstraint(
                     "ck_survey_invoice_revisions_amounts",
                     "total_amount >= 0 AND total_amount = FLOOR(total_amount) AND " +
-                    "total_amount = verified_billable_pole_count * price_per_pole AND " +
+                    "total_amount = CASE WHEN plant_health_pole_count IS NULL THEN verified_billable_pole_count * price_per_pole ELSE verified_billable_pole_count * mapping_price_per_pole + plant_health_pole_count * plant_health_price_per_pole END AND " +
                     "valid_allocated_deposit_net >= 0 AND valid_allocated_deposit_net = FLOOR(valid_allocated_deposit_net) AND " +
                     "due_amount >= 0 AND due_amount = FLOOR(due_amount) AND " +
                     "due_amount = GREATEST(0, total_amount - valid_allocated_deposit_net) AND " +
                     "overpayment_amount >= 0 AND overpayment_amount = FLOOR(overpayment_amount) AND " +
                     "overpayment_amount = GREATEST(0, valid_allocated_deposit_net - total_amount)");
+                table.HasCheckConstraint("ck_survey_invoice_revisions_components",
+                    "(plant_health_pole_count IS NULL AND mapping_price_per_pole IS NULL AND plant_health_price_per_pole IS NULL) OR (plant_health_pole_count IS NOT NULL AND mapping_price_per_pole IS NOT NULL AND plant_health_price_per_pole IS NOT NULL AND plant_health_pole_count BETWEEN 0 AND verified_billable_pole_count AND mapping_price_per_pole > 0 AND mapping_price_per_pole = FLOOR(mapping_price_per_pole) AND plant_health_price_per_pole > 0 AND plant_health_price_per_pole = FLOOR(plant_health_price_per_pole) AND price_per_pole = mapping_price_per_pole + plant_health_price_per_pole)");
+                table.HasCheckConstraint("ck_survey_invoice_revisions_health_area", "plant_health_survey_area IS NULL OR (plant_health_pole_count IS NOT NULL AND NOT ST_IsEmpty(plant_health_survey_area) AND ST_IsValid(plant_health_survey_area))");
                 table.HasCheckConstraint(
                     "ck_survey_invoice_revisions_zero_pole",
                     "(verified_billable_pole_count > 0 AND zero_pole_approved_by IS NULL AND zero_pole_reason_code IS NULL AND zero_pole_evidence_reference IS NULL) OR " +
@@ -74,6 +77,10 @@ public sealed class SurveyInvoiceRevisionConfiguration
         builder.Property(i => i.VerifiedBillablePoleCount).HasColumnName("verified_billable_pole_count").HasColumnType("integer").IsRequired();
         builder.Property(i => i.SurveyServicePriceId).HasColumnName("survey_service_price_id").HasColumnType("uuid").IsRequired();
         builder.Property(i => i.PricePerPole).HasColumnName("price_per_pole").HasColumnType("numeric(18,2)").HasPrecision(18, 2).IsRequired();
+        builder.Property(i => i.PlantHealthPoleCount).HasColumnName("plant_health_pole_count");
+        builder.Property(i => i.MappingPricePerPole).HasColumnName("mapping_price_per_pole").HasPrecision(18, 2);
+        builder.Property(i => i.PlantHealthPricePerPole).HasColumnName("plant_health_price_per_pole").HasPrecision(18, 2);
+        builder.Property(i => i.PlantHealthSurveyArea).HasColumnName("plant_health_survey_area").HasColumnType("geometry(Polygon,4326)");
         builder.Property(i => i.Currency).HasColumnName("currency").HasColumnType("character varying(3)").HasMaxLength(3).HasDefaultValue("VND").IsRequired();
         builder.Property(i => i.CommercialPolicyVersionId).HasColumnName("commercial_policy_version_id").HasColumnType("uuid").IsRequired();
         builder.Property(i => i.TotalAmount).HasColumnName("total_amount").HasColumnType("numeric(18,2)").HasPrecision(18, 2).IsRequired();

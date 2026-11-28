@@ -88,7 +88,8 @@ internal static class V3SurveyResultAndInvoiceMapper
             ExpectedCountFingerprint: request.ExpectedCountFingerprint,
             FinalizationReason: request.FinalizationReason,
             ZeroPoleReasonCode: request.ZeroPoleReasonCode,
-            ZeroPoleEvidenceReference: request.ZeroPoleEvidenceReference);
+            ZeroPoleEvidenceReference: request.ZeroPoleEvidenceReference,
+            PlantHealthSurveyArea: request.PlantHealthSurveyArea);
 
     public static CorrectSurveyOrderPreReleaseInvoiceCommand ToCommand(
         Guid orderId,
@@ -264,7 +265,8 @@ internal static class V3SurveyResultAndInvoiceMapper
             response.HasOpenReconciliation,
             response.ReconciliationReasons,
             response.OrderConfirmedNetCash,
-            response.OrderAvailableRefundCap);
+            response.OrderAvailableRefundCap,
+            ToResponse(response.ComboPricing));
 
     public static V3FinalizeInvoiceApiResponse ToResponse(
         FinalizeSurveyOrderInvoiceResponse response) => new(
@@ -347,7 +349,13 @@ internal static class V3SurveyResultAndInvoiceMapper
             response.TotalAmount,
             response.DueAmount,
             response.FinalizedAt,
-            response.CheckoutToken);
+            response.CheckoutToken,
+            ToResponse(response.ComboPricing));
+
+    private static V3ComboInvoicePricingApiResponse? ToResponse(
+        AgriDrone.Modules.Surveys.Application.Abstractions.Invoices.ComboInvoiceBreakdown? pricing) =>
+        pricing is null ? null : new(pricing.MappingPoleCount, pricing.MappingPricePerPole, pricing.MappingSubtotal,
+            pricing.PlantHealthPoleCount, pricing.PlantHealthPricePerPole, pricing.PlantHealthSubtotal);
 
     public static V3BalanceCheckoutApiResponse ToResponse(
         InitiateBalanceCheckoutResponse response) => new(

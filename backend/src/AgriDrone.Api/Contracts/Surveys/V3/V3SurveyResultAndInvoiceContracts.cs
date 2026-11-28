@@ -80,7 +80,8 @@ public sealed record FinalizeV3InvoiceRequest(
     string ExpectedCountFingerprint,
     [param: Required, StringLength(500, MinimumLength = 1)] string FinalizationReason,
     [param: StringLength(64, MinimumLength = 1)] string? ZeroPoleReasonCode = null,
-    [param: StringLength(500, MinimumLength = 1)] string? ZeroPoleEvidenceReference = null);
+    [param: StringLength(500, MinimumLength = 1)] string? ZeroPoleEvidenceReference = null,
+    GeoJsonPolygonV3? PlantHealthSurveyArea = null);
 
 public sealed record PreReleaseV3PoleCountItemCorrectionRequest(
     [param: Required] Guid? MappingCandidateId,
@@ -232,7 +233,16 @@ public sealed record V3ManagerInvoiceApiResponse(
     bool HasOpenReconciliation = false,
     IReadOnlyList<string>? ReconciliationReasons = null,
     decimal OrderConfirmedNetCash = 0m,
-    decimal OrderAvailableRefundCap = 0m);
+    decimal OrderAvailableRefundCap = 0m,
+    V3ComboInvoicePricingApiResponse? ComboPricing = null);
+
+public sealed record V3ComboInvoicePricingApiResponse(
+    int MappingPoleCount,
+    decimal MappingPricePerPole,
+    decimal MappingSubtotal,
+    int PlantHealthPoleCount,
+    decimal PlantHealthPricePerPole,
+    decimal PlantHealthSubtotal);
 
 public sealed record V3FinalizeInvoiceApiResponse(
     Guid OrderId,
@@ -406,4 +416,5 @@ public sealed record V3TenantOwnerInvoiceApiResponse(
     decimal TotalAmount,
     decimal DueAmount,
     DateTimeOffset FinalizedAt,
-    string? CheckoutToken = null);
+    string? CheckoutToken = null,
+    V3ComboInvoicePricingApiResponse? ComboPricing = null);

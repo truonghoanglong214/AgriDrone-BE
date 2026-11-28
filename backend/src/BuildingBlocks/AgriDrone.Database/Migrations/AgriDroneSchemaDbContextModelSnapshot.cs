@@ -11287,6 +11287,24 @@ namespace AgriDrone.Database.Migrations
                     b.HasKey("Id")
                         .HasName("pk_survey_invoice_revisions");
 
+                    b.Property<int?>("PlantHealthPoleCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("plant_health_pole_count");
+
+                    b.Property<Polygon>("PlantHealthSurveyArea")
+                        .HasColumnType("geometry(Polygon,4326)")
+                        .HasColumnName("plant_health_survey_area");
+
+                    b.Property<decimal?>("MappingPricePerPole")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("mapping_price_per_pole");
+
+                    b.Property<decimal?>("PlantHealthPricePerPole")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("plant_health_price_per_pole");
+
                     b.HasAlternateKey("Id", "SurveyOrderId", "TenantId", "FarmId")
                         .HasName("uq_survey_invoice_revisions_composite_scope");
 
@@ -11319,7 +11337,9 @@ namespace AgriDrone.Database.Migrations
 
                     b.ToTable("survey_invoice_revisions", "survey", t =>
                         {
-                            t.HasCheckConstraint("ck_survey_invoice_revisions_amounts", "total_amount >= 0 AND total_amount = FLOOR(total_amount) AND total_amount = verified_billable_pole_count * price_per_pole AND valid_allocated_deposit_net >= 0 AND valid_allocated_deposit_net = FLOOR(valid_allocated_deposit_net) AND due_amount >= 0 AND due_amount = FLOOR(due_amount) AND due_amount = GREATEST(0, total_amount - valid_allocated_deposit_net) AND overpayment_amount >= 0 AND overpayment_amount = FLOOR(overpayment_amount) AND overpayment_amount = GREATEST(0, valid_allocated_deposit_net - total_amount)");
+                            t.HasCheckConstraint("ck_survey_invoice_revisions_amounts", "total_amount >= 0 AND total_amount = FLOOR(total_amount) AND total_amount = CASE WHEN plant_health_pole_count IS NULL THEN verified_billable_pole_count * price_per_pole ELSE verified_billable_pole_count * mapping_price_per_pole + plant_health_pole_count * plant_health_price_per_pole END AND valid_allocated_deposit_net >= 0 AND valid_allocated_deposit_net = FLOOR(valid_allocated_deposit_net) AND due_amount >= 0 AND due_amount = FLOOR(due_amount) AND due_amount = GREATEST(0, total_amount - valid_allocated_deposit_net) AND overpayment_amount >= 0 AND overpayment_amount = FLOOR(overpayment_amount) AND overpayment_amount = GREATEST(0, valid_allocated_deposit_net - total_amount)");
+                            t.HasCheckConstraint("ck_survey_invoice_revisions_components", "(plant_health_pole_count IS NULL AND mapping_price_per_pole IS NULL AND plant_health_price_per_pole IS NULL) OR (plant_health_pole_count IS NOT NULL AND mapping_price_per_pole IS NOT NULL AND plant_health_price_per_pole IS NOT NULL AND plant_health_pole_count BETWEEN 0 AND verified_billable_pole_count AND mapping_price_per_pole > 0 AND mapping_price_per_pole = FLOOR(mapping_price_per_pole) AND plant_health_price_per_pole > 0 AND plant_health_price_per_pole = FLOOR(plant_health_price_per_pole) AND price_per_pole = mapping_price_per_pole + plant_health_price_per_pole)");
+                            t.HasCheckConstraint("ck_survey_invoice_revisions_health_area", "plant_health_survey_area IS NULL OR (plant_health_pole_count IS NOT NULL AND NOT ST_IsEmpty(plant_health_survey_area) AND ST_IsValid(plant_health_survey_area))");
 
                             t.HasCheckConstraint("ck_survey_invoice_revisions_currency", "currency = 'VND'");
 
@@ -11873,6 +11893,16 @@ namespace AgriDrone.Database.Migrations
                     b.HasKey("SurveyOrderId")
                         .HasName("pk_order_commercial_snapshots");
 
+                    b.Property<decimal?>("MappingPricePerPole")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("mapping_price_per_pole");
+
+                    b.Property<decimal?>("PlantHealthPricePerPole")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("plant_health_price_per_pole");
+
                     b.HasIndex("BusinessPolicyVersionId");
 
                     b.HasIndex("CancellationPolicyId");
@@ -11894,6 +11924,7 @@ namespace AgriDrone.Database.Migrations
                             t.HasCheckConstraint("ck_order_commercial_snapshots_deposit", "deposit_amount > 0 AND deposit_amount = FLOOR(deposit_amount)");
 
                             t.HasCheckConstraint("ck_order_commercial_snapshots_price", "price_per_pole > 0 AND price_per_pole = FLOOR(price_per_pole)");
+                            t.HasCheckConstraint("ck_order_commercial_snapshots_component_rates", "(mapping_price_per_pole IS NULL AND plant_health_price_per_pole IS NULL) OR (service_code = 'COMBO' AND mapping_price_per_pole IS NOT NULL AND plant_health_price_per_pole IS NOT NULL AND mapping_price_per_pole > 0 AND mapping_price_per_pole = FLOOR(mapping_price_per_pole) AND plant_health_price_per_pole > 0 AND plant_health_price_per_pole = FLOOR(plant_health_price_per_pole) AND price_per_pole = mapping_price_per_pole + plant_health_price_per_pole)");
 
                             t.HasCheckConstraint("ck_order_commercial_snapshots_reschedules", "allowed_free_no_show_reschedules >= 0");
                         });

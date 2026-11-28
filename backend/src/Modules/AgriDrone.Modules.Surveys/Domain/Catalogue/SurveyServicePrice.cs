@@ -59,13 +59,7 @@ public sealed class SurveyServicePrice : Entity
                 nameof(currency));
         }
 
-        if (mappingPricePerPole.HasValue != plantHealthPricePerPole.HasValue ||
-            (mappingPricePerPole.HasValue &&
-             (mappingPricePerPole <= 0m || plantHealthPricePerPole <= 0m ||
-              mappingPricePerPole != decimal.Truncate(mappingPricePerPole.Value) ||
-              plantHealthPricePerPole != decimal.Truncate(plantHealthPricePerPole!.Value) ||
-              mappingPricePerPole + plantHealthPricePerPole != pricePerPole.Amount)))
-            throw new ArgumentException("Combo prices require both positive whole-VND component rates; their sum must equal AmountPerPole.");
+        ValidateComponentRates(pricePerPole.Amount, mappingPricePerPole, plantHealthPricePerPole);
 
         var validatedPrice = global::AgriDrone.Modules.Surveys.Domain.PricePerPole
             .Create(pricePerPole.Amount);
@@ -98,7 +92,9 @@ public sealed class SurveyServicePrice : Entity
         Guid createdBy,
         DateTimeOffset createdAt,
         string reasonCode,
-        string? evidenceReference = null)
+        string? evidenceReference = null,
+        decimal? mappingPricePerPole = null,
+        decimal? plantHealthPricePerPole = null)
     {
         DomainGuard.NotEmpty(id, nameof(id));
         DomainGuard.NotEmpty(surveyServiceId, nameof(surveyServiceId));
@@ -109,6 +105,7 @@ public sealed class SurveyServicePrice : Entity
         PolicyValidationGuard.ValidateEffectiveWindow(effectiveFrom, effectiveTo);
         var validatedAmount = PolicyValidationGuard.ValidatePositiveWholeVnd(pricePerPoleAmount, nameof(pricePerPoleAmount));
         var validatedCurrency = PolicyValidationGuard.ValidateVndCurrency(currency, nameof(currency));
+        ValidateComponentRates(validatedAmount, mappingPricePerPole, plantHealthPricePerPole);
 
         var normalizedReasonCode = PolicyValidationGuard.NormalizeRequired(reasonCode, 100, nameof(reasonCode));
         var normalizedEvidence = PolicyValidationGuard.NormalizeOptional(evidenceReference, 500, nameof(evidenceReference));
@@ -122,6 +119,8 @@ public sealed class SurveyServicePrice : Entity
             VersionNumber = versionNumber,
             PredecessorVersionId = predecessorVersionId,
             PricePerPole = validatedPrice,
+            MappingPricePerPole = mappingPricePerPole,
+            PlantHealthPricePerPole = plantHealthPricePerPole,
             PricePerHa = null,
             Currency = validatedCurrency,
             EffectiveFrom = effectiveFrom,
@@ -131,6 +130,19 @@ public sealed class SurveyServicePrice : Entity
             ReasonCode = normalizedReasonCode,
             EvidenceReference = normalizedEvidence
         };
+    }
+
+    internal static void ValidateComponentRates(decimal combinedPrice, decimal? mappingPrice, decimal? healthPrice)
+    {
+        if (mappingPrice is null && healthPrice is null)
+            return;
+
+        if (mappingPrice is not decimal map || healthPrice is not decimal health ||
+            map <= 0m || health <= 0m || map > combinedPrice || health > combinedPrice ||
+            map != decimal.Truncate(map) || health != decimal.Truncate(health) || map + health != combinedPrice)
+        {
+            throw new ArgumentException("Combo prices require both positive whole-VND component rates whose sum equals AmountPerPole.");
+        }
     }
 
     public bool IsEffectiveAt(DateTimeOffset evaluatedAt)

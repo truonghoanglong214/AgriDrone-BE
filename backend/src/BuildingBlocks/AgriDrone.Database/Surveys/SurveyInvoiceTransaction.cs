@@ -24,6 +24,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using NetTopologySuite.Geometries;
 using Npgsql;
+using SurveyScopeType = AgriDrone.Modules.Surveys.Domain.SurveyScopeType;
 
 namespace AgriDrone.Database.Surveys;
 
@@ -106,6 +107,16 @@ internal sealed class SurveyInvoiceTransaction(
             ZeroPoleReasonCode = normalizedZeroPoleReason,
             ZeroPoleEvidenceReference = normalizedZeroPoleEvidence
         });
+        Polygon? plantHealthSurveyArea = null;
+        if (command.PlantHealthSurveyArea is not null)
+        {
+            if (!SurveyResultReviewTransaction.TryBuildValidPolygon(command.PlantHealthSurveyArea,
+                    new GeometryFactory(new PrecisionModel(), 4326), out plantHealthSurveyArea, out var error))
+                return Result.Failure<FinalizeSurveyOrderInvoiceResponse>(AppError.Validation("ComboPricing.InvalidSurveyArea", error!));
+
+            plantHealthSurveyArea!.Normalize();
+            requestFingerprint = ComputeRequestFingerprint(new { requestFingerprint, command.PlantHealthSurveyArea });
+        }
 
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
         try
@@ -189,7 +200,10 @@ internal sealed class SurveyInvoiceTransaction(
 
             var invoiceId = Guid.CreateVersion7();
             var unitPrice = ctx.Commercial.PricePerPole;
-            var total = CalculateInvoiceTotal(ctx.CountSnapshot.VerifiedBillablePoleCount, unitPrice);
+            var pricing = await ResolveComboPricingAsync(ctx, ctx.CountSnapshot.Items, cancellationToken, plantHealthSurveyArea);
+            if (pricing.IsFailure)
+                return Result.Failure<FinalizeSurveyOrderInvoiceResponse>(pricing.Error);
+            var total = SurveyInvoiceRevision.CalculateTotal(ctx.CountSnapshot.VerifiedBillablePoleCount, unitPrice, pricing.Value);
             if (total.IsFailure)
                 return Result.Failure<FinalizeSurveyOrderInvoiceResponse>(total.Error);
             var totalAmount = total.Value;
@@ -218,7 +232,8 @@ internal sealed class SurveyInvoiceTransaction(
                 predecessorRevisionId: null,
                 zeroPoleApprovedBy: zeroPoleApprovedBy,
                 zeroPoleReasonCode: normalizedZeroPoleReason,
-                zeroPoleEvidenceReference: normalizedZeroPoleEvidence);
+                zeroPoleEvidenceReference: normalizedZeroPoleEvidence,
+                comboPricing: pricing.Value);
 
             var invoiceResult = SurveyInvoiceRevision.Create(
                 id: invoiceId,
@@ -241,7 +256,8 @@ internal sealed class SurveyInvoiceTransaction(
                 predecessorRevisionId: null,
                 zeroPoleApprovedBy: zeroPoleApprovedBy,
                 zeroPoleReasonCode: normalizedZeroPoleReason,
-                zeroPoleEvidenceReference: normalizedZeroPoleEvidence);
+                zeroPoleEvidenceReference: normalizedZeroPoleEvidence,
+                comboPricing: pricing.Value);
 
             if (invoiceResult.IsFailure)
                 return Result.Failure<FinalizeSurveyOrderInvoiceResponse>(invoiceResult.Error);
@@ -560,11 +576,16 @@ internal sealed class SurveyInvoiceTransaction(
                 .Distinct()
                 .Count();
 
-            if (newBillableCount == ctx.CountSnapshot.VerifiedBillablePoleCount)
+            var pricing = await ResolveComboPricingAsync(ctx, newItems, cancellationToken);
+            if (pricing.IsFailure)
+                return Result.Failure<CorrectSurveyOrderPreReleaseInvoiceResponse>(pricing.Error);
+
+            if (newBillableCount == ctx.CountSnapshot.VerifiedBillablePoleCount &&
+                pricing.Value?.PlantHealthPoleCount == currentInvoice.PlantHealthPoleCount)
             {
                 return Result.Failure<CorrectSurveyOrderPreReleaseInvoiceResponse>(AppError.Conflict(
                     "InvoiceCorrection.CountUnchanged",
-                    $"Pre-release count correction requires VerifiedBillablePoleCount to change (current: {ctx.CountSnapshot.VerifiedBillablePoleCount})."));
+                    "Pre-release count correction requires a change to the verified map or plant health pole count."));
             }
 
             if (ctx.ComboEvidence is null && replacement is not null)
@@ -712,7 +733,7 @@ internal sealed class SurveyInvoiceTransaction(
             var newInvoiceId = Guid.CreateVersion7();
             var newInvoiceRevisionNumber = currentInvoice.RevisionNumber + 1;
             var unitPrice = ctx.Commercial.PricePerPole;
-            var total = CalculateInvoiceTotal(newBillableCount, unitPrice);
+            var total = SurveyInvoiceRevision.CalculateTotal(newBillableCount, unitPrice, pricing.Value);
             if (total.IsFailure)
                 return Result.Failure<CorrectSurveyOrderPreReleaseInvoiceResponse>(total.Error);
             var newTotalAmount = total.Value;
@@ -741,7 +762,8 @@ internal sealed class SurveyInvoiceTransaction(
                 predecessorRevisionId: currentInvoice.Id,
                 zeroPoleApprovedBy: zeroPoleApprovedBy,
                 zeroPoleReasonCode: normalizedZeroPoleReason,
-                zeroPoleEvidenceReference: normalizedZeroPoleEvidence);
+                zeroPoleEvidenceReference: normalizedZeroPoleEvidence,
+                comboPricing: pricing.Value);
 
             var newInvoiceResult = SurveyInvoiceRevision.Create(
                 id: newInvoiceId,
@@ -764,7 +786,8 @@ internal sealed class SurveyInvoiceTransaction(
                 predecessorRevisionId: currentInvoice.Id,
                 zeroPoleApprovedBy: zeroPoleApprovedBy,
                 zeroPoleReasonCode: normalizedZeroPoleReason,
-                zeroPoleEvidenceReference: normalizedZeroPoleEvidence);
+                zeroPoleEvidenceReference: normalizedZeroPoleEvidence,
+                comboPricing: pricing.Value);
 
             if (newInvoiceResult.IsFailure)
                 return Result.Failure<CorrectSurveyOrderPreReleaseInvoiceResponse>(newInvoiceResult.Error);
@@ -1628,17 +1651,51 @@ internal sealed class SurveyInvoiceTransaction(
         return Result.Success();
     }
 
-    private static Result<decimal> CalculateInvoiceTotal(int count, decimal unitPrice)
+    private async Task<Result<ComboInvoicePricing?>> ResolveComboPricingAsync(
+        VerifiedInvoiceContext context,
+        IEnumerable<SurveyOrderPoleCountSnapshotItem> items,
+        CancellationToken cancellationToken,
+        Polygon? requestedArea = null)
     {
-        // The fingerprint encodes whole currency as Int64. Check the persistence range first.
-        if (unitPrice > SurveyInvoiceRevision.MaxPersistableAmount ||
-            (count > 0 && unitPrice > SurveyInvoiceRevision.MaxPersistableAmount / count))
+        if (context.ComboEvidence is null)
+            return requestedArea is null
+                ? Result.Success<ComboInvoicePricing?>(null)
+                : Result.Failure<ComboInvoicePricing?>(AppError.Validation("ComboPricing.ScopeNotApplicable", "A plant health survey area requires COMBO evidence."));
+
+        var (mappingRate, healthRate) = context.CurrentInvoice is { } invoice
+            ? (invoice.MappingPricePerPole, invoice.PlantHealthPricePerPole)
+            : (context.Commercial.MappingPricePerPole, context.Commercial.PlantHealthPricePerPole);
+
+        // Earlier agreements and their corrections retain the price model booked for that order.
+        if (!mappingRate.HasValue && !healthRate.HasValue)
+            return requestedArea is null
+                ? Result.Success<ComboInvoicePricing?>(null)
+                : Result.Failure<ComboInvoicePricing?>(AppError.Conflict("ComboPricing.RatesMissing", "The order needs a pinned component price to use a separate plant health survey area."));
+        if (!mappingRate.HasValue || !healthRate.HasValue)
+            return Result.Failure<ComboInvoicePricing?>(AppError.Conflict("ComboPricing.RatesMissing", "Both pinned component rates are required."));
+
+        var eligible = items.Where(item => item.IsAccepted && item.IsStrictlyInBoundary && item.PlantProfileId.HasValue);
+        var surveyArea = context.CurrentInvoice?.PlantHealthSurveyArea ?? requestedArea;
+        if (surveyArea is not null)
         {
-            return Result.Failure<decimal>(AppError.Validation(
-                "TotalAmount.Overflow", "Computed invoice amount exceeds the maximum persistable currency limit."));
+            if (!context.Boundary.Geometry.Covers(surveyArea))
+                return Result.Failure<ComboInvoicePricing?>(AppError.Validation("ComboPricing.ScopeOutsideBoundary", "The plant health survey area must be inside the approved farm boundary."));
+
+            eligible = eligible.Where(item => surveyArea.Covers(item.EffectivePosition));
+        }
+        if (context.Order.ScopeType == SurveyScopeType.Zones)
+        {
+            var zones = await db.Set<SurveyOrderZoneScope>().AsNoTracking()
+                .Where(zone => zone.SurveyOrderId == context.Order.Id && zone.FarmId == context.Order.FarmId)
+                .Select(zone => zone.BoundarySnapshot).ToListAsync(cancellationToken);
+            if (zones.Count == 0 || zones.Any(zone => zone.IsEmpty || !zone.IsValid || zone.SRID != 4326))
+                return Result.Failure<ComboInvoicePricing?>(AppError.Conflict("ComboPricing.ScopeMissing", "Valid pinned boundaries for the surveyed zones are required."));
+
+            eligible = eligible.Where(item => zones.Any(zone => zone.Covers(item.EffectivePosition)));
         }
 
-        return Result.Success(count * unitPrice);
+        var healthCount = eligible.Select(item => item.PlantProfileId!.Value).Distinct().Count();
+        return Result.Success<ComboInvoicePricing?>(new(healthCount, mappingRate.Value, healthRate.Value, surveyArea));
     }
 
     // R05E-05: Approver is derived strictly from the authenticated Rank-1 server actor

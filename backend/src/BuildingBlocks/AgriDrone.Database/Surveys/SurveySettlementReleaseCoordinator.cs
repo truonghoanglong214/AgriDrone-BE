@@ -509,7 +509,7 @@ internal sealed class SurveySettlementReleaseCoordinator(
             db.Set<Notification>().Add(notice);
             AddReleaseEmail(owner, order, notice.Id, request.CorrelationId, now);
             using var audit = JsonSerializer.SerializeToDocument(new { PublicationId = publicationId, InvoiceId = invoice.Id, Deadline = deadline });
-            db.Set<AuditLog>().Add(AuditLog.ForIntegrationAction(order.TenantId, order.FarmId, publicationId,
+            db.Set<AuditLog>().Add(AuditLog.ForSystemAction(order.TenantId, order.FarmId,
                 request.CorrelationId, "SurveyOrder", order.Id, "SurveyResult.ReleasedV3", audit, now));
             await AddCompletionHistoryAsync(order, approval.ReviewedBy, publicationId, request.CorrelationId, now, cancellationToken);
             await db.SaveChangesAsync(cancellationToken);

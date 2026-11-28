@@ -1,3 +1,4 @@
+using AgriDrone.IntegrationContracts.Mapping;
 using AgriDrone.SharedKernel.Application;
 using MediatR;
 
@@ -13,7 +14,8 @@ public sealed record FinalizeSurveyOrderInvoiceCommand(
     string ExpectedCountFingerprint,
     string FinalizationReason,
     string? ZeroPoleReasonCode = null,
-    string? ZeroPoleEvidenceReference = null)
+    string? ZeroPoleEvidenceReference = null,
+    GeoJsonPolygonV3? PlantHealthSurveyArea = null)
     : IRequest<Result<FinalizeSurveyOrderInvoiceResponse>>;
 
 public sealed record FinalizeSurveyOrderInvoiceResponse(

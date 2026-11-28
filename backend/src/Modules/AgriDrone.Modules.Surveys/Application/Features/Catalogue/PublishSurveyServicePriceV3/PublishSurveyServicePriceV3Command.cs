@@ -9,7 +9,9 @@ public sealed record PublishSurveyServicePriceV3Command(
     string Currency,
     int? ExpectedLatestPriceVersion,
     string ReasonCode,
-    string? EvidenceReference = null)
+    string? EvidenceReference = null,
+    decimal? MappingPricePerPole = null,
+    decimal? PlantHealthPricePerPole = null)
     : IRequest<Result<PublishSurveyServicePriceV3Response>>;
 
 public sealed record PublishSurveyServicePriceV3Response(
@@ -22,4 +24,6 @@ public sealed record PublishSurveyServicePriceV3Response(
     DateTimeOffset EffectiveFrom,
     DateTimeOffset? EffectiveTo,
     string ReasonCode,
-    string? EvidenceReference);
+    string? EvidenceReference,
+    decimal? MappingPricePerPole = null,
+    decimal? PlantHealthPricePerPole = null);

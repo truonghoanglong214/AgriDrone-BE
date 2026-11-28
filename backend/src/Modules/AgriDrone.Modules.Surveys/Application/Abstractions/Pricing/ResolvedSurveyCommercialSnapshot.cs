@@ -25,4 +25,6 @@ public sealed record ResolvedSurveyCommercialSnapshot(
     bool RefundableBeforeCapture,
     bool RetainDepositAfterCapture,
     int AllowedFreeNoShowReschedules,
-    DateTimeOffset EvaluatedAt);
+    DateTimeOffset EvaluatedAt,
+    decimal? MappingPricePerPole = null,
+    decimal? PlantHealthPricePerPole = null);
