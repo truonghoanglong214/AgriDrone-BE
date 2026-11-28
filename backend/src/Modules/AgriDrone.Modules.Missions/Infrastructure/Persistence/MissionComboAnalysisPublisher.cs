@@ -33,6 +33,15 @@ internal sealed class MissionComboAnalysisPublisher(
         Guid? TargetPlantProfileId,
         Guid? PlantId);
 
+    internal static Guid? TryReadOptionalGuid(JsonElement metadata, string propertyName) =>
+        metadata.ValueKind == JsonValueKind.Object &&
+        metadata.TryGetProperty(propertyName, out var elem) &&
+        elem.ValueKind == JsonValueKind.String &&
+        elem.TryGetGuid(out var parsed) &&
+        parsed != Guid.Empty
+            ? parsed
+            : null;
+
     internal static (Guid? PlantProfileId, Guid? MappingCandidateId) ResolveFindingIdentity(
         Guid? suggestedPlantId,
         Guid? resolvedPlantId,
@@ -333,9 +342,10 @@ internal sealed class MissionComboAnalysisPublisher(
             var metadata = observation.MatchingParameters.RootElement;
             if (observation.DetectedLocation is not { } position ||
                 observation.DetectionConfidence is not decimal confidence ||
-                !metadata.TryGetProperty("source_finding_id", out var id) || !id.TryGetGuid(out var findingId) ||
-                !metadata.TryGetProperty("class_name", out var label) || label.GetString() is not { Length: > 0 } className ||
-                !metadata.TryGetProperty("observed_at", out var observed) || !observed.TryGetDateTimeOffset(out var observedAt))
+                metadata.ValueKind != JsonValueKind.Object ||
+                !metadata.TryGetProperty("source_finding_id", out var id) || id.ValueKind != JsonValueKind.String || !id.TryGetGuid(out var findingId) ||
+                !metadata.TryGetProperty("class_name", out var label) || label.ValueKind != JsonValueKind.String || label.GetString() is not { Length: > 0 } className ||
+                !metadata.TryGetProperty("observed_at", out var observed) || observed.ValueKind != JsonValueKind.String || !observed.TryGetDateTimeOffset(out var observedAt))
             {
                 return Conflict("Observation source identity/location/class/confidence/time is incomplete; reprocess it.");
             }
@@ -351,12 +361,8 @@ internal sealed class MissionComboAnalysisPublisher(
             var classCode = ClassCode(className) ?? className;
             var media = MissionPlantHealthPublisher.EvidenceMedia(observation.EvidenceMediaId, metadata);
 
-            Guid? metadataProfileId = metadata.TryGetProperty("plant_profile_id", out var pid) && pid.TryGetGuid(out var parsedPid)
-                ? parsedPid
-                : null;
-            Guid? metadataCandidateId = metadata.TryGetProperty("mapping_candidate_id", out var mcid) && mcid.TryGetGuid(out var parsedMcid)
-                ? parsedMcid
-                : null;
+            var metadataProfileId = TryReadOptionalGuid(metadata, "plant_profile_id");
+            var metadataCandidateId = TryReadOptionalGuid(metadata, "mapping_candidate_id");
 
             // Only observations matched within threshold (or manually resolved) may carry pole identity.
             var (plantProfileId, mappingCandidateId) = ResolveFindingIdentity(

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using AgriDrone.Modules.Missions.Application.Features.Processing;
 using AgriDrone.Modules.Missions.Infrastructure.Persistence;
 using Xunit;
@@ -221,5 +222,31 @@ public sealed class ComboDiseasePoleLinkingTests
 
         Assert.Equal(profileId, resolvedProfile);
         Assert.Equal(sourceCandidateId, resolvedCandidate);
+    }
+
+    [Fact]
+    public void TryReadOptionalGuidHandlesJsonNullAndNonStringSafely()
+    {
+        var expectedProfileId = Guid.NewGuid();
+        using var doc = JsonDocument.Parse($$"""
+            {
+                "plant_profile_id": null,
+                "mapping_candidate_id": null,
+                "empty_guid": "00000000-0000-0000-0000-000000000000",
+                "bad_type": 12345,
+                "bad_string": "not-a-guid",
+                "valid_profile_id": "{{expectedProfileId:D}}"
+            }
+            """);
+
+        var root = doc.RootElement;
+
+        Assert.Null(MissionComboAnalysisPublisher.TryReadOptionalGuid(root, "plant_profile_id"));
+        Assert.Null(MissionComboAnalysisPublisher.TryReadOptionalGuid(root, "mapping_candidate_id"));
+        Assert.Null(MissionComboAnalysisPublisher.TryReadOptionalGuid(root, "missing_key"));
+        Assert.Null(MissionComboAnalysisPublisher.TryReadOptionalGuid(root, "empty_guid"));
+        Assert.Null(MissionComboAnalysisPublisher.TryReadOptionalGuid(root, "bad_type"));
+        Assert.Null(MissionComboAnalysisPublisher.TryReadOptionalGuid(root, "bad_string"));
+        Assert.Equal(expectedProfileId, MissionComboAnalysisPublisher.TryReadOptionalGuid(root, "valid_profile_id"));
     }
 }
