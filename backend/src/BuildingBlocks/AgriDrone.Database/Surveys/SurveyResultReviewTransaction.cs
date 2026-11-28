@@ -737,7 +737,7 @@ internal sealed class SurveyResultReviewTransaction(
                 .FromSqlInterpolated($"SELECT *, xmin FROM farm.farm_base_map_versions WHERE id = {snapshot.FarmBaseMapVersionId} AND tenant_id = {order.TenantId} AND farm_id = {order.FarmId} FOR SHARE")
                 .SingleOrDefaultAsync(cancellationToken);
             var boundary = await db.Set<FarmBoundary>()
-                .FromSqlInterpolated($"SELECT * FROM farm.farm_boundaries WHERE id = {snapshot.FarmBoundaryVersionId} AND tenant_id = {order.TenantId} AND farm_id = {order.FarmId} FOR SHARE")
+                .FromSqlInterpolated($"SELECT *, xmin FROM farm.farm_boundaries WHERE id = {snapshot.FarmBoundaryVersionId} AND tenant_id = {order.TenantId} AND farm_id = {order.FarmId} FOR SHARE")
                 .SingleOrDefaultAsync(cancellationToken);
 
             if (mappingBatch is null || baseMap is null || boundary is null)
