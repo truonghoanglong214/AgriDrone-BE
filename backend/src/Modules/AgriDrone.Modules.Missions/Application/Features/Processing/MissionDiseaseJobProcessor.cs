@@ -57,6 +57,7 @@ internal sealed record ComboInferencePolicy(
 internal sealed record V3ComboInferenceContext(
     Guid OrderId,
     Guid AttemptId,
+    Guid? MappingSourceAttemptId,
     ComboApprovalRow Approval,
     List<FrozenManifestFileRow> FrozenFiles,
     Guid SnapshotId,
@@ -86,12 +87,39 @@ internal sealed class MissionDiseaseJobProcessor(
     private sealed record OrderLockRow(Guid Id, string Status, Guid? BaselineMapVersionId);
     private sealed record CommercialPolicyRow(Guid PolicyVersionId);
     private sealed record CommercialSnapshotRow(string ServiceCode, bool ScreensDisease, Guid BusinessPolicyVersionId);
-    private sealed record AttemptRow(Guid Id, string? InputApprovalReference, string? ProcessingJobReference);
-    private sealed record AttemptLockRow(Guid Id, string Status, string? InputApprovalReference, string? ProcessingJobReference);
+    private sealed record AttemptRow(Guid Id, string? InputApprovalReference, Guid? MappingSourceAttemptId);
+    private sealed record AttemptLockRow(
+        Guid Id, string Status, string? InputApprovalReference, string? ProcessingJobReference, Guid? MappingSourceAttemptId);
     private sealed record SnapshotRow(Guid Id, Guid MappingCandidateBatchId);
     private sealed record MappingBatchRow(Guid Id, string MappingKind, string Status);
 
     private static readonly Guid ComboAnalysisNamespace = new("e2c56a81-79b8-4e1b-93f4-3d0cf3b12345");
+
+    private Task<SnapshotRow?> ReadVerifiedMappingSnapshotAsync(
+        Guid orderId, Guid tenantId, Guid farmId, Guid missionId, Guid attemptId,
+        Guid? mappingSourceAttemptId, CaptureMapRef map, CancellationToken cancellationToken) =>
+        dbContext.Database.SqlQuery<SnapshotRow>($"""
+            SELECT snapshot.id AS "Id", snapshot.mapping_candidate_batch_id AS "MappingCandidateBatchId"
+            FROM survey.survey_orders AS orders
+            JOIN survey.survey_order_pole_count_snapshots AS snapshot
+                ON snapshot.id = orders.verified_pole_count_snapshot_id AND snapshot.survey_order_id = orders.id
+            JOIN survey.capture_attempts AS source
+                ON source.id = snapshot.capture_attempt_id AND source.order_id = orders.id
+                AND source.tenant_id = snapshot.tenant_id AND source.farm_id = snapshot.farm_id
+            JOIN mission.drone_missions AS map_mission
+                ON map_mission.id = snapshot.mission_id AND map_mission.capture_attempt_id = source.id
+                AND map_mission.survey_order_id = orders.id
+                AND map_mission.tenant_id = snapshot.tenant_id AND map_mission.farm_id = snapshot.farm_id
+            WHERE orders.id = {orderId}
+              AND snapshot.tenant_id = {tenantId} AND snapshot.farm_id = {farmId}
+              AND snapshot.capture_attempt_id = {mappingSourceAttemptId ?? attemptId}
+              AND snapshot.farm_base_map_version_id = {map.BaseMapId}
+              AND snapshot.farm_boundary_version_id = {map.BoundaryId}
+              AND (({mappingSourceAttemptId == null} AND snapshot.mission_id = {missionId})
+                 OR ({mappingSourceAttemptId != null} AND snapshot.mission_id <> {missionId}
+                     AND source.status = 'ACCEPTED' AND source.mapping_source_attempt_id IS NULL
+                     AND source.processing_acceptance_receipt = snapshot.id::text))
+            """).SingleOrDefaultAsync(cancellationToken);
 
     public async Task<Result<PreparedDiseaseDetectionContext>> PrepareContextAsync(
         Guid tenantId,
@@ -342,7 +370,7 @@ internal sealed class MissionDiseaseJobProcessor(
             FROM farm.farm_base_map_versions bm
             WHERE bm.farm_id = {farmId} AND bm.tenant_id = {tenantId}
               AND bm.farm_boundary_version_id = {mission.FarmBoundaryVersionId}
-              AND bm.status IN ('INTERNALLY_APPROVED', 'PUBLISHED')
+              AND bm.status IN ('INTERNAL_APPROVED', 'PUBLISHED')
               AND bm.id = {mapId}
             """).SingleOrDefaultAsync(cancellationToken);
 
@@ -353,9 +381,11 @@ internal sealed class MissionDiseaseJobProcessor(
         }
 
         var attemptRow = await dbContext.Database.SqlQuery<AttemptRow>($"""
-            SELECT id AS "Id", input_approval_reference AS "InputApprovalReference", processing_job_reference AS "ProcessingJobReference"
+            SELECT id AS "Id", input_approval_reference AS "InputApprovalReference",
+                   mapping_source_attempt_id AS "MappingSourceAttemptId"
             FROM survey.capture_attempts
-            WHERE id = {mission.CaptureAttemptId} AND order_id = {orderId} AND status = 'PROCESSING'
+            WHERE id = {mission.CaptureAttemptId} AND order_id = {orderId}
+              AND tenant_id = {tenantId} AND farm_id = {farmId} AND status = 'PROCESSING'
             """).SingleOrDefaultAsync(cancellationToken);
 
         if (attemptRow is null || string.IsNullOrWhiteSpace(attemptRow.InputApprovalReference))
@@ -394,19 +424,9 @@ internal sealed class MissionDiseaseJobProcessor(
                 "DetectDiseases.FrozenFilesMissing", "No frozen raw images found in approved capture manifest."));
         }
 
-        var approvedSnapshot = await dbContext.Database.SqlQuery<SnapshotRow>($"""
-            SELECT id AS "Id", mapping_candidate_batch_id AS "MappingCandidateBatchId"
-            FROM survey.survey_order_pole_count_snapshots
-            WHERE survey_order_id = {orderId}
-              AND capture_attempt_id = {mission.CaptureAttemptId}
-              AND tenant_id = {tenantId}
-              AND farm_id = {farmId}
-              AND mission_id = {mission.Id}
-              AND farm_base_map_version_id = {captureMap.BaseMapId}
-              AND farm_boundary_version_id = {captureMap.BoundaryId}
-            ORDER BY revision_number DESC
-            LIMIT 1
-            """).SingleOrDefaultAsync(cancellationToken);
+        var approvedSnapshot = await ReadVerifiedMappingSnapshotAsync(
+            orderId, tenantId, farmId, mission.Id, attemptRow.Id,
+            attemptRow.MappingSourceAttemptId, captureMap, cancellationToken);
 
         if (approvedSnapshot is null)
         {
@@ -446,7 +466,8 @@ internal sealed class MissionDiseaseJobProcessor(
 
         return Result.Success(new V3ComboInferenceContext(
             OrderId: orderId,
-            AttemptId: mission.CaptureAttemptId!.Value,
+            AttemptId: attemptRow.Id,
+            MappingSourceAttemptId: attemptRow.MappingSourceAttemptId,
             Approval: preApproval,
             FrozenFiles: frozenFiles,
             SnapshotId: approvedSnapshot.Id,
@@ -528,9 +549,11 @@ internal sealed class MissionDiseaseJobProcessor(
             }
 
             var attemptRow = await dbContext.Database.SqlQuery<AttemptLockRow>($"""
-                SELECT id AS "Id", status::text AS "Status", input_approval_reference AS "InputApprovalReference", processing_job_reference AS "ProcessingJobReference"
+                SELECT id AS "Id", status::text AS "Status", input_approval_reference AS "InputApprovalReference",
+                       processing_job_reference AS "ProcessingJobReference", mapping_source_attempt_id AS "MappingSourceAttemptId"
                 FROM survey.capture_attempts
                 WHERE id = {v3Context.AttemptId} AND order_id = {v3Context.OrderId}
+                  AND tenant_id = {trackingJob.TenantId} AND farm_id = {trackingJob.FarmId}
                 FOR UPDATE
                 """).SingleOrDefaultAsync(cancellationToken);
 
@@ -542,9 +565,10 @@ internal sealed class MissionDiseaseJobProcessor(
             if (!Guid.TryParse(attemptRow.InputApprovalReference, out var commitApprovalId) ||
                 commitApprovalId != v3Context.Approval.Id ||
                 !Guid.TryParse(attemptRow.ProcessingJobReference, out var commitJobRef) ||
-                commitJobRef != v3Context.Approval.ProcessingJobId)
+                commitJobRef != v3Context.Approval.ProcessingJobId ||
+                attemptRow.MappingSourceAttemptId != v3Context.MappingSourceAttemptId)
             {
-                throw new InvalidOperationException("Active capture attempt input approval reference or processing job changed during inference.");
+                throw new InvalidOperationException("Capture input approval, processing job or mapping source changed during inference.");
             }
 
             mission = await dbContext.DroneMissions
@@ -570,23 +594,14 @@ internal sealed class MissionDiseaseJobProcessor(
                 throw new InvalidOperationException("Approved capture input record was altered at commit time.");
             }
 
-            var recheckSnapshot = await dbContext.Database.SqlQuery<SnapshotRow>($"""
-                SELECT id AS "Id", mapping_candidate_batch_id AS "MappingCandidateBatchId"
-                FROM survey.survey_order_pole_count_snapshots
-                WHERE id = {v3Context.SnapshotId}
-                  AND survey_order_id = {v3Context.OrderId}
-                  AND capture_attempt_id = {v3Context.AttemptId}
-                  AND tenant_id = {trackingJob.TenantId}
-                  AND farm_id = {trackingJob.FarmId}
-                  AND mission_id = {trackingJob.MissionId}
-                  AND farm_base_map_version_id = {v3Context.CaptureMap.BaseMapId}
-                  AND farm_boundary_version_id = {v3Context.CaptureMap.BoundaryId}
-                """).SingleOrDefaultAsync(cancellationToken)
+            var recheckSnapshot = await ReadVerifiedMappingSnapshotAsync(
+                v3Context.OrderId, trackingJob.TenantId, trackingJob.FarmId, trackingJob.MissionId,
+                v3Context.AttemptId, v3Context.MappingSourceAttemptId, v3Context.CaptureMap, cancellationToken)
                 ?? throw new InvalidOperationException("Approved pole count snapshot was missing or revoked at commit time.");
 
-            if (recheckSnapshot.MappingCandidateBatchId != v3Context.MappingBatchId)
+            if (recheckSnapshot.Id != v3Context.SnapshotId || recheckSnapshot.MappingCandidateBatchId != v3Context.MappingBatchId)
             {
-                throw new InvalidOperationException("Approved pole count snapshot candidate batch altered at commit time.");
+                throw new InvalidOperationException("Approved pole count snapshot or candidate batch changed during inference.");
             }
 
             var baselineMapId = orderRow.BaselineMapVersionId ?? v3Context.CaptureMap.BaseMapId;
