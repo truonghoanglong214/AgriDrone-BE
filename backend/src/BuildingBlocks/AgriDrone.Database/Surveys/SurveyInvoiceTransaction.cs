@@ -1562,7 +1562,11 @@ internal sealed class SurveyInvoiceTransaction(
     {
         var acceptedPairs = correctedItems
             .Where(i => i.IsAccepted && i.IsStrictlyInBoundary && i.PlantProfileId.HasValue)
-            .Select(i => (i.MappingCandidateId, i.PlantProfileId!.Value))
+            .SelectMany(i => new[]
+            {
+                (i.MappingCandidateId, i.PlantProfileId!.Value),
+                (i.SourceCandidateId, i.PlantProfileId!.Value)
+            })
             .ToHashSet();
 
         var acceptedProfiles = acceptedPairs.Select(pair => pair.Value).ToHashSet();

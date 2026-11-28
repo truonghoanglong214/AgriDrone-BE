@@ -47,7 +47,8 @@ public sealed record ComboPendingFindingDto(
     decimal Confidence,
     string Uncertainty,
     IReadOnlyList<string> Limitations,
-    IReadOnlyList<Guid> EvidenceMediaIds);
+    IReadOnlyList<Guid> EvidenceMediaIds,
+    Guid? PlantId = null);
 
 public sealed record ComboPendingBoundaryExceptionDto(
     string SourceReferenceId,

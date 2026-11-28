@@ -18,7 +18,11 @@ internal sealed class ComboAnalysisPendingImport(
     private sealed record SnapshotRow(Guid TenantId, Guid FarmId, bool BoundaryValid, bool MapValid);
     private sealed record ReferenceRow(Guid Id);
     private sealed record BoundaryRow(Guid SourceId, bool Covered, double Distance);
-    private sealed record SnapshotItemPair(Guid MappingCandidateId, Guid? PlantProfileId, Guid? TargetPlantProfileId);
+    private sealed record SnapshotItemPair(
+        Guid MappingCandidateId,
+        Guid SourceCandidateId,
+        Guid? PlantProfileId,
+        Guid? TargetPlantProfileId);
     private sealed record ApprovalRow(Guid Id, Guid ManifestId, string ManifestHash, Guid ProcessingJobId);
 
     public async Task<ComboAnalysisImportOutcome> ImportAsync(
@@ -279,11 +283,13 @@ internal sealed class ComboAnalysisPendingImport(
         if (candidates.Length > 0)
         {
             var validCandidates = await db.Database.SqlQuery<ReferenceRow>($"""
-                SELECT c.candidate_id AS "Id" FROM farm.mapping_candidates c
+                SELECT DISTINCT CASE WHEN c.id = ANY({candidates}) THEN c.id ELSE c.candidate_id END AS "Id"
+                FROM farm.mapping_candidates c
                 JOIN farm.mapping_candidate_batches b ON b.id = c.batch_id
-                WHERE c.candidate_id = ANY({candidates}) AND b.farm_id = {p.FarmId} AND b.tenant_id = {tenantId}
+                WHERE (c.id = ANY({candidates}) OR c.candidate_id = ANY({candidates}))
+                  AND b.farm_id = {p.FarmId} AND b.tenant_id = {tenantId}
                   AND b.id = {p.MappingCandidateBatchId}
-                """).Distinct().ToListAsync(cancellationToken);
+                """).ToListAsync(cancellationToken);
             if (validCandidates.Count != candidates.Length)
                 return Reject("ContextMismatch", "Mapping candidate reference does not match the candidate batch.");
         }
@@ -303,6 +309,7 @@ internal sealed class ComboAnalysisPendingImport(
         // V07: Candidate-profile pairing verification via SurveyOrderPoleCountSnapshotItem
         var snapshotPairs = await db.Database.SqlQuery<SnapshotItemPair>($"""
             SELECT mapping_candidate_id AS "MappingCandidateId",
+                   source_candidate_id AS "SourceCandidateId",
                    plant_profile_id AS "PlantProfileId",
                    target_plant_profile_id AS "TargetPlantProfileId"
             FROM survey.survey_order_pole_count_snapshot_items
@@ -310,9 +317,13 @@ internal sealed class ComboAnalysisPendingImport(
               AND tenant_id = {tenantId} AND farm_id = {p.FarmId}
             """).ToListAsync(cancellationToken);
 
-        var pairLookup = snapshotPairs.ToDictionary(
-            item => item.MappingCandidateId,
-            item => item.PlantProfileId ?? item.TargetPlantProfileId);
+        var pairLookup = new Dictionary<Guid, Guid?>();
+        foreach (var item in snapshotPairs)
+        {
+            var expected = item.PlantProfileId ?? item.TargetPlantProfileId;
+            pairLookup.TryAdd(item.MappingCandidateId, expected);
+            pairLookup.TryAdd(item.SourceCandidateId, expected);
+        }
 
         foreach (var f in p.Findings)
         {

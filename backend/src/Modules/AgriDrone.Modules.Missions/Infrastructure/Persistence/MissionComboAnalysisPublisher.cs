@@ -26,6 +26,62 @@ internal sealed class MissionComboAnalysisPublisher(
     private sealed record BoundaryRow(bool Covered, double Distance);
     private sealed record PlantProfileLookupRow(Guid PlantId, Guid PlantProfileId);
     private sealed record ImportedLineageRow(Guid JobId, int SourceRevision, Guid HandoffId, Guid? SupersedesHandoffId);
+    internal sealed record SnapshotPoleRow(
+        Guid MappingCandidateId,
+        Guid SourceCandidateId,
+        Guid PlantProfileId,
+        Guid? TargetPlantProfileId,
+        Guid? PlantId);
+
+    internal static (Guid? PlantProfileId, Guid? MappingCandidateId) ResolveFindingIdentity(
+        Guid? suggestedPlantId,
+        Guid? resolvedPlantId,
+        Guid? metadataProfileId,
+        Guid? metadataCandidateId,
+        IReadOnlyDictionary<Guid, SnapshotPoleRow> polesByPlantId,
+        IReadOnlyDictionary<Guid, SnapshotPoleRow> polesBySourceCandidateId,
+        IReadOnlyDictionary<Guid, SnapshotPoleRow> polesByCandidateRecordId,
+        IReadOnlyDictionary<Guid, SnapshotPoleRow> polesByProfileId,
+        IReadOnlyDictionary<Guid, Guid> plantIdToProfileMap)
+    {
+        var matchedPlantId = resolvedPlantId ?? suggestedPlantId;
+        if (!matchedPlantId.HasValue && !metadataCandidateId.HasValue)
+        {
+            return (null, null);
+        }
+
+        SnapshotPoleRow? matchedPole = null;
+        if (matchedPlantId is Guid plantId && polesByPlantId.TryGetValue(plantId, out var poleByPlant))
+        {
+            matchedPole = poleByPlant;
+        }
+        else if (metadataCandidateId is Guid candidateId &&
+                 (polesBySourceCandidateId.TryGetValue(candidateId, out var poleBySource) ||
+                  polesByCandidateRecordId.TryGetValue(candidateId, out poleBySource)))
+        {
+            matchedPole = poleBySource;
+        }
+        else if (metadataProfileId is Guid profileId && polesByProfileId.TryGetValue(profileId, out var poleByProfile))
+        {
+            matchedPole = poleByProfile;
+        }
+
+        if (matchedPole is not null)
+        {
+            return (matchedPole.PlantProfileId, matchedPole.SourceCandidateId);
+        }
+
+        if (resolvedPlantId is Guid resId && plantIdToProfileMap.TryGetValue(resId, out var resolvedProfileId))
+        {
+            return polesByProfileId.TryGetValue(resolvedProfileId, out var poleForResolved)
+                ? (resolvedProfileId, poleForResolved.SourceCandidateId)
+                : (resolvedProfileId, null);
+        }
+
+        return matchedPlantId.HasValue
+            ? (metadataProfileId, metadataCandidateId)
+            : (null, null);
+    }
 
     public async Task<MissionComboAnalysisPublishResult> PublishAsync(
         Guid tenantId,
@@ -211,6 +267,48 @@ internal sealed class MissionComboAnalysisPublisher(
             .OrderBy(o => o.Id)
             .ToListAsync(cancellationToken);
 
+        var snapshotPoles = await db.Database.SqlQuery<SnapshotPoleRow>($"""
+            SELECT DISTINCT ON (i.id)
+                i.mapping_candidate_id AS "MappingCandidateId",
+                i.source_candidate_id AS "SourceCandidateId",
+                i.plant_profile_id AS "PlantProfileId",
+                i.target_plant_profile_id AS "TargetPlantProfileId",
+                COALESCE(i.target_plant_id, p.id) AS "PlantId"
+            FROM survey.survey_orders o
+            JOIN survey.survey_order_pole_count_snapshot_items i
+              ON i.snapshot_id = o.verified_pole_count_snapshot_id
+             AND i.mapping_candidate_batch_id = {mappingBatchId}
+             AND i.tenant_id = {tenantId}
+             AND i.farm_id = {farmId}
+             AND i.is_accepted = TRUE
+             AND i.plant_profile_id IS NOT NULL
+            LEFT JOIN plant.plants p
+              ON p.farm_id = i.farm_id
+             AND p.lifecycle_status = 'ACTIVE'
+             AND (p.id = i.target_plant_id OR p.plant_profile_id = i.plant_profile_id)
+            WHERE o.id = {orderId} AND o.tenant_id = {tenantId} AND o.farm_id = {farmId}
+            ORDER BY i.id, (p.id = i.target_plant_id) DESC NULLS LAST, p.created_at DESC NULLS LAST, p.id
+            """).ToListAsync(cancellationToken);
+
+        var polesBySourceCandidateId = new Dictionary<Guid, SnapshotPoleRow>();
+        var polesByCandidateRecordId = new Dictionary<Guid, SnapshotPoleRow>();
+        var polesByPlantId = new Dictionary<Guid, SnapshotPoleRow>();
+        var polesByProfileId = new Dictionary<Guid, SnapshotPoleRow>();
+        foreach (var pole in snapshotPoles)
+        {
+            polesBySourceCandidateId.TryAdd(pole.SourceCandidateId, pole);
+            polesByCandidateRecordId.TryAdd(pole.MappingCandidateId, pole);
+            polesByProfileId.TryAdd(pole.PlantProfileId, pole);
+            if (pole.TargetPlantProfileId.HasValue)
+            {
+                polesByProfileId.TryAdd(pole.TargetPlantProfileId.Value, pole);
+            }
+            if (pole.PlantId.HasValue)
+            {
+                polesByPlantId.TryAdd(pole.PlantId.Value, pole);
+            }
+        }
+
         var resolvedPlantIds = observations
             .Where(o => o.ResolvedPlantId.HasValue)
             .Select(o => o.ResolvedPlantId!.Value)
@@ -253,15 +351,24 @@ internal sealed class MissionComboAnalysisPublisher(
             var classCode = ClassCode(className) ?? className;
             var media = MissionPlantHealthPublisher.EvidenceMedia(observation.EvidenceMediaId, metadata);
 
-            Guid? plantProfileId = null;
-            if (metadata.TryGetProperty("plant_profile_id", out var pid) && pid.TryGetGuid(out var parsedPid))
-                plantProfileId = parsedPid;
-            else if (observation.ResolvedPlantId is Guid resId && plantIdToProfileMap.TryGetValue(resId, out var profileId))
-                plantProfileId = profileId;
+            Guid? metadataProfileId = metadata.TryGetProperty("plant_profile_id", out var pid) && pid.TryGetGuid(out var parsedPid)
+                ? parsedPid
+                : null;
+            Guid? metadataCandidateId = metadata.TryGetProperty("mapping_candidate_id", out var mcid) && mcid.TryGetGuid(out var parsedMcid)
+                ? parsedMcid
+                : null;
 
-            Guid? mappingCandidateId = null;
-            if (metadata.TryGetProperty("mapping_candidate_id", out var mcid) && mcid.TryGetGuid(out var parsedMcid))
-                mappingCandidateId = parsedMcid;
+            // Only observations matched within threshold (or manually resolved) may carry pole identity.
+            var (plantProfileId, mappingCandidateId) = ResolveFindingIdentity(
+                observation.SuggestedPlantId,
+                observation.ResolvedPlantId,
+                metadataProfileId,
+                metadataCandidateId,
+                polesByPlantId,
+                polesBySourceCandidateId,
+                polesByCandidateRecordId,
+                polesByProfileId,
+                plantIdToProfileMap);
 
             var uncertain = (plantProfileId is null && mappingCandidateId is null) ||
                             !boundary.Covered ||
@@ -292,6 +399,22 @@ internal sealed class MissionComboAnalysisPublisher(
                     media));
             }
         }
+
+        var findingsById = findings.ToDictionary(f => f.FindingId);
+        var diseaseZones = comboSnapshot.DiseaseZones
+            .Select(z => z with
+            {
+                Memberships = z.Memberships
+                    .Select(m => findingsById.TryGetValue(m.FindingId, out var resolvedFinding)
+                        ? m with
+                        {
+                            PlantProfileId = resolvedFinding.PlantProfileId ?? m.PlantProfileId,
+                            MappingCandidateId = resolvedFinding.MappingCandidateId ?? m.MappingCandidateId
+                        }
+                        : m)
+                    .ToList()
+            })
+            .ToList();
 
         var handoffId = importedOutput?.HandoffId ?? CreateVersion5(
             ComboAnalysisNamespace,
@@ -324,7 +447,7 @@ internal sealed class MissionComboAnalysisPublisher(
             Provenance: provenance,
             Findings: findings,
             BoundaryExceptions: exceptions,
-            DiseaseZones: comboSnapshot.DiseaseZones);
+            DiseaseZones: diseaseZones);
 
         var errors = ComboAnalysisReadyV1Validator.Validate(payload);
         if (errors.Count != 0)

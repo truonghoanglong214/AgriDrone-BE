@@ -75,14 +75,28 @@ internal sealed class MissionDiseaseJobProcessor(
     TimeProvider timeProvider,
     ILogger<MissionDiseaseJobProcessor> logger) : IMissionDiseaseJobProcessor
 {
-    private sealed record PlantMatchTarget(
-        Guid Id,
-        string PlantCode,
+    internal sealed record PlantMatchTarget(
+        Guid? PlantId,
+        string? PlantCode,
         double Latitude,
         double Longitude,
         int? RowIndex,
         int? ColumnIndex,
-        Guid? PlantProfileId);
+        Guid? PlantProfileId,
+        Guid? MappingCandidateId = null,
+        Guid? SourceCandidateId = null);
+
+    internal sealed record PoleMatchOutcome(
+        bool IsWithinThreshold,
+        Guid? MatchedPlantId,
+        Guid? PlantProfileId,
+        Guid? MappingCandidateId,
+        Guid? MappingCandidateRecordId,
+        string? PlantCode,
+        int? Row,
+        int? Col,
+        double? DistanceM,
+        decimal? MatchConf);
 
     private sealed record OrderLockRow(Guid Id, string Status, Guid? BaselineMapVersionId);
     private sealed record CommercialPolicyRow(Guid PolicyVersionId);
@@ -630,8 +644,8 @@ internal sealed class MissionDiseaseJobProcessor(
                 : 2.5;
 
             var matched = await MatchDetectionsAsync(
-                trackingJob.FarmId, trackingJob.MissionId, result.Detections, sources, derivedMediaIds,
-                matchingToleranceM, v3Context.Policy.Confidence, cancellationToken);
+                trackingJob.FarmId, trackingJob.TenantId, trackingJob.MissionId, result.Detections, sources, derivedMediaIds,
+                matchingToleranceM, v3Context, cancellationToken);
 
             var proposedZones = BuildProposedDiseaseZones(
                 v3Context.OrderId, v3Context.AttemptId, version, v3Context.Policy, matched.ZoneFindings);
@@ -730,8 +744,8 @@ internal sealed class MissionDiseaseJobProcessor(
                 : 2.5;
 
             var matched = await MatchDetectionsAsync(
-                trackingJob.FarmId, trackingJob.MissionId, result.Detections, sources, derivedMediaIds,
-                matchingToleranceM, comboConfidenceThreshold: null, cancellationToken);
+                trackingJob.FarmId, trackingJob.TenantId, trackingJob.MissionId, result.Detections, sources, derivedMediaIds,
+                matchingToleranceM, v3Context: null, cancellationToken);
 
             var observations = BuildObservations(
                 trackingJob.FarmId, trackingJob.MissionId, aiJob.Id, model,
@@ -801,6 +815,8 @@ internal sealed class MissionDiseaseJobProcessor(
         Guid FindingId,
         Guid? MatchedPlantId,
         Guid? PlantProfileId,
+        Guid? MappingCandidateId,
+        Guid? MappingCandidateRecordId,
         string? PlantCode,
         int? Row,
         int? Col,
@@ -810,64 +826,143 @@ internal sealed class MissionDiseaseJobProcessor(
         Guid? AnnotatedMediaId,
         Guid? CropMediaId);
 
+    internal sealed record ZoneFindingCandidate(
+        Guid FindingId,
+        string ClassName,
+        double Lat,
+        double Lon,
+        decimal Confidence,
+        Guid? PlantProfileId,
+        Guid? MappingCandidateId,
+        Guid? EvidenceMediaId);
+
+    internal static PoleMatchOutcome MatchDetectionToPoles(
+        double detectionLat,
+        double detectionLon,
+        IReadOnlyList<PlantMatchTarget> poles,
+        double matchingToleranceM)
+    {
+        PlantMatchTarget? nearestPlant = null;
+        var minDistance = double.MaxValue;
+
+        foreach (var plant in poles)
+        {
+            var dist = CalculateHaversineMeters(detectionLat, detectionLon, plant.Latitude, plant.Longitude);
+            if (dist < minDistance)
+            {
+                minDistance = dist;
+                nearestPlant = plant;
+            }
+        }
+
+        if (nearestPlant is null)
+        {
+            return new PoleMatchOutcome(false, null, null, null, null, null, null, null, null, null);
+        }
+
+        if (minDistance > matchingToleranceM)
+        {
+            // Keep measured GPS distance for review, but never attach a pole identity outside tolerance.
+            return new PoleMatchOutcome(false, null, null, null, null, null, null, null, minDistance, null);
+        }
+
+        var matchConf = (decimal)Math.Round(Math.Max(0.1, 1.0 - (minDistance / matchingToleranceM)), 4);
+        return new PoleMatchOutcome(
+            IsWithinThreshold: true,
+            MatchedPlantId: nearestPlant.PlantId,
+            PlantProfileId: nearestPlant.PlantProfileId,
+            MappingCandidateId: nearestPlant.SourceCandidateId ?? nearestPlant.MappingCandidateId,
+            MappingCandidateRecordId: nearestPlant.MappingCandidateId,
+            PlantCode: nearestPlant.PlantCode,
+            Row: nearestPlant.RowIndex,
+            Col: nearestPlant.ColumnIndex,
+            DistanceM: minDistance,
+            MatchConf: matchConf);
+    }
+
+    private async Task<List<PlantMatchTarget>> LoadMatchTargetsAsync(
+        Guid farmId,
+        Guid tenantId,
+        V3ComboInferenceContext? v3Context,
+        CancellationToken cancellationToken)
+    {
+        if (v3Context is not null)
+        {
+            return await dbContext.Database.SqlQuery<PlantMatchTarget>($"""
+                SELECT DISTINCT ON (i.id)
+                    COALESCE(i.target_plant_id, p.id) AS "PlantId",
+                    COALESCE(p.plant_code, mc.tree_id, 'P-' || COALESCE(i.effective_row_index::text, '0') || '-' || COALESCE(i.effective_column_index::text, '0')) AS "PlantCode",
+                    ST_Y(i.effective_position::geometry) AS "Latitude",
+                    ST_X(i.effective_position::geometry) AS "Longitude",
+                    i.effective_row_index AS "RowIndex",
+                    i.effective_column_index AS "ColumnIndex",
+                    i.plant_profile_id AS "PlantProfileId",
+                    i.mapping_candidate_id AS "MappingCandidateId",
+                    i.source_candidate_id AS "SourceCandidateId"
+                FROM survey.survey_order_pole_count_snapshot_items i
+                JOIN farm.mapping_candidates mc
+                  ON mc.id = i.mapping_candidate_id
+                 AND mc.batch_id = i.mapping_candidate_batch_id
+                LEFT JOIN plant.plants p
+                  ON p.farm_id = i.farm_id
+                 AND p.lifecycle_status = 'ACTIVE'
+                 AND (p.id = i.target_plant_id OR p.plant_profile_id = i.plant_profile_id)
+                WHERE i.snapshot_id = {v3Context.SnapshotId}
+                  AND i.mapping_candidate_batch_id = {v3Context.MappingBatchId}
+                  AND i.tenant_id = {tenantId}
+                  AND i.farm_id = {farmId}
+                  AND i.is_accepted = TRUE
+                  AND i.plant_profile_id IS NOT NULL
+                ORDER BY i.id, (p.id = i.target_plant_id) DESC NULLS LAST, p.created_at DESC NULLS LAST, p.id
+                """).ToListAsync(cancellationToken);
+        }
+
+        return await dbContext.Database.SqlQueryRaw<PlantMatchTarget>(
+            @"SELECT id AS ""PlantId"", plant_code AS ""PlantCode"",
+                     ST_Y(location::geometry) AS ""Latitude"",
+                     ST_X(location::geometry) AS ""Longitude"",
+                     row_index AS ""RowIndex"", column_index AS ""ColumnIndex"",
+                     plant_profile_id AS ""PlantProfileId"",
+                     NULL::uuid AS ""MappingCandidateId"",
+                     NULL::uuid AS ""SourceCandidateId""
+              FROM plant.plants
+              WHERE farm_id = {0} AND lifecycle_status = 'ACTIVE'",
+            farmId)
+            .ToListAsync(cancellationToken);
+    }
+
     private async Task<(
         List<PreparedDetection> Prepared,
-        List<(Guid FindingId, string ClassName, double Lat, double Lon, decimal Confidence, Guid? PlantProfileId, Guid? EvidenceMediaId)> ZoneFindings,
+        List<ZoneFindingCandidate> ZoneFindings,
         int InfectedPlantCount)> MatchDetectionsAsync(
         Guid farmId,
+        Guid tenantId,
         Guid missionId,
         IReadOnlyList<DiseaseDetectionItem> detections,
         DetectMissionDiseasesCommandHandler.DetectionSourceIndex sources,
         Dictionary<string, Guid> derivedMediaIds,
         double matchingToleranceM,
-        double? comboConfidenceThreshold,
+        V3ComboInferenceContext? v3Context,
         CancellationToken cancellationToken)
     {
-        var farmPlants = await dbContext.Database.SqlQueryRaw<PlantMatchTarget>(
-            @"SELECT id AS ""Id"", plant_code AS ""PlantCode"",
-                     ST_Y(location::geometry) AS ""Latitude"",
-                     ST_X(location::geometry) AS ""Longitude"",
-                     row_index AS ""RowIndex"", column_index AS ""ColumnIndex"",
-                     plant_profile_id AS ""PlantProfileId""
-              FROM plant.plants
-              WHERE farm_id = {0} AND lifecycle_status = 'ACTIVE'",
-            farmId)
-            .ToListAsync(cancellationToken);
+        var farmPlants = await LoadMatchTargetsAsync(farmId, tenantId, v3Context, cancellationToken);
 
         Guid? DerivedId(string? key) => key is not null && derivedMediaIds.TryGetValue(key, out var id) ? id : null;
 
-        var zoneFindings = new List<(Guid FindingId, string ClassName, double Lat, double Lon, decimal Confidence, Guid? PlantProfileId, Guid? EvidenceMediaId)>();
+        var zoneFindings = new List<ZoneFindingCandidate>();
         var prepared = new List<PreparedDetection>();
-        var infectedPlantIds = new HashSet<Guid>();
+        var infectedKeys = new HashSet<Guid>();
 
         foreach (var detection in detections)
         {
             var isDisease = detection.ClassName.StartsWith("Disease", StringComparison.OrdinalIgnoreCase) ||
                             (!detection.ClassName.StartsWith("Healthy", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(detection.ClassName));
 
-            PlantMatchTarget? nearestPlant = null;
-            var minDistance = double.MaxValue;
+            var match = MatchDetectionToPoles(detection.Lat, detection.Lon, farmPlants, matchingToleranceM);
 
-            foreach (var plant in farmPlants)
+            if (match.IsWithinThreshold && isDisease && (match.PlantProfileId ?? match.MatchedPlantId) is Guid infectedKey)
             {
-                var dist = CalculateHaversineMeters(detection.Lat, detection.Lon, plant.Latitude, plant.Longitude);
-                if (dist < minDistance)
-                {
-                    minDistance = dist;
-                    nearestPlant = plant;
-                }
-            }
-
-            Guid? matchedPlantId = null;
-            decimal? matchConf = null;
-            if (nearestPlant != null && minDistance <= matchingToleranceM)
-            {
-                matchedPlantId = nearestPlant.Id;
-                if (isDisease)
-                {
-                    infectedPlantIds.Add(nearestPlant.Id);
-                }
-                matchConf = (decimal)Math.Round(Math.Max(0.1, 1.0 - (minDistance / matchingToleranceM)), 4);
+                infectedKeys.Add(infectedKey);
             }
 
             var source = sources.Find(detection);
@@ -876,31 +971,41 @@ internal sealed class MissionDiseaseJobProcessor(
             var findingId = new Guid(SHA256.HashData(Encoding.UTF8.GetBytes(
                 $"{missionId:D}/{detection.ImageName}/{detection.Id}")).AsSpan(0, 16));
 
-            if (comboConfidenceThreshold.HasValue &&
+            if (v3Context is not null &&
+                match.IsWithinThreshold &&
                 isDisease &&
-                matchedPlantId.HasValue &&
-                nearestPlant?.PlantProfileId is not null &&
-                detection.Confidence >= comboConfidenceThreshold.Value)
+                (match.PlantProfileId.HasValue || match.MappingCandidateId.HasValue) &&
+                detection.Confidence >= v3Context.Policy.Confidence)
             {
-                zoneFindings.Add((findingId, detection.ClassName, detection.Lat, detection.Lon, (decimal)detection.Confidence, nearestPlant.PlantProfileId, source?.MediaId));
+                zoneFindings.Add(new ZoneFindingCandidate(
+                    findingId,
+                    detection.ClassName,
+                    detection.Lat,
+                    detection.Lon,
+                    (decimal)detection.Confidence,
+                    match.PlantProfileId,
+                    match.MappingCandidateId,
+                    source?.MediaId));
             }
 
             prepared.Add(new PreparedDetection(
                 detection,
                 findingId,
-                matchedPlantId,
-                nearestPlant?.PlantProfileId,
-                nearestPlant?.PlantCode,
-                nearestPlant?.RowIndex,
-                nearestPlant?.ColumnIndex,
-                nearestPlant is null ? null : minDistance,
-                matchConf,
+                match.MatchedPlantId,
+                match.PlantProfileId,
+                match.MappingCandidateId,
+                match.MappingCandidateRecordId,
+                match.PlantCode,
+                match.Row,
+                match.Col,
+                match.DistanceM,
+                match.MatchConf,
                 source,
                 annotatedMediaId,
                 cropMediaId));
         }
 
-        return (prepared, zoneFindings, infectedPlantIds.Count);
+        return (prepared, zoneFindings, infectedKeys.Count);
     }
 
     private static List<MissionPlantObservation> BuildObservations(
@@ -934,7 +1039,9 @@ internal sealed class MissionDiseaseJobProcessor(
                 plant_code = item.PlantCode,
                 row = item.Row,
                 col = item.Col,
-                plant_profile_id = item.PlantProfileId
+                plant_profile_id = item.PlantProfileId,
+                mapping_candidate_id = item.MappingCandidateId,
+                mapping_candidate_record_id = item.MappingCandidateRecordId
             }));
 
             observations.Add(MissionPlantObservation.Create(
@@ -1056,12 +1163,12 @@ internal sealed class MissionDiseaseJobProcessor(
         }
     }
 
-    private static List<ProposedComboDiseaseZoneV1> BuildProposedDiseaseZones(
+    internal static List<ProposedComboDiseaseZoneV1> BuildProposedDiseaseZones(
         Guid orderId,
         Guid attemptId,
         int version,
         ComboInferencePolicy policy,
-        List<(Guid FindingId, string ClassName, double Lat, double Lon, decimal Confidence, Guid? PlantProfileId, Guid? EvidenceMediaId)> items)
+        List<ZoneFindingCandidate> items)
     {
         if (items.Count == 0)
         {
@@ -1078,18 +1185,18 @@ internal sealed class MissionDiseaseJobProcessor(
         foreach (var group in groups)
         {
             var classCode = group.Key;
-            var groupItems = group.GroupBy(item => item.PlantProfileId)
+            var groupItems = group.GroupBy(item => (item.PlantProfileId, item.MappingCandidateId))
                 .Select(matches => matches.OrderByDescending(item => item.Confidence).First())
                 .ToList();
             var n = groupItems.Count;
             var visited = new bool[n];
-            var clusters = new List<List<(Guid FindingId, string ClassName, double Lat, double Lon, decimal Confidence, Guid? PlantProfileId, Guid? EvidenceMediaId)>>();
+            var clusters = new List<List<ZoneFindingCandidate>>();
 
             for (int i = 0; i < n; i++)
             {
                 if (visited[i]) continue;
 
-                var currentCluster = new List<(Guid FindingId, string ClassName, double Lat, double Lon, decimal Confidence, Guid? PlantProfileId, Guid? EvidenceMediaId)>();
+                var currentCluster = new List<ZoneFindingCandidate>();
                 var queue = new Queue<int>();
                 queue.Enqueue(i);
                 visited[i] = true;
@@ -1156,7 +1263,7 @@ internal sealed class MissionDiseaseJobProcessor(
                     memberships.Add(new ProposedDiseaseZoneMembershipV1(
                         FindingId: item.FindingId,
                         PlantProfileId: item.PlantProfileId,
-                        MappingCandidateId: null,
+                        MappingCandidateId: item.MappingCandidateId,
                         Confidence: item.Confidence));
 
                     if (item.EvidenceMediaId.HasValue && zoneMedia.All(m => m.MediaAssetId != item.EvidenceMediaId.Value))

@@ -150,7 +150,8 @@ internal sealed class SurveyResultReviewTransaction(
                     return Result.Failure<SurveyResultReviewResponse>(batchResult.Error);
 
                 var (batch, payload, persistedBlockers) = batchResult.Value;
-                pendingBatch = MapPendingBatch(batch, payload, persistedBlockers);
+                var plantIdsByProfile = await LoadPlantIdsByProfileAsync(order.FarmId, payload, cancellationToken);
+                pendingBatch = MapPendingBatch(batch, payload, persistedBlockers, plantIdsByProfile);
 
                 var reviewHeads = await db.Set<SurveyComboReviewRevision>().AsNoTracking()
                     .Where(r => r.TenantId == order.TenantId &&
@@ -1916,10 +1917,45 @@ internal sealed class SurveyResultReviewTransaction(
             or PostgresErrorCodes.LockNotAvailable
             or PostgresErrorCodes.UniqueViolation;
 
+    private sealed record PlantByProfileRow(Guid PlantProfileId, Guid PlantId);
+
+    private async Task<Dictionary<Guid, Guid>> LoadPlantIdsByProfileAsync(
+        Guid farmId,
+        ComboAnalysisReadyV1 payload,
+        CancellationToken cancellationToken)
+    {
+        var profileIds = payload.Findings
+            .Where(f => f.PlantProfileId.HasValue)
+            .Select(f => f.PlantProfileId!.Value)
+            .Distinct()
+            .ToArray();
+        if (profileIds.Length == 0)
+        {
+            return [];
+        }
+
+        var rows = await db.Database.SqlQuery<PlantByProfileRow>($"""
+            SELECT p.plant_profile_id AS "PlantProfileId", p.id AS "PlantId"
+            FROM plant.plants p
+            WHERE p.farm_id = {farmId}
+              AND p.plant_profile_id = ANY({profileIds})
+              AND p.lifecycle_status = 'ACTIVE'
+            ORDER BY p.created_at DESC, p.id
+            """).ToListAsync(cancellationToken);
+
+        var lookup = new Dictionary<Guid, Guid>();
+        foreach (var row in rows)
+        {
+            lookup.TryAdd(row.PlantProfileId, row.PlantId);
+        }
+        return lookup;
+    }
+
     private static SurveyComboPendingReviewBatch MapPendingBatch(
         SurveyComboImportBatch batch,
         ComboAnalysisReadyV1 payload,
-        List<ComboPendingBlockingItem> persistedItems) =>
+        List<ComboPendingBlockingItem> persistedItems,
+        Dictionary<Guid, Guid>? plantIdsByProfile = null) =>
         new(
             BatchId: batch.Id,
             TenantId: batch.TenantId,
@@ -1959,7 +1995,10 @@ internal sealed class SurveyResultReviewTransaction(
                 f.Confidence,
                 f.Uncertainty,
                 f.Limitations,
-                f.EvidenceMedia.Select(m => m.MediaAssetId).ToList())).ToList(),
+                f.EvidenceMedia.Select(m => m.MediaAssetId).ToList(),
+                f.PlantProfileId is Guid profileId && plantIdsByProfile is not null && plantIdsByProfile.TryGetValue(profileId, out var plantId)
+                    ? plantId
+                    : null)).ToList(),
             BoundaryExceptions: payload.BoundaryExceptions.Select(e => new ComboPendingBoundaryExceptionDto(
                 e.SourceReferenceId,
                 e.OriginalPosition.Coordinates[0],

@@ -13,7 +13,9 @@ public sealed record BaseMapPlantItemDto(
     int Col,
     double Lat,
     double Lon,
-    string LifecycleStatus);
+    string LifecycleStatus,
+    Guid? PlantProfileId = null,
+    Guid? MappingCandidateId = null);
 
 public sealed record BaseMapManualChangeDto(
     Guid EventId,

@@ -57,7 +57,7 @@ internal sealed class SurveyComboPendingReadPort(SurveysDbContext db) : ISurveyC
         if (batch is null)
             return Result.Failure<SurveyComboPendingReviewBatch>(AppError.NotFound("ComboBatch.NotFound", "COMBO batch was not found for this order context."));
 
-        return Map(batch);
+        return await MapWithPlantIdsAsync(batch, cancellationToken);
     }
 
     public async Task<Result<SurveyComboReviewReadContext>> GetComboReviewContextAsync(
@@ -220,7 +220,81 @@ internal sealed class SurveyComboPendingReadPort(SurveysDbContext db) : ISurveyC
                 AppError.Conflict("ComboBatch.AmbiguousHead", "Multiple or ambiguous pending COMBO lineage heads detected."));
         }
 
-        return Map(headCandidates[0]);
+        return await MapWithPlantIdsAsync(headCandidates[0], cancellationToken);
+    }
+
+    private sealed record PlantByProfileRow(Guid PlantProfileId, Guid PlantId);
+
+    private async Task<Dictionary<Guid, Guid>> LoadPlantIdsByProfileAsync(
+        Guid farmId,
+        ComboAnalysisReadyV1 payload,
+        CancellationToken cancellationToken)
+    {
+        var profileIds = payload.Findings
+            .Where(f => f.PlantProfileId.HasValue)
+            .Select(f => f.PlantProfileId!.Value)
+            .Distinct()
+            .ToArray();
+        if (profileIds.Length == 0)
+        {
+            return [];
+        }
+
+        var rows = await db.Database.SqlQuery<PlantByProfileRow>($"""
+            SELECT p.plant_profile_id AS "PlantProfileId", p.id AS "PlantId"
+            FROM plant.plants p
+            WHERE p.farm_id = {farmId}
+              AND p.plant_profile_id = ANY({profileIds})
+              AND p.lifecycle_status = 'ACTIVE'
+            ORDER BY p.created_at DESC, p.id
+            """).ToListAsync(cancellationToken);
+
+        var lookup = new Dictionary<Guid, Guid>();
+        foreach (var row in rows)
+        {
+            lookup.TryAdd(row.PlantProfileId, row.PlantId);
+        }
+        return lookup;
+    }
+
+    private async Task<Result<SurveyComboPendingReviewBatch>> MapWithPlantIdsAsync(
+        SurveyComboImportBatch batch,
+        CancellationToken cancellationToken)
+    {
+        var mapped = Map(batch);
+        if (mapped.IsFailure)
+        {
+            return mapped;
+        }
+
+        ComboAnalysisReadyV1? payload;
+        try
+        {
+            payload = batch.RawPayload.Deserialize<ComboAnalysisReadyV1>(PayloadJsonOptions);
+        }
+        catch (JsonException)
+        {
+            return mapped;
+        }
+
+        if (payload is null)
+        {
+            return mapped;
+        }
+
+        var plantIdsByProfile = await LoadPlantIdsByProfileAsync(batch.FarmId, payload, cancellationToken);
+        if (plantIdsByProfile.Count == 0)
+        {
+            return mapped;
+        }
+
+        var findings = mapped.Value.Findings
+            .Select(f => f.PlantProfileId is Guid profileId && plantIdsByProfile.TryGetValue(profileId, out var plantId)
+                ? f with { PlantId = plantId }
+                : f)
+            .ToList();
+
+        return Result.Success(mapped.Value with { Findings = findings });
     }
 
     private static Result<SurveyComboPendingReviewBatch> Map(SurveyComboImportBatch batch)

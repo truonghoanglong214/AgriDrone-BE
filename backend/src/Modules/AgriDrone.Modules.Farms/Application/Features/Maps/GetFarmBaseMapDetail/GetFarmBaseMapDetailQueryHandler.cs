@@ -21,7 +21,13 @@ internal sealed class GetFarmBaseMapDetailQueryHandler(
         int? ColumnIndex,
         double Latitude,
         double Longitude,
-        string LifecycleStatus);
+        string LifecycleStatus,
+        Guid? PlantProfileId);
+
+    private sealed record VersionCandidateLinkRow(
+        Guid SourceCandidateId,
+        Guid? PlantProfileId,
+        Guid? TargetPlantId);
 
     private sealed record CandidateQueryRow(
         Guid CandidateId,
@@ -116,7 +122,8 @@ internal sealed class GetFarmBaseMapDetailQueryHandler(
                          p.row_index AS ""RowIndex"", p.column_index AS ""ColumnIndex"",
                          ST_Y(p.location::geometry) AS ""Latitude"",
                          ST_X(p.location::geometry) AS ""Longitude"",
-                         p.lifecycle_status::text AS ""LifecycleStatus""
+                         p.lifecycle_status::text AS ""LifecycleStatus"",
+                         p.plant_profile_id AS ""PlantProfileId""
                   FROM plant.plants p
                   WHERE p.farm_id = {0}
                     AND (
@@ -140,6 +147,31 @@ internal sealed class GetFarmBaseMapDetailQueryHandler(
                   ORDER BY p.row_index, p.column_index",
                 request.FarmId, version.Id)
                 .ToListAsync(cancellationToken);
+
+            var candidateLinks = await dbContext.Database.SqlQueryRaw<VersionCandidateLinkRow>(
+                @"SELECT mc.candidate_id AS ""SourceCandidateId"",
+                         i.plant_profile_id AS ""PlantProfileId"",
+                         COALESCE(i.target_plant_id, mc.corrected_matched_plant_id, mc.proposed_matched_plant_id) AS ""TargetPlantId""
+                  FROM farm.mapping_candidates mc
+                  JOIN farm.mapping_candidate_batches b ON b.id = mc.batch_id
+                  LEFT JOIN survey.survey_order_pole_count_snapshot_items i
+                    ON i.mapping_candidate_id = mc.id
+                   AND i.mapping_candidate_batch_id = mc.batch_id
+                  WHERE b.farm_id = {0}
+                    AND b.farm_base_map_version_id = {1}
+                    AND mc.review_decision IN ('CreateNew', 'MatchExisting', 'Relocate', 'Replace')",
+                request.FarmId, version.Id)
+                .ToListAsync(cancellationToken);
+
+            var candidateByProfile = new Dictionary<Guid, Guid>();
+            var candidateByPlant = new Dictionary<Guid, Guid>();
+            foreach (var link in candidateLinks)
+            {
+                if (link.PlantProfileId.HasValue)
+                    candidateByProfile.TryAdd(link.PlantProfileId.Value, link.SourceCandidateId);
+                if (link.TargetPlantId.HasValue)
+                    candidateByPlant.TryAdd(link.TargetPlantId.Value, link.SourceCandidateId);
+            }
 
             // Nếu là version cũ đã bị superseded và plant.plants đã chuyển sang map version mới hơn,
             // fallback lấy từ mapping_candidates của batch thuộc version này
@@ -167,18 +199,30 @@ internal sealed class GetFarmBaseMapDetailQueryHandler(
                     Col: c.ColumnIndex ?? 0,
                     Lat: c.Latitude,
                     Lon: c.Longitude,
-                    LifecycleStatus: "HISTORICAL")).ToList();
+                    LifecycleStatus: "HISTORICAL",
+                    MappingCandidateId: c.CandidateId)).ToList();
             }
             else
             {
-                plantItems = plantRows.Select(p => new BaseMapPlantItemDto(
-                    PlantId: p.Id,
-                    PlantCode: p.PlantCode,
-                    Row: p.RowIndex ?? 0,
-                    Col: p.ColumnIndex ?? 0,
-                    Lat: p.Latitude,
-                    Lon: p.Longitude,
-                    LifecycleStatus: p.LifecycleStatus)).ToList();
+                plantItems = plantRows.Select(p =>
+                {
+                    Guid? candidateId = p.PlantProfileId is Guid profileId && candidateByProfile.TryGetValue(profileId, out var byProfile)
+                        ? byProfile
+                        : candidateByPlant.TryGetValue(p.Id, out var byPlant)
+                            ? byPlant
+                            : null;
+
+                    return new BaseMapPlantItemDto(
+                        PlantId: p.Id,
+                        PlantCode: p.PlantCode,
+                        Row: p.RowIndex ?? 0,
+                        Col: p.ColumnIndex ?? 0,
+                        Lat: p.Latitude,
+                        Lon: p.Longitude,
+                        LifecycleStatus: p.LifecycleStatus,
+                        PlantProfileId: p.PlantProfileId,
+                        MappingCandidateId: candidateId);
+                }).ToList();
             }
         }
         else // Draft version: Lấy trực tiếp từ mapping candidate batch
