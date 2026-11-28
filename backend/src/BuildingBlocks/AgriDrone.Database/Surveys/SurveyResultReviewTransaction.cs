@@ -1611,29 +1611,17 @@ internal sealed class SurveyResultReviewTransaction(
                     $"Zone decision 'Adjust' for '{proposalId}' requires reviewed geometry, finding memberships, or guidance selection."));
             }
 
-            if (memberFindingIds.Count == 0 || memberFindingIds.Distinct().Count() != memberFindingIds.Count)
+            var memberCheck = ValidateComboZoneMembers(
+                proposalId,
+                proposal.SuspectedClassCode,
+                memberFindingIds,
+                zonePolygon!,
+                findingsById,
+                findingDecisionById,
+                geometryFactory);
+            if (memberCheck.IsFailure)
             {
-                return Result.Failure(AppError.Validation("ComboReview.InvalidZoneMembers",
-                    $"Approved zone '{proposalId}' must have a non-empty unique set of member findings."));
-            }
-
-            foreach (var fid in memberFindingIds)
-            {
-                if (!findingsById.TryGetValue(fid, out var memberFinding) ||
-                    !findingDecisionById.TryGetValue(fid, out var memberDecision) ||
-                    memberDecision.Decision != SurveyComboReviewRevision.FindingDecisionAccept)
-                {
-                    return Result.Failure(AppError.Validation("ComboReview.ZoneMemberNotAccepted",
-                        $"Zone '{proposalId}' references finding '{fid}' which is missing or not accepted in this review."));
-                }
-
-                var findingPoint = geometryFactory.CreatePoint(
-                    new Coordinate(memberFinding.Position.Coordinates[0], memberFinding.Position.Coordinates[1]));
-                if (!zonePolygon!.Covers(findingPoint))
-                {
-                    return Result.Failure(AppError.Validation("ComboReview.MemberOutsideZoneGeometry",
-                        $"Zone '{proposalId}' geometry does not cover accepted finding '{fid}'."));
-                }
+                return memberCheck;
             }
 
             // Sourced guidance validation (per D03 & PlantHealthReviewService.Validation.cs)
@@ -1710,6 +1698,65 @@ internal sealed class SurveyResultReviewTransaction(
                     return Result.Failure(AppError.Validation("ComboReview.NegativeEvidenceRequired",
                         "Excluding all suspected findings requires explicit NegativeResultConfirmationEvidence to justify a negative assessment."));
                 }
+            }
+        }
+
+        return Result.Success();
+    }
+
+    internal static Result ValidateComboZoneMembers(
+        string proposalId,
+        string zoneSuspectedClassCode,
+        IReadOnlyList<Guid> memberFindingIds,
+        Polygon zonePolygon,
+        IReadOnlyDictionary<Guid, ComboFindingV1> findingsById,
+        IReadOnlyDictionary<Guid, ComboFindingReviewDecisionRecord> findingDecisionById,
+        GeometryFactory geometryFactory)
+    {
+        if (memberFindingIds.Count == 0 || memberFindingIds.Distinct().Count() != memberFindingIds.Count)
+        {
+            return Result.Failure(AppError.Validation("ComboReview.InvalidZoneMembers",
+                $"Approved zone '{proposalId}' must have a non-empty unique set of member findings."));
+        }
+
+        var normalizedZoneClass = zoneSuspectedClassCode.Trim();
+        var seenProfiles = new HashSet<Guid>();
+        var seenCandidates = new HashSet<Guid>();
+
+        foreach (var fid in memberFindingIds)
+        {
+            if (!findingsById.TryGetValue(fid, out var memberFinding) ||
+                !findingDecisionById.TryGetValue(fid, out var memberDecision) ||
+                memberDecision.Decision != SurveyComboReviewRevision.FindingDecisionAccept)
+            {
+                return Result.Failure(AppError.Validation("ComboReview.ZoneMemberNotAccepted",
+                    $"Zone '{proposalId}' references finding '{fid}' which is missing or not accepted in this review."));
+            }
+
+            if (!string.Equals(memberFinding.SuspectedClassCode.Trim(), normalizedZoneClass, StringComparison.OrdinalIgnoreCase))
+            {
+                return Result.Failure(AppError.Validation("ComboReview.ZoneMemberClassMismatch",
+                    $"Zone '{proposalId}' (class '{normalizedZoneClass}') cannot include finding '{fid}' of class '{memberFinding.SuspectedClassCode}'."));
+            }
+
+            if (memberFinding.PlantProfileId is Guid memberProfileId && !seenProfiles.Add(memberProfileId))
+            {
+                return Result.Failure(AppError.Validation("ComboReview.DuplicateZonePole",
+                    $"Zone '{proposalId}' cannot include plant profile '{memberProfileId}' more than once."));
+            }
+
+            if (memberFinding.MappingCandidateId is Guid memberCandidateId && !seenCandidates.Add(memberCandidateId))
+            {
+                return Result.Failure(AppError.Validation("ComboReview.DuplicateZonePole",
+                    $"Zone '{proposalId}' cannot include mapping candidate '{memberCandidateId}' more than once."));
+            }
+
+            var findingPoint = geometryFactory.CreatePoint(
+                new Coordinate(memberFinding.Position.Coordinates[0], memberFinding.Position.Coordinates[1]));
+            if (!zonePolygon.Covers(findingPoint))
+            {
+                return Result.Failure(AppError.Validation("ComboReview.MemberOutsideZoneGeometry",
+                    $"Zone '{proposalId}' geometry does not cover accepted finding '{fid}'."));
             }
         }
 

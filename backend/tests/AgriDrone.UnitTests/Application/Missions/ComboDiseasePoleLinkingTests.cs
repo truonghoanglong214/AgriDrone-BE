@@ -1,6 +1,7 @@
 using System.Text.Json;
 using AgriDrone.Modules.Missions.Application.Features.Processing;
 using AgriDrone.Modules.Missions.Infrastructure.Persistence;
+using NetTopologySuite.Geometries;
 using Xunit;
 
 namespace AgriDrone.UnitTests.Application.Missions;
@@ -110,10 +111,11 @@ public sealed class ComboDiseasePoleLinkingTests
 
         var policy = new ComboInferencePolicy(
             ModelVersionId: modelId,
-            Version: "combo-v1",
+            Version: "combo-v2",
             Confidence: 0.25,
-            ClusterRadiusMeters: 15,
-            BufferMeters: 3);
+            ClusterRadiusMeters: 4.5,
+            BufferMeters: 1.5,
+            MinClusterTrees: 1);
 
         var zones = MissionDiseaseJobProcessor.BuildProposedDiseaseZones(
             orderId,
@@ -248,5 +250,80 @@ public sealed class ComboDiseasePoleLinkingTests
         Assert.Null(MissionComboAnalysisPublisher.TryReadOptionalGuid(root, "bad_type"));
         Assert.Null(MissionComboAnalysisPublisher.TryReadOptionalGuid(root, "bad_string"));
         Assert.Equal(expectedProfileId, MissionComboAnalysisPublisher.TryReadOptionalGuid(root, "valid_profile_id"));
+    }
+
+    [Fact]
+    public void BuildProposedDiseaseZonesSkipsClustersSmallerThanMinimumTrees()
+    {
+        var policy = new ComboInferencePolicy(
+            ModelVersionId: Guid.NewGuid(),
+            Version: "combo-v2",
+            Confidence: 0.25,
+            ClusterRadiusMeters: 4.5,
+            BufferMeters: 1.5,
+            MinClusterTrees: 3);
+
+        var zones = MissionDiseaseJobProcessor.BuildProposedDiseaseZones(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            version: 1,
+            policy,
+            [
+                new(Guid.NewGuid(), "BROWN_SPOT", 10.75000, 106.66000, 0.85m, Guid.NewGuid(), Guid.NewGuid(), null),
+                new(Guid.NewGuid(), "BROWN_SPOT", 10.75002, 106.66000, 0.82m, Guid.NewGuid(), Guid.NewGuid(), null)
+            ]);
+
+        Assert.Empty(zones);
+    }
+
+    [Fact]
+    public void BuildProposedDiseaseZonesUsesTightConvexHullWithinBoundary()
+    {
+        var policy = new ComboInferencePolicy(
+            ModelVersionId: Guid.NewGuid(),
+            Version: "combo-v2",
+            Confidence: 0.25,
+            ClusterRadiusMeters: 4.5,
+            BufferMeters: 1.5,
+            MinClusterTrees: 3);
+
+        var factory = new GeometryFactory(new PrecisionModel(), 4326);
+        var boundary = factory.CreatePolygon(
+        [
+            new Coordinate(106.65995, 10.74995),
+            new Coordinate(106.66020, 10.74995),
+            new Coordinate(106.66020, 10.75020),
+            new Coordinate(106.65995, 10.75020),
+            new Coordinate(106.65995, 10.74995)
+        ]);
+
+        // 3 in-boundary poles ~2.8m apart along diagonal + 1 out-of-boundary pole nearby
+        var in1 = Guid.NewGuid();
+        var in2 = Guid.NewGuid();
+        var in3 = Guid.NewGuid();
+        var outOfBoundary = Guid.NewGuid();
+
+        var zones = MissionDiseaseJobProcessor.BuildProposedDiseaseZones(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            version: 1,
+            policy,
+            [
+                new(in1, "ANTHRACNOSE", 10.75000, 106.66000, 0.90m, Guid.NewGuid(), Guid.NewGuid(), null),
+                new(in2, "ANTHRACNOSE", 10.75002, 106.66002, 0.88m, Guid.NewGuid(), Guid.NewGuid(), null),
+                new(in3, "ANTHRACNOSE", 10.75004, 106.66004, 0.87m, Guid.NewGuid(), Guid.NewGuid(), null),
+                new(outOfBoundary, "ANTHRACNOSE", 10.74993, 106.66000, 0.95m, Guid.NewGuid(), Guid.NewGuid(), null)
+            ],
+            boundary);
+
+        var zone = Assert.Single(zones);
+        Assert.Equal(3, zone.Memberships.Count);
+        Assert.DoesNotContain(zone.Memberships, m => m.FindingId == outOfBoundary);
+
+        var ring = zone.Geometry.Coordinates[0];
+        var zonePolygon = factory.CreatePolygon(ring.Select(c => new Coordinate(c[0], c[1])).ToArray());
+        Assert.True(zonePolygon.IsValid);
+        Assert.True(boundary.Covers(zonePolygon));
+        Assert.True(ring.Count > 5); // rounded convex hull, not a 5-vertex axis-aligned box
     }
 }
