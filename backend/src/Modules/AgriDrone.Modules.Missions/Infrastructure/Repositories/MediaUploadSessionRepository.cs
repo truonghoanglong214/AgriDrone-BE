@@ -54,6 +54,7 @@ internal sealed class MediaUploadSessionRepository(
         Guid tenantId,
         Guid farmId,
         Guid missionId,
+        Guid uploadRevisionId,
         string checksum,
         CancellationToken cancellationToken = default)
     {
@@ -62,6 +63,7 @@ internal sealed class MediaUploadSessionRepository(
             session => session.TenantId == tenantId &&
                        session.FarmId == farmId &&
                        session.MissionId == missionId &&
+                       session.UploadRevisionId == uploadRevisionId &&
                        session.ExpectedChecksum == normalized &&
                        (session.Status == MediaUploadSessionStatus.Pending ||
                         session.Status == MediaUploadSessionStatus.Verifying ||

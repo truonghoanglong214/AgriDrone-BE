@@ -15,6 +15,8 @@ public sealed class MissionTelemetryImport : Entity
 
     public Guid MissionId { get; private set; }
 
+    public Guid UploadRevisionId { get; private set; }
+
     public Guid OperationId { get; private set; }
 
     public string SourceFileName { get; private set; } = null!;
@@ -45,7 +47,8 @@ public sealed class MissionTelemetryImport : Entity
         DateTimeOffset firstRecordedAt,
         DateTimeOffset lastRecordedAt,
         Guid createdBy,
-        DateTimeOffset importedAt)
+        DateTimeOffset importedAt,
+        Guid uploadRevisionId = default)
     {
         DomainGuard.NotEmpty(tenantId);
         DomainGuard.NotEmpty(farmId);
@@ -120,6 +123,7 @@ public sealed class MissionTelemetryImport : Entity
             TenantId = tenantId,
             FarmId = farmId,
             MissionId = missionId,
+            UploadRevisionId = uploadRevisionId,
             OperationId = operationId,
             SourceFileName = normalizedFileName,
             PayloadChecksum = normalizedChecksum,
@@ -146,6 +150,7 @@ public sealed class MissionTelemetryImport : Entity
                 nameof(replacement));
         }
 
+        UploadRevisionId = replacement.UploadRevisionId;
         OperationId = replacement.OperationId;
         SourceFileName = replacement.SourceFileName;
         PayloadChecksum = replacement.PayloadChecksum;

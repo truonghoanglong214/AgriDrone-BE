@@ -29,7 +29,12 @@ internal sealed class MissionMediaQueries(MissionsDbContext dbContext) : IMissio
         Guid tenantId, Guid farmId, Guid missionId, PagedRequest page,
         MediaType? mediaType, MissionMediaRole? mediaRole, CancellationToken cancellationToken)
     {
-        var query = ScopedMedia(tenantId, farmId, missionId);
+        var query = ScopedMedia(tenantId, farmId, missionId)
+            .Where(item => item.Mission.UploadRevisionId == Guid.Empty ||
+                (item.MediaRole != MissionMediaRole.RawImage && item.MediaRole != MissionMediaRole.RawVideo) ||
+                dbContext.MediaUploadSessions.Any(session => session.MissionId == missionId &&
+                    session.TenantId == tenantId && session.FarmId == farmId && session.MediaAssetId == item.MediaId &&
+                    session.UploadRevisionId == item.Mission.UploadRevisionId && session.Status == MediaUploadSessionStatus.Completed));
         if (mediaType.HasValue)
             query = query.Where(item => item.Media.MediaType == mediaType.Value);
         if (mediaRole.HasValue)

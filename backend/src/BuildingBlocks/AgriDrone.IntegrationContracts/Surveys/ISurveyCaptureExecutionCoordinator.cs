@@ -145,7 +145,8 @@ public record ReopenCaptureInputManifestRequest(
     Guid CorrelationId,
     Guid OperationId,
     string PayloadFingerprint,
-    string Reason);
+    string Reason,
+    bool ReplaceApprovedInput = false);
 
 public record ReopenCaptureInputManifestResult(
     bool Success,

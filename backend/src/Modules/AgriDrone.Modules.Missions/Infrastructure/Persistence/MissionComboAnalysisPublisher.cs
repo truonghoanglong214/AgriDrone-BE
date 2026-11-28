@@ -217,6 +217,17 @@ internal sealed class MissionComboAnalysisPublisher(
         if (attemptId == Guid.Empty || mission.CaptureAttemptId != attemptId)
             return Conflict("The COMBO snapshot must reference the mission's capture attempt.");
 
+        var approvalReference = comboSnapshot.InputApprovalId?.ToString("D");
+        var manifestReference = comboSnapshot.InputManifestId?.ToString("D");
+        var approvedInputIsCurrent = await db.Database.SqlQuery<bool>($"""
+            SELECT EXISTS (SELECT 1 FROM survey.capture_attempts
+                WHERE id = {attemptId} AND order_id = {orderId} AND tenant_id = {tenantId} AND farm_id = {farmId}
+                  AND input_approval_reference = {approvalReference} AND upload_manifest_reference = {manifestReference}
+                  AND upload_manifest_fingerprint = {comboSnapshot.InputManifestHash}) AS "Value"
+            """).SingleAsync(cancellationToken);
+        if (!approvedInputIsCurrent)
+            return Conflict("The approved input has changed. Run disease detection for the current approved input.");
+
         var lineage = await db.Database.SqlQuery<ImportedLineageRow>($"""
             SELECT batch.job_id AS "JobId", batch.source_revision AS "SourceRevision",
                    batch.handoff_id AS "HandoffId", batch.supersedes_handoff_id AS "SupersedesHandoffId"

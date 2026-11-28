@@ -22,6 +22,7 @@ internal interface IMediaUploadSessionRepository
         Guid tenantId,
         Guid farmId,
         Guid missionId,
+        Guid uploadRevisionId,
         string checksum,
         CancellationToken cancellationToken = default);
 

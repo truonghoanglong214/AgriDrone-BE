@@ -1,8 +1,6 @@
 using AgriDrone.Modules.Missions.Application.Abstractions.Media;
-using AgriDrone.Modules.Missions.Application.Abstractions.Missions;
 using AgriDrone.SharedKernel.Application;
 using AgriDrone.SharedKernel.Application.Abstractions.Authorization;
-using AgriDrone.SharedKernel.Application.Abstractions.Execution;
 using MediatR;
 
 namespace AgriDrone.Modules.Missions.Application.Features.Media.GetMissionMediaDownloadUrl;
@@ -10,7 +8,6 @@ namespace AgriDrone.Modules.Missions.Application.Features.Media.GetMissionMediaD
 internal sealed class GetMissionMediaDownloadUrlQueryHandler(
     IMissionMediaQueries queries,
     IObjectStorage storage,
-    IExecutionContext executionContext,
     ISystemManagerAccessService managerAccessService,
     TimeProvider timeProvider)
     : IRequestHandler<GetMissionMediaDownloadUrlQuery, Result<MissionMediaDownloadResponse>>
@@ -18,11 +15,8 @@ internal sealed class GetMissionMediaDownloadUrlQueryHandler(
     public async Task<Result<MissionMediaDownloadResponse>> Handle(
         GetMissionMediaDownloadUrlQuery request, CancellationToken cancellationToken)
     {
-        if (executionContext.TenantId is not Guid tenantId)
-            return Result.Failure<MissionMediaDownloadResponse>(MissionError.CurrentTenantRequired());
-
         var access = await managerAccessService.ResolveFarmAccessAsync(request.FarmId, cancellationToken);
-        if (!access.IsAllowed || access.TenantId != tenantId || access.FarmId != request.FarmId)
+        if (!access.IsAllowed || access.TenantId is not Guid tenantId || access.FarmId != request.FarmId)
             return Result.Failure<MissionMediaDownloadResponse>(AppError.Forbidden(
                 "MissionMedia.FarmAccessDenied", "The manager is not assigned to this Farm."));
 

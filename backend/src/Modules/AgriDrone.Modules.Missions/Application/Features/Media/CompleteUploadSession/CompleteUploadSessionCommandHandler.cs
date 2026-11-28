@@ -80,6 +80,9 @@ internal sealed class CompleteUploadSessionCommandHandler(
                     request.UploadSessionId));
         }
 
+        if (session.UploadRevisionId != mission.UploadRevisionId)
+            return Result.Failure<CompleteUploadSessionResult>(MediaUploadError.RetryOperationRequired());
+
         if (session.Status ==
             MediaUploadSessionStatus.Completed)
         {

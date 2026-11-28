@@ -48,6 +48,27 @@ public sealed class UploadMissionMediaTests
         Assert.Equal(1, fixture.WriteCount);
     }
 
+    [Fact]
+    public async Task SameImageStartsNewUploadAfterApprovedCaptureIsReopened()
+    {
+        var fixture = new Fixture();
+        var first = await fixture.Upload(Png);
+        Assert.True(first.IsSuccess);
+        var originalOperationId = fixture.Session!.OperationId;
+
+        var revisionId = fixture.ReopenApprovedCapture();
+        var replacement = await fixture.Upload(Png);
+        var retry = await fixture.Upload(Png);
+
+        Assert.True(replacement.IsSuccess);
+        Assert.True(retry.IsSuccess);
+        Assert.NotEqual(first.Value.MediaAssetId, replacement.Value.MediaAssetId);
+        Assert.Equal(replacement.Value.MediaAssetId, retry.Value.MediaAssetId);
+        Assert.NotEqual(originalOperationId, fixture.Session!.OperationId);
+        Assert.Equal(revisionId, fixture.Session.UploadRevisionId);
+        Assert.Equal(2, fixture.WriteCount);
+    }
+
     [Theory]
     [InlineData("")]
     [InlineData("not an image")]
@@ -146,11 +167,14 @@ public sealed class UploadMissionMediaTests
             {
                 if (message is CreateUploadSessionCommand create)
                 {
-                    Session ??= MediaUploadSession.Create(create.TenantId, create.FarmId,
-                        create.MissionId, create.OperationId, Guid.NewGuid(), ActorId.Value,
-                        create.FileName, create.MimeType, create.MediaType, create.FileSizeBytes,
-                        create.Sha256Checksum, "minio://media/test", now,
-                        now.AddHours(1), create.CapturedAt);
+                    if (Session?.OperationId != create.OperationId)
+                    {
+                        Session = MediaUploadSession.Create(create.TenantId, create.FarmId,
+                            create.MissionId, create.OperationId, Guid.NewGuid(), ActorId.Value,
+                            create.FileName, create.MimeType, create.MediaType, create.FileSizeBytes,
+                            create.Sha256Checksum, "minio://media/test", now,
+                            now.AddHours(1), create.CapturedAt, mission.UploadRevisionId);
+                    }
                     return Task.FromResult(Result.Success(new CreateUploadSessionResult(
                         Session.Id, Session.MediaAssetId, new Uri("https://example.invalid"),
                         Session.ExpiresAt, Session.Status, 1, false)));
@@ -171,6 +195,21 @@ public sealed class UploadMissionMediaTests
                 throw new NotSupportedException();
             };
             handler = new(this, this, this, null!, this, this, sender);
+        }
+
+        public Guid ReopenApprovedCapture()
+        {
+            using var answers = JsonDocument.Parse("{}");
+            mission.BindCaptureAttempt(Guid.NewGuid());
+            mission.Schedule(now, now.AddHours(1), now);
+            mission.CompletePreflight(Guid.NewGuid(), "test", answers, true, null, ActorId!.Value, now);
+            mission.StartFlight(ActorId.Value, now);
+            mission.CompleteFlight(now);
+            mission.StartUploading(now);
+            mission.MarkReadyForProcessing(now);
+            var revisionId = Guid.NewGuid();
+            mission.ReopenCaptureUpload(revisionId, now);
+            return revisionId;
         }
 
         public async Task<Result<CompleteUploadSessionResult>> Upload(
@@ -202,8 +241,8 @@ public sealed class UploadMissionMediaTests
             Guid operation, CancellationToken cancellationToken = default) =>
             Task.FromResult(Session?.OperationId == operation ? Session : null);
         public Task<MediaUploadSession?> GetActiveByChecksumAsync(Guid tenant, Guid farm,
-            Guid missionId, string checksum, CancellationToken cancellationToken = default) =>
-            Task.FromResult(Session?.ExpectedChecksum == checksum ? Session : null);
+            Guid missionId, Guid uploadRevisionId, string checksum, CancellationToken cancellationToken = default) =>
+            Task.FromResult(Session?.UploadRevisionId == uploadRevisionId && Session.ExpectedChecksum == checksum ? Session : null);
         public async Task UploadAsync(string uri, Stream content, long length, string mime,
             CancellationToken cancellationToken = default)
         {

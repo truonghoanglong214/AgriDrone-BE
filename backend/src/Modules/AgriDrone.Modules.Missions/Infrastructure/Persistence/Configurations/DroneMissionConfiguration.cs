@@ -209,6 +209,10 @@ public sealed class DroneMissionConfiguration : IEntityTypeConfiguration<DroneMi
             .HasDefaultValueSql("'DRAFT'::system.mission_status")
             .IsRequired();
 
+        builder.Property(mission => mission.UploadRevisionId)
+            .HasColumnName("upload_revision_id")
+            .HasDefaultValue(Guid.Empty);
+
         builder.Property(mission => mission.ProcessingStatus)
             .HasColumnName("processing_status")
             .HasColumnType("system.processing_status")

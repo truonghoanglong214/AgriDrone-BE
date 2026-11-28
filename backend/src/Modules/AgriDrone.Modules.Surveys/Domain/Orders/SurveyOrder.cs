@@ -605,6 +605,21 @@ public sealed class SurveyOrder : AggregateRoot
     public void TransitionToAwaitingCaptureUploadV3(DateTimeOffset occurredAt) =>
         ApplyV3Transition(SurveyOrderStatus.AwaitingCaptureUpload, occurredAt);
 
+    public void ReopenApprovedDiseaseCaptureUpload(DateTimeOffset occurredAt)
+    {
+        EnsureV3Scope();
+        if (Status != SurveyOrderStatus.Processing || CurrentApprovedResultRevisionId.HasValue || CurrentInvoiceRevisionId.HasValue)
+        {
+            throw new SurveyDomainException(
+                "SurveyOrder.DiseaseCaptureUploadClosed",
+                "Only a processing order with an open result can replace disease capture input.");
+        }
+
+        DomainGuard.Utc(occurredAt, nameof(occurredAt));
+        ArgumentOutOfRangeException.ThrowIfLessThan(occurredAt, UpdatedAt);
+        ApplyTransition(SurveyOrderStatus.AwaitingCaptureUpload, occurredAt);
+    }
+
     public void TransitionToAwaitingInputReviewV3(DateTimeOffset occurredAt) =>
         ApplyV3Transition(SurveyOrderStatus.AwaitingInputReview, occurredAt);
 

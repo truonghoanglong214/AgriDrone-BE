@@ -331,7 +331,8 @@ public sealed class V3SystemManagerSurveyOrdersController(
                 executionContext.CorrelationId,
                 request.OperationId!.Value,
                 request.PayloadFingerprint,
-                request.Reason), cancellationToken);
+                request.Reason,
+                request.ReplaceApprovedInput), cancellationToken);
         if (result.ErrorCode == "MANAGER_FORBIDDEN")
             return Results.Forbid();
         if (result.ErrorCode == "CAPTURE_MANIFEST_NOT_FOUND")

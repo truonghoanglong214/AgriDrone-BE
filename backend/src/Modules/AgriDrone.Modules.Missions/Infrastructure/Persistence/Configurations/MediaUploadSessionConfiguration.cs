@@ -128,6 +128,10 @@ public sealed class MediaUploadSessionConfiguration
             .HasColumnType("timestamp with time zone")
             .IsRequired();
 
+        builder.Property(session => session.UploadRevisionId)
+            .HasColumnName("upload_revision_id")
+            .HasDefaultValue(Guid.Empty);
+
         builder.Property(session => session.Version)
             .IsRowVersion();
 
@@ -144,6 +148,7 @@ public sealed class MediaUploadSessionConfiguration
         {
             session.TenantId,
             session.MissionId,
+            session.UploadRevisionId,
             session.ExpectedChecksum
         })
             .IsUnique()

@@ -102,7 +102,8 @@ public sealed record ReopenV3CaptureManifestRequest(
     [param: Required] uint? ExpectedAttemptVersion,
     [param: Required] Guid? OperationId,
     [param: Required, StringLength(128, MinimumLength = 1)] string PayloadFingerprint,
-    [param: Required, StringLength(500, MinimumLength = 1)] string Reason);
+    [param: Required, StringLength(500, MinimumLength = 1)] string Reason,
+    bool ReplaceApprovedInput = false);
 
 public sealed record ApproveV3CaptureInputRequest(
     [param: Required] Guid? ManifestId,

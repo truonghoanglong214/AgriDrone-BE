@@ -802,10 +802,12 @@ internal sealed class SurveyCaptureExecutionCoordinator(
             if (attempt is null || manifest is null)
                 return ReopenFailure("CAPTURE_MANIFEST_NOT_FOUND", "V3 order or manifest was not found.");
 
+            var reopenAction = request.ReplaceApprovedInput
+                ? CaptureAttemptAction.ReopenApprovedUpload : CaptureAttemptAction.ReopenUpload;
             var replay = attempt.History.SingleOrDefault(value => value.OperationId == request.OperationId);
             if (replay is not null)
             {
-                return replay.Action == CaptureAttemptAction.ReopenUpload &&
+                return replay.Action == reopenAction &&
                        replay.EvidenceReference == manifest.Id.ToString("D") &&
                        string.Equals(replay.PayloadFingerprint, request.PayloadFingerprint.Trim(), StringComparison.Ordinal)
                     ? new ReopenCaptureInputManifestResult(
@@ -814,13 +816,20 @@ internal sealed class SurveyCaptureExecutionCoordinator(
                     : ReopenFailure("OPERATION_CONFLICT", "The operation identifier was already used with another payload.");
             }
 
-            if (order.Status != SurveyOrderStatus.AwaitingInputReview ||
-                order.Version != request.ExpectedOrderVersion ||
-                attempt.Status != CaptureAttemptStatus.Uploaded ||
+            if (order.Version != request.ExpectedOrderVersion ||
                 attempt.Version != request.ExpectedAttemptVersion ||
-                manifest.Status != CaptureInputManifestStatus.Uploaded ||
                 attempt.UploadManifestReference != manifest.Id.ToString("D") ||
-                attempt.UploadManifestFingerprint != manifest.ManifestFingerprint ||
+                attempt.UploadManifestFingerprint != manifest.ManifestFingerprint)
+            {
+                return ReopenFailure("CAPTURE_MANIFEST_STATE_CONFLICT", "The current order, attempt or manifest has changed.");
+            }
+
+            if (request.ReplaceApprovedInput)
+                return await ReopenApprovedDiseaseInputAsync(request, order, attempt, manifest, token);
+
+            if (order.Status != SurveyOrderStatus.AwaitingInputReview ||
+                attempt.Status != CaptureAttemptStatus.Uploaded ||
+                manifest.Status != CaptureInputManifestStatus.Uploaded ||
                 await db.Set<CaptureInputApproval>().AnyAsync(value => value.InputManifestId == manifest.Id, token))
             {
                 return ReopenFailure("CAPTURE_MANIFEST_STATE_CONFLICT", "Only the current unapproved manifest can be reopened.");
@@ -855,7 +864,103 @@ internal sealed class SurveyCaptureExecutionCoordinator(
                 true, attempt.Id, mission.Id, manifest.Id, attempt.Status.ToString(), attempt.Version, order.Version);
         },
         exception => ReopenFailure("CAPTURE_MANIFEST_REOPEN_CONFLICT", GetErrorMessage(exception)),
-        cancellationToken);
+        cancellationToken,
+        request.ReplaceApprovedInput ? IsolationLevel.ReadCommitted : IsolationLevel.Serializable);
+
+    private async Task<ReopenCaptureInputManifestResult> ReopenApprovedDiseaseInputAsync(
+        ReopenCaptureInputManifestRequest request,
+        SurveyOrder order,
+        CaptureAttempt attempt,
+        CaptureInputManifest manifest,
+        CancellationToken token)
+    {
+        if (order.Status != SurveyOrderStatus.Processing || order.CurrentApprovedResultRevisionId.HasValue ||
+            order.CurrentInvoiceRevisionId.HasValue || !attempt.MappingSourceAttemptId.HasValue ||
+            attempt.Status != CaptureAttemptStatus.Processing || manifest.Status != CaptureInputManifestStatus.Approved ||
+            !Guid.TryParse(attempt.InputApprovalReference, out var approvalId) ||
+            !Guid.TryParse(attempt.ProcessingJobReference, out var processingJobId))
+        {
+            return ReopenFailure("CAPTURE_MANIFEST_STATE_CONFLICT",
+                "Only the current approved input of a processing disease capture can be replaced.");
+        }
+
+        // Job submission and the preliminary-result publisher use the same mission lock.
+        await LockRowAsync("SELECT id FROM mission.drone_missions WHERE id = @id FOR UPDATE", manifest.MissionId, token);
+        var mission = await db.Set<DroneMission>().SingleOrDefaultAsync(value =>
+            value.Id == manifest.MissionId && value.CaptureAttemptId == attempt.Id && value.SurveyOrderId == order.Id &&
+            value.TenantId == order.TenantId && value.FarmId == order.FarmId, token);
+        if (mission is null || mission.Status != MissionStatus.ReadyForProcessing)
+            return ReopenFailure("CAPTURE_MISSION_STATE_CONFLICT", "The disease mission must be ready for processing.");
+
+        var approvalExists = await db.Set<CaptureInputApproval>().AnyAsync(value =>
+            value.Id == approvalId && value.InputManifestId == manifest.Id && value.CaptureAttemptId == attempt.Id &&
+            value.ProcessingJobId == processingJobId && value.ManifestFingerprint == manifest.ManifestFingerprint, token);
+        if (!approvalExists)
+            return ReopenFailure("CAPTURE_MANIFEST_STATE_CONFLICT", "The current input approval could not be verified.");
+
+        var partitionKey = mission.Id.ToString("D");
+        if (await db.Set<OutboxMessage>().AnyAsync(value =>
+                value.TenantId == order.TenantId && value.PartitionKey == partitionKey &&
+                value.EventType == IntegrationEventTypes.ComboAnalysisReadyV1, token) ||
+            await db.Set<SurveyComboImportBatch>().AnyAsync(value =>
+                value.SurveyOrderId == order.Id && value.MissionId == mission.Id, token))
+        {
+            return ReopenFailure("CAPTURE_DISEASE_RESULT_ALREADY_SENT",
+                "The disease result has already been submitted for review.");
+        }
+
+        var jobsActive = await db.Database.SqlQuery<bool>($"""
+            SELECT EXISTS (SELECT 1 FROM mission.tiling_jobs
+                WHERE mission_id = {mission.Id} AND tenant_id = {order.TenantId} AND farm_id = {order.FarmId}
+                  AND status IN ('QUEUED', 'RUNNING')) AS "Value"
+            """).SingleAsync(token);
+        if (jobsActive)
+            return ReopenFailure("CAPTURE_JOB_STATE_CONFLICT", "Wait for the active mission job to finish before replacing input.");
+
+        await LockRowAsync("SELECT id FROM mission.ai_processing_jobs WHERE id = @id FOR UPDATE", processingJobId, token);
+        var job = await FindCaptureMappingJob(manifest).SingleOrDefaultAsync(token);
+        if (job is null || job.Id != processingJobId || job.Status != AiJobStatus.Queued)
+            return ReopenFailure("CAPTURE_JOB_STATE_CONFLICT", "The manifest's processing job has already advanced.");
+
+        var telemetry = await ReadValidCaptureTelemetryAsync(order, mission, token);
+        if (telemetry is null || FormatTelemetryEvidence(telemetry) != manifest.GpsMetadataSummary)
+            return ReopenFailure("CAPTURE_TELEMETRY_NOT_FROZEN", "The approved telemetry could not be archived.");
+
+        var points = await db.Set<MissionTelemetryPoint>().AsNoTracking()
+            .Where(point => point.MissionId == mission.Id).OrderBy(point => point.SequenceNumber)
+            .Select(point => new
+            {
+                point.SequenceNumber, point.RecordedAt,
+                Longitude = point.Location.X, Latitude = point.Location.Y,
+                point.AltitudeM, point.AltitudeReference, point.HeadingDeg, point.SpeedMps, point.HorizontalAccuracyM
+            }).ToListAsync(token);
+
+        var now = clock.GetUtcNow();
+        mission.ReopenCaptureUpload(request.OperationId, now);
+        job.CancelQueuedCaptureMapping(now);
+        manifest.SupersedeApprovedInput();
+        attempt.ReopenUpload(manifest.Id, now, request.ActorId, request.CorrelationId, request.OperationId,
+            request.PayloadFingerprint, request.Reason, request.ExpectedAttemptVersion, replaceApprovedInput: true);
+        order.ReopenApprovedDiseaseCaptureUpload(now);
+        using var oldData = JsonSerializer.SerializeToDocument(new
+        {
+            manifestId = manifest.Id,
+            approvalId,
+            telemetryId = telemetry.Id,
+            telemetry.UploadRevisionId,
+            telemetry.OperationId,
+            telemetry.SourceFileName,
+            telemetry.PayloadChecksum,
+            telemetry.ImportedAt,
+            points
+        });
+        AddCaptureEvidence(order, request.ActorId, request.CorrelationId,
+            "CAPTURE_DISEASE_INPUT_REOPENED", now, attempt.Id, mission.Id, oldData: oldData);
+        await db.SaveChangesAsync(token);
+
+        return new ReopenCaptureInputManifestResult(
+            true, attempt.Id, mission.Id, manifest.Id, attempt.Status.ToString(), attempt.Version, order.Version);
+    }
 
     public Task<ApproveCaptureInputResult> ApproveInputAsync(
         ApproveCaptureInputRequest request,
@@ -1161,12 +1266,31 @@ internal sealed class SurveyCaptureExecutionCoordinator(
                     "An active manifest exists without a matching idempotent operation receipt.");
             }
 
-            var files = await db.Set<MissionMedia>()
+            var filesQuery = db.Set<MissionMedia>()
                 .AsNoTracking()
                 .Where(value =>
                     value.MissionId == mission.Id &&
                     value.Media.StorageStatus == MediaStorageStatus.Active &&
-                    value.Media.DeletedAt == null)
+                    value.Media.DeletedAt == null);
+            if (mission.UploadRevisionId != Guid.Empty)
+            {
+                if (mission.Status != MissionStatus.Uploading)
+                    return ManifestFailure("CAPTURE_MISSION_STATE_CONFLICT", "The replacement input must be uploaded before freezing.");
+
+                var replacementSessions = db.Set<MediaUploadSession>().Where(session => session.MissionId == mission.Id &&
+                    session.TenantId == order.TenantId && session.FarmId == order.FarmId &&
+                    session.UploadRevisionId == mission.UploadRevisionId);
+                if (await replacementSessions.AnyAsync(session => session.Status == MediaUploadSessionStatus.Verifying ||
+                        (session.Status == MediaUploadSessionStatus.Pending && session.ExpiresAt > now), token))
+                {
+                    return ManifestFailure("CAPTURE_MEDIA_UPLOAD_IN_PROGRESS", "Finish the current uploads before freezing replacement input.");
+                }
+                filesQuery = filesQuery.Where(value => value.MediaRole == MissionMediaRole.RawImage &&
+                    replacementSessions.Any(session => session.MediaAssetId == value.MediaId &&
+                        session.Status == MediaUploadSessionStatus.Completed));
+            }
+
+            var files = await filesQuery
                 .OrderBy(value => value.MediaId)
                 .Select(value => new
                 {
@@ -1279,7 +1403,8 @@ internal sealed class SurveyCaptureExecutionCoordinator(
     {
         var telemetry = await db.Set<MissionTelemetryImport>().AsNoTracking()
             .SingleOrDefaultAsync(value => value.MissionId == mission.Id &&
-                value.TenantId == order.TenantId && value.FarmId == order.FarmId, token);
+                value.TenantId == order.TenantId && value.FarmId == order.FarmId &&
+                value.UploadRevisionId == mission.UploadRevisionId, token);
         if (telemetry is null || telemetry.PointCount < 2 ||
             telemetry.PayloadChecksum is not { Length: 64 } checksum || !checksum.All(Uri.IsHexDigit) ||
             telemetry.SelectedSegmentJson?.RootElement is not { ValueKind: JsonValueKind.Object } segment ||
@@ -2060,7 +2185,8 @@ internal sealed class SurveyCaptureExecutionCoordinator(
         Guid? missionId = null,
         Guid? cancellationDecisionId = null,
         Guid? refundObligationId = null,
-        object? fundingBasis = null)
+        object? fundingBasis = null,
+        JsonDocument? oldData = null)
     {
         using var newData = JsonSerializer.SerializeToDocument(new
         {
@@ -2079,7 +2205,7 @@ internal sealed class SurveyCaptureExecutionCoordinator(
             nameof(SurveyOrder),
             order.Id,
             changeType,
-            oldData: null,
+            oldData,
             newData,
             changedAt));
 
@@ -2111,10 +2237,11 @@ internal sealed class SurveyCaptureExecutionCoordinator(
     private async Task<TResult> ExecuteAsync<TResult>(
         Func<CancellationToken, Task<TResult>> operation,
         Func<Exception, TResult> exceptionMapper,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IsolationLevel isolationLevel = IsolationLevel.Serializable)
     {
         await using var transaction = await db.Database.BeginTransactionAsync(
-            IsolationLevel.Serializable,
+            isolationLevel,
             cancellationToken);
         try
         {

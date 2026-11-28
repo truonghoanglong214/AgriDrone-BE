@@ -76,6 +76,7 @@ internal sealed class MissionTelemetryRepository(
                 WHERE o.id = {orderId} AND o.tenant_id = {telemetryImport.TenantId} AND o.farm_id = {telemetryImport.FarmId}
                   AND o.scope = 'V3' AND o.status = 'AWAITING_CAPTURE_UPLOAD'
                   AND a.id = {attemptId} AND m.id = {telemetryImport.MissionId}
+                  AND m.upload_revision_id = {telemetryImport.UploadRevisionId}
                   AND m.tenant_id = o.tenant_id AND m.farm_id = o.farm_id
                   AND a.tenant_id = o.tenant_id AND a.farm_id = o.farm_id AND a.status = 'AWAITING_UPLOAD'
                 FOR SHARE OF o

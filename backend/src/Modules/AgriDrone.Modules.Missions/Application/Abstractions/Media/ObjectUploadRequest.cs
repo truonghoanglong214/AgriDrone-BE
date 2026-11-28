@@ -8,4 +8,5 @@ public sealed record ObjectUploadRequest(
     long FileSizeBytes,
     string ChecksumAlgorithm,
     string Checksum,
-    Guid? MissionId = null);
+    Guid? MissionId = null,
+    Guid UploadRevisionId = default);
