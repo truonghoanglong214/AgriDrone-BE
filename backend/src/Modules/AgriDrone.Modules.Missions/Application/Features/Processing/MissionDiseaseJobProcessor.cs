@@ -1219,7 +1219,7 @@ internal sealed class MissionDiseaseJobProcessor(
         }
 
         var groups = eligibleItems.OrderBy(item => item.FindingId)
-            .GroupBy(i => i.ClassName.Trim().Replace(' ', '_').ToUpperInvariant(), StringComparer.Ordinal)
+            .GroupBy(i => ComboAnalysisV1Values.NormalizeSuspectedClassCode(i.ClassName), StringComparer.Ordinal)
             .ToList();
 
         var zones = new List<ProposedComboDiseaseZoneV1>();

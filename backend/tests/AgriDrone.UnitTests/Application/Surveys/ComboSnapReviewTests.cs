@@ -297,4 +297,18 @@ public sealed class ComboSnapReviewTests
         Assert.Equal(fpBaseline, fpExplicitNull);
         Assert.NotEqual(fpBaseline, fpSnapped);
     }
+
+    [Theory]
+    [InlineData("DISEASE_BROWN_SPOT", "BROWN_SPOT")]
+    [InlineData("BROWN_SPOT", "BROWN_SPOT")]
+    [InlineData("DISEASE_SUN_BURN", "SUNBURN")]
+    [InlineData("SUN_BURN", "SUNBURN")]
+    [InlineData("SUNBURN", "SUNBURN")]
+    [InlineData("DISEASE_ANTHRACNOSE", "ANTHRACNOSE")]
+    [InlineData("Disease Soft Rot", "SOFT_ROT")]
+    [InlineData("DISEASE_SOFT_ROT", "SOFT_ROT")]
+    public void NormalizeSuspectedClassCodeUnifiesZoneAndFindingCodes(string input, string expected)
+    {
+        Assert.Equal(expected, ComboAnalysisV1Values.NormalizeSuspectedClassCode(input));
+    }
 }

@@ -86,4 +86,18 @@ public static class ComboAnalysisV1Values
     public const string ResultNature = "PRELIMINARY_SUSPECTED";
     public const string ClassificationNature = "SUSPECTED";
     public const decimal BoundaryReviewThresholdMeters = 0.3m;
+
+    public static string NormalizeSuspectedClassCode(string? label)
+    {
+        var normalized = (label ?? string.Empty).Trim().Replace(' ', '_').ToUpperInvariant();
+        return normalized switch
+        {
+            "SUNBURN" or "SUN_BURN" or "DISEASE_SUN_BURN" => "SUNBURN",
+            "BROWN_SPOT" or "DISEASE_BROWN_SPOT" => "BROWN_SPOT",
+            "ANTHRACNOSE" or "DISEASE_ANTHRACNOSE" => "ANTHRACNOSE",
+            _ => normalized.StartsWith("DISEASE_", StringComparison.Ordinal)
+                ? normalized["DISEASE_".Length..]
+                : normalized
+        };
+    }
 }

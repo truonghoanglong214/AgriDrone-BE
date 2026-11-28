@@ -1682,7 +1682,10 @@ internal sealed class SurveyResultReviewTransaction(
                         $"Selected guidance '{guidanceId}' was not found or is not effective at evaluation time."));
                 }
 
-                if (!string.Equals(guidance.SuspectedClassCode.Trim(), proposal.SuspectedClassCode.Trim(), StringComparison.OrdinalIgnoreCase))
+                if (!string.Equals(
+                        ComboAnalysisV1Values.NormalizeSuspectedClassCode(guidance.SuspectedClassCode),
+                        ComboAnalysisV1Values.NormalizeSuspectedClassCode(proposal.SuspectedClassCode),
+                        StringComparison.Ordinal))
                 {
                     return Result.Failure(AppError.Validation("ComboReview.GuidanceClassMismatch",
                         $"Selected guidance '{guidanceId}' suspected class '{guidance.SuspectedClassCode}' does not match zone class '{proposal.SuspectedClassCode}'."));
@@ -1768,7 +1771,7 @@ internal sealed class SurveyResultReviewTransaction(
                 $"Approved zone '{proposalId}' must have a non-empty unique set of member findings."));
         }
 
-        var normalizedZoneClass = zoneSuspectedClassCode.Trim();
+        var normalizedZoneClass = ComboAnalysisV1Values.NormalizeSuspectedClassCode(zoneSuspectedClassCode);
         var seenProfiles = new HashSet<Guid>();
         var seenCandidates = new HashSet<Guid>();
 
@@ -1782,10 +1785,11 @@ internal sealed class SurveyResultReviewTransaction(
                     $"Zone '{proposalId}' references finding '{fid}' which is missing or not accepted in this review."));
             }
 
-            if (!string.Equals(memberFinding.SuspectedClassCode.Trim(), normalizedZoneClass, StringComparison.OrdinalIgnoreCase))
+            var normalizedFindingClass = ComboAnalysisV1Values.NormalizeSuspectedClassCode(memberFinding.SuspectedClassCode);
+            if (!string.Equals(normalizedFindingClass, normalizedZoneClass, StringComparison.Ordinal))
             {
                 return Result.Failure(AppError.Validation("ComboReview.ZoneMemberClassMismatch",
-                    $"Zone '{proposalId}' (class '{normalizedZoneClass}') cannot include finding '{fid}' of class '{memberFinding.SuspectedClassCode}'."));
+                    $"Zone '{proposalId}' (class '{zoneSuspectedClassCode.Trim()}') cannot include finding '{fid}' of class '{memberFinding.SuspectedClassCode}'."));
             }
 
             var effectiveProfileId = memberDecision.ReviewedPlantProfileId ?? memberFinding.PlantProfileId;

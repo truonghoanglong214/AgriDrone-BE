@@ -140,7 +140,7 @@ public static class ComboSnapReviewValidator
                 continue;
             }
 
-            var normalizedClass = finding.SuspectedClassCode.Trim().ToUpperInvariant();
+            var normalizedClass = ComboAnalysisV1Values.NormalizeSuspectedClassCode(finding.SuspectedClassCode);
             var key = (effectiveProfileId.Value, normalizedClass);
             var isSnapped = fd.ReviewedPlantProfileId.HasValue;
 

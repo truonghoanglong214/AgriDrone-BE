@@ -369,7 +369,7 @@ internal sealed class MissionComboAnalysisPublisher(
                 """).SingleOrDefaultAsync(cancellationToken);
             if (boundary is null) return Conflict("The capture boundary is unavailable.");
 
-            var classCode = ClassCode(className) ?? className;
+            var classCode = ComboAnalysisV1Values.NormalizeSuspectedClassCode(className);
             var media = MissionPlantHealthPublisher.EvidenceMedia(observation.EvidenceMediaId, metadata);
 
             var metadataProfileId = TryReadOptionalGuid(metadata, "plant_profile_id");
@@ -491,18 +491,6 @@ internal sealed class MissionComboAnalysisPublisher(
 
     private static MissionComboAnalysisPublishResult Conflict(string error) =>
         new(MissionComboAnalysisPublishStatus.Conflict, Errors: [error]);
-
-    private static string? ClassCode(string label)
-    {
-        var normalized = label.Trim().Replace(' ', '_').ToUpperInvariant();
-        return normalized switch
-        {
-            "SUNBURN" or "SUN_BURN" or "DISEASE_SUN_BURN" => "SUNBURN",
-            "BROWN_SPOT" or "DISEASE_BROWN_SPOT" => "BROWN_SPOT",
-            "ANTHRACNOSE" or "DISEASE_ANTHRACNOSE" => "ANTHRACNOSE",
-            _ => null
-        };
-    }
 
     private static Guid CreateVersion5(Guid namespaceId, string name)
     {
