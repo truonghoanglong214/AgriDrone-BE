@@ -32,4 +32,5 @@ public sealed record SurveyResultReviewResponse(
     SurveyComboPendingReviewBatch? ComboPendingBatch,
     SurveyComboReviewSummaryDto? CurrentComboReview,
     SurveyExpectedFreezeTokensDto ExpectedFreezeTokens,
-    string? CurrentApprovedResultFingerprint = null);
+    string? CurrentApprovedResultFingerprint = null,
+    IReadOnlyList<ComboSnapTargetDto>? ComboSnapTargets = null);

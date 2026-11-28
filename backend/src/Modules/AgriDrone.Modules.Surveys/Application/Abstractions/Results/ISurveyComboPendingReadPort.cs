@@ -80,6 +80,15 @@ public sealed record ComboPendingZoneMembershipDto(
     Guid? MappingCandidateId,
     decimal Confidence);
 
+public sealed record ComboSnapTargetDto(
+    Guid PlantProfileId,
+    Guid MappingCandidateId,
+    Guid SourceCandidateId,
+    double Latitude,
+    double Longitude,
+    int? Row,
+    int? Column);
+
 public sealed record SurveyComboReviewSummaryDto(
     Guid ReviewRevisionId,
     int RevisionNumber,

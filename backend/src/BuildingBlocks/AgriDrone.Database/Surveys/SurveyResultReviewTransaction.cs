@@ -141,6 +141,7 @@ internal sealed class SurveyResultReviewTransaction(
 
             SurveyComboPendingReviewBatch? pendingBatch = null;
             SurveyComboReviewSummaryDto? reviewSummary = null;
+            IReadOnlyList<ComboSnapTargetDto> comboSnapTargets = [];
             SurveyExpectedFreezeTokensDto expectedTokens;
 
             if (commercial.ServiceCode == SurveyInternalApprovedResultRevision.ServiceCombo && commercial.ScreensDisease)
@@ -152,6 +153,21 @@ internal sealed class SurveyResultReviewTransaction(
                 var (batch, payload, persistedBlockers) = batchResult.Value;
                 var plantIdsByProfile = await LoadPlantIdsByProfileAsync(order.FarmId, payload, cancellationToken);
                 pendingBatch = MapPendingBatch(batch, payload, persistedBlockers, plantIdsByProfile);
+
+                if (order.Status == SurveyOrderStatus.Processing &&
+                    currentApproval is null &&
+                    activeAttempt.Status == CaptureAttemptStatus.Processing)
+                {
+                    var targetBaseMapVersionId = batch.FarmBaseMapVersionId != Guid.Empty
+                        ? batch.FarmBaseMapVersionId
+                        : snapshot.FarmBaseMapVersionId;
+                    comboSnapTargets = await LoadComboSnapTargetsAsync(
+                        order.TenantId,
+                        order.FarmId,
+                        snapshot.Id,
+                        targetBaseMapVersionId,
+                        cancellationToken);
+                }
 
                 var reviewHeads = await db.Set<SurveyComboReviewRevision>().AsNoTracking()
                     .Where(r => r.TenantId == order.TenantId &&
@@ -251,7 +267,8 @@ internal sealed class SurveyResultReviewTransaction(
                 ComboPendingBatch: pendingBatch,
                 CurrentComboReview: reviewSummary,
                 ExpectedFreezeTokens: expectedTokens,
-                CurrentApprovedResultFingerprint: currentApproval?.EvidenceFingerprint));
+                CurrentApprovedResultFingerprint: currentApproval?.EvidenceFingerprint,
+                ComboSnapTargets: comboSnapTargets));
         }
         catch (Fault f)
         {
@@ -291,7 +308,7 @@ internal sealed class SurveyResultReviewTransaction(
         var normalizedDecisions = SurveyComboReviewRevision.CanonicalizeDecisions(
             new ComboReviewDecisionsSnapshotRecord(
                 command.FindingDecisions.Select(f => new ComboFindingReviewDecisionRecord(
-                    f.FindingId, f.Decision, f.Reason, f.EvidenceMediaIds ?? [])).ToList(),
+                    f.FindingId, f.Decision, f.Reason, f.EvidenceMediaIds ?? [], f.ReviewedPlantProfileId)).ToList(),
                 command.ZoneDecisions.Select(z => new ComboZoneReviewDecisionRecord(
                     z.SourceProposalId, z.Decision, z.ReviewedGeometry, z.ReviewedFindingIds,
                     z.SelectedGuidanceId, z.SelectedGuidanceVersionNumber, z.Reason, z.EvidenceMediaIds ?? [])).ToList(),
@@ -1462,6 +1479,37 @@ internal sealed class SurveyResultReviewTransaction(
                 "Every finding in the COMBO batch must have an explicit review decision."));
         }
 
+        if (decisions.FindingDecisions.Any(f => f.ReviewedPlantProfileId.HasValue))
+        {
+            if (!order.VerifiedPoleCountSnapshotId.HasValue)
+            {
+                return Result.Failure(AppError.Conflict("CountSnapshot.Missing",
+                    "Verified pole count snapshot is required to snap COMBO findings to poles."));
+            }
+
+            var outsideBoundaryFindingIds = BuildOutsideBoundaryFindingIdSet(payload, persistedBlockers);
+            var snapTargets = await LoadComboSnapTargetsAsync(
+                order.TenantId,
+                order.FarmId,
+                order.VerifiedPoleCountSnapshotId.Value,
+                batch.FarmBaseMapVersionId,
+                cancellationToken);
+            var snapTargetsByProfile = snapTargets.ToDictionary(
+                t => t.PlantProfileId,
+                t => new ComboSnapTargetPoint(t.PlantProfileId, t.Latitude, t.Longitude));
+
+            var snapValidation = ComboSnapReviewValidator.Validate(
+                payload,
+                outsideBoundaryFindingIds,
+                decisions.FindingDecisions,
+                snapTargetsByProfile,
+                allowedMedia);
+            if (snapValidation.IsFailure)
+            {
+                return snapValidation;
+            }
+        }
+
         // 2. Blocking items: exact set match by composite key (SourceType, SourceId, ReasonCode)
         var blockerKeysExpected = persistedBlockers
             .Select(b => (b.SourceType.Trim(), b.SourceId.Trim(), b.ReasonCode.Trim()))
@@ -1494,7 +1542,8 @@ internal sealed class SurveyResultReviewTransaction(
             }
 
             var isResolved = SurveyComboReviewRevision.IsResolvedBlockerStatus(br.Resolution);
-            var mediaCheck = ValidateEvidenceMedia(br.EvidenceMediaIds, allowedMedia, required: isResolved);
+            var resolvedBySnap = ComboSnapReviewValidator.IsIdentityBlockerResolvedBySnap(br, findingDecisionById);
+            var mediaCheck = ValidateEvidenceMedia(br.EvidenceMediaIds, allowedMedia, required: isResolved && !resolvedBySnap);
             if (mediaCheck.IsFailure) return mediaCheck;
 
             if (isResolved && string.IsNullOrWhiteSpace(br.Reason))
@@ -1739,7 +1788,8 @@ internal sealed class SurveyResultReviewTransaction(
                     $"Zone '{proposalId}' (class '{normalizedZoneClass}') cannot include finding '{fid}' of class '{memberFinding.SuspectedClassCode}'."));
             }
 
-            if (memberFinding.PlantProfileId is Guid memberProfileId && !seenProfiles.Add(memberProfileId))
+            var effectiveProfileId = memberDecision.ReviewedPlantProfileId ?? memberFinding.PlantProfileId;
+            if (effectiveProfileId is Guid memberProfileId && !seenProfiles.Add(memberProfileId))
             {
                 return Result.Failure(AppError.Validation("ComboReview.DuplicateZonePole",
                     $"Zone '{proposalId}' cannot include plant profile '{memberProfileId}' more than once."));
@@ -1996,6 +2046,87 @@ internal sealed class SurveyResultReviewTransaction(
             lookup.TryAdd(row.PlantProfileId, row.PlantId);
         }
         return lookup;
+    }
+
+    private async Task<IReadOnlyList<ComboSnapTargetDto>> LoadComboSnapTargetsAsync(
+        Guid tenantId,
+        Guid farmId,
+        Guid snapshotId,
+        Guid farmBaseMapVersionId,
+        CancellationToken cancellationToken)
+    {
+        return await db.Database.SqlQuery<ComboSnapTargetDto>($"""
+            SELECT DISTINCT ON (i.plant_profile_id)
+                i.plant_profile_id AS "PlantProfileId",
+                i.mapping_candidate_id AS "MappingCandidateId",
+                i.source_candidate_id AS "SourceCandidateId",
+                ST_Y(COALESCE(p.location, pp.current_location, i.effective_position)::geometry) AS "Latitude",
+                ST_X(COALESCE(p.location, pp.current_location, i.effective_position)::geometry) AS "Longitude",
+                COALESCE(i.effective_row_index, p.row_index) AS "Row",
+                COALESCE(i.effective_column_index, p.column_index) AS "Column"
+            FROM survey.survey_order_pole_count_snapshots s
+            JOIN survey.survey_order_pole_count_snapshot_items i
+              ON i.snapshot_id = s.id
+             AND i.tenant_id = s.tenant_id
+             AND i.farm_id = s.farm_id
+            JOIN plant.plant_profiles pp
+              ON pp.id = i.plant_profile_id
+             AND pp.tenant_id = i.tenant_id
+             AND pp.farm_id = i.farm_id
+             AND pp.status = 'Active'
+            LEFT JOIN plant.plants p
+              ON p.farm_id = i.farm_id
+             AND p.lifecycle_status = 'ACTIVE'
+             AND (p.id = i.target_plant_id OR p.plant_profile_id = i.plant_profile_id)
+            WHERE s.id = {snapshotId}
+              AND s.tenant_id = {tenantId}
+              AND s.farm_id = {farmId}
+              AND s.farm_base_map_version_id = {farmBaseMapVersionId}
+              AND i.is_accepted = TRUE
+              AND i.plant_profile_id IS NOT NULL
+              AND NOT EXISTS (
+                  SELECT 1 FROM plant.plants pr
+                  WHERE pr.farm_id = i.farm_id
+                    AND pr.plant_profile_id = i.plant_profile_id
+                    AND pr.lifecycle_status <> 'ACTIVE'
+                    AND NOT EXISTS (
+                        SELECT 1 FROM plant.plants pa
+                        WHERE pa.farm_id = i.farm_id
+                          AND pa.plant_profile_id = i.plant_profile_id
+                          AND pa.lifecycle_status = 'ACTIVE'
+                    )
+              )
+            ORDER BY i.plant_profile_id, (p.id = i.target_plant_id) DESC NULLS LAST, p.created_at DESC NULLS LAST, p.id, i.id
+            """).ToListAsync(cancellationToken);
+    }
+
+    private static HashSet<Guid> BuildOutsideBoundaryFindingIdSet(
+        ComboAnalysisReadyV1 payload,
+        List<ComboPendingBlockingItem> persistedBlockers)
+    {
+        var ids = new HashSet<Guid>();
+        foreach (var exception in payload.BoundaryExceptions)
+        {
+            if ((string.Equals(exception.BoundaryClassification, "OUTSIDE_BOUNDARY", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(exception.BoundaryClassification, "OUT_OF_BOUNDARY", StringComparison.OrdinalIgnoreCase)) &&
+                Guid.TryParse(exception.SourceReferenceId, out var findingId))
+            {
+                ids.Add(findingId);
+            }
+        }
+
+        foreach (var blocker in persistedBlockers)
+        {
+            if (blocker.SourceType is "BOUNDARY_EXCEPTION" or "FINDING_SPATIAL" &&
+                (string.Equals(blocker.ReasonCode, "OUTSIDE_BOUNDARY", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(blocker.ReasonCode, "OUT_OF_BOUNDARY", StringComparison.OrdinalIgnoreCase)) &&
+                Guid.TryParse(blocker.SourceId, out var findingId))
+            {
+                ids.Add(findingId);
+            }
+        }
+
+        return ids;
     }
 
     private static SurveyComboPendingReviewBatch MapPendingBatch(

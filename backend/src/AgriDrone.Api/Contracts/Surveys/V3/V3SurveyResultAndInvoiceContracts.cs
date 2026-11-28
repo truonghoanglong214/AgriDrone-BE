@@ -9,7 +9,8 @@ public sealed record V3ComboFindingReviewDecisionRequest(
     [param: Required] Guid? FindingId,
     [param: Required, StringLength(32, MinimumLength = 1)] string Decision,
     [param: StringLength(500)] string? Reason = null,
-    IReadOnlyList<Guid>? EvidenceMediaIds = null);
+    IReadOnlyList<Guid>? EvidenceMediaIds = null,
+    Guid? ReviewedPlantProfileId = null);
 
 public sealed record V3ComboZoneReviewDecisionRequest(
     [param: Required, StringLength(128, MinimumLength = 1)] string SourceProposalId,
@@ -144,7 +145,8 @@ public sealed record V3SurveyResultReviewApiResponse(
     string? CurrentApprovedResultFingerprint,
     SurveyComboPendingReviewBatch? ComboPendingBatch,
     SurveyComboReviewSummaryDto? CurrentComboReview,
-    SurveyExpectedFreezeTokensDto ExpectedFreezeTokens);
+    SurveyExpectedFreezeTokensDto ExpectedFreezeTokens,
+    IReadOnlyList<ComboSnapTargetDto> ComboSnapTargets);
 
 public sealed record V3ComboReviewApiResponse(
     Guid OrderId,

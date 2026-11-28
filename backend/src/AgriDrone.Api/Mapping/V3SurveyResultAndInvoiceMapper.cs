@@ -33,7 +33,8 @@ internal static class V3SurveyResultAndInvoiceMapper
                     f.FindingId!.Value,
                     f.Decision,
                     f.Reason,
-                    f.EvidenceMediaIds))
+                    f.EvidenceMediaIds,
+                    f.ReviewedPlantProfileId))
                 .ToArray(),
             ZoneDecisions: request.ZoneDecisions
                 .Select(z => new ComboZoneReviewDecisionInput(
@@ -121,7 +122,8 @@ internal static class V3SurveyResultAndInvoiceMapper
                                 f.FindingId!.Value,
                                 f.Decision,
                                 f.Reason,
-                                f.EvidenceMediaIds ?? []))
+                                f.EvidenceMediaIds ?? [],
+                                f.ReviewedPlantProfileId))
                             .ToArray(),
                         ZoneDecisions: request.ReplacementComboReview.Decisions.ZoneDecisions
                             .Select(z => new ComboZoneReviewDecisionRecord(
@@ -172,7 +174,8 @@ internal static class V3SurveyResultAndInvoiceMapper
             response.CurrentApprovedResultFingerprint,
             response.ComboPendingBatch,
             response.CurrentComboReview,
-            response.ExpectedFreezeTokens);
+            response.ExpectedFreezeTokens,
+            response.ComboSnapTargets ?? []);
 
     public static V3ComboReviewApiResponse ToResponse(
         RecordSurveyComboReviewResponse response) => new(

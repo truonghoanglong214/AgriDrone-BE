@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using AgriDrone.IntegrationContracts.Mapping;
 using AgriDrone.SharedKernel.Application;
@@ -12,7 +13,8 @@ public sealed record ComboFindingReviewDecisionRecord(
     Guid FindingId,
     string Decision,
     string? Reason,
-    IReadOnlyList<Guid> EvidenceMediaIds);
+    IReadOnlyList<Guid> EvidenceMediaIds,
+    Guid? ReviewedPlantProfileId = null);
 
 public sealed record ComboZoneReviewDecisionRecord(
     string SourceProposalId,
@@ -56,6 +58,14 @@ public sealed class SurveyComboReviewRevision : Entity
     public const string BlockerResolutionUnresolved = "Unresolved";
 
     private static readonly Regex Hex64Regex = new("^[0-9a-f]{64}$", RegexOptions.Compiled);
+
+    private sealed record CanonicalFindingDecisionForFingerprint(
+        Guid FindingId,
+        string Decision,
+        string? Reason,
+        IReadOnlyList<Guid> EvidenceMediaIds,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        Guid? ReviewedPlantProfileId);
 
     private static readonly JsonSerializerOptions CanonicalJsonOptions = new()
     {
@@ -223,7 +233,20 @@ public sealed class SurveyComboReviewRevision : Entity
             ? null
             : negativeResultConfirmationEvidence.Trim();
         var canonicalDecisions = CanonicalizeDecisions(decisions);
-        var decisionsBytes = JsonSerializer.SerializeToUtf8Bytes(canonicalDecisions, CanonicalJsonOptions);
+        var fingerprintSnapshot = new
+        {
+            FindingDecisions = canonicalDecisions.FindingDecisions
+                .Select(f => new CanonicalFindingDecisionForFingerprint(
+                    f.FindingId,
+                    f.Decision,
+                    f.Reason,
+                    f.EvidenceMediaIds,
+                    f.ReviewedPlantProfileId))
+                .ToArray(),
+            canonicalDecisions.ZoneDecisions,
+            canonicalDecisions.BlockerResolutions
+        };
+        var decisionsBytes = JsonSerializer.SerializeToUtf8Bytes(fingerprintSnapshot, CanonicalJsonOptions);
 
         using var stream = new MemoryStream();
         using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = false }))

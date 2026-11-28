@@ -1585,8 +1585,9 @@ internal sealed class SurveyInvoiceTransaction(
                     $"Accepted COMBO finding '{fd.FindingId}' was not found in batch payload."));
             }
 
-            var matchesCorrectedCount = finding.PlantProfileId is Guid profileId &&
-                (finding.MappingCandidateId is Guid candidateId
+            var effectiveProfileId = fd.ReviewedPlantProfileId ?? finding.PlantProfileId;
+            var matchesCorrectedCount = effectiveProfileId is Guid profileId &&
+                (!fd.ReviewedPlantProfileId.HasValue && finding.MappingCandidateId is Guid candidateId
                     ? acceptedPairs.Contains((candidateId, profileId))
                     : acceptedProfiles.Contains(profileId));
             if (!matchesCorrectedCount)

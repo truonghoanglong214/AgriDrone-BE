@@ -77,12 +77,18 @@ internal sealed class V3OwnerSurveyResults(
             if (decisions is null || source is null)
                 return null;
 
-            var accepted = decisions.FindingDecisions
+            var acceptedDecisionsByFindingId = decisions.FindingDecisions
                 .Where(d => d.Decision == SurveyComboReviewRevision.FindingDecisionAccept)
-                .Select(d => d.FindingId).ToHashSet();
-            findings = source.Findings.Where(f => accepted.Contains(f.FindingId) && f.PlantProfileId.HasValue)
-                .Select(f => new V3OwnerSurveyFinding(f.FindingId, f.PlantProfileId!.Value, f.Position,
-                    f.ObservedAt, f.SuspectedClassCode, f.Confidence, f.Uncertainty, f.Limitations)).ToArray();
+                .ToDictionary(d => d.FindingId);
+            var accepted = acceptedDecisionsByFindingId.Keys.ToHashSet();
+            findings = source.Findings
+                .Select(f => acceptedDecisionsByFindingId.TryGetValue(f.FindingId, out var decision)
+                    ? (Finding: f, EffectiveProfileId: decision.ReviewedPlantProfileId ?? f.PlantProfileId)
+                    : default)
+                .Where(x => x.Finding is not null && x.EffectiveProfileId.HasValue)
+                .Select(x => new V3OwnerSurveyFinding(x.Finding.FindingId, x.EffectiveProfileId!.Value, x.Finding.Position,
+                    x.Finding.ObservedAt, x.Finding.SuspectedClassCode, x.Finding.Confidence, x.Finding.Uncertainty,
+                    x.Finding.Limitations)).ToArray();
 
             var approvedZones = decisions.ZoneDecisions
                 .Where(z => z.Decision is SurveyComboReviewRevision.ZoneDecisionApprove or SurveyComboReviewRevision.ZoneDecisionAdjust)

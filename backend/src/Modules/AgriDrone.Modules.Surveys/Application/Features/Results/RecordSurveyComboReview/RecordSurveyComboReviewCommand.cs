@@ -8,7 +8,8 @@ public sealed record ComboFindingReviewDecisionInput(
     Guid FindingId,
     string Decision,
     string? Reason = null,
-    IReadOnlyList<Guid>? EvidenceMediaIds = null);
+    IReadOnlyList<Guid>? EvidenceMediaIds = null,
+    Guid? ReviewedPlantProfileId = null);
 
 public sealed record ComboZoneReviewDecisionInput(
     string SourceProposalId,

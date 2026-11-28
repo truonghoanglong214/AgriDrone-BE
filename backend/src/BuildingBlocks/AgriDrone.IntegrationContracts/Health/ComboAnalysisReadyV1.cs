@@ -85,5 +85,5 @@ public static class ComboAnalysisV1Values
 {
     public const string ResultNature = "PRELIMINARY_SUSPECTED";
     public const string ClassificationNature = "SUSPECTED";
-    public const decimal BoundaryReviewThresholdMeters = 1m;
+    public const decimal BoundaryReviewThresholdMeters = 0.3m;
 }
