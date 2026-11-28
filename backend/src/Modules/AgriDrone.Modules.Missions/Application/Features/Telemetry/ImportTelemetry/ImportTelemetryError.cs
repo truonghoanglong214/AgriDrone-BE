@@ -27,7 +27,12 @@ internal static class ImportTelemetryError
     public static AppError CaptureUploadClosed() =>
         AppError.Conflict(
             "TelemetryImport.CaptureUploadClosed",
-            "This V3 capture upload is closed. Reopen the unapproved manifest to import telemetry.");
+            "This V3 capture upload is closed. Reopen the input manifest before importing telemetry.");
+
+    public static AppError NewOperationRequired() =>
+        AppError.Conflict(
+            "TelemetryImport.NewOperationRequired",
+            "The operation belongs to a previous upload revision. Use a new Idempotency-Key.");
 
     public static AppError ConcurrentUpdate() =>
         AppError.Conflict(

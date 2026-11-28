@@ -40,7 +40,7 @@ internal static class MediaUploadError
     public static AppError RetryOperationRequired() =>
         AppError.Conflict(
             "MediaUpload.NewOperationRequired",
-            "The previous mission upload attempt failed. " +
+            "The previous upload operation cannot be reused. " +
             "Create a new operation ID for the retry.");
 
     public static AppError ConcurrentUpdate() =>

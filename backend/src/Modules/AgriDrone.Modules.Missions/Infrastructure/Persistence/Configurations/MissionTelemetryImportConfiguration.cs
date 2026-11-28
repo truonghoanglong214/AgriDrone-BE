@@ -66,6 +66,10 @@ public sealed class MissionTelemetryImportConfiguration
             .HasColumnType("uuid")
             .IsRequired();
 
+        builder.Property(telemetryImport => telemetryImport.UploadRevisionId)
+            .HasColumnName("upload_revision_id")
+            .HasDefaultValue(Guid.Empty);
+
         builder.Property(telemetryImport =>
                 telemetryImport.OperationId)
             .HasColumnName("operation_id")

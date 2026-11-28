@@ -14,6 +14,8 @@ public sealed class MediaUploadSession : Entity
 
     public Guid MissionId { get; private set; }
 
+    public Guid UploadRevisionId { get; private set; }
+
     public Guid OperationId { get; private set; }
 
     public Guid MediaAssetId { get; private set; }
@@ -63,7 +65,8 @@ public sealed class MediaUploadSession : Entity
         string storageUri,
         DateTimeOffset createdAt,
         DateTimeOffset expiresAt,
-        DateTimeOffset? capturedAt = null)
+        DateTimeOffset? capturedAt = null,
+        Guid uploadRevisionId = default)
     {
         DomainGuard.NotEmpty(tenantId);
         DomainGuard.NotEmpty(farmId);
@@ -148,6 +151,7 @@ public sealed class MediaUploadSession : Entity
             TenantId = tenantId,
             FarmId = farmId,
             MissionId = missionId,
+            UploadRevisionId = uploadRevisionId,
             OperationId = operationId,
             MediaAssetId = mediaAssetId,
             CreatedBy = createdBy,

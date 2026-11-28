@@ -11,6 +11,7 @@ public static class CaptureAttemptAction
     public const string RecordFlightFailed = "RecordFlightFailed";
     public const string MarkUploaded = "MarkUploaded";
     public const string ReopenUpload = "ReopenUpload";
+    public const string ReopenApprovedUpload = "ReopenApprovedUpload";
     public const string StartProcessing = "StartProcessing";
     public const string AcceptProcessing = "AcceptProcessing";
     public const string RequireReflight = "RequireReflight";

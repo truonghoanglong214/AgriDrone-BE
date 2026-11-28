@@ -876,15 +876,20 @@ public sealed class CaptureAttempt : AggregateRoot
         Guid operationId,
         string payloadFingerprint,
         string reason,
-        uint expectedVersion)
+        uint expectedVersion,
+        bool replaceApprovedInput = false)
     {
-        const string action = CaptureAttemptAction.ReopenUpload;
+        var action = replaceApprovedInput ? CaptureAttemptAction.ReopenApprovedUpload : CaptureAttemptAction.ReopenUpload;
         if (CheckIdempotentReplay(operationId, payloadFingerprint, action)) return;
 
         EnsureVersion(expectedVersion);
         const CaptureAttemptStatus targetStatus = CaptureAttemptStatus.AwaitingUpload;
+        var canReopen = replaceApprovedInput
+            ? Status == CaptureAttemptStatus.Processing && MappingSourceAttemptId.HasValue &&
+              InputApprovalReference is not null && ProcessingJobReference is not null
+            : Status == CaptureAttemptStatus.Uploaded && CanTransition(Status, targetStatus);
         SurveyTransitionGuard.EnsureAllowed(
-            Status == CaptureAttemptStatus.Uploaded && CanTransition(Status, targetStatus),
+            canReopen,
             Status,
             targetStatus,
             CaptureAttemptDomainErrorCodes.InvalidTransition);
@@ -893,7 +898,7 @@ public sealed class CaptureAttempt : AggregateRoot
         {
             throw new SurveyDomainException(
                 CaptureAttemptDomainErrorCodes.EvidenceIdentityMismatch,
-                "Only the current uploaded manifest can be reopened.");
+                "Only the current input manifest can be reopened.");
         }
 
         DomainGuard.Utc(timestamp, nameof(timestamp));
@@ -905,6 +910,8 @@ public sealed class CaptureAttempt : AggregateRoot
 
         UploadManifestReference = null;
         UploadManifestFingerprint = null;
+        InputApprovalReference = null;
+        ProcessingJobReference = null;
         Status = targetStatus;
         Version++;
         UpdatedAt = timestamp;

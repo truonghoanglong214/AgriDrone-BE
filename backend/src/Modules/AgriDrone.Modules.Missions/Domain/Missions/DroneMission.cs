@@ -25,6 +25,8 @@ public sealed class DroneMission : AggregateRoot
 
     public Guid? CaptureAttemptId { get; private set; }
 
+    public Guid UploadRevisionId { get; private set; }
+
     public MissionPurpose? Purpose { get; private set; }
 
     public Guid? PreparationOperationId { get; private set; }
@@ -797,6 +799,18 @@ public sealed class DroneMission : AggregateRoot
         Status = MissionStatus.Uploading;
         ProcessingStatus = ProcessingStatus.NotUploaded;
         UpdatedAt = changedAt;
+    }
+
+    public void ReopenCaptureUpload(Guid uploadRevisionId, DateTimeOffset changedAt)
+    {
+        DomainGuard.NotEmpty(uploadRevisionId);
+        if (!CaptureAttemptId.HasValue)
+            throw new InvalidOperationException("Only a capture mission can start a replacement upload.");
+
+        EnsureStatus(MissionStatus.ReadyForProcessing);
+        ResetUpload(changedAt);
+        UploadRevisionId = uploadRevisionId;
+        ClearFlightRoute(changedAt);
     }
 
     public void MarkAwaitingReview(DateTimeOffset changedAt)

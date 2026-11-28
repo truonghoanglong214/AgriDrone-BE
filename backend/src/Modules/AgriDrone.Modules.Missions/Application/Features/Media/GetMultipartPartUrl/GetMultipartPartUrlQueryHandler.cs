@@ -44,6 +44,7 @@ internal sealed class GetMultipartPartUrlQueryHandler(
         var now = clock.GetUtcNow();
         var count = MultipartUploadPolicy.PartCount(session.FileSizeBytes);
         if (mission.Status != MissionStatus.Uploading ||
+            session.UploadRevisionId != mission.UploadRevisionId ||
             session.Status != MediaUploadSessionStatus.Pending ||
             session.MultipartUploadId is null || session.IsExpiredAt(now))
             return Result.Failure<GetMultipartPartUrlResult>(AppError.Conflict(

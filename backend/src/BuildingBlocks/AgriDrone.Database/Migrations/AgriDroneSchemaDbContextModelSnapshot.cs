@@ -2750,6 +2750,12 @@ namespace AgriDrone.Database.Migrations
                         .HasColumnType("xid")
                         .HasColumnName("xmin");
 
+                    b.Property<Guid>("UploadRevisionId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("upload_revision_id")
+                        .HasDefaultValue(Guid.Empty);
+
                     b.HasKey("Id")
                         .HasName("pk_media_upload_sessions");
 
@@ -2768,7 +2774,7 @@ namespace AgriDrone.Database.Migrations
                     b.HasIndex("Status", "ExpiresAt")
                         .HasDatabaseName("ix_upload_sessions_cleanup");
 
-                    b.HasIndex("TenantId", "MissionId", "ExpectedChecksum")
+                    b.HasIndex("TenantId", "MissionId", "UploadRevisionId", "ExpectedChecksum")
                         .IsUnique()
                         .HasDatabaseName("uq_upload_sessions_active_checksum")
                         .HasFilter("status IN ('Pending', 'Verifying', 'Completed')");
@@ -3108,6 +3114,12 @@ namespace AgriDrone.Database.Migrations
                     b.Property<Guid?>("ZoneId")
                         .HasColumnType("uuid")
                         .HasColumnName("zone_id");
+
+                    b.Property<Guid>("UploadRevisionId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("upload_revision_id")
+                        .HasDefaultValue(Guid.Empty);
 
                     b.HasKey("Id")
                         .HasName("pk_drone_missions");
@@ -4144,6 +4156,12 @@ namespace AgriDrone.Database.Migrations
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uuid")
                         .HasColumnName("tenant_id");
+
+                    b.Property<Guid>("UploadRevisionId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("upload_revision_id")
+                        .HasDefaultValue(Guid.Empty);
 
                     b.HasKey("Id")
                         .HasName("pk_mission_telemetry_imports");

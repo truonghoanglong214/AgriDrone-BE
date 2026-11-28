@@ -51,9 +51,10 @@ internal sealed class MinioObjectStorage(
         var safeObjectName =
             SanitizeObjectName(request.ObjectName);
 
-        var objectName = request.MissionId.HasValue
-            ? $"tenants/{request.TenantId:D}/media/{request.MissionId.Value:D}/{safeObjectName}"
-            : $"tenants/{request.TenantId:D}/media/{request.MediaAssetId:D}/{safeObjectName}";
+        var prefix = $"tenants/{request.TenantId:D}/media/{(request.MissionId ?? request.MediaAssetId):D}";
+        if (request.MissionId.HasValue && request.UploadRevisionId != Guid.Empty)
+            prefix += $"/uploads/{request.UploadRevisionId:D}/{request.MediaAssetId:D}";
+        var objectName = $"{prefix}/{safeObjectName}";
 
         var expiresAt = timeProvider.GetUtcNow()
             .AddMinutes(

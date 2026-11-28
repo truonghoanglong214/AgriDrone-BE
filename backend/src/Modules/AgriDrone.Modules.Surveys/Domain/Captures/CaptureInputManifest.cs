@@ -119,4 +119,14 @@ public sealed class CaptureInputManifest : Entity
         Status = CaptureInputManifestStatus.Superseded;
         EvaluatedAt = supersededAt;
     }
+
+    public void SupersedeApprovedInput()
+    {
+        if (Status != CaptureInputManifestStatus.Approved)
+        {
+            throw new InvalidOperationException("Only an approved input manifest can be replaced after approval.");
+        }
+
+        Status = CaptureInputManifestStatus.Superseded;
+    }
 }

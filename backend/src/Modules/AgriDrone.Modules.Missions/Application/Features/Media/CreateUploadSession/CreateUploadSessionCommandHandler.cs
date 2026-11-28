@@ -83,6 +83,9 @@ internal sealed class CreateUploadSessionCommandHandler(
 
         if (existing is not null)
         {
+            if (existing.UploadRevisionId != mission.UploadRevisionId)
+                return Result.Failure<CreateUploadSessionResult>(MediaUploadError.RetryOperationRequired());
+
             return await ReuseExistingOperationAsync(
                 request,
                 mission,
@@ -100,7 +103,7 @@ internal sealed class CreateUploadSessionCommandHandler(
 
         var matchingChecksum = await uploadSessionRepository
             .GetActiveByChecksumAsync(request.TenantId, request.FarmId,
-                request.MissionId, request.Sha256Checksum, cancellationToken);
+                request.MissionId, mission.UploadRevisionId, request.Sha256Checksum, cancellationToken);
         if (matchingChecksum is not null)
             return Result.Failure<CreateUploadSessionResult>(
                 MediaUploadError.ChecksumAlreadyActive());
@@ -118,7 +121,8 @@ internal sealed class CreateUploadSessionCommandHandler(
                     request.FileSizeBytes,
                     ChecksumAlgorithms.Sha256,
                     request.Sha256Checksum,
-                    request.MissionId),
+                    request.MissionId,
+                    mission.UploadRevisionId),
                 cancellationToken);
 
         var uploadSession = MediaUploadSession.Create(
@@ -136,7 +140,8 @@ internal sealed class CreateUploadSessionCommandHandler(
             objectSession.StorageUri,
             now,
             objectSession.ExpiresAt,
-            request.CapturedAt);
+            request.CapturedAt,
+            uploadRevisionId: mission.UploadRevisionId);
 
         var previousMissionStatus = mission.Status;
 
@@ -245,7 +250,8 @@ internal sealed class CreateUploadSessionCommandHandler(
                     existing.FileSizeBytes,
                     existing.ChecksumAlgorithm,
                     existing.ExpectedChecksum,
-                    existing.MissionId),
+                    existing.MissionId,
+                    existing.UploadRevisionId),
                 cancellationToken);
 
         existing.RefreshPendingUpload(

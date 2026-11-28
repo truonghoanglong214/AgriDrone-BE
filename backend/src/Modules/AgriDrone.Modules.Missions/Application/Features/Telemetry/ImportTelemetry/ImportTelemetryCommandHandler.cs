@@ -84,6 +84,9 @@ internal sealed class ImportTelemetryCommandHandler(
                     request.OperationId,
                     cancellationToken);
 
+        if (existingOperation is not null && existingOperation.UploadRevisionId != mission.UploadRevisionId)
+            return Result.Failure<ImportTelemetryResult>(ImportTelemetryError.NewOperationRequired());
+
         if (existingOperation is not null &&
             (existingOperation.MatchesPayload(
                  request.SourceFileName,
@@ -175,7 +178,8 @@ internal sealed class ImportTelemetryCommandHandler(
                 telemetryPoints[0].RecordedAt,
                 telemetryPoints[^1].RecordedAt,
                 actorId,
-                now);
+                now,
+                uploadRevisionId: mission.UploadRevisionId);
 
         var previousOperationId =
             existingMissionImport?.OperationId;

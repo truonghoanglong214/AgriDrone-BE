@@ -44,6 +44,7 @@ internal sealed class StartMultipartUploadCommandHandler(
             return Result.Failure<StartMultipartUploadResult>(AppError.NotFound(
                 "MediaUpload.SessionNotFound", "Upload session was not found."));
         if (mission.Status != MissionStatus.Uploading ||
+            session.UploadRevisionId != mission.UploadRevisionId ||
             session.Status != MediaUploadSessionStatus.Pending ||
             session.IsExpiredAt(clock.GetUtcNow()))
             return Result.Failure<StartMultipartUploadResult>(AppError.Conflict(

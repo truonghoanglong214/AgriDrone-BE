@@ -11,7 +11,8 @@ internal static class MissionUploadReadinessPolicy
         DroneMission mission,
         MissionUploadReadinessSnapshot snapshot)
     {
-        if (mission.Purpose == MissionPurpose.BaselineMapping ||
+        if (mission.UploadRevisionId != Guid.Empty ||
+            mission.Purpose == MissionPurpose.BaselineMapping ||
             mission.MissionType == MissionType.Mapping)
         {
             return snapshot.RawImageCount;

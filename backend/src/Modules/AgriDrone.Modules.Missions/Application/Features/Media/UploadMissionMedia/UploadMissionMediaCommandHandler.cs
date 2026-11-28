@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using AgriDrone.Modules.Missions.Application.Abstractions.Media;
 using AgriDrone.Modules.Missions.Application.Abstractions.Missions;
 using AgriDrone.Modules.Missions.Application.Features.Media.CompleteUploadSession;
@@ -77,8 +78,7 @@ internal sealed class UploadMissionMediaCommandHandler(
             mimeType, content.Length, cancellationToken);
         if (checksum is null)
             return InvalidFile("The image or video is incomplete or has an invalid container structure.");
-        // Operation uniqueness is scoped by tenant/farm/mission in persistence.
-        var operationId = new Guid(Convert.FromHexString(checksum).AsSpan(0, 16));
+        var operationId = OperationForUpload(checksum, mission.UploadRevisionId);
         var fileName = !string.IsNullOrWhiteSpace(request.FileName)
             ? Path.GetFileName(request.FileName)
             : checksum + UploadedMediaFormat.Extension(mimeType);
@@ -140,6 +140,18 @@ internal sealed class UploadMissionMediaCommandHandler(
     private static Result<CompleteUploadSessionResult> InvalidFile(string message) =>
         Result.Failure<CompleteUploadSessionResult>(
             AppError.Validation("MediaUpload.InvalidFile", message));
+
+    private static Guid OperationForUpload(string checksum, Guid uploadRevisionId)
+    {
+        var checksumBytes = Convert.FromHexString(checksum);
+        if (uploadRevisionId == Guid.Empty)
+            return new Guid(checksumBytes.AsSpan(0, 16));
+
+        Span<byte> input = stackalloc byte[48];
+        uploadRevisionId.TryWriteBytes(input);
+        checksumBytes.CopyTo(input[16..]);
+        return new Guid(SHA256.HashData(input).AsSpan(0, 16));
+    }
 
     private async Task UploadMultipartPartsAsync(
         MediaUploadSession session,

@@ -17,12 +17,22 @@ internal sealed class MissionUploadReadinessQueries(
         DateTimeOffset evaluatedAt,
         CancellationToken cancellationToken = default)
     {
+        var uploadRevisionId = await dbContext.DroneMissions.AsNoTracking()
+            .Where(mission => mission.Id == missionId && mission.TenantId == tenantId && mission.FarmId == farmId)
+            .Select(mission => mission.UploadRevisionId)
+            .SingleOrDefaultAsync(cancellationToken);
+        var revisionSessions = dbContext.MediaUploadSessions.AsNoTracking()
+            .Where(session => session.MissionId == missionId && session.TenantId == tenantId &&
+                session.FarmId == farmId && session.UploadRevisionId == uploadRevisionId);
+
         var mediaCounts = await dbContext.MissionMedia
             .AsNoTracking()
             .Where(link =>
                 link.MissionId == missionId &&
                 link.Mission.TenantId == tenantId &&
                 link.Mission.FarmId == farmId &&
+                (uploadRevisionId == Guid.Empty || revisionSessions.Any(session =>
+                    session.MediaAssetId == link.MediaId && session.Status == MediaUploadSessionStatus.Completed)) &&
                 link.Media.StorageStatus ==
                     MediaStorageStatus.Active)
             .GroupBy(_ => 1)
@@ -44,13 +54,15 @@ internal sealed class MissionUploadReadinessQueries(
                 .Where(telemetryImport =>
                     telemetryImport.TenantId == tenantId &&
                     telemetryImport.FarmId == farmId &&
-                    telemetryImport.MissionId == missionId)
+                    telemetryImport.MissionId == missionId &&
+                    telemetryImport.UploadRevisionId == uploadRevisionId)
                 .Select(telemetryImport =>
                     (int?)telemetryImport.PointCount)
                 .SingleOrDefaultAsync(cancellationToken);
 
-        var persistedPointCount =
-            await dbContext.MissionTelemetryPoints
+        var persistedPointCount = uploadRevisionId != Guid.Empty && !importedPointCount.HasValue
+            ? 0
+            : await dbContext.MissionTelemetryPoints
                 .AsNoTracking()
                 .CountAsync(
                     point =>
@@ -60,13 +72,9 @@ internal sealed class MissionUploadReadinessQueries(
                     cancellationToken);
 
         var hasActiveUploadSessions =
-            await dbContext.MediaUploadSessions
-                .AsNoTracking()
+            await revisionSessions
                 .AnyAsync(
                     session =>
-                        session.TenantId == tenantId &&
-                        session.FarmId == farmId &&
-                        session.MissionId == missionId &&
                         (
                             session.Status ==
                                 MediaUploadSessionStatus.Verifying ||
