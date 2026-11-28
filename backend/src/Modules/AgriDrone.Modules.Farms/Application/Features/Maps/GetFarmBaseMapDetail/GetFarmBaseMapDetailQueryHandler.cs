@@ -82,7 +82,7 @@ internal sealed class GetFarmBaseMapDetailQueryHandler(
         }
 
         if (!access.CanReadDraft && !await previewReader.CanOwnerReadAsync(
-                version.TenantId, version.FarmId, version.SourceSurveyOrderId, cancellationToken))
+                version.TenantId, version.FarmId, version.SourceSurveyOrderId, version.Id, cancellationToken))
         {
             return Result.Failure<FarmBaseMapDetailResponse>(AppError.Conflict(
                 "FarmBaseMapVersion.PaymentRequired", "Reviewed survey results remain locked until final settlement."));

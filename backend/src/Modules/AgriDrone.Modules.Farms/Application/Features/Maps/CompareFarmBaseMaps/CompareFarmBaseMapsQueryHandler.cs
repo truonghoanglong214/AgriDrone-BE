@@ -69,7 +69,7 @@ internal sealed class CompareFarmBaseMapsQueryHandler(
             foreach (var version in allVersions)
             {
                 if (await previewReader.CanOwnerReadAsync(
-                        version.TenantId, version.FarmId, version.SourceSurveyOrderId, cancellationToken))
+                        version.TenantId, version.FarmId, version.SourceSurveyOrderId, version.Id, cancellationToken))
                 {
                     readable.Add(version);
                 }

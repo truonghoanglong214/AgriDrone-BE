@@ -4,7 +4,7 @@ namespace AgriDrone.Modules.Farms.Application.Abstractions.Maps;
 
 public interface IFarmBaseMapPreviewReader
 {
-    Task<bool> CanOwnerReadAsync(Guid tenantId, Guid farmId, Guid sourceOrderId,
+    Task<bool> CanOwnerReadAsync(Guid tenantId, Guid farmId, Guid sourceOrderId, Guid mapId,
         CancellationToken cancellationToken = default);
 
     Task<FarmBaseMapPreview?> GetAsync(

@@ -1,6 +1,7 @@
 using System.Data.Common;
 using AgriDrone.Database;
 using AgriDrone.Database.Mapping;
+using AgriDrone.Database.Surveys;
 using AgriDrone.Modules.Missions.Application.Abstractions.Media;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -13,9 +14,10 @@ namespace AgriDrone.IntegrationTests;
 public sealed class FarmBaseMapPreviewQueryTests
 {
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task PreviewAndOwnerSettlementGateTranslateWithoutStorageAccess(bool ownerGate)
+    [InlineData("preview")]
+    [InlineData("owner")]
+    [InlineData("v3-release")]
+    public async Task PreviewAndOwnerSettlementGateTranslateWithoutStorageAccess(string query)
     {
         var builder = new NpgsqlDataSourceBuilder(
             "Host=127.0.0.1;Port=1;Database=query_translation_test;Username=test;Password=test");
@@ -25,13 +27,16 @@ public sealed class FarmBaseMapPreviewQueryTests
         AgriDroneSchemaDbContextOptions.Configure(options, source);
         options.AddInterceptors(new StopBeforeConnection());
         await using var context = new AgriDroneSchemaDbContext(options.Options);
-        var reader = new FarmBaseMapPreviewReader(context, new UnusedStorage(),
+        var releases = new V3SurveyReleaseStore(context);
+        var reader = new FarmBaseMapPreviewReader(context, releases, new UnusedStorage(),
             NullLogger<FarmBaseMapPreviewReader>.Instance);
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            ownerGate
-                ? (Task)reader.CanOwnerReadAsync(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid())
-                : reader.GetAsync(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid()));
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => query switch
+        {
+            "owner" => reader.CanOwnerReadAsync(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid()),
+            "v3-release" => releases.GetByMapVersionAsync(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), CancellationToken.None),
+            _ => reader.GetAsync(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid())
+        });
 
         Assert.Equal("Preview query translated; no database connection opened.", exception.Message);
     }

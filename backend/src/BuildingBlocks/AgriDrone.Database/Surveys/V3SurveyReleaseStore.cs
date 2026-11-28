@@ -15,8 +15,13 @@ internal sealed class V3SurveyReleaseStore(AgriDroneSchemaDbContext db)
         Guid tenantId, Guid publicationId, CancellationToken cancellationToken = default) =>
         ReadProofAsync(tenantId, null, publicationId, cancellationToken);
 
+    internal Task<V3ResultReleaseProof?> GetByMapVersionAsync(
+        Guid tenantId, Guid farmId, Guid orderId, Guid mapId, CancellationToken cancellationToken) =>
+        ReadProofAsync(tenantId, orderId, null, cancellationToken, farmId, mapId);
+
     private async Task<V3ResultReleaseProof?> ReadProofAsync(
-        Guid tenantId, Guid? orderId, Guid? publicationId, CancellationToken cancellationToken)
+        Guid tenantId, Guid? orderId, Guid? publicationId, CancellationToken cancellationToken,
+        Guid? farmId = null, Guid? mapId = null)
     {
         var row = await db.Database.SqlQuery<ReleaseRow>($"""
             SELECT r.proof::text AS "ProofJson", refund.transferred_at AS "WithdrawnAt"
@@ -26,6 +31,8 @@ internal sealed class V3SurveyReleaseStore(AgriDroneSchemaDbContext db)
             WHERE r.tenant_id = {tenantId}
               AND ({orderId}::uuid IS NULL OR r.survey_order_id = {orderId}::uuid)
               AND ({publicationId}::uuid IS NULL OR r.id = {publicationId}::uuid)
+              AND ({farmId}::uuid IS NULL OR r.farm_id = {farmId}::uuid)
+              AND ({mapId}::uuid IS NULL OR r.map_id = {mapId}::uuid)
             """).SingleOrDefaultAsync(cancellationToken);
 
         if (row is null)

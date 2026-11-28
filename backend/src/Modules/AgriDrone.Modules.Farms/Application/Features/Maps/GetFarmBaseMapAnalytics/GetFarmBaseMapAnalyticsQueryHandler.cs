@@ -47,7 +47,7 @@ internal sealed class GetFarmBaseMapAnalyticsQueryHandler(
             foreach (var version in versions)
             {
                 if (await previewReader.CanOwnerReadAsync(
-                        version.TenantId, version.FarmId, version.SourceSurveyOrderId, cancellationToken))
+                        version.TenantId, version.FarmId, version.SourceSurveyOrderId, version.Id, cancellationToken))
                 {
                     readable.Add(version);
                 }

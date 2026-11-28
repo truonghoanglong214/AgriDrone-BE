@@ -90,6 +90,7 @@ public sealed class FarmBaseMapReadAccessTests
 
         Assert.True(result.IsFailure);
         Assert.Equal("FarmBaseMapVersion.PaymentRequired", result.Error.Code);
+        Assert.Equal(map.Id, preview.CheckedMapId);
         Assert.Equal(0, preview.Calls);
     }
 
@@ -116,6 +117,7 @@ public sealed class FarmBaseMapReadAccessTests
         Assert.True(result.IsSuccess);
         Assert.Empty(result.Value);
         Assert.Equal(0, preview.Calls);
+        Assert.Equal(map.Id, preview.CheckedMapId);
     }
 
     private static FarmsDbContext CreateDatabase()
@@ -142,8 +144,13 @@ public sealed class FarmBaseMapReadAccessTests
 
     private sealed class UnusedPreview : IFarmBaseMapPreviewReader
     {
-        public Task<bool> CanOwnerReadAsync(Guid tenantId, Guid farmId, Guid sourceOrderId,
-            CancellationToken cancellationToken = default) => Task.FromResult(false);
+        public Guid? CheckedMapId { get; private set; }
+        public Task<bool> CanOwnerReadAsync(Guid tenantId, Guid farmId, Guid sourceOrderId, Guid mapId,
+            CancellationToken cancellationToken = default)
+        {
+            CheckedMapId = mapId;
+            return Task.FromResult(false);
+        }
         public int Calls { get; private set; }
         public Task<FarmBaseMapPreview?> GetAsync(Guid tenantId, Guid farmId, Guid missionId,
             CancellationToken cancellationToken = default)

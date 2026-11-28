@@ -1,9 +1,12 @@
 using System.Text.Json;
+using AgriDrone.Database.Surveys;
+using AgriDrone.Modules.Farms.Domain.Farms;
 using AgriDrone.Modules.Surveys.Domain;
 using AgriDrone.Modules.Farms.Application.Abstractions.Maps;
 using AgriDrone.Modules.Farms.Application.Features.Maps.GetFarmBaseMapDetail;
 using AgriDrone.Modules.Missions.Application.Abstractions.Media;
 using AgriDrone.Modules.Missions.Domain.Media;
+using AgriDrone.SharedKernel.Domain;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
@@ -11,20 +14,38 @@ namespace AgriDrone.Database.Mapping;
 
 internal sealed class FarmBaseMapPreviewReader(
     AgriDroneSchemaDbContext context,
+    V3SurveyReleaseStore releases,
     IObjectStorage storage,
     ILogger<FarmBaseMapPreviewReader> logger) : IFarmBaseMapPreviewReader
 {
-    public Task<bool> CanOwnerReadAsync(Guid tenantId, Guid farmId, Guid sourceOrderId,
-        CancellationToken cancellationToken = default) =>
-        context.Set<SurveyOrder>().AsNoTracking().AnyAsync(order =>
-            order.Id == sourceOrderId && order.TenantId == tenantId && order.FarmId == farmId &&
-            order.Scope == ContractScope.Legacy && order.Status != SurveyOrderStatus.Cancelled &&
-            (!order.PostFlightSettlement ||
-                (order.Status == SurveyOrderStatus.Completed && order.ServiceReviewedAt != null &&
-                 order.FinalPrice > 0m && order.DepositPaymentStatus == SurveyPaymentStatus.Paid &&
-                 (order.RemainingAmount == 0m || order.Payments.Any(payment =>
-                     payment.Purpose == PaymentPurpose.FinalBalance && payment.Status == SurveyPaymentStatus.Paid &&
-                     payment.Amount == order.RemainingAmount && payment.Currency == order.Currency)))), cancellationToken);
+    public async Task<bool> CanOwnerReadAsync(Guid tenantId, Guid farmId, Guid sourceOrderId, Guid mapId,
+        CancellationToken cancellationToken = default)
+    {
+        var order = await context.Set<SurveyOrder>().AsNoTracking()
+            .Where(order => order.Id == sourceOrderId && order.TenantId == tenantId && order.FarmId == farmId &&
+                order.Status != SurveyOrderStatus.Cancelled)
+            .Select(order => new
+            {
+                order.Scope,
+                LegacyReadable = order.Scope == ContractScope.Legacy &&
+                    (!order.PostFlightSettlement ||
+                        (order.Status == SurveyOrderStatus.Completed && order.ServiceReviewedAt != null &&
+                         order.FinalPrice > 0m && order.DepositPaymentStatus == SurveyPaymentStatus.Paid &&
+                         (order.RemainingAmount == 0m || order.Payments.Any(payment =>
+                             payment.Purpose == PaymentPurpose.FinalBalance && payment.Status == SurveyPaymentStatus.Paid &&
+                             payment.Amount == order.RemainingAmount && payment.Currency == order.Currency))))
+            })
+            .SingleOrDefaultAsync(cancellationToken);
+
+        if (order?.Scope != ContractScope.V3)
+            return order?.LegacyReadable == true;
+
+        var proof = await releases.GetByMapVersionAsync(tenantId, farmId, sourceOrderId, mapId, cancellationToken);
+        return proof is not null && proof.OrderId == sourceOrderId && proof.FarmBaseMapVersionId == mapId &&
+            proof.AllowsOwnerActiveAccess(tenantId, farmId) &&
+            await context.Set<Farm>().AsNoTracking().AnyAsync(farm => farm.Id == farmId &&
+                farm.TenantId == tenantId && farm.Status == GeneralStatus.Active && farm.DeletedAt == null, cancellationToken);
+    }
 
     public async Task<FarmBaseMapPreview?> GetAsync(
         Guid tenantId, Guid farmId, Guid missionId,
