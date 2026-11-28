@@ -1,5 +1,4 @@
 using System.Text.Json;
-using AgriDrone.IntegrationContracts.Health;
 using AgriDrone.IntegrationContracts.Surveys;
 using AgriDrone.Modules.Farms.Domain.Farms;
 using AgriDrone.Modules.Missions.Application.Abstractions.Media;
@@ -14,7 +13,7 @@ internal sealed class V3OwnerSurveyResults(
     AgriDroneSchemaDbContext db, IV3ResultReleaseProofReader releases, IObjectStorage storage)
     : IV3OwnerSurveyResults
 {
-    private static readonly JsonSerializerOptions PayloadOptions = new() { PropertyNameCaseInsensitive = true };
+    private sealed record ReleasedImage(Guid MediaId, bool IsAlbumImage);
 
     public async Task<IReadOnlyList<V3OwnerSurveySummary>?> GetHistoryAsync(
         Guid tenantId, Guid farmId, CancellationToken cancellationToken)
@@ -51,56 +50,59 @@ internal sealed class V3OwnerSurveyResults(
             SELECT ST_AsGeoJSON(geometry) AS "Value" FROM farm.farm_boundaries
             WHERE id = {approval.FarmBoundaryVersionId} AND tenant_id = {tenantId} AND farm_id = {proof.FarmId}
             """).SingleOrDefaultAsync(cancellationToken);
-        var images = await db.Database.SqlQuery<Guid>($"""
-            SELECT unnest(media_ids) AS "Value"
-            FROM survey.v3_survey_releases
-            WHERE id = {proof.PublicationId} AND tenant_id = {tenantId}
+        var images = await db.Database.SqlQuery<ReleasedImage>($"""
+            SELECT a.id AS "MediaId", EXISTS (
+                SELECT 1 FROM mission.mission_media mm
+                WHERE mm.media_id = a.id AND mm.media_role IN ('RAW_IMAGE', 'PROCESSED_IMAGE', 'THUMBNAIL')
+            ) AS "IsAlbumImage"
+            FROM survey.v3_survey_releases r
+            JOIN media.media_assets a ON a.id = ANY(r.media_ids)
+                AND a.tenant_id = r.tenant_id AND a.farm_id = r.farm_id
+            WHERE r.id = {proof.PublicationId} AND r.survey_order_id = {orderId}
+              AND r.tenant_id = {tenantId} AND r.farm_id = {proof.FarmId}
+              AND a.deleted_at IS NULL AND a.storage_status = 'ACTIVE'
+              AND a.mime_type IN ('image/jpeg', 'image/png', 'image/tiff')
+              AND NOT EXISTS (SELECT 1 FROM survey.quality_refund_cases c
+                  WHERE c.v3_publication_id = r.id AND c.status = 'Refunded')
+            ORDER BY a.id
             """).ToListAsync(cancellationToken);
 
         IReadOnlyList<V3OwnerSurveyFinding> findings = [];
         IReadOnlyList<V3OwnerSurveyZone> zones = [];
         if (proof.ScreensDisease)
         {
-            var review = await db.Set<SurveyComboReviewRevision>().AsNoTracking()
-                .SingleOrDefaultAsync(r => r.Id == proof.ComboReviewRevisionId &&
-                    r.SurveyOrderId == orderId && r.TenantId == tenantId && r.FarmId == proof.FarmId &&
-                    r.DecisionFingerprint == approval.ComboReviewFingerprint, cancellationToken);
             var batch = await db.Set<SurveyComboImportBatch>().AsNoTracking()
                 .SingleOrDefaultAsync(b => b.Id == approval.ComboBatchId &&
                     b.SurveyOrderId == orderId && b.TenantId == tenantId && b.FarmId == proof.FarmId,
                     cancellationToken);
-            if (review is null || batch is null || review.ComboBatchId != batch.Id)
+            if (batch is null || approval.ComboReviewRevisionId != proof.ComboReviewRevisionId)
                 return null;
 
-            var decisions = review.DecisionsPayload.Deserialize<ComboReviewDecisionsSnapshotRecord>(PayloadOptions);
-            var source = batch.RawPayload.Deserialize<ComboAnalysisReadyV1>(PayloadOptions);
-            if (decisions is null || source is null)
+            var reviewed = await V3ReviewedComboFindings.ReadAsync(db, approval, batch, cancellationToken);
+            if (reviewed is null)
                 return null;
 
-            var acceptedDecisionsByFindingId = decisions.FindingDecisions
-                .Where(d => d.Decision == SurveyComboReviewRevision.FindingDecisionAccept)
-                .ToDictionary(d => d.FindingId);
-            var accepted = acceptedDecisionsByFindingId.Keys.ToHashSet();
-            findings = source.Findings
-                .Select(f => acceptedDecisionsByFindingId.TryGetValue(f.FindingId, out var decision)
-                    ? (Finding: f, EffectiveProfileId: decision.ReviewedPlantProfileId ?? f.PlantProfileId)
-                    : default)
-                .Where(x => x.Finding is not null && x.EffectiveProfileId.HasValue)
-                .Select(x => new V3OwnerSurveyFinding(x.Finding.FindingId, x.EffectiveProfileId!.Value, x.Finding.Position,
+            var releasedImageIds = images.Select(image => image.MediaId).ToHashSet();
+            var poleIds = poles.Select(pole => pole.PlantProfileId).ToHashSet();
+            findings = reviewed.AcceptedFindings(poleIds)
+                .Select(x => new V3OwnerSurveyFinding(x.Finding.FindingId, x.PlantProfileId, x.Finding.Position,
                     x.Finding.ObservedAt, x.Finding.SuspectedClassCode, x.Finding.Confidence, x.Finding.Uncertainty,
-                    x.Finding.Limitations)).ToArray();
+                    x.Finding.Limitations)
+                {
+                    EvidenceMediaIds = V3ReviewedComboFindings.ReadEvidenceMediaIds(x.Finding, releasedImageIds)
+                }).ToArray();
 
-            var approvedZones = decisions.ZoneDecisions
+            var approvedZones = reviewed.Decisions.ZoneDecisions
                 .Where(z => z.Decision is SurveyComboReviewRevision.ZoneDecisionApprove or SurveyComboReviewRevision.ZoneDecisionAdjust)
                 .ToDictionary(z => z.SourceProposalId, StringComparer.Ordinal);
-            zones = source.DiseaseZones.Where(z => approvedZones.ContainsKey(z.SourceProposalId))
+            zones = reviewed.Source.DiseaseZones.Where(z => approvedZones.ContainsKey(z.SourceProposalId))
                 .Select(z =>
                 {
                     var decision = approvedZones[z.SourceProposalId];
                     return new V3OwnerSurveyZone(z.SourceProposalId, z.SuspectedClassCode,
                         decision.ReviewedGeometry ?? z.Geometry,
                         (decision.ReviewedFindingIds ?? z.Memberships.Select(m => m.FindingId).ToArray())
-                            .Where(accepted.Contains).ToArray(),
+                            .Where(reviewed.AcceptedDecisions.ContainsKey).ToArray(),
                         decision.SelectedGuidanceId, decision.SelectedGuidanceVersionNumber);
                 }).ToArray();
         }
@@ -110,7 +112,8 @@ internal sealed class V3OwnerSurveyResults(
                 i.EvidenceFingerprint == proof.InvoiceFingerprint)
             .Select(i => i.VerifiedBillablePoleCount).SingleAsync(cancellationToken);
         return new V3OwnerSurveyResult(Summary(proof), count, boundary, poles, approval.HealthAssessmentStatus,
-            approval.LimitationNotice, findings, zones, images);
+            approval.LimitationNotice, findings, zones,
+            images.Where(image => image.IsAlbumImage).Select(image => image.MediaId).ToArray());
     }
 
     public async Task<V3OwnerSurveyComparison?> CompareAsync(
@@ -159,8 +162,10 @@ internal sealed class V3OwnerSurveyResults(
             FROM survey.v3_survey_releases r
             JOIN media.media_assets a ON a.id = {mediaId} AND a.id = ANY(r.media_ids)
                 AND a.tenant_id = r.tenant_id AND a.farm_id = r.farm_id
-            WHERE r.id = {proof.PublicationId} AND r.tenant_id = {tenantId}
+            WHERE r.id = {proof.PublicationId} AND r.survey_order_id = {orderId}
+              AND r.tenant_id = {tenantId} AND r.farm_id = {proof.FarmId}
               AND a.deleted_at IS NULL AND a.storage_status = 'ACTIVE'
+              AND a.mime_type IN ('image/jpeg', 'image/png', 'image/tiff')
               AND NOT EXISTS (SELECT 1 FROM survey.quality_refund_cases c
                   WHERE c.v3_publication_id = r.id AND c.status = 'Refunded')
             """).SingleOrDefaultAsync(cancellationToken);

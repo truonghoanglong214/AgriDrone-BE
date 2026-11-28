@@ -500,6 +500,11 @@ internal sealed class SurveySettlementReleaseCoordinator(
                     approval, comboBatch.CaptureAttemptId, comboBatch.MissionId, cancellationToken);
                 mediaIds = mediaIds.Union(diseaseMedia).OrderBy(id => id).ToArray();
             }
+            if (comboBatch is not null)
+            {
+                var evidenceMedia = await ReadComboEvidenceMediaAsync(approval, comboBatch, cancellationToken);
+                mediaIds = mediaIds.Union(evidenceMedia).OrderBy(id => id).ToArray();
+            }
             var reservations = overpayment?.CreateObligations(order.Id, order.TenantId, now) ?? [];
             db.Set<SurveyRefundObligation>().AddRange(reservations);
             map.Publish(approval.ReviewedBy, now);
@@ -638,6 +643,35 @@ internal sealed class SurveySettlementReleaseCoordinator(
                 (m.Media.MimeType == "image/jpeg" || m.Media.MimeType == "image/png" || m.Media.MimeType == "image/tiff"))
             .Select(m => m.MediaId).Distinct().OrderBy(id => id).ToArrayAsync(cancellationToken);
         return media;
+    }
+
+    private async Task<Guid[]> ReadComboEvidenceMediaAsync(
+        SurveyInternalApprovedResultRevision approval, SurveyComboImportBatch batch, CancellationToken cancellationToken)
+    {
+        var reviewed = await V3ReviewedComboFindings.ReadAsync(db, approval, batch, cancellationToken);
+        if (reviewed is null)
+            return [];
+
+        var poleIds = await db.Set<SurveyOrderPoleCountSnapshotItem>().AsNoTracking()
+            .Where(item => item.SnapshotId == approval.PoleCountSnapshotId && item.TenantId == approval.TenantId &&
+                item.FarmId == approval.FarmId && item.IsAccepted && item.IsStrictlyInBoundary && item.PlantProfileId.HasValue)
+            .Select(item => item.PlantProfileId!.Value).Distinct().ToListAsync(cancellationToken);
+        var evidenceIds = reviewed.AcceptedFindings(poleIds.ToHashSet())
+            .SelectMany(item => item.Finding.EvidenceMedia)
+            .Where(V3ReviewedComboFindings.IsDerivedImage)
+            .Select(media => media.MediaAssetId).Distinct().ToArray();
+        if (evidenceIds.Length == 0)
+            return [];
+
+        return await db.Set<MissionMedia>().AsNoTracking()
+            .Where(media => evidenceIds.Contains(media.MediaId) &&
+                media.MissionId == batch.MissionId && media.Mission.TenantId == approval.TenantId &&
+                media.Mission.FarmId == approval.FarmId && media.Mission.SurveyOrderId == approval.SurveyOrderId &&
+                media.Media.TenantId == approval.TenantId && media.Media.FarmId == approval.FarmId &&
+                media.Media.DeletedAt == null && media.Media.StorageStatus == MediaStorageStatus.Active &&
+                media.MediaRole == MissionMediaRole.Other &&
+                (media.Media.MimeType == "image/jpeg" || media.Media.MimeType == "image/png" || media.Media.MimeType == "image/tiff"))
+            .Select(media => media.MediaId).ToArrayAsync(cancellationToken);
     }
 
     private async Task AddCompletionHistoryAsync(

@@ -29,7 +29,10 @@ public sealed record V3OwnerSurveyPole(
 
 public sealed record V3OwnerSurveyFinding(
     Guid FindingId, Guid PlantProfileId, GeoJsonPointV3 Position, DateTimeOffset ObservedAt,
-    string SuspectedClassCode, decimal Confidence, string Uncertainty, IReadOnlyList<string> Limitations);
+    string SuspectedClassCode, decimal Confidence, string Uncertainty, IReadOnlyList<string> Limitations)
+{
+    public IReadOnlyList<Guid> EvidenceMediaIds { get; init; } = [];
+}
 
 public sealed record V3OwnerSurveyZone(
     string SourceProposalId, string SuspectedClassCode, GeoJsonPolygonV3 Geometry,
