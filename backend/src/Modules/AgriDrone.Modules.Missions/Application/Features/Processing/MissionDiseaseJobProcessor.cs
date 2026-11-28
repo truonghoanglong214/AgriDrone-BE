@@ -16,6 +16,7 @@ using AgriDrone.SharedKernel.Application;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using NetTopologySuite.Geometries;
+using NetTopologySuite.IO;
 
 namespace AgriDrone.Modules.Missions.Application.Features.Processing;
 
@@ -52,7 +53,8 @@ internal sealed record ComboInferencePolicy(
     string Version,
     double Confidence,
     double ClusterRadiusMeters,
-    double BufferMeters);
+    double BufferMeters,
+    int MinClusterTrees = MissionDiseaseJobProcessor.DefaultMinClusterTrees);
 
 internal sealed record V3ComboInferenceContext(
     Guid OrderId,
@@ -647,8 +649,23 @@ internal sealed class MissionDiseaseJobProcessor(
                 trackingJob.FarmId, trackingJob.TenantId, trackingJob.MissionId, result.Detections, sources, derivedMediaIds,
                 matchingToleranceM, v3Context, cancellationToken);
 
+            var boundaryWkt = await dbContext.Database.SqlQuery<string?>($"""
+                SELECT ST_AsText(geometry) AS "Value"
+                FROM farm.farm_boundaries
+                WHERE id = {v3Context.CaptureMap.BoundaryId}
+                  AND farm_id = {trackingJob.FarmId}
+                  AND tenant_id = {trackingJob.TenantId}
+                """).SingleOrDefaultAsync(cancellationToken);
+
+            Geometry? farmBoundary = null;
+            if (!string.IsNullOrWhiteSpace(boundaryWkt))
+            {
+                farmBoundary = new WKTReader(new NetTopologySuite.NtsGeometryServices(new PrecisionModel(), 4326))
+                    .Read(boundaryWkt);
+            }
+
             var proposedZones = BuildProposedDiseaseZones(
-                v3Context.OrderId, v3Context.AttemptId, version, v3Context.Policy, matched.ZoneFindings);
+                v3Context.OrderId, v3Context.AttemptId, version, v3Context.Policy, matched.ZoneFindings, farmBoundary);
 
             var comboSnapshot = new ComboAnalysisProcessingSnapshot(
                 SourceRevision: version,
@@ -1135,6 +1152,8 @@ internal sealed class MissionDiseaseJobProcessor(
         (bytes[4], bytes[5]) = (bytes[5], bytes[4]);
     }
 
+    internal const int DefaultMinClusterTrees = 3;
+
     private static ComboInferencePolicy? ReadComboPolicy(AiModelVersion model)
     {
         var metrics = model.Metrics.RootElement;
@@ -1152,7 +1171,18 @@ internal sealed class MissionDiseaseJobProcessor(
             return null;
         }
 
-        return new ComboInferencePolicy(model.Id, policyVersion, confidence, radius, buffer);
+        var minClusterTrees = DefaultMinClusterTrees;
+        if (policy.TryGetProperty("minClusterTrees", out var minTreesProp))
+        {
+            if (minTreesProp.ValueKind != JsonValueKind.Number ||
+                !minTreesProp.TryGetInt32(out minClusterTrees) ||
+                minClusterTrees < 1)
+            {
+                return null;
+            }
+        }
+
+        return new ComboInferencePolicy(model.Id, policyVersion, confidence, radius, buffer, minClusterTrees);
 
         bool ReadNumber(string name, out double value)
         {
@@ -1168,19 +1198,33 @@ internal sealed class MissionDiseaseJobProcessor(
         Guid attemptId,
         int version,
         ComboInferencePolicy policy,
-        List<ZoneFindingCandidate> items)
+        List<ZoneFindingCandidate> items,
+        Geometry? farmBoundary = null)
     {
         if (items.Count == 0)
         {
             return [];
         }
 
-        var groups = items.OrderBy(item => item.FindingId)
+        var wgs84Factory = new GeometryFactory(new PrecisionModel(), 4326);
+        var eligibleItems = farmBoundary is null
+            ? items
+            : items.Where(item =>
+                farmBoundary.Covers(wgs84Factory.CreatePoint(new Coordinate(item.Lon, item.Lat))))
+                .ToList();
+
+        if (eligibleItems.Count == 0)
+        {
+            return [];
+        }
+
+        var groups = eligibleItems.OrderBy(item => item.FindingId)
             .GroupBy(i => i.ClassName.Trim().Replace(' ', '_').ToUpperInvariant(), StringComparer.Ordinal)
             .ToList();
 
         var zones = new List<ProposedComboDiseaseZoneV1>();
         int zoneIndex = 0;
+        var minClusterTrees = Math.Max(1, policy.MinClusterTrees);
 
         foreach (var group in groups)
         {
@@ -1219,42 +1263,16 @@ internal sealed class MissionDiseaseJobProcessor(
                     }
                 }
 
-                clusters.Add(currentCluster);
+                if (currentCluster.Count >= minClusterTrees)
+                {
+                    clusters.Add(currentCluster);
+                }
             }
 
             foreach (var cluster in clusters)
             {
                 zoneIndex++;
-                double minLon = double.MaxValue, maxLon = double.MinValue;
-                double minLat = double.MaxValue, maxLat = double.MinValue;
-
-                foreach (var item in cluster)
-                {
-                    if (item.Lon < minLon) minLon = item.Lon;
-                    if (item.Lon > maxLon) maxLon = item.Lon;
-                    if (item.Lat < minLat) minLat = item.Lat;
-                    if (item.Lat > maxLat) maxLat = item.Lat;
-                }
-
-                const double metersPerLatitudeDegree = 111_195;
-                var latBuffer = policy.BufferMeters / metersPerLatitudeDegree;
-                var maxAbsoluteLatitude = Math.Max(Math.Abs(minLat), Math.Abs(maxLat));
-                var lonBuffer = latBuffer / Math.Max(1e-6, Math.Cos(maxAbsoluteLatitude * Math.PI / 180));
-                var pMinLon = Math.Max(-180, minLon - lonBuffer);
-                var pMaxLon = Math.Min(180, maxLon + lonBuffer);
-                var pMinLat = Math.Max(-90, minLat - latBuffer);
-                var pMaxLat = Math.Min(90, maxLat + latBuffer);
-
-                var ring = new List<IReadOnlyList<double>>
-                {
-                    new double[] { pMinLon, pMinLat },
-                    new double[] { pMaxLon, pMinLat },
-                    new double[] { pMaxLon, pMaxLat },
-                    new double[] { pMinLon, pMaxLat },
-                    new double[] { pMinLon, pMinLat }
-                };
-
-                var polygon = new GeoJsonPolygonV3("Polygon", [ring]);
+                var polygon = BuildClusterPolygon(cluster, policy.BufferMeters, farmBoundary, wgs84Factory);
                 var memberships = new List<ProposedDiseaseZoneMembershipV1>();
                 var zoneMedia = new List<EvidenceMediaReferenceV4>();
 
@@ -1288,5 +1306,142 @@ internal sealed class MissionDiseaseJobProcessor(
         }
 
         return zones;
+    }
+
+    private static GeoJsonPolygonV3 BuildClusterPolygon(
+        List<ZoneFindingCandidate> cluster,
+        double bufferMeters,
+        Geometry? farmBoundary,
+        GeometryFactory wgs84Factory)
+    {
+        const double metersPerLatitudeDegree = 111_195.0;
+        const int bufferQuadrantSegments = 6;
+
+        var refLat = cluster.Average(i => i.Lat);
+        var refLon = cluster.Average(i => i.Lon);
+        var metersPerLon = metersPerLatitudeDegree * Math.Max(1e-6, Math.Cos(refLat * Math.PI / 180.0));
+
+        var metricFactory = new GeometryFactory();
+        var metricCoords = cluster
+            .Select(i => new Coordinate(
+                (i.Lon - refLon) * metersPerLon,
+                (i.Lat - refLat) * metersPerLatitudeDegree))
+            .Distinct()
+            .ToArray();
+
+        Geometry metricHull = metricCoords.Length == 1
+            ? metricFactory.CreatePoint(metricCoords[0])
+            : metricFactory.CreateMultiPointFromCoords(metricCoords).ConvexHull();
+
+        var bufferedMetric = metricHull.Buffer(bufferMeters, bufferQuadrantSegments) as Polygon
+            ?? throw new InvalidOperationException("Failed to build buffered convex hull polygon for disease cluster.");
+
+        var shell = ProjectRingToWgs84(bufferedMetric.ExteriorRing.Coordinates, refLon, refLat, metersPerLon, metersPerLatitudeDegree, wgs84Factory);
+        var rawPolygon = wgs84Factory.CreatePolygon(shell);
+        if (!rawPolygon.IsValid && rawPolygon.Buffer(0) is Polygon repaired && !repaired.IsEmpty)
+        {
+            rawPolygon = repaired;
+        }
+
+        var finalPolygon = rawPolygon;
+        if (farmBoundary is not null && !farmBoundary.IsEmpty)
+        {
+            var clusterPoints = cluster
+                .Select(i => wgs84Factory.CreatePoint(new Coordinate(i.Lon, i.Lat)))
+                .ToArray();
+
+            var intersected = rawPolygon.Intersection(farmBoundary);
+            var candidate = SelectCoveringPolygon(intersected, clusterPoints);
+            if (candidate is not null &&
+                candidate.IsValid &&
+                !candidate.IsEmpty &&
+                candidate.ExteriorRing.Coordinates.Length is >= 4 and <= 10_000 &&
+                candidate.InteriorRings.All(r => r.Coordinates.Length is >= 4 and <= 10_000) &&
+                1 + candidate.InteriorRings.Length <= 128 &&
+                clusterPoints.All(candidate.Covers))
+            {
+                finalPolygon = candidate;
+            }
+        }
+
+        var rings = new List<IReadOnlyList<IReadOnlyList<double>>>
+        {
+            ToGeoJsonRing(finalPolygon.ExteriorRing.Coordinates)
+        };
+        foreach (var hole in finalPolygon.InteriorRings)
+        {
+            rings.Add(ToGeoJsonRing(hole.Coordinates));
+        }
+
+        return new GeoJsonPolygonV3("Polygon", rings);
+    }
+
+    private static LinearRing ProjectRingToWgs84(
+        Coordinate[] metricCoords,
+        double refLon,
+        double refLat,
+        double metersPerLon,
+        double metersPerLat,
+        GeometryFactory factory)
+    {
+        var coords = new Coordinate[metricCoords.Length];
+        for (int i = 0; i < metricCoords.Length; i++)
+        {
+            var lon = Math.Clamp(refLon + metricCoords[i].X / metersPerLon, -180.0, 180.0);
+            var lat = Math.Clamp(refLat + metricCoords[i].Y / metersPerLat, -90.0, 90.0);
+            coords[i] = new Coordinate(lon, lat);
+        }
+
+        if (coords.Length > 0 && !coords[0].Equals2D(coords[^1]))
+        {
+            coords[^1] = new Coordinate(coords[0].X, coords[0].Y);
+        }
+
+        return factory.CreateLinearRing(coords);
+    }
+
+    private static Polygon? SelectCoveringPolygon(Geometry intersected, Point[] clusterPoints)
+    {
+        if (intersected is Polygon single)
+        {
+            return single;
+        }
+
+        Polygon? best = null;
+        for (int i = 0; i < intersected.NumGeometries; i++)
+        {
+            if (intersected.GetGeometryN(i) is not Polygon candidate || candidate.IsEmpty)
+            {
+                continue;
+            }
+
+            if (clusterPoints.All(candidate.Covers))
+            {
+                return candidate;
+            }
+
+            if (best is null || candidate.Area > best.Area)
+            {
+                best = candidate;
+            }
+        }
+
+        return best;
+    }
+
+    private static List<IReadOnlyList<double>> ToGeoJsonRing(Coordinate[] ringCoords)
+    {
+        var ring = new List<IReadOnlyList<double>>(ringCoords.Length);
+        foreach (var coord in ringCoords)
+        {
+            ring.Add([coord.X, coord.Y]);
+        }
+
+        if (ring.Count > 0 && (ring[0][0] != ring[^1][0] || ring[0][1] != ring[^1][1]))
+        {
+            ring.Add([ring[0][0], ring[0][1]]);
+        }
+
+        return ring;
     }
 }

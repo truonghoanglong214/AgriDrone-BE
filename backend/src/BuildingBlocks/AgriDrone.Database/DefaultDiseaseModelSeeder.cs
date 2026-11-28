@@ -67,10 +67,11 @@ internal static class DefaultDiseaseModelSeeder
             teamLabelLimitation = "Team-labelled pilot observations; preliminary disease screening only.",
             comboInferencePolicy = new
             {
-                version = "combo-v1",
+                version = "combo-v2",
                 confidence = 0.25,
-                clusterRadiusMeters = 15.0,
-                bufferMeters = 3.0
+                clusterRadiusMeters = 4.5,
+                bufferMeters = 1.5,
+                minClusterTrees = 3
             }
         });
 
