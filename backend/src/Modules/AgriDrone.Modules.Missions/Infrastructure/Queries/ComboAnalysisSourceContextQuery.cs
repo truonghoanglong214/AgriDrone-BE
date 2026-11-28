@@ -40,13 +40,23 @@ internal sealed class ComboAnalysisSourceContextQuery(MissionsDbContext db) : IC
             }
         }
 
-        var inputMediaIdList = inputMediaIds ?? [];
+        var observations = await db.MissionPlantObservations.AsNoTracking()
+            .Where(o => o.MissionId == mission.Id && o.FarmId == mission.FarmId && o.AiJobId == job.Id)
+            .Select(o => new { o.EvidenceMediaId, o.MatchingParameters })
+            .ToListAsync(cancellationToken);
+
+        var candidateMediaIds = (inputMediaIds ?? [])
+            .Concat(observations.SelectMany(o => MissionPlantHealthPublisher
+                .EvidenceMedia(o.EvidenceMediaId, o.MatchingParameters.RootElement)
+                .Select(evidence => evidence.MediaAssetId)))
+            .Distinct()
+            .ToArray();
+
         var mediaIds = await db.MissionMedia.AsNoTracking()
-            .Where(m => m.MissionId == missionId && inputMediaIdList.Contains(m.MediaId))
+            .Where(m => m.MissionId == mission.Id && candidateMediaIds.Contains(m.MediaId) &&
+                        m.Media.TenantId == mission.TenantId && m.Media.FarmId == mission.FarmId &&
+                        m.Media.DeletedAt == null)
             .Select(m => m.MediaId)
-            .Union(db.MissionPlantObservations.Where(o => o.MissionId == missionId && o.AiJobId == jobId &&
-                o.EvidenceMediaId != null)
-                .Select(o => o.EvidenceMediaId!.Value))
             .ToListAsync(cancellationToken);
 
         var isComboEligible = mission.Purpose == MissionPurpose.Capture && job.JobType == AiJobType.DiseaseDetection &&
