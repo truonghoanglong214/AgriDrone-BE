@@ -612,25 +612,6 @@ internal sealed class MissionDiseaseJobProcessor(
                 """).SingleOrDefaultAsync(cancellationToken);
             var policyVersionId = commercialPolicyRow?.PolicyVersionId ?? Guid.Empty;
 
-            Guid? supersedesHandoffId = null;
-            if (version > 1)
-            {
-                var prevJob = await dbContext.AiProcessingJobs.AsNoTracking()
-                    .Where(j => j.MissionId == trackingJob.MissionId &&
-                                j.JobType == AiJobType.DiseaseDetection &&
-                                j.AttemptNumber == version - 1 &&
-                                j.Status == AiJobStatus.Completed)
-                    .OrderByDescending(j => j.CompletedAt)
-                    .FirstOrDefaultAsync(cancellationToken);
-
-                if (prevJob is not null)
-                {
-                    supersedesHandoffId = CreateVersion5(
-                        ComboAnalysisNamespace,
-                        $"{trackingJob.TenantId:D}:{v3Context.OrderId:D}:{v3Context.AttemptId:D}:{prevJob.Id:D}:{version - 1}");
-                }
-            }
-
             var comboProvenance = new ComboAnalysisProvenanceV1(
                 RequiredMetadata("datasetId"),
                 RequiredMetadata("datasetVersion"),
@@ -667,7 +648,7 @@ internal sealed class MissionDiseaseJobProcessor(
                 InputApprovalId: approval.Id,
                 InputManifestId: approval.ManifestId,
                 InputManifestHash: approval.ManifestHash,
-                SupersedesHandoffId: supersedesHandoffId,
+                SupersedesHandoffId: null,
                 LimitationNotice: RequiredMetadata("teamLabelLimitation"),
                 Provenance: comboProvenance,
                 ApprovedJobReference: approval.ProcessingJobId,

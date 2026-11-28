@@ -25,6 +25,7 @@ internal sealed class MissionComboAnalysisPublisher(
 
     private sealed record BoundaryRow(bool Covered, double Distance);
     private sealed record PlantProfileLookupRow(Guid PlantId, Guid PlantProfileId);
+    private sealed record ImportedLineageRow(Guid JobId, int SourceRevision, Guid HandoffId, Guid? SupersedesHandoffId);
 
     public async Task<MissionComboAnalysisPublishResult> PublishAsync(
         Guid tenantId,
@@ -148,8 +149,31 @@ internal sealed class MissionComboAnalysisPublisher(
         }
 
         var attemptId = comboSnapshot.CaptureAttemptId;
-        if (attemptId == Guid.Empty)
-            return Conflict("A valid CaptureAttemptId in COMBO snapshot is required.");
+        if (attemptId == Guid.Empty || mission.CaptureAttemptId != attemptId)
+            return Conflict("The COMBO snapshot must reference the mission's capture attempt.");
+
+        var lineage = await db.Database.SqlQuery<ImportedLineageRow>($"""
+            SELECT batch.job_id AS "JobId", batch.source_revision AS "SourceRevision",
+                   batch.handoff_id AS "HandoffId", batch.supersedes_handoff_id AS "SupersedesHandoffId"
+            FROM survey.survey_combo_import_batches AS batch
+            WHERE batch.tenant_id = {tenantId} AND batch.farm_id = {farmId}
+              AND batch.survey_order_id = {orderId} AND batch.capture_attempt_id = {attemptId}
+              AND batch.mission_id = {missionId}
+              AND ((batch.job_id = {jobId} AND batch.source_revision = {sourceRevision}) OR NOT EXISTS (
+                  SELECT 1
+                  FROM survey.survey_combo_import_batches AS successor
+                  WHERE successor.predecessor_batch_id = batch.id))
+            ORDER BY (batch.job_id = {jobId} AND batch.source_revision = {sourceRevision}) DESC
+            LIMIT 2
+            """).ToListAsync(cancellationToken);
+
+        var importedOutput = lineage.SingleOrDefault(batch => batch.JobId == jobId && batch.SourceRevision == sourceRevision);
+        // Preserve the original lineage when an already imported output is sent with a new key.
+        var head = importedOutput is null ? lineage.FirstOrDefault() : null;
+        if (importedOutput is null && lineage.Count > 1)
+            return Conflict("More than one imported COMBO batch is at the head of this capture attempt.");
+        if (head is not null && head.SourceRevision >= sourceRevision)
+            return Conflict("The requested source revision must be newer than the latest imported COMBO batch.");
 
         var boundaryId = comboSnapshot.FarmBoundaryVersionId;
         if (boundaryId == Guid.Empty)
@@ -269,7 +293,7 @@ internal sealed class MissionComboAnalysisPublisher(
             }
         }
 
-        var handoffId = CreateVersion5(
+        var handoffId = importedOutput?.HandoffId ?? CreateVersion5(
             ComboAnalysisNamespace,
             $"{tenantId:D}:{orderId:D}:{attemptId:D}:{job.Id:D}:{sourceRevision}");
         var now = timeProvider.GetUtcNow();
@@ -285,7 +309,7 @@ internal sealed class MissionComboAnalysisPublisher(
             JobId: job.Id,
             SourceRevision: sourceRevision,
             ProducedAt: producedAt,
-            SupersedesHandoffId: comboSnapshot.SupersedesHandoffId,
+            SupersedesHandoffId: importedOutput?.SupersedesHandoffId ?? head?.HandoffId,
             BusinessPolicyVersionId: policyVersionId,
             InputApprovalId: comboSnapshot.InputApprovalId,
             InputManifestId: comboSnapshot.InputManifestId,

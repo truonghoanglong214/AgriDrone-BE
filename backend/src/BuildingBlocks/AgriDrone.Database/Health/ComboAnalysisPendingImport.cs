@@ -479,9 +479,10 @@ internal sealed class ComboAnalysisPendingImport(
 
             if (predecessorBatch.SurveyOrderId != p.SurveyOrderId ||
                 predecessorBatch.FarmId != p.FarmId ||
-                predecessorBatch.CaptureAttemptId != p.CaptureAttemptId)
+                predecessorBatch.CaptureAttemptId != p.CaptureAttemptId ||
+                predecessorBatch.MissionId != p.MissionId)
             {
-                return Reject("PredecessorContextMismatch", "Predecessor batch does not match order/farm/attempt context.");
+                return Reject("PredecessorContextMismatch", "Predecessor batch does not match order/farm/attempt/mission context.");
             }
 
             if (p.SourceRevision <= predecessorBatch.SourceRevision)
@@ -500,11 +501,7 @@ internal sealed class ComboAnalysisPendingImport(
         }
         else
         {
-            if (p.SourceRevision != 1)
-            {
-                return Reject("InvalidInitialRevision", "Initial batch without predecessor must have SourceRevision = 1.");
-            }
-
+            // SourceRevision counts AI runs, so the first imported batch can start above revision 1.
             var existingRoot = await db.SurveyComboImportBatches.AsNoTracking()
                 .FirstOrDefaultAsync(b => b.TenantId == tenantId &&
                                           b.SurveyOrderId == p.SurveyOrderId &&
