@@ -75,9 +75,27 @@ internal sealed class GetPlantLifecycleHistoryQueryHandler(
             return PlantNotFound();
         }
 
-        // V3 internal approval can mutate a legacy plant before release. Keep its
-        // live row and timeline together behind the same gate.
+        // Internal approval can mutate the live plant before release. Require release
+        // proof for every V3 change affecting the live row or its timeline.
         var plant = await dbContext.Database.SqlQuery<PlantRow>($"""
+            WITH released_v3_maps AS (
+                SELECT m.id AS map_id, o.id AS order_id, m.source_mission_id, r.published_at
+                FROM survey.v3_survey_releases r
+                JOIN farm.farm_base_map_versions m ON m.id = r.map_id
+                    AND m.source_survey_order_id = r.survey_order_id
+                    AND m.tenant_id = r.tenant_id AND m.farm_id = r.farm_id
+                JOIN survey.survey_orders o ON o.id = r.survey_order_id
+                    AND o.tenant_id = r.tenant_id AND o.farm_id = r.farm_id
+                WHERE NOT {canReadInternal}
+                  AND r.tenant_id = {tenantId} AND r.farm_id = {request.FarmId}
+                  AND o.scope = 'V3'::system.contract_scope AND o.status <> 'CANCELLED'
+                  AND m.status IN ('PUBLISHED', 'SUPERSEDED')
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM survey.quality_refund_cases c
+                      WHERE c.v3_publication_id = r.id AND c.status = 'Refunded'
+                  )
+            )
             SELECT p.id AS "Id", p.farm_id AS "FarmId", p.plant_code AS "PlantCode",
                    p.row_index AS "RowIndex", p.column_index AS "ColumnIndex",
                    ST_Y(p.location::geometry) AS "Lat", ST_X(p.location::geometry) AS "Lon",
@@ -102,6 +120,11 @@ internal sealed class GetPlantLifecycleHistoryQueryHandler(
                                 AND o.scope = 'LEGACY'::system.contract_scope
                                 AND o.status <> 'CANCELLED'
                           )
+                           OR EXISTS (
+                               SELECT 1
+                               FROM released_v3_maps r
+                               WHERE r.map_id = p.farm_base_map_version_id
+                           )
                       )
                       AND NOT EXISTS (
                           SELECT 1
@@ -109,6 +132,11 @@ internal sealed class GetPlantLifecycleHistoryQueryHandler(
                           LEFT JOIN survey.survey_orders o ON o.id = dm.survey_order_id
                           WHERE dm.id = p.created_from_mission_id
                             AND (dm.capture_attempt_id IS NOT NULL OR o.scope = 'V3'::system.contract_scope)
+                             AND NOT EXISTS (
+                                 SELECT 1
+                                 FROM released_v3_maps r
+                                 WHERE r.order_id = dm.survey_order_id AND r.source_mission_id = dm.id
+                             )
                       )
                       AND NOT EXISTS (
                           SELECT 1
@@ -133,6 +161,14 @@ internal sealed class GetPlantLifecycleHistoryQueryHandler(
                                       AND o.scope = 'V3'::system.contract_scope
                                 )
                             )
+                             AND NOT EXISTS (
+                                 SELECT 1
+                                 FROM released_v3_maps r
+                                 WHERE r.map_id = e.farm_base_map_version_id
+                                   AND (e.source_survey_order_id IS NULL OR e.source_survey_order_id = r.order_id)
+                                   AND (e.mission_id IS NULL OR e.mission_id = r.source_mission_id)
+                                   AND e.created_at <= r.published_at
+                             )
                       )
                   )
               )
